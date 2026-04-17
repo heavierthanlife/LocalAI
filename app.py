@@ -484,6 +484,30 @@ def init_postgres_tables():
                         )
                         """)
 
+            # Add content column to project_files if not exists
+            cur.execute("""
+                DO $$ 
+                BEGIN
+                    BEGIN
+                        ALTER TABLE project_files ADD COLUMN content TEXT;
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END;
+                END $$;
+            """)
+
+            # Create project_file_usage table
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS project_file_usage
+                        (
+                            id        SERIAL PRIMARY KEY,
+                            file_id   INTEGER REFERENCES project_files (id) ON DELETE CASCADE,
+                            user_id   TEXT REFERENCES users (user_id),
+                            action    TEXT NOT NULL,
+                            details   JSONB,
+                            timestamp TIMESTAMPTZ DEFAULT NOW()
+                        )
+                        """)
+
             cur.execute("""
                         CREATE TABLE IF NOT EXISTS project_folder_comments
                         (
@@ -1131,7 +1155,7 @@ def get_agent(max_tokens=None):
             raise ValueError("Missing QWEN_API_KEY or DASHSCOPE_API_KEY")
         os.environ["DASHSCOPE_API_KEY"] = api_key
         os.environ["DASHSCOPE_API_BASE"] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        llm_qw = ChatQwen(model="qwen-turbo-latest", enable_thinking=True, streaming=False, max_tokens=max_tokens)
+        llm_qw = ChatQwen(model="qwen3.5-flash-2026-02-23", enable_thinking=True, streaming=False, max_tokens=max_tokens)
         if _async_checkpointer is None:
             _init_async_checkpointer()
         system_prompt = """
@@ -2278,6 +2302,25 @@ def set_max_tokens():
         _agent = None
     return jsonify({"success": True, "max_tokens": tokens})
 
+@app.route('/check_auth', methods=['GET'])
+def check_auth():
+    if not session.get('consent_given'):
+        return jsonify({"authenticated": False, "reason": "consent_not_given"})
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"authenticated": False, "reason": "no_user_id"})
+    # Optionally verify user still exists in DB
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM users WHERE user_id = %s", (user_id,))
+            if not cur.fetchone():
+                return jsonify({"authenticated": False, "reason": "user_deleted"})
+    return jsonify({
+        "authenticated": True,
+        "username": session.get('username'),
+        "is_admin": session.get('role') == 'admin',
+        "user_id": user_id
+    })
 
 @app.route('/feedback', methods=['POST'])
 def submit_feedback():
@@ -4042,31 +4085,47 @@ def upload_project_file(project_id, folder_id):
     user_id = session.get('user_id')
     if not is_admin() and not can_access_project(project_id, user_id):
         return jsonify({"error": "Access denied"}), 403
+
+    # Check project status
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status FROM projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             if not row or row[0] != 'active':
                 return jsonify({"error": "Project is not active (archived or aborted). Cannot upload."}), 400
+
     if 'file' not in request.files:
         return jsonify({"error": "No file"}), 400
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
+
+    # Verify folder exists
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s", (folder_id, project_id))
             if not cur.fetchone():
                 return jsonify({"error": "Folder not found"}), 404
+
     original_name = file.filename
     file_bytes = file.read()
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     file.seek(0)
+
+    # Extract text content
+    file_content, _ = extract_text_from_file(file)
+    if not file_content or file_content.startswith("["):
+        return jsonify({"error": "Could not extract text from file"}), 400
+
+    # Check for duplicate by hash
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, original_name, stored_path, version, folder_id, filename FROM project_files WHERE project_id = %s AND file_hash = %s",
-                (project_id, file_hash))
+            cur.execute("""
+                        SELECT id, original_name, stored_path, version, folder_id, filename
+                        FROM project_files
+                        WHERE project_id = %s
+                          AND file_hash = %s
+                        """, (project_id, file_hash))
             duplicate = cur.fetchone()
             if duplicate:
                 return jsonify({
@@ -4080,22 +4139,31 @@ def upload_project_file(project_id, folder_id):
                     },
                     "new_filename": original_name
                 })
+
     ext = os.path.splitext(original_name)[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     stored_path = get_project_file_path(project_id, unique_name)
+    file.seek(0)
     file.save(stored_path)
     file_size = os.path.getsize(stored_path)
+
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
                 cur.execute("""
                             INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
-                                                       stored_path, uploaded_by, file_hash)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                                       stored_path, uploaded_by, file_hash, content)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id
                             """, (project_id, folder_id, unique_name, original_name, file_size, stored_path, user_id,
-                                  file_hash))
+                                  file_hash, file_content))
                 file_id = cur.fetchone()[0]
+
+                # Log usage
+                cur.execute("""
+                            INSERT INTO project_file_usage (file_id, user_id, action, details)
+                            VALUES (%s, %s, 'upload', %s)
+                            """, (file_id, user_id, json.dumps({'original_name': original_name, 'size': file_size})))
                 conn.commit()
                 return jsonify({"success": True, "file_id": file_id, "original_name": original_name, "version": 1})
 
@@ -4112,27 +4180,43 @@ def new_file_version(project_id, file_id):
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
+
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT stored_path, version, original_name, folder_id, filename FROM project_files WHERE id = %s AND project_id = %s",
-                (file_id, project_id))
+            cur.execute("""
+                        SELECT stored_path, version, original_name, folder_id, filename
+                        FROM project_files
+                        WHERE id = %s
+                          AND project_id = %s
+                        """, (file_id, project_id))
             existing = cur.fetchone()
             if not existing:
                 return jsonify({"error": "File not found"}), 404
+
             original_name = file.filename
             file_bytes = file.read()
             file_hash = hashlib.sha256(file_bytes).hexdigest()
             file.seek(0)
+
+            # Extract text from new version
+            file_content, _ = extract_text_from_file(file)
+            if not file_content or file_content.startswith("["):
+                return jsonify({"error": "Could not extract text from new version"}), 400
+
             ext = os.path.splitext(original_name)[1]
             unique_name = f"{uuid.uuid4().hex}{ext}"
             stored_path = get_project_file_path(project_id, unique_name)
             file.save(stored_path)
             file_size = os.path.getsize(stored_path)
             new_version = existing['version'] + 1
-            cur.execute(
-                "INSERT INTO project_file_versions (file_id, version, stored_path, file_size, uploaded_by) VALUES (%s, %s, %s, %s, %s)",
-                (file_id, existing['version'], existing['stored_path'], file_size, user_id))
+
+            # Store old version in versions table
+            cur.execute("""
+                        INSERT INTO project_file_versions (file_id, version, stored_path, file_size, uploaded_by)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """, (file_id, existing['version'], existing['stored_path'], file_size, user_id))
+
+            # Update main record with new version, new file, new hash, new content
             cur.execute("""
                         UPDATE project_files
                         SET version       = %s,
@@ -4141,9 +4225,18 @@ def new_file_version(project_id, file_id):
                             uploaded_at   = NOW(),
                             uploaded_by   = %s,
                             file_hash     = %s,
-                            original_name = %s
+                            original_name = %s,
+                            content       = %s
                         WHERE id = %s
-                        """, (new_version, stored_path, file_size, user_id, file_hash, original_name, file_id))
+                        """,
+                        (new_version, stored_path, file_size, user_id, file_hash, original_name, file_content, file_id))
+
+            # Log new version action
+            cur.execute("""
+                        INSERT INTO project_file_usage (file_id, user_id, action, details)
+                        VALUES (%s, %s, 'new_version', %s)
+                        """, (file_id, user_id, json.dumps({'version': new_version, 'size': file_size})))
+
             conn.commit()
             return jsonify(
                 {"success": True, "file_id": file_id, "original_name": original_name, "version": new_version})

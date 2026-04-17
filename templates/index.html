@@ -5099,6 +5099,55 @@
             if (batchDeleteBtn) batchDeleteBtn.click();
         }
     })
+    // --- Authentication verification ---
+    async function verifyAuth() {
+        try {
+            const res = await fetch('/check_auth', { credentials: 'include' });
+            const data = await res.json();
+            if (!data.authenticated) {
+                // Clear frontend storage
+                sessionStorage.clear();
+                // If the page previously thought consent was given, reload to show consent modal
+                const consentGiven = {{ consent_given|tojson }};
+                if (consentGiven) {
+                    location.reload();
+                }
+            } else {
+                // Sync frontend storage with server state
+                sessionStorage.setItem('username', data.username || '');
+                if (data.is_admin) {
+                    sessionStorage.setItem('isAdmin', 'true');
+                } else {
+                    sessionStorage.removeItem('isAdmin');
+                }
+                sessionStorage.setItem('user_id', data.user_id || '');
+            }
+        } catch (err) {
+            console.error('Auth check failed', err);
+        }
+    }
+
+    // Global fetch interceptor to catch 401/403 responses
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        return originalFetch.apply(this, args).then(async response => {
+            if (response.status === 401 || response.status === 403) {
+                // Attempt to read error message
+                const cloned = response.clone();
+                const data = await cloned.json().catch(() => ({}));
+                if (data.error === 'Consent not given' || data.error === 'Not logged in' || response.status === 401) {
+                    sessionStorage.clear();
+                    // Reload to show consent modal
+                    location.reload();
+                    return Promise.reject(new Error('Unauthorized'));
+                }
+            }
+            return response;
+        });
+    };
+
+    // Call verifyAuth on every page load
+    verifyAuth();
 </script>
 </body>
 </html>
