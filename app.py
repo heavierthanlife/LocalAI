@@ -4077,7 +4077,6 @@ def get_project_file_path(project_id, unique_filename):
     os.makedirs(project_dir, exist_ok=True)
     return os.path.join(project_dir, unique_filename)
 
-
 @app.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/upload', methods=['POST'])
 def upload_project_file(project_id, folder_id):
     if not session.get('consent_given'):
@@ -4092,7 +4091,7 @@ def upload_project_file(project_id, folder_id):
             cur.execute("SELECT status FROM projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             if not row or row[0] != 'active':
-                return jsonify({"error": "Project is not active (archived or aborted). Cannot upload."}), 400
+                return jsonify({"error": "Project is not active. Cannot upload."}), 400
 
     if 'file' not in request.files:
         return jsonify({"error": "No file"}), 400
@@ -4112,20 +4111,10 @@ def upload_project_file(project_id, folder_id):
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     file.seek(0)
 
-    # Extract text content
-    file_content, _ = extract_text_from_file(file)
-    if not file_content or file_content.startswith("["):
-        return jsonify({"error": "Could not extract text from file"}), 400
-
     # Check for duplicate by hash
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                        SELECT id, original_name, stored_path, version, folder_id, filename
-                        FROM project_files
-                        WHERE project_id = %s
-                          AND file_hash = %s
-                        """, (project_id, file_hash))
+            cur.execute("SELECT id, original_name, stored_path, version, folder_id FROM project_files WHERE project_id = %s AND file_hash = %s", (project_id, file_hash))
             duplicate = cur.fetchone()
             if duplicate:
                 return jsonify({
@@ -4134,16 +4123,15 @@ def upload_project_file(project_id, folder_id):
                         "id": duplicate['id'],
                         "original_name": duplicate['original_name'],
                         "folder_id": duplicate['folder_id'],
-                        "version": duplicate['version'],
-                        "filename": duplicate['filename']
+                        "version": duplicate['version']
                     },
                     "new_filename": original_name
                 })
 
+    # Save original file (no text extraction)
     ext = os.path.splitext(original_name)[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     stored_path = get_project_file_path(project_id, unique_name)
-    file.seek(0)
     file.save(stored_path)
     file_size = os.path.getsize(stored_path)
 
@@ -4151,22 +4139,14 @@ def upload_project_file(project_id, folder_id):
         with db_transaction(conn):
             with conn.cursor() as cur:
                 cur.execute("""
-                            INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
-                                                       stored_path, uploaded_by, file_hash, content)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            RETURNING id
-                            """, (project_id, folder_id, unique_name, original_name, file_size, stored_path, user_id,
-                                  file_hash, file_content))
+                    INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
+                                               stored_path, uploaded_by, file_hash)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (project_id, folder_id, unique_name, original_name, file_size, stored_path, user_id, file_hash))
                 file_id = cur.fetchone()[0]
-
-                # Log usage
-                cur.execute("""
-                            INSERT INTO project_file_usage (file_id, user_id, action, details)
-                            VALUES (%s, %s, 'upload', %s)
-                            """, (file_id, user_id, json.dumps({'original_name': original_name, 'size': file_size})))
                 conn.commit()
                 return jsonify({"success": True, "file_id": file_id, "original_name": original_name, "version": 1})
-
 
 @app.route('/admin/projects/<int:project_id>/files/<int:file_id>/new_version', methods=['POST'])
 def new_file_version(project_id, file_id):
@@ -4691,7 +4671,7 @@ def upload_file():
                     UPDATE user_files
                     SET content = %s, size_bytes = %s,
                         original_stored_path = %s, file_hash = %s, filename = %s,
-                        expires_at = NULL,
+                        expires_at = NOW() + INTERVAL '3 days',
                         original_expires_at = NOW() + INTERVAL '3 days'
                     WHERE id = %s
                 """, (file_content, len(file_content), original_path, file_hash, file.filename, existing[0]))
@@ -4700,11 +4680,11 @@ def upload_file():
                     INSERT INTO user_files
                         (user_id, thread_id, filename, content, size_bytes, expires_at,
                          original_stored_path, file_hash, original_expires_at)
-                    VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, NOW() + INTERVAL '3 days')
+                    VALUES (%s, %s, %s, %s, %s, NOW() + INTERVAL '3 days', %s, %s, NOW() + INTERVAL '3 days')
                     ON CONFLICT (thread_id, filename) DO UPDATE SET
                         content = EXCLUDED.content,
                         size_bytes = EXCLUDED.size_bytes,
-                        expires_at = NULL,
+                        expires_at = NOW() + INTERVAL '3 days',
                         original_stored_path = EXCLUDED.original_stored_path,
                         file_hash = EXCLUDED.file_hash,
                         original_expires_at = NOW() + INTERVAL '3 days'
@@ -5243,6 +5223,76 @@ def schedule_project_deletion_cleanup():
                 cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
             conn.commit()
 
+@app.route('/search_chat', methods=['GET'])
+def search_chat():
+    if not session.get('consent_given'):
+        return jsonify({"error": "Consent not given"}), 403
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({"error": "Search query must be at least 2 characters"}), 400
+
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    fuzzy = request.args.get('fuzzy', 'false').lower() == 'true'
+    role = request.args.get('role', 'assistant')  # 'assistant', 'user', or 'both'
+
+    # Build the search pattern
+    if fuzzy:
+        search_pattern = f"%{q}%"
+    else:
+        search_pattern = q  # exact match (case-insensitive via ILIKE)
+
+    # Date filtering
+    date_condition = ""
+    params = [user_id, search_pattern]
+    if start_date:
+        date_condition += " AND cm.timestamp >= %s"
+        params.append(start_date)
+    if end_date:
+        date_condition += " AND cm.timestamp <= %s"
+        params.append(end_date)
+
+    # Role condition
+    if role == 'assistant':
+        role_condition = " AND cm.role = 'assistant'"
+    elif role == 'user':
+        role_condition = " AND cm.role = 'user'"
+    else:  # both
+        role_condition = ""
+
+    query = f"""
+        SELECT cs.thread_id, cs.title, cm.role, cm.content, cm.timestamp,
+               SUBSTRING(cm.content, 1, 200) as snippet
+        FROM chat_messages cm
+        JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
+        WHERE cs.user_id = %s
+          AND cm.content ILIKE %s
+          {role_condition}
+          {date_condition}
+        ORDER BY cm.timestamp DESC
+        LIMIT 100
+    """
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            results = cur.fetchall()
+            for row in results:
+                # Convert timestamp to Beijing time for display
+                if row['timestamp']:
+                    row['timestamp_str'] = row['timestamp'].astimezone(BEIJING_TZ).strftime('%Y-%m-%d %H:%M:%S')
+                # Highlight the search term (simple)
+                if fuzzy:
+                    # Escape regex special chars
+                    import re
+                    escaped = re.escape(q)
+                    row['highlighted_snippet'] = re.sub(f"({escaped})", r'<mark>\1</mark>', row['snippet'], flags=re.IGNORECASE)
+                else:
+                    row['highlighted_snippet'] = row['snippet']
+            return jsonify({"results": results})
 
 # App startup
 app.config['SESSION_PERMANENT'] = True

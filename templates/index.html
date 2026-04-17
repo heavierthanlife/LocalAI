@@ -1214,6 +1214,16 @@
             border-top: 1px solid var(--border-color);
             flex-wrap: wrap;
         }
+        mark {
+            background-color: #ffeb3b;
+            color: #000;
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        body.dark mark {
+            background-color: #ff9800;
+            color: #1e1b1e;
+        }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -1229,6 +1239,8 @@
     <div class="sidebar-content">
         <button class="new-chat-btn" id="newChatBtn" aria-label="新建聊天">💬 新聊天</button>
         <h3 style="font-size: 0.9rem; margin: 0.5rem 0;">聊天历史</h3>
+        <hr style="margin: 16px 0;">
+        <button id="openSearchModalBtn" class="file-btn" style="width:100%; margin-bottom:8px;">🔍 搜索聊天记录</button>
         <ul class="history-list" id="historyList"><li style="color: #999;">加载中...</li></ul>
         <button class="account-sidebar-btn" id="accountSettingsBtn" aria-label="账户设置">
             <span>⚙️</span> 账户设置
@@ -1448,6 +1460,33 @@
         <span class="close" id="closeAccountModal">&times;</span>
         <h3>账户设置</h3>
         <div id="accountContent"></div>
+    </div>
+</div>
+
+<div id="searchModal" class="modal" style="display:none;">
+    <div class="modal-content" style="width: 700px; max-width: 90%;">
+        <span class="close" id="closeSearchModal">&times;</span>
+        <h3>🔍 搜索聊天记录</h3>
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="searchQuery" placeholder="输入搜索关键词..." style="width: 100%; padding: 8px; margin-bottom: 10px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <label><input type="radio" name="searchRole" value="assistant" checked> 仅助手回答</label>
+                <label><input type="radio" name="searchRole" value="user"> 仅用户消息</label>
+                <label><input type="radio" name="searchRole" value="both"> 全部</label>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <label><input type="checkbox" id="fuzzySearch" checked> 模糊搜索</label>
+                <label><input type="checkbox" id="dateFilterToggle"> 按时间范围筛选</label>
+            </div>
+            <div id="dateRange" style="display: none; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <input type="date" id="startDate" placeholder="开始日期">
+                <input type="date" id="endDate" placeholder="结束日期">
+            </div>
+            <button id="doSearchBtn" class="file-btn" style="background:#2c3e50; color:white;">搜索</button>
+        </div>
+        <div id="searchResults" style="max-height: 400px; overflow-y: auto;">
+            <p>输入关键词后点击搜索</p>
+        </div>
     </div>
 </div>
 
@@ -3251,7 +3290,7 @@
 
     newChatBtn.onclick = async () => {
         if (isProcessing) { addSystemMessage('请等待当前请求完成后再创建新聊天。'); return; }
-        const confirmed = await confirm('创建新聊天将清空当前对话。确定要继续吗？');
+        const confirmed = await confirm('确定要创建新聊天吗？');
         if (!confirmed) return;
         const res = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
         if (res.ok) {
@@ -5145,6 +5184,98 @@
             return response;
         });
     };
+
+    // --- Chat Search ---
+    const openSearchModalBtn = document.getElementById('openSearchModalBtn');
+    const searchModal = document.getElementById('searchModal');
+    const closeSearchModal = document.getElementById('closeSearchModal');
+    const dateFilterToggle = document.getElementById('dateFilterToggle');
+    const dateRangeDiv = document.getElementById('dateRange');
+    const doSearchBtn = document.getElementById('doSearchBtn');
+    const searchQueryInput = document.getElementById('searchQuery');
+    const searchResultsDiv = document.getElementById('searchResults');
+
+    if (openSearchModalBtn) {
+        openSearchModalBtn.onclick = () => {
+            searchModal.style.display = 'block';
+            // Clear previous results
+            searchResultsDiv.innerHTML = '<p>输入关键词后点击搜索</p>';
+            searchQueryInput.value = '';
+        };
+    }
+    if (closeSearchModal) {
+        closeSearchModal.onclick = () => { searchModal.style.display = 'none'; };
+    }
+    if (dateFilterToggle) {
+        dateFilterToggle.onchange = () => {
+            dateRangeDiv.style.display = dateFilterToggle.checked ? 'flex' : 'none';
+        };
+    }
+    if (doSearchBtn) {
+        doSearchBtn.onclick = async () => {
+            const query = searchQueryInput.value.trim();
+            if (query.length < 2) {
+                alert('搜索词至少2个字符');
+                return;
+            }
+            const role = document.querySelector('input[name="searchRole"]:checked').value;
+            const fuzzy = document.getElementById('fuzzySearch').checked;
+            let startDate = '', endDate = '';
+            if (dateFilterToggle.checked) {
+                startDate = document.getElementById('startDate').value;
+                endDate = document.getElementById('endDate').value;
+            }
+            const params = new URLSearchParams({
+                q: query,
+                role: role,
+                fuzzy: fuzzy,
+                start_date: startDate,
+                end_date: endDate
+            });
+            searchResultsDiv.innerHTML = '<p>搜索中...</p>';
+            try {
+                const res = await fetch(`/search_chat?${params.toString()}`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.error) {
+                    searchResultsDiv.innerHTML = `<p>错误: ${data.error}</p>`;
+                    return;
+                }
+                const results = data.results || [];
+                if (results.length === 0) {
+                    searchResultsDiv.innerHTML = '<p>未找到匹配的聊天记录。</p>';
+                    return;
+                }
+                let html = '<ul style="list-style: none; padding: 0;">';
+                for (const r of results) {
+                    const roleLabel = r.role === 'assistant' ? '🤖 助手' : '👤 用户';
+                    html += `
+                        <li style="border-bottom:1px solid #ddd; padding:12px 0;">
+                            <div><strong>${escapeHtml(r.title)}</strong> <small>${roleLabel}</small> <small>${r.timestamp_str}</small></div>
+                            <div style="margin-top:6px;">${r.highlighted_snippet}...</div>
+                            <button class="load-session-btn" data-thread="${escapeHtml(r.thread_id)}" style="margin-top:6px; background:#2c3e50; color:white; border:none; border-radius:4px; padding:4px 8px;">跳转到会话</button>
+                        </li>
+                    `;
+                }
+                html += '</ul>';
+                searchResultsDiv.innerHTML = html;
+                // Attach event handlers to load session buttons
+                document.querySelectorAll('.load-session-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const threadId = btn.getAttribute('data-thread');
+                        searchModal.style.display = 'none';
+                        loadSession(threadId);
+                    };
+                });
+            } catch (err) {
+                console.error(err);
+                searchResultsDiv.innerHTML = '<p>搜索失败，请重试。</p>';
+            }
+        };
+    }
+    // Allow Enter key in search input
+    searchQueryInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') doSearchBtn.click();
+    });
 
     // Call verifyAuth on every page load
     verifyAuth();
