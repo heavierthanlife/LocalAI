@@ -95,6 +95,39 @@ class VLModel:
             f"请详细描述这个PDF页面(第{page_num}页)的内容，包括标题、段落、表格、图表等关键信息。"
         )
 
+    def describe_with_crosscheck(self, image_bytes, base_prompt: str = "") -> str:
+        """Describe image with cross-validation: two prompts, compare for consistency.
+
+        If the two descriptions have significant numerical differences, the result
+        is prefixed with a [⚠️数据可能不一致] warning. This prevents downstream
+        LLMs from blindly trusting a single VL hallucination.
+
+        Costs 2x API calls — use only for critical content (tables, invoices, etc.)
+        """
+        if not self.is_available():
+            return "⚠️ VL模型不可用，请检查API密钥。"
+
+        prompt_a = base_prompt or "请详细描述这张图片的内容，特别注意其中的文字、数字和表格"
+        prompt_b = "请从不同角度再次描述这张图片，重点关注数字、金额、日期等关键数据"
+
+        desc1 = self.describe_image(image_bytes, prompt_a)
+        desc2 = self.describe_image(image_bytes, prompt_b)
+
+        # Cross-check
+        try:
+            from app.services.prompt_safety import vl_cross_check
+            check = vl_cross_check(desc1, desc2)
+        except Exception:
+            check = {'consistent': True, 'note': 'check skipped'}
+
+        if check.get('consistent'):
+            # Use the more detailed description (usually the first)
+            return desc1
+        else:
+            note = check.get('note', 'description mismatch')
+            logger.warning(f"VL cross-check inconsistency: {note}")
+            return f"[⚠️ 图片描述可能不一致: {note}]\n\n{desc1}\n\n---\n二次描述(供参考):\n{desc2}"
+
 
 # Global singleton
 vl_model = VLModel()

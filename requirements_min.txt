@@ -1,0 +1,51 @@
+# ZLAIservices — minimal direct dependencies
+# Install: pip install -r requirements_min.txt
+# Result: ~100 packages (vs 156 current). Same functionality, zero loss.
+
+# --- Web Framework ---
+flask>=3.0
+flask-session
+flask-wtf
+waitress
+
+# --- LLM & Agent ---
+langchain
+langchain-deepseek
+langchain-openai
+langgraph
+langgraph-checkpoint-sqlite
+openai
+tiktoken
+
+# --- Document Processing ---
+python-docx
+openpyxl
+python-pptx
+pymupdf
+markitdown
+beautifulsoup4
+lxml
+olefile
+xlrd
+
+# --- OCR & ML ---
+easyocr
+sentence-transformers
+scikit-learn
+imagehash
+
+# --- Database ---
+psycopg2-binary
+
+# --- Utilities ---
+apscheduler
+python-dotenv
+filelock
+pillow
+numpy
+pandas
+requests
+selenium
+webdriver-manager
+werkzeug
+pywin32

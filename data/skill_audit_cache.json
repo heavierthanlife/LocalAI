@@ -1,0 +1,33 @@
+{
+  "fingerprints": {
+    "personal:44": "6097a6dd5f9775bd",
+    "company:25": "9a01ce6a14e9ffd2"
+  },
+  "results": {
+    "total_skills": 2,
+    "unused_count": 0,
+    "duplicate_pairs": 1,
+    "duplicates": [
+      {
+        "skill_a": {
+          "name": "1ad156667697430da866de17259f11ef.docx",
+          "owner": "admin",
+          "id": 44,
+          "source": "personal",
+          "summary": ""
+        },
+        "skill_b": {
+          "name": "标准招标施工文件.doc",
+          "owner": "admin",
+          "id": 25,
+          "source": "company",
+          "summary": ""
+        },
+        "similarity": 78.1
+      }
+    ],
+    "unused": [],
+    "promote_candidates": []
+  },
+  "last_full_analysis": "2026-07-02T07:06:21.455403+00:00"
+}

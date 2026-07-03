@@ -1,0 +1,24 @@
+{
+    "name": "中联AI — 中联招标智能助手",
+    "short_name": "中联AI",
+    "description": "中联招标智能助手 — 文件分析、批量对比、征信查询与知识库管理平台",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f5f5f5",
+    "theme_color": "#2c3e50",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "categories": ["productivity", "utilities"],
+    "lang": "zh-CN"
+}

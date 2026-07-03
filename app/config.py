@@ -38,7 +38,7 @@ LOGGING_CONFIG = {
         'console': {'class': 'logging.StreamHandler', 'level': 'INFO', 'formatter': 'default',
                     'stream': 'ext://sys.stdout'},
         'file': {'class': 'logging.handlers.RotatingFileHandler', 'level': 'DEBUG', 'formatter': 'detailed',
-                 'filename': str(BASE_DIR / 'app.log'), 'maxBytes': 10485760, 'backupCount': 5},
+                 'filename': str(LOGS_DIR / 'app.log'), 'maxBytes': 10485760, 'backupCount': 5},
     },
     'root': {'level': 'DEBUG', 'handlers': ['console', 'file']},
 }
@@ -50,20 +50,34 @@ dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 # ---------------- Edge Driver Path ----------------
-EDGE_DRIVER_PATH = None
+EDGE_DRIVER_PATH: str | None = None  # intentionally reassigned below
 
 
 def preinstall_edgedriver():
     global EDGE_DRIVER_PATH
+    # Check env var first, then common locations, then auto-download
+    env_path = os.environ.get('EDGEDRIVER_PATH')
+    if env_path and os.path.exists(env_path):
+        EDGE_DRIVER_PATH = env_path  # pyright: ignore[reportConstantRedefinition]
+        logger.info(f"Edge WebDriver from env: {EDGE_DRIVER_PATH}")
+        return
+    # Try local msedgedriver.exe in project root
+    local = os.path.join(BASE_DIR, "msedgedriver.exe")
+    if os.path.exists(local):
+        EDGE_DRIVER_PATH = local  # pyright: ignore[reportConstantRedefinition]
+        logger.info(f"Edge WebDriver found at: {EDGE_DRIVER_PATH}")
+        return
+    # Fall back to auto-download via webdriver_manager
     try:
-        EDGE_DRIVER_PATH = r"D:\PyCharm\Local_AI\msedgedriver.exe"
-        logger.info(f"Edge WebDriver pre-installed at {EDGE_DRIVER_PATH}")
+        from webdriver_manager.microsoft import EdgeChromiumDriverManager
+        EDGE_DRIVER_PATH = EdgeChromiumDriverManager().install()  # pyright: ignore[reportConstantRedefinition]
+        logger.info(f"Edge WebDriver auto-downloaded to: {EDGE_DRIVER_PATH}")
     except Exception as e:
-        logger.error(f"Failed to pre-install Edge WebDriver: {e}")
+        logger.warning(f"Could not pre-install Edge WebDriver: {e}. It will be downloaded on first use.")
 
 
 # ---------------- File Type Validation ----------------
-def is_valid_extracted_text(text, min_length=20, min_ratio=0.6):
+def is_valid_extracted_text(text: str, min_length: int = 20, min_ratio: float = 0.6) -> bool:
     if not text or len(text) < min_length:
         return False
     allowed = re.compile(r'[\u4e00-\u9fff\w\s.,;:!?()\-<>/{}[\]"\'=&#@+*|]')
@@ -78,5 +92,5 @@ ALLOWED_EXTENSIONS = {'.txt', '.md', '.text', '.csv', '.pdf', '.docx', '.docm', 
                       '.html', '.htm', '.json'}
 
 
-def allowed_file(filename):
+def allowed_file(filename: str) -> bool:
     return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS

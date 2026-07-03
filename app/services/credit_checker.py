@@ -1,5 +1,6 @@
 """Credit checker using Selenium Edge WebDriver for automated company searches."""
 import os
+import sys
 import time
 import logging
 import subprocess
@@ -40,26 +41,28 @@ class CreditChecker:
         driver_path = os.environ.get('EDGEDRIVER_PATH')
         if driver_path and os.path.exists(driver_path):
             return driver_path
-        default_driver = r"D:\PyCharm\Local_AI\msedgedriver.exe"
-        if os.path.exists(default_driver):
-            return default_driver
+        local_driver = os.path.join(os.getcwd(), "msedgedriver.exe")
+        if os.path.exists(local_driver):
+            return local_driver
         try:
             return EdgeChromiumDriverManager().install()
         except Exception as e:
             logger.warning(f"Auto WebDriver download failed: {e}")
-        local_driver = os.path.join(os.getcwd(), "msedgedriver.exe")
-        if os.path.exists(local_driver):
-            return local_driver
         raise FileNotFoundError(
             "Could not locate EdgeDriver. Please set EDGEDRIVER_PATH or place msedgedriver.exe in project root.")
 
     def _init_driver(self):
-        try:
-            subprocess.run("taskkill /f /im msedge.exe", shell=True, capture_output=True)
-            time.sleep(2)
-            logger.info("Closed existing Edge instances")
-        except Exception:
-            pass
+        # Kill any orphaned Edge instances spawned by WebDriver (Windows only)
+        if sys.platform == 'win32':
+            try:
+                subprocess.run(
+                    ["taskkill", "/f", "/im", "msedge.exe"],
+                    capture_output=True, timeout=5
+                )
+                time.sleep(1)
+                logger.info("Closed existing Edge instances")
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+                logger.debug("taskkill failed — proceeding anyway")
 
         options = Options()
         options.binary_location = self._get_edge_binary()

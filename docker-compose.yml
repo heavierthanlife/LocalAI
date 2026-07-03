@@ -1,0 +1,180 @@
+# ── Local_AI Production Stack ──
+# Start:  docker-compose up -d
+# Stop:   docker-compose down
+# Logs:   docker-compose logs -f app
+# Scale:  docker-compose up -d --scale app=2  (with Redis sessions enabled)
+#
+# Services:
+#   app       — Flask/gunicorn (4 workers, gevent)
+#   postgres  — PostgreSQL 16
+#   redis     — Redis 7 (ready for Celery + session storage)
+#   nginx     — HTTPS reverse proxy
+
+services:
+  # ── Flask Application ──
+  app:
+    build: .
+    image: local-ai:latest
+    container_name: localai-app
+    restart: unless-stopped
+    environment:
+      # LLM Providers (set in .env file)
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+      # Database
+      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      # App config
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-change-me-in-production}
+      - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:-change-me-in-production}
+      - ADMIN_PIN=${ADMIN_PIN:-123456}
+      - LLM_TIMEOUT=120
+      - WORKERS=4
+      # Search
+      - BOCHA_API_KEY=${BOCHA_API_KEY:-}
+      # VL Model
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      # Credit Checker
+      - CREDIT_BROWSER_HEADLESS=true
+    volumes:
+      # Persistent data — survives container restarts
+      - app_data:/app/data
+      - app_logs:/app/logs
+      # Certificates (for EdgeDriver HTTPS)
+      - ./cert:/app/cert:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - localai-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/check_auth"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── PostgreSQL ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: localai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localai
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localai}
+      POSTGRES_DB: localai
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    # No port mapping — containers communicate via Docker internal network
+    networks:
+      - localai-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: localai-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - localai-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ── Celery Worker (background tasks: OCR, skill extraction) ──
+  celery-worker:
+    build: .
+    image: local-ai:latest
+    container_name: localai-celery-worker
+    restart: unless-stopped
+    command: celery -A celery_app worker -l info -c 2 --max-tasks-per-child 50
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-change-me}
+      - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:-change-me}
+      - LLM_TIMEOUT=120
+    volumes:
+      - app_data:/app/data
+      - app_logs:/app/logs
+      - ./cert:/app/cert:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - localai-net
+
+  # ── Celery Beat (scheduler: replaces APScheduler) ──
+  celery-beat:
+    build: .
+    image: local-ai:latest
+    container_name: localai-celery-beat
+    restart: unless-stopped
+    command: celery -A celery_app beat -l info
+    environment:
+      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-change-me}
+    volumes:
+      - app_data:/app/data
+      - app_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - localai-net
+
+  # ── Nginx (HTTPS termination) ──
+  nginx:
+    image: nginx:alpine
+    container_name: localai-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./cert:/etc/nginx/certs:ro
+      - ./static:/app/static:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - app
+    networks:
+      - localai-net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# ── Persistent Volumes ──
+volumes:
+  app_data:     # uploaded files, knowledge base, search cache
+  app_logs:     # application logs
+  pg_data:      # PostgreSQL data
+  redis_data:   # Redis AOF persistence
+
+# ── Network ──
+networks:
+  localai-net:
+    driver: bridge

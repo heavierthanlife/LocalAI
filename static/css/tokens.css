@@ -1,0 +1,53 @@
+/* ZLAIservices Brand Token System
+   Domain: 中联招标智能助手 — Construction Engineering Bid/Tender Intelligence
+   Architecture: Blueprint / precision-engineering aesthetic with cool slate tones */
+
+:root {
+    /* === Core Palette === */
+    --zl-navy:          #1a2332;    /* Deep navy — primary dark bg */
+    --zl-slate:         #2c3e50;    /* Slate blue — headers, sidebar */
+    --zl-steel:         #5a7c9b;    /* Steel accent — interactive elements */
+    --zl-steel-hover:   #4a6a8a;    /* Darker steel — hover states */
+    --zl-cool-white:    #f2f4f7;    /* Cool off-white — light bg */
+    --zl-cool-panel:    #e8ecf0;    /* Cool panel — sidebar bg */
+    --zl-cool-border:   #c8d0d8;    /* Cool border — dividers */
+    --zl-cool-bubble:   #e4e8ed;    /* Cool bubble — assistant messages */
+    --zl-text:          #2c3e50;    /* Primary text */
+    --zl-text-muted:    #6b7b8d;    /* Muted text */
+
+    /* === Semantic Colors === */
+    --zl-success:       #27ae60;    /* Emerald — confirm, success */
+    --zl-warning:       #e67e22;    /* Warning */
+    --zl-error:         #e74c3c;    /* Error */
+    --zl-info:          #3498db;    /* Info */
+
+    /* === Dark Theme === */
+    --zl-dark-bg:       #1a2332;
+    --zl-dark-panel:    #141d2a;
+    --zl-dark-surface:  #1e2a3a;
+    --zl-dark-border:   #2a3a4e;
+    --zl-dark-text:     #dfe3e8;
+    --zl-dark-text-dim: #8a9bb0;
+
+    /* === Typography === */
+    --zl-font-display:  'Georgia', 'SimSun', 'STSong', serif;
+    --zl-font-body:     'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+    --zl-font-mono:     'Consolas', 'Courier New', monospace;
+
+    /* === Spacing === */
+    --zl-space-xs:  4px;
+    --zl-space-sm:  8px;
+    --zl-space-md:  12px;
+    --zl-space-lg:  16px;
+    --zl-space-xl:  24px;
+
+    /* === Radius === */
+    --zl-radius-sm: 4px;
+    --zl-radius-md: 6px;
+    --zl-radius-lg: 8px;
+
+    /* === Shadows === */
+    --zl-shadow-sm: 0 1px 3px rgba(26,35,50,0.08);
+    --zl-shadow-md: 0 4px 12px rgba(26,35,50,0.12);
+    --zl-shadow-lg: 0 8px 24px rgba(26,35,50,0.16);
+}
