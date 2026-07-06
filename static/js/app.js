@@ -1836,6 +1836,16 @@
                     };
                 };
                 makeEditable(titleSpan, sess);
+                // Unread badge (localStorage per-browser)
+                const unreadSpan = document.createElement('span');
+                unreadSpan.className = 'unread-badge';
+                unreadSpan.style.cssText = 'display:none;background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;margin-left:6px;';
+                const commonUnread = _getUnreadCount(sess.thread_id, sess.last_msg_id || 0);
+                if (commonUnread > 0) {
+                    unreadSpan.textContent = commonUnread > 99 ? '99+' : commonUnread;
+                    unreadSpan.style.display = '';
+                }
+                titleSpan.appendChild(unreadSpan);
                 const timeSpan = document.createElement('div');
                 timeSpan.className = 'history-time';
                 const formatted = sess.updated_at ? new Date(sess.updated_at).toLocaleString() : '刚刚';
@@ -1973,7 +1983,7 @@
                         const titleSpan = document.createElement('div');
                         titleSpan.className = 'history-title';
                         titleSpan.textContent = (sess.is_grilling ? '🔥 ' : '📂 ') + (sess.title || '项目对话');
-                        // Unread badge
+                        // Unread badge (localStorage per-browser)
                         const unreadSpan = document.createElement('span');
                         unreadSpan.className = 'unread-badge';
                         unreadSpan.style.cssText = 'display:none;background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;margin-left:6px;';
@@ -1987,16 +1997,11 @@
                         li.style.cursor = 'pointer';
                         li.onclick = () => loadSession(sess.thread_id);
                         projectHistoryList.appendChild(li);
-                        // Fetch unread count async
-                        if (sess.project_id) {
-                            fetch(`/admin/projects/${sess.project_id}/unread_count`, { credentials: 'include' })
-                                .then(r => r.json())
-                                .then(d => {
-                                    if (d.count > 0) {
-                                        unreadSpan.textContent = d.count;
-                                        unreadSpan.style.display = '';
-                                    }
-                                }).catch(() => {});
+                        // Unread: compare last_msg_id vs per-browser read position
+                        const projectUnread = _getUnreadCount(sess.thread_id, sess.last_msg_id || 0);
+                        if (projectUnread > 0) {
+                            unreadSpan.textContent = projectUnread > 99 ? '99+' : projectUnread;
+                            unreadSpan.style.display = '';
                         }
                     }
                 } else {
@@ -2078,15 +2083,25 @@
                 }
                 fixLinksInContainer(messagesDiv);
                 sessionStorage.setItem('currentThreadId', threadId);
-                // Mark project chat as read + start realtime polling
+                // Track last message ID for polling
+                _lastKnownMessageId = 0;
+                for (const m of data.messages || []) {
+                    if (m.id && m.id > _lastKnownMessageId) _lastKnownMessageId = m.id;
+                }
+                // Mark project chat as read + start polling (common and project)
+                let foundProject = false;
                 for (const s of data.sessions || []) {
                     if (s.thread_id === threadId && s.project_id) {
+                        foundProject = true;
                         fetch(`/admin/projects/${s.project_id}/mark_read`, { method: 'POST', credentials: 'include' }).catch(() => {});
-                        startRealtimePoll(s.project_id);
+                        startRealtimePoll(s.project_id);  // 3s project poll
                         loadProjectTodos(s.project_id);
                         loadProjectVotes(s.project_id);
                         break;
                     }
+                }
+                if (!foundProject) {
+                    startRealtimePoll(null);  // 5s common chat poll
                 }
                 await loadHistoryList();
                 await checkStorage();
@@ -2128,48 +2143,82 @@
         }
     }
 
-    // ── Real-time project chat polling ──
-    let _rtPollTimer = null;
-    let _rtLastTs = '';
+    // ── Unified real-time polling (common + project chats) ──
+    let _pollTimer = null;
+    let _pollLastId = 0;
 
     function startRealtimePoll(projectId) {
         stopRealtimePoll();
-        _rtLastTs = new Date().toISOString();
-        _rtPollTimer = setInterval(async () => {
-            if (!currentProjectId || currentProjectId != projectId) return;
+        _pollLastId = _lastKnownMessageId || 0;
+        const interval = projectId ? 3000 : 5000;  // 3s project, 5s common
+        _pollTimer = setInterval(async () => {
+            const currentThread = sessionStorage.getItem('currentThreadId');
+            if (!currentThread || isProcessing) return;
+            if (projectId && currentProjectId != projectId) return;
             try {
-                const res = await fetch(`/admin/projects/${projectId}/ai_activity?since=${encodeURIComponent(_rtLastTs)}`, { credentials: 'include' });
+                const res = await fetch(`/chat/poll/${currentThread}?since_id=${_pollLastId}`, { credentials: 'include' });
                 if (!res.ok) return;
                 const data = await res.json();
-                const items = data.items || [];
-                // Always refresh votes on each poll (cheap check)
-                loadProjectVotes(projectId);
-                if (items.length > 0) {
-                    _rtLastTs = data.now || new Date().toISOString();
-                    // Check if any items are for the currently viewed chat
-                    const currentThread = sessionStorage.getItem('currentThreadId');
-                    let hasMine = false;
-                    for (const item of items) {
-                        if (item.type === 'chat_message' && item.thread_id === currentThread) {
-                            hasMine = true;
-                            break;
+                if (!data.success || !data.data) return;
+                const newMsgs = data.data.messages || [];
+                if (projectId) loadProjectVotes(projectId);
+                if (newMsgs.length > 0) {
+                    _pollLastId = data.data.max_id;
+                    const wasNearBottom = _isUserNearBottom();
+                    for (const msg of newMsgs) {
+                        if (msg.role === 'user') {
+                            addUserMessage(msg.content, msg.id);
+                        } else if (msg.role === 'assistant') {
+                            const thinking = msg.thinking || null;
+                            renderAssistantMessageLegacy(msg.id, '', msg.content, thinking);
                         }
                     }
-                    if (hasMine) {
-                        await loadSession(currentThread, true);
-                    } else {
-                        // Refresh sidebar to update unread counts
-                        await loadHistoryList();
-                    }
+                    if (wasNearBottom) scrollToBottom();
+                    await loadHistoryList();
                 }
             } catch(e) { /* silent */ }
-        }, 5000);
-        console.debug('Realtime poll started for project', projectId);
+        }, interval);
     }
 
     function stopRealtimePoll() {
-        if (_rtPollTimer) { clearInterval(_rtPollTimer); _rtPollTimer = null; }
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     }
+
+    let _lastKnownMessageId = 0;
+    function _isUserNearBottom() {
+        return messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 150;
+    }
+
+    // ── Per-browser read position (localStorage) ──
+    function _getUnreadCount(threadId, lastMsgId) {
+        if (!lastMsgId) return 0;
+        const key = 'zlai_read_' + threadId;
+        const readId = parseInt(localStorage.getItem(key) || '0', 10);
+        return Math.max(0, lastMsgId - readId);
+    }
+
+    function _markThreadRead(threadId) {
+        const key = 'zlai_read_' + threadId;
+        localStorage.setItem(key, String(_lastKnownMessageId));
+        loadHistoryList();  // refresh sidebar unread badges
+    }
+
+    // Mark read on scroll-to-bottom (debounced)
+    let _readMarkTimer = null;
+    messagesDiv.addEventListener('scroll', () => {
+        if (_isUserNearBottom() && _lastKnownMessageId > 0) {
+            const currentThread = sessionStorage.getItem('currentThreadId');
+            if (currentThread) {
+                const key = 'zlai_read_' + currentThread;
+                const prevRead = parseInt(localStorage.getItem(key) || '0', 10);
+                if (_lastKnownMessageId > prevRead) {
+                    localStorage.setItem(key, String(_lastKnownMessageId));
+                    if (_readMarkTimer) clearTimeout(_readMarkTimer);
+                    _readMarkTimer = setTimeout(() => loadHistoryList(), 800);
+                }
+            }
+        }
+    }, { passive: true });
 
     async function loadMostRecentSession() {
         try {
@@ -2967,7 +3016,7 @@
     if (toggleSidebarBtn) {
         toggleSidebarBtn.onclick = (e) => {
             e.stopPropagation();
-            if (window.innerWidth <= 768) openSidebar();
+            if (window.innerWidth <= 1024) { openSidebar(); }  // tablet+phone: overlay
             else {
                 sidebarCollapsed = !sidebarCollapsed;
                 if (sidebarCollapsed) { sidebar.classList.add('collapsed'); localStorage.setItem('sidebarCollapsed', 'true'); }
@@ -2975,15 +3024,101 @@
             }
         };
     }
-    if (sidebarOverlay) sidebarOverlay.onclick = closeSidebar;
+    if (sidebarOverlay) {
+        sidebarOverlay.onclick = closeSidebar;
+        // Swipe-to-close on overlay
+        let touchStartX = 0;
+        sidebarOverlay.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, {passive:true});
+        sidebarOverlay.addEventListener('touchend', (e) => {
+            if (e.changedTouches[0].clientX - touchStartX < -30) closeSidebar();
+        }, {passive:true});
+    }
     const savedCollapsed = localStorage.getItem('sidebarCollapsed');
-    if (savedCollapsed === 'true' && window.innerWidth > 768) { sidebar.classList.add('collapsed'); sidebarCollapsed = true; }
+    if (savedCollapsed === 'true' && window.innerWidth > 1024) { sidebar.classList.add('collapsed'); sidebarCollapsed = true; }
     else sidebarCollapsed = false;
+
+    // ── Mobile tab "更多" dropdown ──
+    const moreBtn = document.getElementById('mobileMoreTabsBtn');
+    const moreDropdown = document.getElementById('mobileMoreDropdown');
+    const tabSeparator = document.querySelector('#tabBar .tab-separator');
+
+    function populateMobileDropdown() {
+        if (!moreBtn || !moreDropdown) return;
+        const adminTabs = document.querySelectorAll('#tabBar .admin-tab');
+        const hiddenTabs = [];
+        adminTabs.forEach(btn => {
+            if (btn.style.display === 'none' || !btn.offsetParent) {
+                hiddenTabs.push(btn);
+            }
+        });
+        // Also add admin tabs that exist but might be forced hidden
+        if (hiddenTabs.length === 0) {
+            adminTabs.forEach(btn => hiddenTabs.push(btn));
+        }
+        moreDropdown.innerHTML = hiddenTabs.map(btn =>
+            `<button data-tab-id="${btn.id}">${btn.textContent}</button>`
+        ).join('');
+        moreDropdown.querySelectorAll('button').forEach(b => {
+            b.onclick = () => {
+                const target = document.getElementById(b.dataset.tabId);
+                if (target) { target.click(); moreDropdown.classList.remove('open'); }
+            };
+        });
+    }
+
+    function updateMobileLayout() {
+        const isPhone = window.innerWidth <= 640;
+        // Sidebar
+        if (isPhone) {
+            sidebar.classList.remove('collapsed');
+            sidebar.style.width = '';
+        }
+        // Tab bar
+        if (moreBtn) moreBtn.style.display = isPhone ? 'inline-block' : 'none';
+        if (moreDropdown) { moreDropdown.classList.remove('open'); moreDropdown.style.display = isPhone ? '' : 'none'; }
+        if (tabSeparator) tabSeparator.style.display = isPhone ? 'none' : '';
+        // Admin tabs
+        document.querySelectorAll('#tabBar .admin-tab').forEach(btn => {
+            if (isPhone) {
+                btn.classList.add('visible');
+                if (btn.style.display === 'none') btn.style.display = '';
+                // Hide all admin tabs; dropdown will show them
+                btn.style.display = 'none';
+            } else {
+                btn.classList.remove('visible');
+                btn.style.display = btn.id === 'skillAuditTabBtn' || btn.id === 'reviewTabBtn'
+                    ? (btn.style.display) : '';  // restore original visibility
+                const role = sessionStorage.getItem('role') || '';
+                const isAuditor = sessionStorage.getItem('is_auditor') === '1';
+                if (btn.id === 'skillAuditTabBtn' && (role === 'admin' || isAuditor)) btn.style.display = 'inline-block';
+                if (btn.id === 'reviewTabBtn' && (role === 'admin' || isAuditor)) btn.style.display = 'inline-block';
+                if (btn.id === 'databaseTabBtn') btn.style.display = 'inline-block';
+                if (btn.id === 'analyticsTabBtn') btn.style.display = 'inline-block';
+            }
+        });
+        if (isPhone) populateMobileDropdown();
+    }
+
+    if (moreBtn) {
+        moreBtn.onclick = (e) => {
+            e.stopPropagation();
+            populateMobileDropdown();
+            moreDropdown.classList.toggle('open');
+        };
+        document.addEventListener('click', () => { if (moreDropdown) moreDropdown.classList.remove('open'); });
+    }
+
     window.addEventListener('resize', () => {
-        if (window.innerWidth <= 768) sidebar.classList.remove('collapsed');
-        else if (localStorage.getItem('sidebarCollapsed') === 'true') { sidebar.classList.add('collapsed'); sidebarCollapsed = true; }
-        else { sidebar.classList.remove('collapsed'); sidebarCollapsed = false; }
+        if (window.innerWidth <= 1024) {
+            sidebar.classList.remove('collapsed');
+        } else if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            sidebar.classList.add('collapsed'); sidebarCollapsed = true;
+        } else {
+            sidebar.classList.remove('collapsed'); sidebarCollapsed = false;
+        }
+        updateMobileLayout();
     });
+    updateMobileLayout();  // initial run
 
     // ======================== Consent Modal Logic ========================
     const consentModal = document.getElementById('consentModal');
@@ -4916,7 +5051,7 @@
             // Verify the project chat is in the list; if missing, backfill
             const sessionsRes = await fetch('/get_sessions', { credentials: 'include' });
             const sessionsData = await sessionsRes.json();
-            const projectChat = (sessionsData.sessions || []).find(s => s.project_id == projectId);
+            const projectChat = (sessionsData.sessions || []).find(s => s.project_id == projectId && !s.is_grilling);
             if (!projectChat) {
                 // Backfill: call admin endpoint to create missing project chat
                 console.log('Backfilling missing project chat for', projectId);
@@ -5016,7 +5151,7 @@
                     try {
                         const res = await fetch('/get_sessions', { credentials: 'include' });
                         const data = await res.json();
-                        const projChat = (data.sessions || []).find(s => s.project_id == projectId);
+                        const projChat = (data.sessions || []).find(s => s.project_id == projectId && !s.is_grilling);
                         if (projChat) {
                             // Switch to chat tab and load the project chat
                             document.getElementById('chatTabBtn')?.click();
@@ -6654,7 +6789,7 @@
                             // Verify project chat actually appeared; reload if not
                             const sRes = await fetch('/get_sessions', { credentials: 'include' });
                             const sData = await sRes.json();
-                            const found = (sData.sessions || []).find(s => s.project_id == result.id);
+                            const found = (sData.sessions || []).find(s => s.project_id == result.id && !s.is_grilling);
                             if (!found) {
                                 await loadHistoryList(true);
                             }
@@ -8653,23 +8788,27 @@
     }
 
     // ======================== Drag-and-Drop File Upload ========================
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+    let _dragCounter = 0;
+    ['dragenter', 'dragover', 'dragleave', 'drop', 'dragend'].forEach(evt => {
         document.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); }, false);
     });
-    ['dragenter', 'dragover'].forEach(evt => {
-        document.body.addEventListener(evt, function() {
-            chatInterface.classList.add('drag-over');
-        }, false);
+    document.addEventListener('dragenter', function() {
+        _dragCounter++;
+        chatInterface.classList.add('drag-over');
     });
-    ['dragleave', 'drop'].forEach(evt => {
-        document.body.addEventListener(evt, function(e) {
-            if (e.target === document.body || e.target === chatInterface) {
-                chatInterface.classList.remove('drag-over');
-            }
-        }, false);
+    document.addEventListener('dragleave', function() {
+        _dragCounter--;
+        if (_dragCounter <= 0) { _dragCounter = 0; chatInterface.classList.remove('drag-over'); }
+    });
+    document.addEventListener('drop', function() {
+        _dragCounter = 0;
+        chatInterface.classList.remove('drag-over');
+    });
+    document.addEventListener('dragend', function() {
+        _dragCounter = 0;
+        chatInterface.classList.remove('drag-over');
     });
     chatInterface.addEventListener('drop', function(e) {
-        chatInterface.classList.remove('drag-over');
         const dt = e.dataTransfer;
         if (dt && dt.files && dt.files.length > 0) {
             for (let i = 0; i < dt.files.length; i++) {
@@ -9007,14 +9146,14 @@
     const reviewTabBtn = document.getElementById('reviewTabBtn');
     const reviewPanel = document.getElementById('reviewPanel');
     if (reviewTabBtn && reviewPanel) {
-        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false };
+        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, docReview: false };
         reviewTabBtn.onclick = async function() {
             saveActiveTab('review');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             reviewTabBtn.classList.add('active');
             switchToPanel('reviewPanel');
             switchSidebarPane('review');
-            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false };
+            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, docReview: false };
             const content = document.getElementById('reviewContent');
             const sections = document.getElementById('reviewSections');
             try {
@@ -9105,6 +9244,7 @@
                 ['ingestHistoryDetails', 'history', loadIngestHistory],
                 ['structuredDocsDetails', 'structured', loadStructuredDocsPanel],
                 ['workloadDetails', 'workload', loadWorkloadPanel],
+                ['docReviewDetails', 'docReview', loadDocReviewPanel],
             ];
             for (const [id, key, fn] of map) {
                 const el = document.getElementById(id);
@@ -9145,6 +9285,103 @@
             }
             panel.innerHTML = html || '<span style="color:var(--card-muted);">暂无摄入历史。</span>';
         } catch(_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
+    }
+
+    async function loadDocReviewPanel() {
+        const panel = document.getElementById('docReviewPanel'); if (!panel) return;
+        const fileInput = document.getElementById('docReviewFileInput');
+        const selectBtn = document.getElementById('selectDocReviewFileBtn');
+        const fileName = document.getElementById('docReviewFileName');
+        const runBtn = document.getElementById('runDocReviewBtn');
+        const status = document.getElementById('docReviewStatus');
+        const results = document.getElementById('docReviewResults');
+
+        if (selectBtn && fileInput) {
+            selectBtn.onclick = () => fileInput.click();
+            fileInput.onchange = () => {
+                if (fileInput.files.length) {
+                    fileName.textContent = fileInput.files[0].name;
+                    if (runBtn) runBtn.disabled = false;
+                } else {
+                    fileName.textContent = '';
+                    if (runBtn) runBtn.disabled = true;
+                }
+            };
+        }
+
+        if (runBtn) {
+            runBtn.onclick = async () => {
+                if (!fileInput || !fileInput.files.length) {
+                    if (status) status.textContent = '请先选择文件';
+                    return;
+                }
+                runBtn.disabled = true;
+                if (status) status.textContent = '⏳ AI正在审查...';
+                if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+
+                const form = new FormData();
+                form.append('file', fileInput.files[0]);
+
+                const selectedAxes = [];
+                document.querySelectorAll('.doc-review-axis:checked').forEach(cb => selectedAxes.push(cb.value));
+                if (selectedAxes.length < 5) form.append('axes', selectedAxes.join(','));
+
+                try {
+                    const res = await fetch('/admin/review/document', {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: form
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        if (status) status.textContent = '❌ ' + (data.error || '审查失败');
+                        runBtn.disabled = false;
+                        return;
+                    }
+                    const r = data.data;
+                    if (status) status.textContent = '✅ 审查完成';
+
+                    let html = '';
+                    if (r.scores) {
+                        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
+                        for (const [k, v] of Object.entries(r.scores)) {
+                            const color = v >= 7 ? '#16a34a' : (v >= 5 ? '#d97706' : '#dc2626');
+                            html += `<span style="background:${color};color:white;border-radius:6px;padding:4px 10px;font-size:0.75rem;"><b>${k}: ${v}</b></span>`;
+                        }
+                        html += '</div>';
+                    }
+                    if (r.overall) {
+                        html += `<div style="font-size:0.9rem;margin-bottom:6px;">综合评分: <b style="font-size:1.1rem;">${r.overall}/10</b> — ${r.verdict||''}</div>`;
+                    }
+                    if (r.issues && r.issues.length) {
+                        html += '<table style="width:100%;font-size:0.7rem;border-collapse:collapse;">';
+                        html += '<tr style="background:var(--card-bg);"><th style="padding:4px;">维度</th><th>严重度</th><th>位置</th><th>问题</th><th>建议</th></tr>';
+                        for (const iss of r.issues) {
+                            const sevColor = iss.severity === '高' ? '#dc2626' : (iss.severity === '中' ? '#d97706' : '#6b7280');
+                            html += `<tr style="border-top:1px solid var(--card-border);">
+                                <td style="padding:4px;">${escapeHtml(iss.axis||'')}</td>
+                                <td style="color:${sevColor};font-weight:600;">${escapeHtml(iss.severity||'')}</td>
+                                <td>${escapeHtml(iss.location||'')}</td>
+                                <td>${escapeHtml(iss.finding||'')}</td>
+                                <td>${escapeHtml(iss.suggestion||'')}</td></tr>`;
+                        }
+                        html += '</table>';
+                    }
+                    if (r.summary) {
+                        html += `<div style="margin-top:10px;padding:8px;background:#f8fafc;border-radius:6px;font-size:0.75rem;">📝 ${escapeHtml(r.summary)}</div>`;
+                    }
+                    if (r.parse_error) {
+                        html += `<div style="margin-top:10px;padding:8px;background:#fef3c7;border-radius:6px;font-size:0.72rem;white-space:pre-wrap;">⚠️ AI返回格式异常，原文如下：\n${escapeHtml(r.raw_analysis||'')}</div>`;
+                    }
+                    results.innerHTML = html;
+                    results.style.display = '';
+                } catch(e) {
+                    console.error('Doc review error:', e);
+                    if (status) status.textContent = '❌ 网络错误';
+                }
+                runBtn.disabled = false;
+            };
+        }
     }
 
     async function loadStructuredDocsPanel() {
