@@ -6072,47 +6072,24 @@
             return null;
         }
         updateProgress(70, '正在保存...');
+        // ok() wraps payload in data.data — check nested first, then flat for non-ok() endpoints
+        const payload = (data.data && typeof data.data === 'object') ? data.data : data;
+        if (payload.duplicate) {
+            finishProgress(false, '发现重复文件');
+            return {
+                conflict: true,
+                conflict_type: payload.conflict_type || 'hash',
+                existing_file: payload.existing_file,
+                new_filename: payload.new_filename,
+                file: file
+            };
+        }
         if (res.ok && data.success) {
             finishProgress(true);
             return { success: true };
         }
-        if (data.duplicate) {
-            finishProgress(false, '发现重复文件');
-            return {
-                conflict: true,
-                conflict_type: data.conflict_type || 'hash',
-                existing_file: data.existing_file,
-                new_filename: data.new_filename,
-                file: file
-            };
-        }
         finishProgress(false, data.error || '上传失败，请检查文件格式后重试');
         return null;
-    }
-
-    async function showDuplicateFileOptions(existingFile, newFileName) {
-        return new Promise((resolve) => {
-            const modal = document.createElement('div');
-            modal.className = 'custom-modal-overlay';
-            modal.innerHTML = `
-                <div class="custom-modal" style="max-width: 500px;">
-                    <h3>发现重复文件</h3>
-                    <p>文件内容与以下文件相同：</p>
-                    <p><strong>已存在文件：</strong> ${escapeHtml(existingFile.original_name)} (版本 v${existingFile.version})</p>
-                    <p><strong>新文件名称：</strong> ${escapeHtml(newFileName)}</p>
-                    <p>请选择操作：</p>
-                    <div class="custom-modal-buttons" style="flex-direction: column; gap: 8px;">
-                        <button class="confirm" id="keepBtn">保留原有文件（不改变）</button>
-                        <button class="confirm" id="renameBtn">将原文件重命名为新文件名</button>
-                        <button class="cancel" id="forceBtn">强制上传为新版本（保留两份）</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            modal.querySelector('#keepBtn').onclick = () => { modal.remove(); resolve('keep'); };
-            modal.querySelector('#renameBtn').onclick = () => { modal.remove(); resolve('rename'); };
-            modal.querySelector('#forceBtn').onclick = () => { modal.remove(); resolve('force'); };
-        });
     }
 
     function getCurrentProjectId() {
@@ -11064,10 +11041,8 @@
                 es.close();
                 _activeTaskIds.delete(taskId);
                 updateFloatingIndicator();
-                if (_activeTaskIds.size === 0) {
-                    if (progBar) progBar.style.display = 'none';
-                    if (procInd) procInd.style.display = 'none';
-                }
+                finishProgress(false, '连接失败');
+                if (_activeTaskIds.size === 0 && procInd) procInd.style.display = 'none';
                 loadBgTasks();
             };
         } catch(e) {
