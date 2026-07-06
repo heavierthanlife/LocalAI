@@ -5782,6 +5782,7 @@
     }
 
     async function loadFilesInFolder(projectId, folderId) {
+        window._currentProjectId = projectId;
         const container = document.getElementById('fileListContainer');
         container.innerHTML = '加载中...';
         try {
@@ -5875,9 +5876,70 @@
             document.getElementById('batchUploadBtn').onclick = () => document.getElementById('batchUploadInput').click();
             document.getElementById('batchUploadInput').onchange = async (e) => {
                 const uploadFiles = Array.from(e.target.files);
+                const conflicts = [];
+                const nonConflictUploads = [];
+
                 for (const file of uploadFiles) {
-                    await uploadFileToFolder(projectId, folderId, file);
+                    const result = await uploadFileToFolder(projectId, folderId, file);
+                    if (result && result.conflict) {
+                        conflicts.push({
+                            index: conflicts.length,
+                            conflict_type: result.conflict_type,
+                            existing_file: result.existing_file,
+                            new_filename: result.new_filename,
+                            file: result.file
+                        });
+                    } else if (result && result.success) {
+                        nonConflictUploads.push(file.name);
+                    }
                 }
+
+                if (conflicts.length > 0) {
+                    const panelResult = await showBatchConflictPanel(conflicts);
+                    if (panelResult.applied) {
+                        for (const r of panelResult.results) {
+                            const c = conflicts[r.index];
+                            if (r.action === 'keep') {
+                                // Skip — keep existing file
+                                continue;
+                            } else if (r.action === 'replace') {
+                                // Upload as new version of the existing file
+                                const formData = new FormData();
+                                formData.append('file', c.file);
+                                try {
+                                    await fetch(`/admin/projects/${projectId}/files/${c.existing_file.id}/new_version`, {
+                                        method: 'POST',
+                                        credentials: 'include',
+                                        body: formData
+                                    });
+                                } catch (err) {
+                                    console.error('Replace failed:', c.new_filename, err);
+                                }
+                            } else if (r.action === 'rename') {
+                                // Rename the existing file then upload new one
+                                try {
+                                    await fetch(`/admin/projects/${projectId}/files/${c.existing_file.id}/rename`, {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({ original_name: c.new_filename })
+                                    });
+                                    // Now re-upload the new file
+                                    const formData = new FormData();
+                                    formData.append('file', c.file);
+                                    await fetch(`/admin/projects/${projectId}/folders/${folderId}/upload`, {
+                                        method: 'POST',
+                                        credentials: 'include',
+                                        body: formData
+                                    });
+                                } catch (err) {
+                                    console.error('Rename+upload failed:', c.new_filename, err);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 await loadFilesInFolder(projectId, folderId);
             };
             document.getElementById('batchDownloadBtn').onclick = () => batchDownloadFiles(projectId);
@@ -6051,6 +6113,177 @@
             modal.querySelector('#renameBtn').onclick = () => { modal.remove(); resolve('rename'); };
             modal.querySelector('#forceBtn').onclick = () => { modal.remove(); resolve('force'); };
         });
+    }
+
+    function getCurrentProjectId() {
+        return window._currentProjectId;
+    }
+
+    async function showBatchConflictPanel(conflicts) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'custom-modal-overlay';
+            modal.id = 'batchConflictPanel';
+
+            function sizeFmt(s) {
+                if (!s) return '?';
+                return s > 1024*1024 ? (s/(1024*1024)).toFixed(1)+'MB' : s > 1024 ? (s/1024).toFixed(1)+'KB' : s+'B';
+            }
+
+            const rows = conflicts.map((c, i) => {
+                const ef = c.existing_file;
+                const newSize = c.file ? c.file.size : 0;
+                return `
+                    <div class="conflict-pair" data-index="${i}" data-action="pending">
+                        <div class="conflict-pair-header">
+                            <span class="conflict-badge ${c.conflict_type === 'hash' ? 'badge-hash' : 'badge-name'}">${c.conflict_type === 'hash' ? '内容相同' : '同名文件'}</span>
+                            <span class="conflict-pair-name">${escapeHtml(c.new_filename)}</span>
+                        </div>
+                        <div class="conflict-cards">
+                            <div class="conflict-card card-existing">
+                                <div class="conflict-card-label">已存在</div>
+                                <div class="conflict-card-name">${escapeHtml(ef.original_name)}</div>
+                                <div class="conflict-card-meta">v${ef.version} · ${sizeFmt(ef.file_size)}</div>
+                            </div>
+                            <div class="conflict-card card-new">
+                                <div class="conflict-card-label">新上传</div>
+                                <div class="conflict-card-name">${escapeHtml(c.new_filename)}</div>
+                                <div class="conflict-card-meta">${sizeFmt(newSize)}</div>
+                            </div>
+                        </div>
+                        <div class="conflict-actions">
+                            <button class="conflict-btn btn-keep" data-action="keep">保留已有</button>
+                            <button class="conflict-btn btn-replace" data-action="replace">替换为新</button>
+                            <button class="conflict-btn btn-rename" data-action="rename">重命名新文件</button>
+                            ${c.conflict_type === 'name' ? '<button class="conflict-btn btn-compare" data-action="compare">比较内容</button>' : ''}
+                        </div>
+                        <div class="conflict-compare-view" style="display:none;"></div>
+                    </div>`;
+            }).join('');
+
+            modal.innerHTML = `
+                <div class="custom-modal conflict-panel" style="max-width:720px;max-height:85vh;overflow-y:auto;">
+                    <h3>发现 ${conflicts.length} 个文件冲突</h3>
+                    <p style="font-size:0.8rem;color:var(--card-muted);margin-bottom:12px;">请为每个冲突选择处理方式，或使用批量操作</p>
+                    <div class="conflict-bulk-actions">
+                        <button id="bulkKeepAll" class="confirm" style="margin-right:8px;">保留所有已有</button>
+                        <button id="bulkReplaceAll" class="cancel">替换所有为新</button>
+                    </div>
+                    <div class="conflict-pairs-list">${rows}</div>
+                    <div class="custom-modal-buttons" style="margin-top:16px;">
+                        <button id="conflictApplyBtn" class="confirm">应用选择</button>
+                        <button id="conflictCancelBtn" class="cancel">取消全部上传</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Per-pair: highlight active action
+            modal.querySelectorAll('.conflict-pair').forEach(pair => {
+                const idx = parseInt(pair.dataset.index);
+                pair.querySelectorAll('.conflict-btn[data-action]').forEach(btn => {
+                    btn.onclick = async () => {
+                        const action = btn.dataset.action;
+                        if (action === 'compare') {
+                            await doContentCompare(pair, conflicts[idx]);
+                            return;
+                        }
+                        pair.dataset.action = action;
+                        pair.querySelectorAll('.conflict-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    };
+                });
+            });
+
+            // Bulk: set all pairs
+            modal.querySelector('#bulkKeepAll').onclick = () => {
+                modal.querySelectorAll('.conflict-pair').forEach(p => {
+                    p.dataset.action = 'keep';
+                    p.querySelectorAll('.conflict-btn').forEach(b => b.classList.remove('active'));
+                    p.querySelector('.btn-keep').classList.add('active');
+                });
+            };
+            modal.querySelector('#bulkReplaceAll').onclick = () => {
+                modal.querySelectorAll('.conflict-pair').forEach(p => {
+                    p.dataset.action = 'replace';
+                    p.querySelectorAll('.conflict-btn').forEach(b => b.classList.remove('active'));
+                    p.querySelector('.btn-replace').classList.add('active');
+                });
+            };
+
+            // Apply / Cancel
+            modal.querySelector('#conflictApplyBtn').onclick = () => {
+                const results = [];
+                modal.querySelectorAll('.conflict-pair').forEach(pair => {
+                    const action = pair.dataset.action === 'pending' ? 'keep' : pair.dataset.action;
+                    results.push({ index: parseInt(pair.dataset.index), action });
+                });
+                modal.remove();
+                resolve({ applied: true, results });
+            };
+            modal.querySelector('#conflictCancelBtn').onclick = () => {
+                modal.remove();
+                resolve({ applied: false, results: [] });
+            };
+        });
+
+        async function doContentCompare(pairEl, conflict) {
+            const viewEl = pairEl.querySelector('.conflict-compare-view');
+            viewEl.style.display = 'block';
+            viewEl.innerHTML = '<div class="compare-loading">正在提取文本内容...</div>';
+
+            // Get existing file content from server
+            let existingText = '';
+            try {
+                const ef = conflict.existing_file;
+                const projectId = getCurrentProjectId();
+                const res = await fetch(`/admin/projects/${projectId}/files/${ef.id}/content`, {
+                    credentials: 'include'
+                });
+                if (res.ok) {
+                    const d = await res.json();
+                    existingText = d.data ? d.data.text : (d.text || '');
+                }
+            } catch (err) {
+                existingText = '[加载失败]';
+            }
+
+            // Get new file content client-side via FileReader
+            let newText = '';
+            const file = conflict.file;
+            if (file) {
+                const ext = (file.name || '').split('.').pop().toLowerCase();
+                const textExts = ['txt', 'md', 'csv', 'json', 'xml', 'html', 'css', 'js', 'py', 'log', 'yaml', 'yml', 'toml', 'ini', 'cfg'];
+                if (textExts.includes(ext)) {
+                    try {
+                        newText = await new Promise((res, rej) => {
+                            const reader = new FileReader();
+                            reader.onload = () => res(reader.result);
+                            reader.onerror = () => rej(reader.error);
+                            reader.readAsText(file);
+                        });
+                    } catch (err) {
+                        newText = '[文件读取失败]';
+                    }
+                } else {
+                    newText = `[二进制文件 (${ext || '未知类型'}) — 无法在浏览器中预览，请根据文件大小和元数据判断]`;
+                }
+            } else {
+                newText = '[文件不可用]';
+            }
+
+            viewEl.innerHTML = `
+                <div class="compare-side-by-side">
+                    <div class="compare-pane">
+                        <div class="compare-pane-header">已存在: ${escapeHtml(conflict.existing_file.original_name)} (v${conflict.existing_file.version})</div>
+                        <pre class="compare-content">${escapeHtml(existingText)}</pre>
+                    </div>
+                    <div class="compare-pane">
+                        <div class="compare-pane-header">新文件: ${escapeHtml(conflict.new_filename)}</div>
+                        <pre class="compare-content">${escapeHtml(newText)}</pre>
+                    </div>
+                </div>`;
+        }
     }
 
     async function batchDownloadFiles(projectId) {
