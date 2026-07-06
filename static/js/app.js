@@ -10810,16 +10810,9 @@
                         es.close();
                         _activeTaskIds.delete(taskId);
                         updateFloatingIndicator();
-                        if (progFill) progFill.style.width = '100%';
+                        finishProgress(true);
                         showTaskCompletion(taskId, { label: d.message || '任务完成', message: d.resultText || '', result: d.result });
-
-                        setTimeout(() => {
-                            if (_activeTaskIds.size === 0) {
-                                if (progBar) progBar.style.display = 'none';
-                                if (procInd) procInd.style.display = 'none';
-                                if (progToast) progToast.style.display = 'none';
-                            }
-                        }, 800);
+                        if (_activeTaskIds.size === 0 && procInd) procInd.style.display = 'none';
                         loadBgTasks();
                     }
                     if (d.event === 'error') {
@@ -10827,14 +10820,8 @@
                         es.close();
                         _activeTaskIds.delete(taskId);
                         updateFloatingIndicator();
-                        if (progToast && !_taskMinimized) {
-                            progToast.textContent = '❌ ' + (d.message || '任务失败');
-                            setTimeout(() => { progToast.style.display = 'none'; }, 5000);
-                        }
-                        if (_activeTaskIds.size === 0) {
-                            if (progBar) progBar.style.display = 'none';
-                            if (procInd) procInd.style.display = 'none';
-                        }
+                        finishProgress(false, d.message || '任务失败');
+                        if (_activeTaskIds.size === 0 && procInd) procInd.style.display = 'none';
                         loadBgTasks();
                     }
                 } catch(parseErr) {}
