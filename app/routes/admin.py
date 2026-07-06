@@ -8,7 +8,7 @@ from werkzeug.datastructures import FileStorage
 
 from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, PROJECT_FILES_ROOT, logger
 from app.database import get_db_connection, db_transaction
-from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
+from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer, ok, err
 import app.globals as g
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 from app.services.file_processing import extract_text_from_file
@@ -49,13 +49,13 @@ admin_bp = Blueprint('admin', __name__, template_folder=str(BASE_DIR / 'template
 @admin_bp.route('/admin/task_deposit', methods=['GET'])
 def get_task_deposit():
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "Not logged in"}), 401
+        return err("Not logged in", "AUTH_REQUIRED", 401)
     is_admin_user = session.get('role') == 'admin'
     if not is_admin_user:
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -75,24 +75,24 @@ def get_task_deposit():
                         ORDER BY created_at DESC
                         """)
             items = cur.fetchall()
-            return jsonify({"items": items})
+            return ok({"items": items})
 
 @admin_bp.route('/admin/task_deposit/transfer/<int:item_id>', methods=['POST'])
 def transfer_task_deposit_item(item_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if session.get('role') != 'admin':
-        return jsonify({"error": "Only admin can transfer deposit items"}), 403
+        return err("Only admin can transfer deposit items", "FORBIDDEN", 403)
     data = request.get_json()
     target_user_id = data.get('target_user_id')
     if not target_user_id:
-        return jsonify({"error": "Missing target_user_id"}), 400
+        return err("Missing target_user_id", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM users WHERE user_id = %s", (target_user_id,))
             if not cur.fetchone():
-                return jsonify({"error": "Target user not found"}), 404
+                return err("Target user not found", "NOT_FOUND", 404)
             cur.execute("""
                         UPDATE task_deposit_items
                         SET transferred_to_user_id = %s,
@@ -103,9 +103,9 @@ def transfer_task_deposit_item(item_id):
                         """, (target_user_id, item_id))
             item = cur.fetchone()
             if not item:
-                return jsonify({"error": "Item not found or already deleted"}), 404
+                return err("Item not found or already deleted", "NOT_FOUND", 404)
             conn.commit()
-            return jsonify({"success": True, "item": dict(item)})
+            return ok({"item": dict(item)})
 
 # Permission helpers for projects
 ROLE_HIERARCHY = {'admin': 4, 'manager': 3, 'editor': 2, 'viewer': 1, 'user': 0}
@@ -129,7 +129,7 @@ def require_role(min_role):
         @wraps(f)
         def wrapper(*args, **kwargs):
             if get_role_level() < ROLE_HIERARCHY.get(min_role, 0):
-                return jsonify({"error": f"Requires {min_role} role or higher"}), 403
+                return err(f"Requires {min_role} role or higher", "FORBIDDEN", 403)
             return f(*args, **kwargs)
         return wrapper
     return decorator
@@ -138,7 +138,7 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not is_admin():
-            return jsonify({"error": "Admin access required"}), 403
+            return err("Admin access required", "FORBIDDEN", 403)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -155,7 +155,7 @@ def auditor_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not is_auditor_or_admin():
-            return jsonify({"error": "Admin or Auditor access required"}), 403
+            return err("Admin or Auditor access required", "FORBIDDEN", 403)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -163,9 +163,9 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get('consent_value', 0) != 1:
-            return jsonify({"error": "Consent not given"}), 403
+            return err("Consent not given", "FORBIDDEN", 403)
         if not session.get('user_id'):
-            return jsonify({"error": "Not logged in"}), 401
+            return err("Not logged in", "AUTH_REQUIRED", 401)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -188,7 +188,7 @@ def create_project():
     if industry not in ('bidding_agency', 'engineering_cost', 'engineering_audit', 'general'):
         industry = 'general'
     if not name:
-        return jsonify({"error": "Project name required"}), 400
+        return err("Project name required", "VALIDATION_ERROR", 400)
     user_id = session.get('user_id')
     import uuid
     chat_thread_id = str(uuid.uuid4())
@@ -215,7 +215,7 @@ def create_project():
                     "INSERT INTO chat_sessions (user_id, thread_id, title, project_id) VALUES (%s, %s, %s, %s)",
                     (user_id, chat_thread_id, name, project_id))
                 conn.commit()
-                return jsonify({"success": True, "id": project_id, "chat_thread_id": chat_thread_id})
+                return ok({"id": project_id, "chat_thread_id": chat_thread_id})
 
 @admin_bp.route('/admin/projects/<int:project_id>/backfill_chat', methods=['POST'])
 def backfill_project_chat(project_id):
@@ -226,7 +226,7 @@ def backfill_project_chat(project_id):
     """
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "Not authenticated"}), 401
+        return err("Not authenticated", "AUTH_REQUIRED", 401)
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -238,15 +238,17 @@ def backfill_project_chat(project_id):
                 """, (project_id, user_id))
                 proj = cur.fetchone()
                 if not proj:
-                    return jsonify({"error": "Project not found or access denied"}), 404
+                    return err("Project not found or access denied", "NOT_FOUND", 404)
                 
-                # Check if chat already exists
+                # Check if chat already exists (exclude grilling threads)
                 cur.execute("""
-                    SELECT thread_id FROM chat_sessions WHERE project_id = %s LIMIT 1
+                    SELECT thread_id FROM chat_sessions
+                    WHERE project_id = %s AND (is_grilling = FALSE OR is_grilling IS NULL)
+                    LIMIT 1
                 """, (project_id,))
                 existing = cur.fetchone()
                 if existing:
-                    return jsonify({"success": True, "thread_id": existing['thread_id'], "existed": True})
+                    return ok({"thread_id": existing['thread_id'], "existed": True})
                 
                 # Create new shared chat
                 import uuid
@@ -256,18 +258,18 @@ def backfill_project_chat(project_id):
                     (user_id, thread_id, proj['name'], project_id))
                 conn.commit()
                 logger.info(f"Backfilled project chat: {proj['name']} (project_id={project_id}, thread={thread_id})")
-                return jsonify({"success": True, "thread_id": thread_id, "existed": False})
+                return ok({"thread_id": thread_id, "existed": False})
     except Exception as e:
         logger.error(f"Backfill project chat failed: {e}")
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects', methods=['GET'])
 def get_projects():
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"projects": [], "has_projects": False})
+        return ok({"projects": [], "has_projects": False})
     if is_admin():
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -275,7 +277,7 @@ def get_projects():
                     "SELECT id, name, description, created_at, updated_at, status, archived_at, archive_filename, deletion_scheduled_at FROM projects ORDER BY CASE status WHEN 'active' THEN 1 WHEN 'archived' THEN 2 WHEN 'aborted' THEN 3 END, created_at DESC")
                 projects = cur.fetchall()
                 has_projects = len(projects) > 0
-                return jsonify({"projects": projects, "has_projects": has_projects})
+                return ok({"projects": projects, "has_projects": has_projects})
     else:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -300,24 +302,24 @@ def get_projects():
                             """, (user_id,))
                 projects = cur.fetchall()
                 has_projects = len(projects) > 0
-                return jsonify({"projects": projects, "has_projects": has_projects})
+                return ok({"projects": projects, "has_projects": has_projects})
 
 @admin_bp.route('/admin/projects/<int:project_id>', methods=['PUT'])
 def update_project(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "Not logged in"}), 401
+        return err("Not logged in", "AUTH_REQUIRED", 401)
 
     if not is_admin() and not _can_manage_files(project_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
 
     data = request.get_json()
     name = data.get('name', '').strip()
     description = data.get('description', '').strip()
     if not name:
-        return jsonify({"error": "Project name required"}), 400
+        return err("Project name required", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -328,15 +330,15 @@ def update_project(project_id):
                 RETURNING id
             """, (name, description, project_id))
             if cur.fetchone():
-                # Sync project chat title
+                # Sync project chat title (skip grilling threads)
                 cur.execute(
-                    "UPDATE chat_sessions SET title = %s WHERE project_id = %s",
+                    "UPDATE chat_sessions SET title = %s WHERE project_id = %s AND (is_grilling = FALSE OR is_grilling IS NULL)",
                     (name, project_id)
                 )
                 conn.commit()
-                return jsonify({"success": True})
+                return ok(message="ok")
             else:
-                return jsonify({"error": "Project not found"}), 404
+                return err("Project not found", "NOT_FOUND", 404)
 
 @admin_bp.route('/admin/projects/<int:project_id>', methods=['DELETE'])
 @admin_required
@@ -346,10 +348,10 @@ def delete_project(project_id):
             cur.execute("SELECT status FROM projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "Project not found"}), 404
+                return err("Project not found", "NOT_FOUND", 404)
             status = row[0]
             if status not in ('archived', 'aborted'):
-                return jsonify({"error": "Only archived or aborted projects can be deleted"}), 400
+                return err("Only archived or aborted projects can be deleted", "VALIDATION_ERROR", 400)
 
             # Archive project chat sessions before deletion (full content to disk JSON)
             from app.services.session_manager import archive_session
@@ -373,15 +375,15 @@ def delete_project(project_id):
 
             cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>', methods=['DELETE'])
 def delete_project_file(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_edit_file(project_id, file_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with db_transaction(conn):
@@ -393,7 +395,7 @@ def delete_project_file(project_id, file_id):
                 """, (file_id, project_id))
                 file_record = cur.fetchone()
                 if not file_record:
-                    return jsonify({"error": "File not found"}), 404
+                    return err("File not found", "NOT_FOUND", 404)
 
                 cur.execute("""
                     INSERT INTO project_recycle_bin 
@@ -409,7 +411,7 @@ def delete_project_file(project_id, file_id):
 
                 cur.execute("DELETE FROM project_files WHERE id = %s AND project_id = %s", (file_id, project_id))
                 conn.commit()
-                return jsonify({"success": True, "moved_to_recycle_bin": True})
+                return ok({"moved_to_recycle_bin": True})
 
 @admin_bp.route('/admin/projects/<int:project_id>/abort', methods=['POST'])
 @admin_required
@@ -420,27 +422,27 @@ def abort_project(project_id):
                         (project_id,))
             if cur.fetchone():
                 conn.commit()
-                return jsonify({"success": True})
-            return jsonify({"error": "Project not found"}), 404
+                return ok(message="ok")
+            return err("Project not found", "NOT_FOUND", 404)
 
 @admin_bp.route('/admin/projects/<int:project_id>/finish', methods=['POST'])
 def finish_project(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_manage_files(project_id, user_id):
-        return jsonify({"error": "Only admin or project manager can finish a project"}), 403
+        return err("Only admin or project manager can finish a project", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT name FROM projects WHERE id = %s AND status = 'active'", (project_id,))
             project = cur.fetchone()
             if not project:
-                return jsonify({"error": "Project not found or already finished/aborted"}), 404
+                return err("Project not found or already finished/aborted", "NOT_FOUND", 404)
             project_name = project[0]
             cur.execute("SELECT stored_path, original_name FROM project_files WHERE project_id = %s", (project_id,))
             files = cur.fetchall()
             if not files:
-                return jsonify({"error": "No files to archive"}), 400
+                return err("No files to archive", "VALIDATION_ERROR", 400)
             zip_dir = os.path.join(PROJECT_FILES_ROOT, 'archives')
             os.makedirs(zip_dir, exist_ok=True)
             safe_name = re.sub(r'[^\w\-_\.]', '_', project_name)
@@ -452,7 +454,7 @@ def finish_project(project_id):
             cur.execute("UPDATE projects SET status = 'archived', archived_at = NOW(), archive_filename = %s WHERE id = %s",
                         (zip_filename, project_id))
             conn.commit()
-            return jsonify({
+            return ok({
                 "success": True,
                 "download_url": f"/admin/projects/{project_id}/download_archive/{zip_filename}",
                 "zip_filename": zip_filename
@@ -461,21 +463,21 @@ def finish_project(project_id):
 @admin_bp.route('/admin/projects/<int:project_id>/download_archive/<zip_filename>', methods=['GET'])
 def download_archive(project_id, zip_filename):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     zip_dir = os.path.join(PROJECT_FILES_ROOT, 'archives')
     zip_path = os.path.join(zip_dir, zip_filename)
     if not os.path.exists(zip_path):
-        return jsonify({"error": "Archive not found"}), 404
+        return err("Archive not found", "NOT_FOUND", 404)
     return send_file(zip_path, as_attachment=True, download_name=zip_filename)
 
 # Project members routes
 @admin_bp.route('/admin/projects/<int:project_id>/members', methods=['GET'])
 def get_project_members(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -486,19 +488,19 @@ def get_project_members(project_id):
                 ORDER BY pm.role, u.username
             """, (project_id,))
             members = cur.fetchall()
-            return jsonify({"members": members})
+            return ok({"members": members})
 
 @admin_bp.route('/admin/projects/<int:project_id>/members/search', methods=['GET'])
 def search_users_to_add(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_manage_members(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     query = request.args.get('q', '').strip()
     if len(query) < 2:
-        return jsonify({"users": []})
+        return ok({"users": []})
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -511,15 +513,15 @@ def search_users_to_add(project_id):
                 LIMIT 20
             """, (f'%{query}%', project_id, user_id))
             users = cur.fetchall()
-            return jsonify({"users": users})
+            return ok({"users": users})
 
 @admin_bp.route('/admin/users', methods=['GET'])
 def list_users():
     """Return all active users (for searchable dropdowns, member pickers)."""
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     if not is_admin():
-        return jsonify({"error": "Admin only"}), 403
+        return err("Admin only", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -528,17 +530,17 @@ def list_users():
                 WHERE is_active = TRUE AND username IS NOT NULL AND username != ''
                 ORDER BY username
             """)
-            return jsonify({"users": cur.fetchall()})
+            return ok({"users": cur.fetchall()})
 
 @admin_bp.route('/admin/projects/<int:project_id>/all_users', methods=['GET'])
 def get_all_users_for_project(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     current_user_id = session.get('user_id')
     if not current_user_id:
-        return jsonify({"error": "Not logged in"}), 401
+        return err("Not logged in", "AUTH_REQUIRED", 401)
     if not is_admin() and not _can_manage_members(project_id, current_user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -553,45 +555,45 @@ def get_all_users_for_project(project_id):
                 LIMIT 100
             """, (project_id, current_user_id))
             users = cur.fetchall()
-            return jsonify({"users": users})
+            return ok({"users": users})
 
 @admin_bp.route('/admin/projects/<int:project_id>/members', methods=['POST'])
 def add_project_member(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_manage_members(project_id, user_id):
-        return jsonify({"error": "Only admin or project manager can add members"}), 403
+        return err("Only admin or project manager can add members", "FORBIDDEN", 403)
 
     data = request.get_json()
     new_user_id = data.get('user_id')
     role = data.get('role', 'member')
     if role == 'manager' and not is_admin():
-        return jsonify({"error": "Only admin can add managers"}), 403
+        return err("Only admin can add managers", "FORBIDDEN", 403)
     if role not in ('member', 'manager'):
-        return jsonify({"error": "Invalid role"}), 400
+        return err("Invalid role", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT role FROM users WHERE user_id = %s", (new_user_id,))
             row = cur.fetchone()
             if row and row[0] == 'admin':
-                return jsonify({"error": "Cannot add a global admin as a project member"}), 403
+                return err("Cannot add a global admin as a project member", "FORBIDDEN", 403)
 
             if not row:
-                return jsonify({"error": "User not found"}), 404
+                return err("User not found", "NOT_FOUND", 404)
 
             cur.execute("SELECT 1 FROM project_members WHERE project_id = %s AND user_id = %s",
                         (project_id, new_user_id))
             if cur.fetchone():
-                return jsonify({"error": "User already a member"}), 409
+                return err("User already a member", "RESOURCE_BUSY", 409)
 
             cur.execute("""
                 INSERT INTO project_members (project_id, user_id, role, added_by)
                 VALUES (%s, %s, %s, %s)
             """, (project_id, new_user_id, role, user_id))
             # Auto-backfill project chat if none exists
-            cur.execute("SELECT 1 FROM chat_sessions WHERE project_id = %s LIMIT 1", (project_id,))
+            cur.execute("SELECT 1 FROM chat_sessions WHERE project_id = %s AND (is_grilling = FALSE OR is_grilling IS NULL) LIMIT 1", (project_id,))
             if not cur.fetchone():
                 import uuid as _uuid
                 cur.execute("SELECT name FROM projects WHERE id = %s", (project_id,))
@@ -602,7 +604,7 @@ def add_project_member(project_id):
                     (user_id, f"proj_{project_id}_{_uuid.uuid4().hex[:8]}", proj_name, project_id)
                 )
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/members/<user_id>', methods=['PUT'])
 @admin_required
@@ -610,14 +612,14 @@ def update_member_role(project_id, user_id):
     data = request.get_json()
     new_role = data.get('role')
     if new_role not in ('member', 'manager'):
-        return jsonify({"error": "Invalid role"}), 400
+        return err("Invalid role", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT role FROM users WHERE user_id = %s", (user_id,))
             row = cur.fetchone()
             if row and row[0] == 'admin':
-                return jsonify({"error": "Cannot modify global admin's role"}), 403
+                return err("Cannot modify global admin's role", "FORBIDDEN", 403)
 
             cur.execute("""
                 UPDATE project_members
@@ -626,24 +628,24 @@ def update_member_role(project_id, user_id):
                 RETURNING user_id
             """, (new_role, project_id, user_id))
             if cur.rowcount == 0:
-                return jsonify({"error": "Member not found"}), 404
+                return err("Member not found", "NOT_FOUND", 404)
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/members/<user_id>', methods=['DELETE'])
 def remove_project_member(project_id, user_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     current_user_id = session.get('user_id')
     if not _can_manage_members(project_id, current_user_id):
-        return jsonify({"error": "Only admin or project manager can remove members"}), 403
+        return err("Only admin or project manager can remove members", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT role FROM users WHERE user_id = %s", (user_id,))
             row = cur.fetchone()
             if row and row[0] == 'admin':
-                return jsonify({"error": "Cannot remove a global admin"}), 403
+                return err("Cannot remove a global admin", "FORBIDDEN", 403)
 
             cur.execute("""
                 SELECT role FROM project_members
@@ -651,36 +653,34 @@ def remove_project_member(project_id, user_id):
             """, (project_id, user_id))
             target_member = cur.fetchone()
             if not target_member:
-                return jsonify({"error": "Member not found"}), 404
+                return err("Member not found", "NOT_FOUND", 404)
 
             target_role = target_member[0]
             if target_role == 'admin':
-                return jsonify({"error": "Cannot remove the project admin"}), 403
+                return err("Cannot remove the project admin", "FORBIDDEN", 403)
             if target_role == 'manager' and not is_admin():
-                return jsonify({"error": "Only admin can remove managers"}), 403
+                return err("Only admin can remove managers", "FORBIDDEN", 403)
 
             cur.execute("""
                 UPDATE project_members SET status = 'quitted'
                 WHERE project_id = %s AND user_id = %s
             """, (project_id, user_id))
             if cur.rowcount == 0:
-                return jsonify({"error": "Member not found"}), 404
+                return err("Member not found", "NOT_FOUND", 404)
             conn.commit()
-            return jsonify({"success": True, "quitted": True})
-            conn.commit()
-            return jsonify({"success": True})
+            return ok({"quitted": True})
 
 @admin_bp.route('/admin/projects/<int:project_id>/transfer_manager/<user_id>', methods=['POST'])
 def transfer_manager_role(project_id, user_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     current_user_id = session.get('user_id')
     current_role = get_user_role_in_project(project_id, current_user_id)
     if current_role != 'manager':
-        return jsonify({"error": "Only a manager can transfer manager rights"}), 403
+        return err("Only a manager can transfer manager rights", "FORBIDDEN", 403)
     target_role = get_user_role_in_project(project_id, user_id)
     if target_role != 'member':
-        return jsonify({"error": "Target user must be a member"}), 400
+        return err("Target user must be a member", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
@@ -689,7 +689,7 @@ def transfer_manager_role(project_id, user_id):
                 cur.execute("UPDATE project_members SET role = 'manager' WHERE project_id = %s AND user_id = %s",
                             (project_id, user_id))
                 conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 # Project folders and files
 def ensure_root_folder(project_id):
@@ -722,10 +722,10 @@ def build_folder_path(folder_id, folder_dict):
 @admin_bp.route('/admin/projects/<int:project_id>/folders', methods=['GET'])
 def get_folders(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     ensure_root_folder(project_id)
     try:
         with get_db_connection() as conn:
@@ -735,7 +735,7 @@ def get_folders(project_id):
                     (project_id,))
                 folders = cur.fetchall()
                 if not folders:
-                    return jsonify({"folders": []})
+                    return ok({"folders": []})
                 folder_dict = {f['id']: f for f in folders}
                 for f in folder_dict.values():
                     f['children'] = []
@@ -751,45 +751,45 @@ def get_folders(project_id):
                             root_folders.append(f)
                 for f in folder_dict.values():
                     f['path'] = build_folder_path(f['id'], folder_dict)
-                return jsonify({"folders": root_folders})
+                return ok({"folders": root_folders})
     except Exception as e:
         logger.error(f"Error in get_folders: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
+        return err("Internal server error", "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders', methods=['POST'])
 def create_folder(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json()
     name = data.get('name', '').strip()
     parent_folder_id = data.get('parent_folder_id')
     if not name:
-        return jsonify({"error": "Folder name required"}), 400
+        return err("Folder name required", "VALIDATION_ERROR", 400)
     if parent_folder_id is None:
-        return jsonify({"error": "Cannot create root folder. Only one root folder exists per project."}), 400
+        return err("Cannot create root folder. Only one root folder exists per project.", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s",
                         (parent_folder_id, project_id))
             if not cur.fetchone():
-                return jsonify({"error": "Parent folder not found"}), 404
+                return err("Parent folder not found", "NOT_FOUND", 404)
             cur.execute(
                 "INSERT INTO project_folders (project_id, parent_folder_id, name, created_by) VALUES (%s, %s, %s, %s) RETURNING id",
                 (project_id, parent_folder_id, name, user_id))
             new_id = cur.fetchone()[0]
             conn.commit()
-            return jsonify({"success": True, "id": new_id})
+            return ok({"id": new_id})
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>', methods=['DELETE'])
 def delete_folder(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_edit_folder(project_id, folder_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with db_transaction(conn):
@@ -849,7 +849,7 @@ def delete_folder(project_id, folder_id):
                 """, [project_id] + folder_ids)
 
                 conn.commit()
-                return jsonify({
+                return ok({
                     "success": True,
                     "folders_moved": len(folders),
                     "files_moved": len(files) if files else 0
@@ -858,30 +858,30 @@ def delete_folder(project_id, folder_id):
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/rename', methods=['PUT'])
 def rename_folder(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_edit_folder(project_id, folder_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
     data = request.get_json()
     new_name = data.get('name', '').strip()
     if not new_name:
-        return jsonify({"error": "Folder name required"}), 400
+        return err("Folder name required", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT parent_folder_id FROM project_folders WHERE id = %s AND project_id = %s",
                         (folder_id, project_id))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "Folder not found"}), 404
+                return err("Folder not found", "NOT_FOUND", 404)
             parent_id = row[0]
             cur.execute(
                 "SELECT id FROM project_folders WHERE project_id = %s AND parent_folder_id = %s AND name = %s AND id != %s",
                 (project_id, parent_id, new_name, folder_id))
             if cur.fetchone():
-                return jsonify({"error": "A folder with this name already exists in this location"}), 400
+                return err("A folder with this name already exists in this location", "VALIDATION_ERROR", 400)
             cur.execute("UPDATE project_folders SET name = %s WHERE id = %s", (new_name, folder_id))
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 # Project files management
 os.makedirs(PROJECT_FILES_ROOT, exist_ok=True)
@@ -894,29 +894,29 @@ def get_project_file_path(project_id, unique_filename):
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/upload', methods=['POST'])
 def upload_project_file(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT status FROM projects WHERE id = %s", (project_id,))
             row = cur.fetchone()
             if not row or row[0] != 'active':
-                return jsonify({"error": "Project is not active. Cannot upload."}), 400
+                return err("Project is not active. Cannot upload.", "VALIDATION_ERROR", 400)
 
     if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
+        return err("No file", "VALIDATION_ERROR", 400)
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "Empty filename"}), 400
+        return err("Empty filename", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s", (folder_id, project_id))
             if not cur.fetchone():
-                return jsonify({"error": "Folder not found"}), 404
+                return err("Folder not found", "NOT_FOUND", 404)
 
     original_name = file.filename
     file_bytes = file.read()
@@ -925,16 +925,36 @@ def upload_project_file(project_id, folder_id):
 
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, original_name, stored_path, version, folder_id FROM project_files WHERE project_id = %s AND file_hash = %s", (project_id, file_hash))
-            duplicate = cur.fetchone()
-            if duplicate:
-                return jsonify({
+            # Check hash duplicate (identical content)
+            cur.execute("SELECT id, original_name, stored_path, version, folder_id, file_size FROM project_files WHERE project_id = %s AND file_hash = %s", (project_id, file_hash))
+            hash_dup = cur.fetchone()
+            if hash_dup:
+                return ok({
                     "duplicate": True,
+                    "conflict_type": "hash",
                     "existing_file": {
-                        "id": duplicate['id'],
-                        "original_name": duplicate['original_name'],
-                        "folder_id": duplicate['folder_id'],
-                        "version": duplicate['version']
+                        "id": hash_dup['id'],
+                        "original_name": hash_dup['original_name'],
+                        "folder_id": hash_dup['folder_id'],
+                        "version": hash_dup['version'],
+                        "file_size": hash_dup['file_size']
+                    },
+                    "new_filename": original_name
+                })
+            # Check name duplicate (same name, different content)
+            cur.execute("SELECT id, original_name, stored_path, version, folder_id, file_size, file_hash FROM project_files WHERE project_id = %s AND original_name = %s", (project_id, original_name))
+            name_dup = cur.fetchone()
+            if name_dup:
+                return ok({
+                    "duplicate": True,
+                    "conflict_type": "name",
+                    "existing_file": {
+                        "id": name_dup['id'],
+                        "original_name": name_dup['original_name'],
+                        "folder_id": name_dup['folder_id'],
+                        "version": name_dup['version'],
+                        "file_size": name_dup['file_size'],
+                        "file_hash": name_dup['file_hash']
                     },
                     "new_filename": original_name
                 })
@@ -963,20 +983,62 @@ def upload_project_file(project_id, folder_id):
                 """, (project_id, folder_id, unique_name, original_name, file_size, stored_path, user_id, file_hash, text_content))
                 file_id = cur.fetchone()[0]
                 conn.commit()
-                return jsonify({"success": True, "file_id": file_id, "original_name": original_name, "version": 1})
+                return ok({"file_id": file_id, "original_name": original_name, "version": 1})
+
+@admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/content', methods=['GET'])
+def get_file_content(project_id, file_id):
+    """Return extracted text content for a single project file. Used by conflict compare panel."""
+    if session.get('consent_value', 0) != 1:
+        return err("Consent not given", "FORBIDDEN", 403)
+    user_id = session.get('user_id')
+    if not is_admin() and not _can_access_project(project_id, user_id):
+        return err("Access denied", "FORBIDDEN", 403)
+
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, original_name, content, file_size, version, stored_path
+                FROM project_files
+                WHERE id = %s AND project_id = %s
+            """, (file_id, project_id))
+            f = cur.fetchone()
+            if not f:
+                return err("File not found", "NOT_FOUND", 404)
+
+            text = (f.get('content') or '').strip()
+            if not text:
+                stored = f.get('stored_path')
+                if stored and os.path.exists(stored):
+                    try:
+                        with open(stored, 'rb') as fh:
+                            fake = FileStorage(fh, filename=f['original_name'])
+                            text, _ = extract_text_from_file(fake)
+                            text = text or ''
+                    except Exception:
+                        text = ''
+            if not text:
+                text = '[无法提取文本内容]'
+
+            return ok({
+                "id": f['id'],
+                "name": f['original_name'],
+                "text": text,
+                "size": f['file_size'],
+                "version": f['version']
+            })
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/new_version', methods=['POST'])
 def new_file_version(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
+        return err("No file", "VALIDATION_ERROR", 400)
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "Empty filename"}), 400
+        return err("Empty filename", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -988,7 +1050,7 @@ def new_file_version(project_id, file_id):
                         """, (file_id, project_id))
             existing = cur.fetchone()
             if not existing:
-                return jsonify({"error": "File not found"}), 404
+                return err("File not found", "NOT_FOUND", 404)
 
             original_name = file.filename
             file_bytes = file.read()
@@ -1005,7 +1067,7 @@ def new_file_version(project_id, file_id):
                 else:
                     file_content, _ = extract_text_from_file(file)
                     if not file_content or file_content.startswith("["):
-                        return jsonify({"error": "Could not extract text from new version"}), 400
+                        return err("Could not extract text from new version", "VALIDATION_ERROR", 400)
             else:
                 # For images, audio, video, etc., just store empty content
                 file_content = ""
@@ -1042,15 +1104,15 @@ def new_file_version(project_id, file_id):
                         """, (file_id, user_id, json.dumps({'version': new_version, 'size': file_size})))
 
             conn.commit()
-            return jsonify({"success": True, "file_id": file_id, "original_name": original_name, "version": new_version})
+            return ok({"file_id": file_id, "original_name": original_name, "version": new_version})
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/files', methods=['GET'])
 def list_project_files(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     # Pre-compute permissions once to avoid N+1 DB round-trips per file
     _is_admin = is_admin()
@@ -1087,15 +1149,15 @@ def list_project_files(project_id, folder_id):
                 f['file_size_kb'] = round(f['file_size'] / 1024, 1)
                 f['uploaded_at_str'] = f['uploaded_at'].strftime('%Y-%m-%d %H:%M:%S')
                 result.append(f)
-            return jsonify({"files": result})
+            return ok({"files": result})
 
 @admin_bp.route('/admin/projects/<int:project_id>/files', methods=['GET'])
 def list_root_files(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     # Pre-compute permissions once to avoid N+1 DB round-trips per file
     _is_admin = is_admin()
@@ -1132,15 +1194,15 @@ def list_root_files(project_id):
                 f['file_size_kb'] = round(f['file_size'] / 1024, 1)
                 f['uploaded_at_str'] = f['uploaded_at'].strftime('%Y-%m-%d %H:%M:%S')
                 result.append(f)
-            return jsonify({"files": result})
+            return ok({"files": result})
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/versions', methods=['GET'])
 def get_file_versions(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -1154,15 +1216,15 @@ def get_file_versions(project_id, file_id):
                         ORDER BY version DESC
                         """, (file_id,))
             versions = cur.fetchall()
-            return jsonify({"versions": versions})
+            return ok({"versions": versions})
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/download', methods=['GET'])
 def download_project_file(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     version = request.args.get('version', type=int)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -1174,19 +1236,19 @@ def download_project_file(project_id, file_id):
                 cur.execute("SELECT stored_path, original_name FROM project_files WHERE id = %s", (file_id,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "File not found"}), 404
+                return err("File not found", "NOT_FOUND", 404)
             stored_path, original_name = row
     if not os.path.exists(stored_path):
-        return jsonify({"error": "文件已被清理，无法下载"}), 410
+        return err("文件已被清理，无法下载", "SERVER_ERROR", 410)
     return send_file(stored_path, as_attachment=True, download_name=original_name)
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/comments', methods=['GET'])
 def get_file_comments(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -1197,33 +1259,33 @@ def get_file_comments(project_id, file_id):
                         ORDER BY c.created_at ASC
                         """, (file_id,))
             comments = cur.fetchall()
-            return jsonify({"comments": comments})
+            return ok({"comments": comments})
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/comments', methods=['POST'])
 def add_file_comment(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json()
     comment = data.get('comment', '').strip()
     if not comment:
-        return jsonify({"error": "Comment cannot be empty"}), 400
+        return err("Comment cannot be empty", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("INSERT INTO project_file_comments (file_id, user_id, comment) VALUES (%s, %s, %s)",
                         (file_id, user_id, comment))
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/move', methods=['POST'])
 def move_file(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_move_file(project_id, file_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
     data = request.get_json()
     target_folder_id = data.get('folder_id')
     with get_db_connection() as conn:
@@ -1231,38 +1293,38 @@ def move_file(project_id, file_id):
             if target_folder_id:
                 cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s", (target_folder_id, project_id))
                 if not cur.fetchone():
-                    return jsonify({"error": "Target folder not found in this project"}), 404
+                    return err("Target folder not found in this project", "NOT_FOUND", 404)
             cur.execute("UPDATE project_files SET folder_id = %s WHERE id = %s AND project_id = %s", (target_folder_id, file_id, project_id))
             if cur.rowcount == 0:
-                return jsonify({"error": "File not found"}), 404
+                return err("File not found", "NOT_FOUND", 404)
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/batch_move', methods=['POST'])
 def batch_move_files(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "Not logged in"}), 401
+        return err("Not logged in", "AUTH_REQUIRED", 401)
 
     data = request.get_json()
     file_ids = data.get('file_ids', [])
     target_folder_id = data.get('folder_id')
     if not file_ids:
-        return jsonify({"error": "No files selected"}), 400
+        return err("No files selected", "VALIDATION_ERROR", 400)
     if not target_folder_id:
-        return jsonify({"error": "Target folder required"}), 400
+        return err("Target folder required", "VALIDATION_ERROR", 400)
 
     role = get_user_role_in_project(project_id, user_id)
     if not role and not is_admin():
-        return jsonify({"error": "You are not a member of this project"}), 403
+        return err("You are not a member of this project", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s", (target_folder_id, project_id))
             if not cur.fetchone():
-                return jsonify({"error": "Target folder not found in this project"}), 404
+                return err("Target folder not found in this project", "NOT_FOUND", 404)
 
             placeholders = ','.join(['%s'] * len(file_ids))
             cur.execute(f"""
@@ -1271,26 +1333,26 @@ def batch_move_files(project_id):
             """, file_ids + [project_id])
             found = cur.fetchall()
             if len(found) != len(file_ids):
-                return jsonify({"error": "Some files not found in this project"}), 404
+                return err("Some files not found in this project", "NOT_FOUND", 404)
 
             cur.execute(f"""
                 UPDATE project_files SET folder_id = %s 
                 WHERE id IN ({placeholders}) AND project_id = %s
             """, [target_folder_id] + file_ids + [project_id])
             conn.commit()
-            return jsonify({"success": True, "moved_count": len(file_ids)})
+            return ok({"moved_count": len(file_ids)})
 
 @admin_bp.route('/admin/projects/<int:project_id>/batch_download', methods=['POST'])
 def batch_download_files(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json()
     file_ids = data.get('file_ids', [])
     if not file_ids:
-        return jsonify({"error": "No files selected"}), 400
+        return err("No files selected", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             placeholders = ','.join(['%s'] * len(file_ids))
@@ -1299,7 +1361,7 @@ def batch_download_files(project_id):
                 file_ids + [project_id])
             files = cur.fetchall()
             if not files:
-                return jsonify({"error": "No valid files found"}), 404
+                return err("No valid files found", "NOT_FOUND", 404)
             zip_buffer = BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for stored_path, original_name in files:
@@ -1311,13 +1373,13 @@ def batch_download_files(project_id):
 @admin_bp.route('/admin/projects/<int:project_id>/files/search', methods=['GET'])
 def search_project_files(project_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     query = request.args.get('q', '').strip()
     if len(query) < 2:
-        return jsonify({"files": []})
+        return ok({"files": []})
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -1332,15 +1394,15 @@ def search_project_files(project_id):
             files = cur.fetchall()
             for f in files:
                 f['file_size_kb'] = round(f['file_size'] / 1024, 1)
-            return jsonify({"files": files})
+            return ok({"files": files})
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/comments', methods=['GET'])
 def get_folder_comments(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -1351,45 +1413,45 @@ def get_folder_comments(project_id, folder_id):
                         ORDER BY c.created_at ASC
                         """, (folder_id,))
             comments = cur.fetchall()
-            return jsonify({"comments": comments})
+            return ok({"comments": comments})
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/comments', methods=['POST'])
 def add_folder_comment(project_id, folder_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not is_admin() and not _can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json()
     comment = data.get('comment', '').strip()
     if not comment:
-        return jsonify({"error": "Comment cannot be empty"}), 400
+        return err("Comment cannot be empty", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("INSERT INTO project_folder_comments (folder_id, user_id, comment) VALUES (%s, %s, %s)",
                         (folder_id, user_id, comment))
             conn.commit()
-            return jsonify({"success": True})
+            return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/rename', methods=['PUT'])
 def rename_project_file(project_id, file_id):
     if session.get('consent_value', 0) != 1:
-        return jsonify({"error": "Consent not given"}), 403
+        return err("Consent not given", "FORBIDDEN", 403)
     user_id = session.get('user_id')
     if not _can_edit_file(project_id, file_id, user_id):
-        return jsonify({"error": "Permission denied"}), 403
+        return err("Permission denied", "FORBIDDEN", 403)
     data = request.get_json()
     new_name = data.get('original_name', '').strip()
     if not new_name:
-        return jsonify({"error": "New name required"}), 400
+        return err("New name required", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE project_files SET original_name = %s WHERE id = %s AND project_id = %s",
                         (new_name, file_id, project_id))
             if cur.rowcount == 0:
-                return jsonify({"error": "File not found"}), 404
+                return err("File not found", "NOT_FOUND", 404)
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 # ========== Knowledge Lab Routes ==========
 @admin_bp.route('/admin/db_tables', methods=['GET'])
@@ -1404,18 +1466,18 @@ def admin_db_tables():
                         ORDER BY tablename
                         """)
             tables = [row['tablename'] for row in cur.fetchall()]
-            return jsonify({"tables": tables})
+            return ok({"tables": tables})
 
 def _query_db_table(table, page, per_page, search, search_column):
     """Shared helper: run a paginated, searchable SELECT against any public table."""
     if not table:
-        return jsonify({"error": "Table name required"}), 400
+        return err("Table name required", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = %s", (table,))
             if not cur.fetchone():
-                return jsonify({"error": "Invalid table name"}), 400
+                return err("Invalid table name", "VALIDATION_ERROR", 400)
 
     offset = (page - 1) * per_page
     with get_db_connection() as conn:
@@ -1461,7 +1523,7 @@ def _query_db_table(table, page, per_page, search, search_column):
             cur.execute(query, params + [per_page, offset])
             rows = cur.fetchall()
 
-            return jsonify({
+            return ok({
                 "columns": col_names,
                 "rows": rows,
                 "total": total,
@@ -1486,15 +1548,15 @@ def admin_db_schema():
     """Return column info for a given table (used by sidebar 'view schema' button)."""
     table = request.args.get('table', '')
     if not table:
-        return jsonify({"error": "Table name required"}), 400
+        return err("Table name required", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename=%s", (table,))
             if not cur.fetchone():
-                return jsonify({"error": "Invalid table"}), 400
+                return err("Invalid table", "VALIDATION_ERROR", 400)
             cur.execute("SELECT column_name, data_type FROM information_schema.columns WHERE table_name=%s ORDER BY ordinal_position", (table,))
             cols = [dict(r) for r in cur.fetchall()]
-    return jsonify({"columns": cols})
+    return ok({"columns": cols})
 
 
 @admin_bp.route('/admin/db_table_data', methods=['POST'])
@@ -1517,7 +1579,7 @@ def admin_db_update_row():
     data = request.get_json()
     table = data.get('table')
     if table in IMMUTABLE_TABLES:
-        return jsonify({"error": "审计日志不可修改，仅可查看和导出"}), 403
+        return err("审计日志不可修改，仅可查看和导出", "FORBIDDEN", 403)
     row_id = data.get('row_id')
     column = data.get('column')
     new_value = data.get('value')
@@ -1531,13 +1593,13 @@ def admin_db_update_row():
         log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                          column, None, new_value, success=False,
                          error_message="Admin password hash not configured")
-        return jsonify({"error": "Admin authentication not configured"}), 500
+        return err("Admin authentication not configured", "SERVER_ERROR", 500)
 
     if not check_password_hash(admin_hash, pin):
         log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                          column, None, new_value, success=False,
                          error_message="Invalid admin PIN")
-        return jsonify({"error": "Invalid admin PIN"}), 403
+        return err("Invalid admin PIN", "FORBIDDEN", 403)
 
     # Validate table exists
     with get_db_connection() as conn:
@@ -1547,14 +1609,14 @@ def admin_db_update_row():
                 log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                                  column, None, new_value, success=False,
                                  error_message=f"Invalid table name: {table}")
-                return jsonify({"error": "Invalid table name"}), 400
+                return err("Invalid table name", "VALIDATION_ERROR", 400)
 
     # Validate column exists
     if not validate_table_column(table, column):
         log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                          column, None, new_value, success=False,
                          error_message=f"Invalid column: {column}")
-        return jsonify({"error": f"Column '{column}' does not exist"}), 400
+        return err(f"Column '{column}' does not exist", "VALIDATION_ERROR", 400)
 
     # Determine primary key column
     with get_db_connection() as conn:
@@ -1569,7 +1631,7 @@ def admin_db_update_row():
                 log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                                  column, None, new_value, success=False,
                                  error_message="No primary key column found")
-                return jsonify({"error": f"Table '{table}' has no known primary key"}), 400
+                return err(f"Table '{table}' has no known primary key", "VALIDATION_ERROR", 400)
             pk_col = pk_col[0]
 
     if pk_col == 'id':
@@ -1579,7 +1641,7 @@ def admin_db_update_row():
             log_admin_action(admin_user_id, admin_username, 'UPDATE', table, row_id,
                              column, None, new_value, success=False,
                              error_message="Invalid row_id (not an integer)")
-            return jsonify({"error": "Row ID must be an integer"}), 400
+            return err("Row ID must be an integer", "VALIDATION_ERROR", 400)
     else:
         row_id_val = row_id
 
@@ -1597,7 +1659,7 @@ def admin_db_update_row():
                 log_admin_action(admin_user_id, admin_username, 'UPDATE', table, str(row_id_val),
                                  column, None, new_value, success=False,
                                  error_message="Row not found")
-                return jsonify({"error": "Row not found"}), 404
+                return err("Row not found", "NOT_FOUND", 404)
 
     # Execute update
     with get_db_connection() as conn:
@@ -1612,7 +1674,7 @@ def admin_db_update_row():
     log_admin_action(admin_user_id, admin_username, 'UPDATE', table, str(row_id_val),
                      column, old_value, new_value, success=True)
 
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/db_delete_row', methods=['POST'])
 @admin_required
@@ -1621,7 +1683,7 @@ def admin_db_delete_row():
     data = request.get_json()
     table = data.get('table')
     if table in IMMUTABLE_TABLES:
-        return jsonify({"error": "审计日志不可删除，仅可查看和导出"}), 403
+        return err("审计日志不可删除，仅可查看和导出", "FORBIDDEN", 403)
     row_id = data.get('row_id')
     pin = data.get('pin', '').strip()
     admin_user_id = session.get('user_id')
@@ -1630,18 +1692,18 @@ def admin_db_delete_row():
     if not table or not row_id or row_id == 'undefined':
         log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                          success=False, error_message="Missing table or row_id")
-        return jsonify({"error": "Missing table or valid row_id"}), 400
+        return err("Missing table or valid row_id", "VALIDATION_ERROR", 400)
 
     admin_hash = current_app.config.get('ADMIN_PASSWORD_HASH')
     if not admin_hash:
         log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                          success=False, error_message="Admin password hash not configured")
-        return jsonify({"error": "Admin authentication not configured"}), 500
+        return err("Admin authentication not configured", "SERVER_ERROR", 500)
 
     if not check_password_hash(admin_hash, pin):
         log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                          success=False, error_message="Invalid admin PIN")
-        return jsonify({"error": "Invalid admin PIN"}), 403
+        return err("Invalid admin PIN", "FORBIDDEN", 403)
 
     # Validate table exists
     with get_db_connection() as conn:
@@ -1650,7 +1712,7 @@ def admin_db_delete_row():
             if not cur.fetchone():
                 log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                                  success=False, error_message=f"Invalid table: {table}")
-                return jsonify({"error": "Invalid table name"}), 400
+                return err("Invalid table name", "VALIDATION_ERROR", 400)
 
     # Determine primary key column
     with get_db_connection() as conn:
@@ -1664,7 +1726,7 @@ def admin_db_delete_row():
             if not pk_col:
                 log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                                  success=False, error_message="No primary key column found")
-                return jsonify({"error": f"Table '{table}' has no known primary key"}), 400
+                return err(f"Table '{table}' has no known primary key", "VALIDATION_ERROR", 400)
             pk_col = pk_col[0]
 
     if pk_col == 'id':
@@ -1673,7 +1735,7 @@ def admin_db_delete_row():
         except ValueError:
             log_admin_action(admin_user_id, admin_username, 'DELETE', table, row_id,
                              success=False, error_message="Invalid row_id (not integer)")
-            return jsonify({"error": "Row ID must be an integer"}), 400
+            return err("Row ID must be an integer", "VALIDATION_ERROR", 400)
     else:
         row_id_val = row_id
 
@@ -1692,7 +1754,7 @@ def admin_db_delete_row():
             else:
                 log_admin_action(admin_user_id, admin_username, 'DELETE', table, str(row_id_val),
                                  success=False, error_message="Row not found")
-                return jsonify({"error": "Row not found"}), 404
+                return err("Row not found", "NOT_FOUND", 404)
 
     # Execute deletion
     with get_db_connection() as conn:
@@ -1709,7 +1771,7 @@ def admin_db_delete_row():
                      old_value=json_module.dumps(row_snapshot, default=str) if row_snapshot else None,
                      success=True)
 
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/archived_sessions', methods=['GET'])
 @admin_required
@@ -1746,7 +1808,7 @@ def admin_archived_sessions():
         if not entry.get('title'):
             entry['title'] = '(已归档)'
         result.append(entry)
-    return jsonify({"sessions": result})
+    return ok({"sessions": result})
 
 @admin_bp.route('/admin/archived_sessions/<thread_id>', methods=['DELETE'])
 @admin_required
@@ -1758,7 +1820,7 @@ def delete_archived_session(thread_id):
             cur.execute("SELECT archive_path FROM archived_sessions WHERE thread_id = %s", (thread_id,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "Not found"}), 404
+                return err("Not found", "NOT_FOUND", 404)
             # Remove disk files
             base = row['archive_path']
             if base:
@@ -1769,7 +1831,7 @@ def delete_archived_session(thread_id):
                         os.remove(p)
             cur.execute("DELETE FROM archived_sessions WHERE thread_id = %s", (thread_id,))
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/archived_sessions', methods=['DELETE'])
 @admin_required
@@ -1779,7 +1841,7 @@ def delete_selected_archived_sessions():
     data = request.get_json() or {}
     thread_ids = data.get('thread_ids', [])
     if not thread_ids:
-        return jsonify({"error": "No thread_ids provided"}), 400
+        return err("No thread_ids provided", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             for tid in thread_ids:
@@ -1794,7 +1856,7 @@ def delete_selected_archived_sessions():
                             os.remove(p)
             cur.execute("DELETE FROM archived_sessions WHERE thread_id = ANY(%s)", (thread_ids,))
             conn.commit()
-    return jsonify({"success": True, "deleted": len(thread_ids)})
+    return ok({"deleted": len(thread_ids)})
 
 @admin_bp.route('/admin/archived_sessions/all', methods=['DELETE'])
 @admin_required
@@ -1815,7 +1877,7 @@ def delete_all_archived_sessions():
                             os.remove(p)
             cur.execute("DELETE FROM archived_sessions")
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/clear_file_cache', methods=['POST'])
 @admin_required
@@ -1824,7 +1886,7 @@ def clear_file_cache():
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE file_text_cache")
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 # Project presence tracking (lightweight in-memory)
 _project_presence = {}
@@ -1834,11 +1896,11 @@ def project_ping(project_id):
     """Update user's last-active timestamp for a project."""
     user_id = session.get('user_id')
     username = session.get('username', 'unknown')
-    if not user_id: return jsonify({"error": "Not logged in"}), 401
+    if not user_id: return err("Not logged in", "AUTH_REQUIRED", 401)
     _project_presence.setdefault(project_id, {})[user_id] = {
         'username': username, 'ts': time.time()
     }
-    return jsonify({"status": "ok"})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/presence', methods=['GET'])
 def project_presence(project_id):
@@ -1848,7 +1910,7 @@ def project_presence(project_id):
     for uid, info in _project_presence.get(project_id, {}).items():
         if now - info['ts'] < 60:
             active[uid] = info['username']
-    return jsonify({"active_users": active})
+    return ok({"active_users": active})
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_assist/stream', methods=['POST'])
 def project_ai_assist_stream(project_id):
@@ -1858,14 +1920,14 @@ def project_ai_assist_stream(project_id):
     user_id = session.get('user_id')
     username = session.get('username', user_id)
     if not user_id:
-        return jsonify({"error": "未登录"}), 401
+        return err("未登录", "AUTH_REQUIRED", 401)
     if not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问此项目"}), 403
+        return err("无权访问此项目", "FORBIDDEN", 403)
 
     data = request.get_json(silent=True) or {}
     query = data.get('query', '').strip()
     if not query or len(query) < 3:
-        return jsonify({"error": "请用一句话描述您想生成的内容"}), 400
+        return err("请用一句话描述您想生成的内容", "VALIDATION_ERROR", 400)
     quoted_message_id = data.get('quoted_message_id')
 
     # Build context (reuse same context gathering logic)
@@ -1978,7 +2040,7 @@ def project_ai_assist_stream(project_id):
 {quote_context}
 【引用规则】只引用对话历史中确实存在的内容，不得编造。输出格式专业清晰。"""
     except Exception as e:
-        return jsonify({"error": f"上下文构建失败: {str(e)[:200]}"}), 500
+        return err(f"上下文构建失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
     # Stream LLM response
     def generate():
@@ -2065,9 +2127,9 @@ def project_ai_assist(project_id):
     user_id = session.get('user_id')
     username = session.get('username', user_id)
     if not user_id:
-        return jsonify({"error": "未登录"}), 401
+        return err("未登录", "AUTH_REQUIRED", 401)
     if not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问此项目"}), 403
+        return err("无权访问此项目", "FORBIDDEN", 403)
 
     data = request.get_json(silent=True) or {}
     query = data.get('query', '').strip()
@@ -2076,7 +2138,7 @@ def project_ai_assist(project_id):
     if output_fmt not in ('docx', 'xlsx', ''):
         output_fmt = ''
     if not query or len(query) < 3:
-        return jsonify({"error": "请用一句话描述您想生成的内容"}), 400
+        return err("请用一句话描述您想生成的内容", "VALIDATION_ERROR", 400)
 
     warnings = []
     question_hash = hashlib.sha256(query[:200].encode()).hexdigest()[:16]
@@ -2092,7 +2154,7 @@ def project_ai_assist(project_id):
                 project_name = row['name']
             # Backfill: ensure shared project chat exists
             cur.execute(
-                "SELECT thread_id FROM chat_sessions WHERE project_id = %s LIMIT 1",
+                "SELECT thread_id FROM chat_sessions WHERE project_id = %s AND (is_grilling = FALSE OR is_grilling IS NULL) LIMIT 1",
                 (project_id,)
             )
             chat_row = cur.fetchone()
@@ -2320,7 +2382,7 @@ def project_ai_assist(project_id):
                               temperature=0.5, max_tokens=3200, industry=proj_industry)
     except Exception as e:
         logger.error(f"Project AI assist LLM error: {e}")
-        return jsonify({"error": f"AI生成失败: {str(e)[:200]}"}), 500
+        return err(f"AI生成失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
     # 9. Save to project_ai_memory
     memory_id = None
@@ -2346,7 +2408,7 @@ def project_ai_assist(project_id):
             # Fallback: re-fetch the session if backfill failed to set chat_thread_id
             with get_db_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    cur.execute("SELECT thread_id FROM chat_sessions WHERE project_id = %s LIMIT 1", (project_id,))
+                    cur.execute("SELECT thread_id FROM chat_sessions WHERE project_id = %s AND (is_grilling = FALSE OR is_grilling IS NULL) LIMIT 1", (project_id,))
                     row = cur.fetchone()
                     if row:
                         chat_thread_id = row['thread_id']
@@ -2378,7 +2440,7 @@ def project_ai_assist(project_id):
     if memory_id:
         resp["memory_id"] = memory_id
         resp["download_formats"] = ["docx", "xlsx"]
-    return jsonify(resp)
+    return ok(resp)
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_activity', methods=['GET'])
 def project_ai_activity(project_id):
@@ -2386,7 +2448,7 @@ def project_ai_activity(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"items": []})
+        return ok({"items": []})
 
     since = request.args.get('since', '')
     items = []
@@ -2430,6 +2492,7 @@ def project_ai_activity(project_id):
                     FROM chat_messages cm
                     JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
                     WHERE cs.project_id = %s AND cm.timestamp > %s
+                    AND (cs.is_grilling = FALSE OR cs.is_grilling IS NULL)
                     ORDER BY cm.timestamp ASC LIMIT 50
                 """, (project_id, since))
             else:
@@ -2438,6 +2501,7 @@ def project_ai_activity(project_id):
                     FROM chat_messages cm
                     JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
                     WHERE cs.project_id = %s
+                    AND (cs.is_grilling = FALSE OR cs.is_grilling IS NULL)
                     ORDER BY cm.timestamp DESC LIMIT 50
                 """, (project_id,))
             for r in cur.fetchall():
@@ -2453,7 +2517,7 @@ def project_ai_activity(project_id):
 
     # Sort merged
     items.sort(key=lambda x: x.get('created_at', ''))
-    return jsonify({"items": items, "now": datetime.now(timezone.utc).isoformat()})
+    return ok({"items": items, "now": datetime.now(timezone.utc).isoformat()})
 
 @admin_bp.route('/admin/projects/<int:project_id>/unread_count', methods=['GET'])
 def project_unread_count(project_id):
@@ -2461,7 +2525,7 @@ def project_unread_count(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"count": 0})
+        return ok({"count": 0})
 
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -2478,10 +2542,11 @@ def project_unread_count(project_id):
                 SELECT COUNT(*) as cnt FROM chat_messages cm
                 JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
                 WHERE cs.project_id = %s AND cm.role = 'assistant'
+                  AND (cs.is_grilling = FALSE OR cs.is_grilling IS NULL)
                   AND cm.timestamp > %s
             """, (project_id, since))
             count = cur.fetchone()['cnt']
-    return jsonify({"count": count, "since": since})
+    return ok({"count": count, "since": since})
 
 @admin_bp.route('/admin/projects/<int:project_id>/mark_read', methods=['POST'])
 def project_mark_read(project_id):
@@ -2489,7 +2554,7 @@ def project_mark_read(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -2501,7 +2566,7 @@ def project_mark_read(project_id):
                 (project_id, user_id)
             )
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 
 # ======================== Project Todo System ========================
@@ -2512,7 +2577,7 @@ def project_todos_list(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -2522,7 +2587,7 @@ def project_todos_list(project_id):
                 ORDER BY created_at ASC
             """, (project_id, user_id))
             todos = cur.fetchall()
-    return jsonify({"todos": [{
+    return ok({"todos": [{
         "id": t["id"],
         "message_id": t["message_id"],
         "content_copy": t["content_copy"],
@@ -2538,12 +2603,12 @@ def project_todos_add(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json() or {}
     message_id = data.get('message_id')
     content_copy = (data.get('content_copy') or '').strip()
     if not content_copy:
-        return jsonify({"error": "内容不能为空"}), 400
+        return err("内容不能为空", "VALIDATION_ERROR", 400)
     original_role = data.get('original_role', '')
     original_author = data.get('original_author', '')
     with get_db_connection() as conn:
@@ -2554,14 +2619,14 @@ def project_todos_add(project_id):
             )
             count = cur.fetchone()[0]
             if count >= 5:
-                return jsonify({"error": "待办最多5条，请先完成或删除现有待办"}), 400
+                return err("待办最多5条，请先完成或删除现有待办", "VALIDATION_ERROR", 400)
             cur.execute("""
                 INSERT INTO project_todos (project_id, user_id, message_id, content_copy, original_role, original_author)
                 VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
             """, (project_id, user_id, message_id, content_copy[:2000], original_role, original_author))
             todo_id = cur.fetchone()[0]
             conn.commit()
-    return jsonify({"success": True, "todo_id": todo_id})
+    return ok({"todo_id": todo_id})
 
 
 @admin_bp.route('/admin/projects/<int:project_id>/todos/<int:todo_id>/done', methods=['POST'])
@@ -2571,7 +2636,7 @@ def project_todos_done(project_id, todo_id):
     user_id = session.get('user_id')
     username = session.get('username', user_id)
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -2581,14 +2646,14 @@ def project_todos_done(project_id, todo_id):
             """, (todo_id, project_id, user_id))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "待办不存在或已完成"}), 404
+                return err("待办不存在或已完成", "NOT_FOUND", 404)
             content_copy, original_author = row
             cur.execute("""
                 INSERT INTO project_ai_memory (project_id, user_id, role, content)
                 VALUES (%s, %s, 'system', %s)
             """, (project_id, user_id, f"[TODO DONE] by @{username}: original from @{original_author}: {content_copy[:200]}"))
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 
 @admin_bp.route('/admin/projects/<int:project_id>/todos/<int:todo_id>/remove', methods=['POST'])
@@ -2597,7 +2662,7 @@ def project_todos_remove(project_id, todo_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -2605,7 +2670,7 @@ def project_todos_remove(project_id, todo_id):
                 (todo_id, project_id, user_id)
             )
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 
 @admin_bp.route('/admin/projects/<int:project_id>/todos/done_log', methods=['GET'])
@@ -2613,7 +2678,7 @@ def project_todos_done_log(project_id):
     """Admin-only: view completed todo records."""
     from app.routes.projects import is_admin
     if not is_admin():
-        return jsonify({"error": "Admin only"}), 403
+        return err("Admin only", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -2625,7 +2690,7 @@ def project_todos_done_log(project_id):
                 ORDER BY t.done_at DESC
             """, (project_id,))
             logs = cur.fetchall()
-    return jsonify({"logs": [{
+    return ok({"logs": [{
         "id": l["id"],
         "content_copy": l["content_copy"],
         "original_role": l["original_role"],
@@ -2644,13 +2709,13 @@ def project_quote_create(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json() or {}
     quoted_message_id = data.get('quoted_message_id')
     parent_quote_id = data.get('parent_quote_id')
     thread_id = data.get('thread_id')
     if not quoted_message_id:
-        return jsonify({"error": "quoted_message_id required"}), 400
+        return err("quoted_message_id required", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -2659,7 +2724,7 @@ def project_quote_create(project_id):
             """, (project_id, quoted_message_id, parent_quote_id, thread_id))
             quote_id = cur.fetchone()[0]
             conn.commit()
-    return jsonify({"success": True, "quote_id": quote_id})
+    return ok({"quote_id": quote_id})
 
 
 @admin_bp.route('/admin/projects/<int:project_id>/quote_tree/<int:message_id>', methods=['GET'])
@@ -2668,7 +2733,7 @@ def project_quote_tree(project_id, message_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             nodes = []
@@ -2708,7 +2773,7 @@ def project_quote_tree(project_id, message_id):
                         break
                 else:
                     break
-    return jsonify({"nodes": nodes})
+    return ok({"nodes": nodes})
 
 
 # ======================== Regeneration Vote System ========================
@@ -2885,7 +2950,7 @@ def project_regen_votes_list(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -2900,7 +2965,7 @@ def project_regen_votes_list(project_id):
                 ORDER BY rv.created_at DESC
             """, (user_id, user_id, project_id))
             votes = cur.fetchall()
-    return jsonify({"votes": [{
+    return ok({"votes": [{
         "id": v["id"],
         "message_id": v["message_id"],
         "original_content": (v["original_content"] or '')[:200],
@@ -2920,18 +2985,18 @@ def project_regen_vote_cast(project_id, vote_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "Access denied"}), 403
+        return err("Access denied", "FORBIDDEN", 403)
     data = request.get_json() or {}
     vote_choice = data.get('vote')  # 'keep_original' or 'replace'
     if vote_choice not in ('keep_original', 'replace'):
-        return jsonify({"error": "Invalid vote"}), 400
+        return err("Invalid vote", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             # Check vote is still active
             cur.execute("SELECT status, expires_at FROM regen_votes WHERE id = %s AND project_id = %s", (vote_id, project_id))
             row = cur.fetchone()
             if not row or row[0] != 'active':
-                return jsonify({"error": "投票已结束"}), 400
+                return err("投票已结束", "VALIDATION_ERROR", 400)
             # Upsert ballot
             cur.execute("""
                 INSERT INTO regen_vote_ballots (vote_id, voter_id, vote)
@@ -2939,7 +3004,7 @@ def project_regen_vote_cast(project_id, vote_id):
                 ON CONFLICT (vote_id, voter_id) DO UPDATE SET vote = EXCLUDED.vote
             """, (vote_id, user_id, vote_choice))
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 
 @admin_bp.route('/admin/projects/<int:project_id>/regen_votes/<int:vote_id>/resolve', methods=['POST'])
@@ -2948,11 +3013,11 @@ def project_regen_vote_resolve(project_id, vote_id):
     from app.routes.projects import can_manage_members
     user_id = session.get('user_id')
     if not user_id or not can_manage_members(project_id, user_id):
-        return jsonify({"error": "仅项目经理可裁决"}), 403
+        return err("仅项目经理可裁决", "FORBIDDEN", 403)
     data = request.get_json() or {}
     decision = data.get('decision')  # 'keep_original' or 'replace'
     if decision not in ('keep_original', 'replace'):
-        return jsonify({"error": "Invalid decision"}), 400
+        return err("Invalid decision", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             if decision == 'replace':
@@ -2966,7 +3031,7 @@ def project_regen_vote_resolve(project_id, vote_id):
                     WHERE id = %s AND project_id = %s
                 """, (vote_id, project_id))
             conn.commit()
-    return jsonify({"success": True})
+    return ok(message="ok")
 
 
 def _check_and_create_regen_vote(project_id, message_id, new_content):
@@ -3010,13 +3075,13 @@ def project_ai_download(project_id, memory_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "未登录"}), 401
+        return err("未登录", "AUTH_REQUIRED", 401)
     if not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
 
     fmt = request.args.get('format', 'docx').strip().lower()
     if fmt not in ('docx', 'xlsx'):
-        return jsonify({"error": "格式仅支持 docx / xlsx"}), 400
+        return err("格式仅支持 docx / xlsx", "VALIDATION_ERROR", 400)
 
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -3026,11 +3091,11 @@ def project_ai_download(project_id, memory_id):
             )
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "记录不存在"}), 404
+                return err("记录不存在", "NOT_FOUND", 404)
 
     md_text = row.get('content_md') or row.get('content') or ''
     if not md_text.strip():
-        return jsonify({"error": "内容为空"}), 400
+        return err("内容为空", "VALIDATION_ERROR", 400)
 
     try:
         from app.services.file_generator import generate_file
@@ -3045,7 +3110,7 @@ def project_ai_download(project_id, memory_id):
         )
     except Exception as e:
         logger.error(f"File generation failed: {e}")
-        return jsonify({"error": f"文件生成失败: {str(e)[:200]}"}), 500
+        return err(f"文件生成失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects/<int:project_id>/my_workflow', methods=['GET'])
 def get_my_workflow(project_id):
@@ -3053,14 +3118,14 @@ def get_my_workflow(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT * FROM member_workflows WHERE project_id=%s AND user_id=%s",
                 (project_id, user_id))
             row = cur.fetchone()
-    return jsonify({"workflow": dict(row) if row else None, "needs_setup": row is None})
+    return ok({"workflow": dict(row) if row else None, "needs_setup": row is None})
 
 @admin_bp.route('/admin/projects/<int:project_id>/my_workflow', methods=['POST'])
 def save_my_workflow(project_id):
@@ -3068,12 +3133,12 @@ def save_my_workflow(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
     data = request.get_json(silent=True) or {}
     steps = data.get('steps', [])
     name = data.get('name', '默认工作流').strip() or '默认工作流'
     if not steps or not isinstance(steps, list):
-        return jsonify({"error": "请至少定义一个步骤"}), 400
+        return err("请至少定义一个步骤", "VALIDATION_ERROR", 400)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -3083,7 +3148,7 @@ def save_my_workflow(project_id):
                 DO UPDATE SET workflow_name=%s, steps=%s, updated_at=NOW()
             """, (project_id, user_id, name, json.dumps(steps), name, json.dumps(steps)))
             conn.commit()
-    return jsonify({"status": "ok"})
+    return ok(message="ok")
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_workflow_step', methods=['POST'])
 def project_ai_workflow_step(project_id):
@@ -3095,7 +3160,7 @@ def project_ai_workflow_step(project_id):
     user_id = session.get('user_id')
     username = session.get('username', user_id)
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
 
     data = request.get_json(silent=True) or {}
     query = data.get('query', '').strip()
@@ -3111,11 +3176,11 @@ def project_ai_workflow_step(project_id):
                 (project_id, user_id))
             wf = cur.fetchone()
     if not wf:
-        return jsonify({"error": "请先设置工作流"}), 400
+        return err("请先设置工作流", "VALIDATION_ERROR", 400)
 
     steps = wf['steps'] if isinstance(wf['steps'], list) else json.loads(wf['steps'])
     if step_index >= len(steps):
-        return jsonify({"done": True, "message": "所有步骤已完成"})
+        return ok({"message": "所有步骤已完成"})
 
     current_step = steps[step_index]
     step_name = current_step.get('step', f'步骤{step_index+1}')
@@ -3200,11 +3265,11 @@ def project_ai_workflow_step(project_id):
         }
         if overlap_warn:
             resp["warning"] = overlap_warn
-        return jsonify(resp)
+        return ok(resp)
 
     except Exception as e:
         logger.error(f"Workflow step error: {e}")
-        return jsonify({"error": f"执行失败: {str(e)[:200]}"}), 500
+        return err(f"执行失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects/<int:project_id>/workflow_kpi', methods=['GET'])
 @admin_required
@@ -3213,7 +3278,7 @@ def project_workflow_kpi(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -3222,7 +3287,7 @@ def project_workflow_kpi(project_id):
                 WHERE wk.project_id = %s ORDER BY wk.generations DESC
             """, (project_id,))
             rows = cur.fetchall()
-    return jsonify({"kpi": [dict(r) for r in rows]})
+    return ok({"kpi": [dict(r) for r in rows]})
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_workflow', methods=['POST'])
 def project_ai_workflow(project_id):
@@ -3230,12 +3295,12 @@ def project_ai_workflow(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
 
     data = request.get_json(silent=True) or {}
     query = data.get('query', '').strip()
     if not query or len(query) < 3:
-        return jsonify({"error": "请描述您需要起草的文档"}), 400
+        return err("请描述您需要起草的文档", "VALIDATION_ERROR", 400)
 
     # Get project industry
     proj_industry = 'general'
@@ -3252,10 +3317,10 @@ def project_ai_workflow(project_id):
     try:
         from app.services.workflow_engine import run_document_workflow
         result = run_document_workflow(query, industry=proj_industry)
-        return jsonify({"status": "ok", **result})
+        return ok({**result}, "ok")
     except Exception as e:
         logger.error(f"Workflow failed: {e}")
-        return jsonify({"error": f"工作流执行失败: {str(e)[:200]}"}), 500
+        return err(f"工作流执行失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_analyze', methods=['POST'])
 def project_ai_analyze(project_id):
@@ -3263,11 +3328,11 @@ def project_ai_analyze(project_id):
     from app.routes.projects import can_access_project
     user_id = session.get('user_id')
     if not user_id or not can_access_project(project_id, user_id):
-        return jsonify({"error": "无权访问"}), 403
+        return err("无权访问", "FORBIDDEN", 403)
 
     file = request.files.get('file')
     if not file:
-        return jsonify({"error": "请上传Excel或CSV文件"}), 400
+        return err("请上传Excel或CSV文件", "VALIDATION_ERROR", 400)
 
     try:
         import pandas as pd
@@ -3281,7 +3346,7 @@ def project_ai_analyze(project_id):
             df = pd.read_excel(BytesIO(file.read()))
 
         if df.empty or len(df.columns) < 2:
-            return jsonify({"error": "文件需要包含至少两列数据"}), 400
+            return err("文件需要包含至少两列数据", "VALIDATION_ERROR", 400)
 
         result = {
             "rows": len(df),
@@ -3331,10 +3396,10 @@ def project_ai_analyze(project_id):
                     "sum": round(float(df[col].sum()), 2),
                 }
 
-        return jsonify({"status": "ok", "analysis": result})
+        return ok({"analysis": result}, "ok")
     except Exception as e:
         logger.error(f"Data analysis failed: {e}")
-        return jsonify({"error": f"分析失败: {str(e)[:200]}"}), 500
+        return err(f"分析失败: {str(e)[:200]}", "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/projects/<int:project_id>/ai_memory', methods=['POST'])
 def project_ai_sync_chat(project_id):
@@ -3344,13 +3409,13 @@ def project_ai_sync_chat(project_id):
     """
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "未登录"}), 401
+        return err("未登录", "AUTH_REQUIRED", 401)
     
     data = request.get_json(silent=True) or {}
     role = data.get('role', 'user')
     content = data.get('content', '').strip()
     if not content or len(content) < 2:
-        return jsonify({"status": "skipped"})
+        return ok({"status": "skipped"})
 
     try:
         with get_db_connection() as conn:
@@ -3360,16 +3425,16 @@ def project_ai_sync_chat(project_id):
                     (project_id, user_id, role, content[:2000])
                 )
                 conn.commit()
-        return jsonify({"status": "ok"})
+        return ok(message="ok")
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/analytics', methods=['GET'])
 def admin_analytics():
     """Return usage statistics — admin sees all users, regular users see own stats."""
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({"error": "Not logged in"}), 401
+        return err("Not logged in", "AUTH_REQUIRED", 401)
 
     admin_view = is_admin()
     with get_db_connection() as conn:
@@ -3464,7 +3529,7 @@ def admin_analytics():
                     stats['rag_stats'] = {}
 
             stats['is_admin_view'] = admin_view
-    return jsonify(stats)
+    return ok(stats)
 
 @admin_bp.route('/admin/audit_log', methods=['GET'])
 @admin_required
@@ -3502,7 +3567,7 @@ def admin_audit_log():
             logs = cur.fetchall()
             cur.execute(f"SELECT COUNT(*) as total FROM admin_audit_log {where_sql}", params)
             total = cur.fetchone()['total']
-    return jsonify({
+    return ok({
         "logs": logs,
         "total": total,
         "page": page,
@@ -3518,14 +3583,14 @@ def admin_audit_note():
     data = request.get_json(silent=True) or {}
     note = (data.get('note', '') or '').strip()
     if not note:
-        return jsonify({"error": "备注不能为空"}), 400
+        return err("备注不能为空", "VALIDATION_ERROR", 400)
     log_admin_action(
         session.get('user_id', ''),
         session.get('username', ''),
         'ADMIN_NOTE', 'system', None,
         column_name='note', new_value=note[:500]
     )
-    return jsonify({"status": "ok"})
+    return ok(message="ok")
 
 
 @admin_bp.route('/admin/approve_delete/<username>', methods=['POST'])
@@ -3537,9 +3602,9 @@ def admin_approve_delete(username):
             cur.execute("SELECT user_id, email, deletion_requested FROM users WHERE username = %s", (username,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "用户不存在"}), 404
+                return err("用户不存在", "NOT_FOUND", 404)
             if not row['deletion_requested']:
-                return jsonify({"error": "该用户未申请删除"}), 400
+                return err("该用户未申请删除", "VALIDATION_ERROR", 400)
             user_email = row.get('email', '')
             code = f"{random.randint(1000, 9999)}"
             cur.execute("UPDATE users SET deletion_code = %s WHERE username = %s", (code, username))
@@ -3553,7 +3618,7 @@ def admin_approve_delete(username):
     if is_configured() and user_email:
         send_email(user_email, "[中联AI] 账户删除验证码",
                    f"验证码: {code}\n有效5分钟。输入此码确认删除账户。", async_mode=True)
-    return jsonify({"status": "ok", "hint": f"验证码{'已发送至 '+user_email if user_email else ': '+code}"})
+    return ok({"hint": f"验证码{'已发送至 '+user_email if user_email else ': '+code}"}, "ok")
 
 
 @admin_bp.route('/admin/pending_deletions', methods=['GET'])
@@ -3564,7 +3629,7 @@ def admin_pending_deletions():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT username, email, deletion_requested FROM users WHERE deletion_requested = TRUE")
             users = cur.fetchall()
-    return jsonify({"users": users})
+    return ok({"users": users})
 
 
 # ── User Assets Overview ──
@@ -3592,7 +3657,7 @@ def admin_user_assets():
             cur.execute("""SELECT id, original_username, item_type, item_data, stored_path, created_at
                 FROM task_deposit_items WHERE deleted_at IS NULL AND transferred_to_user_id IS NULL ORDER BY created_at DESC""")
             deposits = [dict(r) for r in cur.fetchall()]
-    return jsonify({"users": users, "deposits": deposits})
+    return ok({"users": users, "deposits": deposits})
 
 
 @admin_bp.route('/admin/transfer_assets', methods=['POST'])
@@ -3606,14 +3671,14 @@ def admin_transfer_assets():
     deposit_ids = data.get('deposit_ids', [])
     types = data.get('types', ['all'])
     if not target_user_id:
-        return jsonify({"error": "Missing target user"}), 400
+        return err("Missing target user", "VALIDATION_ERROR", 400)
     admin_uid = session.get('user_id', ''); admin_uname = session.get('username', '')
     transferred = 0
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 FROM users WHERE user_id = %s", (target_user_id,))
-                if not cur.fetchone(): return jsonify({"error": "Target user not found"}), 404
+                if not cur.fetchone(): return err("Target user not found", "NOT_FOUND", 404)
                 for src in source_user_ids:
                     if 'all' in types or 'chat_files' in types:
                         cur.execute("UPDATE user_files SET user_id = %s WHERE user_id = %s", (target_user_id, src)); transferred += cur.rowcount
@@ -3628,7 +3693,7 @@ def admin_transfer_assets():
                 conn.commit()
     log_admin_action(admin_uid, admin_uname, 'ASSET_TRANSFER', 'users', target_user_id,
                     column_name='bulk_transfer', old_value=f'{len(source_user_ids)}src+{len(deposit_ids)}dep', new_value=f'{transferred}items')
-    return jsonify({"status": "ok", "transferred": transferred})
+    return ok({"transferred": transferred}, "ok")
 
 
 # ── System Prompt Management ──
@@ -3638,7 +3703,7 @@ def admin_transfer_assets():
 def get_system_prompt():
     """Return the current agent system prompt (admin only)."""
     from app.globals import AGENT_SYSTEM_PROMPT
-    return jsonify({"prompt": AGENT_SYSTEM_PROMPT.strip()})
+    return ok({"prompt": AGENT_SYSTEM_PROMPT.strip()})
 
 
 @admin_bp.route('/admin/system_prompt', methods=['POST'])
@@ -3650,14 +3715,14 @@ def set_system_prompt():
     data = request.get_json(silent=True) or {}
     new_prompt = (data.get('prompt', '') or '').strip()
     if not new_prompt:
-        return jsonify({"error": "Prompt cannot be empty"}), 400
+        return err("Prompt cannot be empty", "VALIDATION_ERROR", 400)
     if new_prompt == _current.strip():
-        return jsonify({"status": "ok", "message": "No changes"})
+        return ok({"message": "No changes"}, "ok")
     save_prompt(new_prompt)
     log_admin_action(session.get('user_id', ''), session.get('username', ''),
                     'PROMPT_EDIT', 'system', None, column_name='agent_system_prompt',
                     old_value=_current[:80] + '...', new_value=new_prompt[:80] + '...')
-    return jsonify({"status": "ok", "message": "System prompt updated"})
+    return ok({"message": "System prompt updated"}, "ok")
 
 
 # ── Search Cache Config ──
@@ -3667,7 +3732,7 @@ def set_system_prompt():
 def get_search_cache_config():
     """Return search cache config and stats."""
     from app.services.agent import get_cache_stats
-    return jsonify({"status": "ok", "config": get_cache_stats()})
+    return ok({"config": get_cache_stats()}, "ok")
 
 
 @admin_bp.route('/admin/search_cache_config', methods=['POST'])
@@ -3684,18 +3749,18 @@ def set_search_cache_config():
         log_admin_action(session.get('user_id', ''), session.get('username', ''),
                         'CACHE_CLEAR', 'system', None,
                         column_name='search_cache', new_value='cleared')
-        return jsonify({"status": "ok", "message": "搜索缓存已清除"})
+        return ok({"message": "搜索缓存已清除"}, "ok")
 
     # set_ttl
     ttl_hours = data.get('ttl_hours')
     if ttl_hours is None:
-        return jsonify({"error": "缺少 ttl_hours 参数"}), 400
+        return err("缺少 ttl_hours 参数", "VALIDATION_ERROR", 400)
     try:
         ttl_hours = float(ttl_hours)
     except (ValueError, TypeError):
-        return jsonify({"error": "ttl_hours 必须是数字"}), 400
+        return err("ttl_hours 必须是数字", "VALIDATION_ERROR", 400)
     if ttl_hours < 0:
-        return jsonify({"error": "TTL 不能为负数（设为0表示禁用缓存）"}), 400
+        return err("TTL 不能为负数（设为0表示禁用缓存）", "VALIDATION_ERROR", 400)
 
     old_ttl_hours = get_cache_ttl() / 3600
     _set_cache_ttl(int(ttl_hours * 3600))
@@ -3703,7 +3768,7 @@ def set_search_cache_config():
                     'CACHE_TTL_CHANGE', 'system', None,
                     column_name='search_cache_ttl',
                     old_value=f'{old_ttl_hours}h', new_value=f'{ttl_hours}h')
-    return jsonify({"status": "ok", "message": f"搜索缓存 TTL 已设为 {ttl_hours} 小时"})
+    return ok({"message": f"搜索缓存 TTL 已设为 {ttl_hours} 小时"}, "ok")
 
 
 # ── Unified Runtime Config ──
@@ -3713,7 +3778,7 @@ def set_search_cache_config():
 def get_runtime_config():
     """Return all runtime-adjustable config values."""
     from app.services.runtime_config import get_all
-    return jsonify({"status": "ok", "config": get_all()})
+    return ok({"config": get_all()}, "ok")
 
 
 @admin_bp.route('/admin/runtime_config', methods=['POST'])
@@ -3730,28 +3795,28 @@ def update_runtime_config():
         log_admin_action(session.get('user_id', ''), session.get('username', ''),
                         'CONFIG_RESET', 'system', None,
                         column_name='runtime_config', new_value='reset_to_defaults')
-        return jsonify({"status": "ok", "message": "Config reset to defaults", "config": cfg})
+        return ok({"message": "Config reset to defaults", "config": cfg}, "ok")
 
     if action == 'save_factory':
         if has_factory_presets():
-            return jsonify({"error": "Factory presets already saved — cannot overwrite"}), 409
+            return err("Factory presets already saved — cannot overwrite", "RESOURCE_BUSY", 409)
         factory = save_factory_presets()
         log_admin_action(session.get('user_id', ''), session.get('username', ''),
                         'CONFIG_FACTORY_SAVE', 'system', None,
                         column_name='runtime_config', new_value=f'factory_saved:{len(factory)}keys')
-        return jsonify({"status": "ok", "message": f"Factory presets saved ({len(factory)} keys, read-only)", "factory": factory})
+        return ok({"message": f"Factory presets saved ({len(factory)} keys, read-only)", "factory": factory}, "ok")
 
     if action == 'restore_factory':
         if not has_factory_presets():
-            return jsonify({"error": "No factory presets exist — save factory first"}), 400
+            return err("No factory presets exist — save factory first", "VALIDATION_ERROR", 400)
         cfg = restore_factory_presets()
         log_admin_action(session.get('user_id', ''), session.get('username', ''),
                         'CONFIG_RESTORE_FACTORY', 'system', None,
                         column_name='runtime_config', new_value='restored_to_factory')
-        return jsonify({"status": "ok", "message": "Restored to factory presets", "config": cfg})
+        return ok({"message": "Restored to factory presets", "config": cfg}, "ok")
 
     if not data:
-        return jsonify({"error": "No update parameters provided"}), 400
+        return err("No update parameters provided", "VALIDATION_ERROR", 400)
 
     # Validate types against defaults
     from app.services.runtime_config import DEFAULTS
@@ -3768,7 +3833,7 @@ def update_runtime_config():
             else:
                 sanitized[k] = expected_type(v)
         except (ValueError, TypeError):
-            return jsonify({"error": f"Type mismatch for {k}: expected {expected_type.__name__}"}), 400
+            return err(f"Type mismatch for {k}: expected {expected_type.__name__}", "VALIDATION_ERROR", 400)
 
     cfg = update(sanitized)
     changed = ', '.join(f'{k}={v}' for k, v in sanitized.items())
@@ -3784,7 +3849,7 @@ def update_runtime_config():
             g._current_max_tokens = None
         logger.info("Agent cache invalidated due to LLM config change")
 
-    return jsonify({"status": "ok", "message": f"Updated {len(sanitized)} config keys", "config": cfg})
+    return ok({"message": f"Updated {len(sanitized)} config keys", "config": cfg}, "ok")
 
 
 @admin_bp.route('/admin/embedding_cache', methods=['GET'])
@@ -3793,9 +3858,9 @@ def get_embedding_cache():
     """Return embedding cache stats for admin monitoring."""
     try:
         from app.services.rag_engine import embedding_cache_stats
-        return jsonify(embedding_cache_stats())
+        return ok(embedding_cache_stats())
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/embedding_cache/clear', methods=['POST'])
 @admin_required
@@ -3804,9 +3869,9 @@ def clear_embedding_cache_route():
     try:
         from app.services.rag_engine import clear_embedding_cache
         clear_embedding_cache()
-        return jsonify({"success": True})
+        return ok(message="ok")
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 # ── DB Migration Management ──
 
@@ -3828,13 +3893,13 @@ def get_db_migrations():
             capture_output=True, text=True, timeout=30,
             env={**os.environ, 'PYTHONPATH': os.path.dirname(os.path.dirname(os.path.dirname(__file__)))}
         )
-        return jsonify({
+        return ok({
             "pending": result.stdout,
             "history": hist_result.stdout,
             "error": result.stderr if result.stderr else None,
         })
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/db_migrations/apply', methods=['POST'])
 @admin_required
@@ -3849,13 +3914,13 @@ def apply_db_migrations():
             cmd.append('--yes')
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
             env={**os.environ, 'PYTHONPATH': os.path.dirname(os.path.dirname(os.path.dirname(__file__)))})
-        return jsonify({
+        return ok({
             "success": result.returncode == 0,
             "output": result.stdout,
             "error": result.stderr if result.stderr else None,
         })
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/db_migrations/rollback', methods=['POST'])
 @admin_required
@@ -3868,13 +3933,13 @@ def rollback_db_migration():
             [sys.executable, os.path.join(scripts_dir, 'manage_db.py'), 'rollback'],
             capture_output=True, text=True, timeout=60,
             env={**os.environ, 'PYTHONPATH': os.path.dirname(os.path.dirname(os.path.dirname(__file__)))})
-        return jsonify({
+        return ok({
             "success": result.returncode == 0,
             "output": result.stdout,
             "error": result.stderr if result.stderr else None,
         })
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/db_migrations/snapshot', methods=['POST'])
 @admin_required
@@ -3887,12 +3952,12 @@ def snapshot_db_schema():
             [sys.executable, os.path.join(scripts_dir, 'manage_db.py'), 'snapshot'],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, 'PYTHONPATH': os.path.dirname(os.path.dirname(os.path.dirname(__file__)))})
-        return jsonify({
+        return ok({
             "success": True,
             "output": result.stdout,
         })
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 500
+        return err(str(e)[:200], "SERVER_ERROR", 500)
 
 @admin_bp.route('/admin/runtime_config_schema', methods=['GET'])
 @admin_required
@@ -3987,7 +4052,7 @@ def get_runtime_config_schema():
     }
     # Inject factory status
     from app.services.runtime_config import has_factory_presets, get_factory_presets, NON_FACTORY_KEYS
-    return jsonify({
+    return ok({
         "status": "ok",
         "schema": schema,
         "has_factory": has_factory_presets(),
@@ -4026,7 +4091,7 @@ def admin_llm_providers():
     session_provider = flask_session.get('llm_provider', '')
     session_model = flask_session.get('llm_model', '')
 
-    return jsonify({
+    return ok({
         "status": "ok",
         "providers": providers,
         "active_provider": active_provider,
@@ -4046,18 +4111,18 @@ def admin_send_mail():
     subject = data.get('subject', '').strip()
     body = data.get('body', '').strip()
     if not to_addr or not subject or not body:
-        return jsonify({"error": "收件人、主题和正文不能为空"}), 400
+        return err("收件人、主题和正文不能为空", "VALIDATION_ERROR", 400)
     try:
         from app.utils.mailer import send_email, is_configured
         if not is_configured():
-            return jsonify({"error": "SMTP未配置，请设置SMTP_HOST等环境变量"}), 503
+            return err("SMTP未配置，请设置SMTP_HOST等环境变量", "SERVICE_UNAVAILABLE", 503)
         success = send_email(to_addr, subject, body, async_mode=True)
         if success:
-            return jsonify({"status": "ok", "message": f"邮件已发送至 {to_addr}"})
+            return ok({"message": f"邮件已发送至 {to_addr}"}, "ok")
         else:
-            return jsonify({"error": "邮件发送失败"}), 500
+            return err("邮件发送失败", "SERVER_ERROR", 500)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 # ── Mail: get all user emails for autocomplete ──
 @admin_bp.route('/admin/user_emails', methods=['GET'])
@@ -4067,7 +4132,7 @@ def admin_user_emails():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT username, user_id, role, is_auditor FROM users WHERE is_active = TRUE ORDER BY username")
             users = cur.fetchall()
-    return jsonify({"users": [
+    return ok({"users": [
         {"username": u['username'], "user_id": u['user_id'],
          "role": u.get('role', 'user'), "is_auditor": bool(u.get('is_auditor', False))}
         for u in users
@@ -4245,7 +4310,7 @@ def admin_system_cleanup():
         results['file_audit'] = f"孤儿{audit_data.get('orphans_count',0)}个, 泄漏{audit_data.get('disk_leaks_count',0)}个"
     except Exception as e:
         results['file_audit'] = str(e)[:100]
-    return jsonify({"status": "ok", "results": results})
+    return ok({"results": results}, "ok")
 
 @admin_bp.route('/admin/clear_all_data', methods=['POST'])
 @admin_required
@@ -4325,7 +4390,7 @@ def admin_clear_all_data():
             os.remove(cache_file)
     except: pass
 
-    return jsonify({"status": "ok", "results": results})
+    return ok({"results": results}, "ok")
 
 # ── Safe file deletion helper ──
 def _safe_delete_file(filepath, label=''):
@@ -4393,7 +4458,7 @@ def admin_file_audit():
                 if not found:
                     leaks.append({'path': full_path, 'size': os.path.getsize(full_path)})
 
-    return jsonify({
+    return ok({
         'db_paths_checked': total_checked,
         'orphans': orphans[:100],
         'orphans_count': len(orphans),
@@ -4421,7 +4486,7 @@ def admin_notifications():
             pass
 
     unread = len([n for n in notifications if not n.get('seen_by')])
-    return jsonify({
+    return ok({
         "notifications": notifications,
         "unread": unread,
         "total": len(notifications),
@@ -4439,7 +4504,7 @@ def admin_mark_notifications_read():
     notify_path = os.path.join(str(DATA_DIR), 'ingest', 'training_notifications.json')
 
     if not os.path.exists(notify_path):
-        return jsonify({"success": True, "marked": 0})
+        return ok({"marked": 0})
 
     try:
         with open(notify_path, 'r', encoding='utf-8') as f:
@@ -4454,9 +4519,9 @@ def admin_mark_notifications_read():
         with open(notify_path, 'w', encoding='utf-8') as f:
             json.dump(notifications, f, ensure_ascii=False, default=str)
 
-        return jsonify({"success": True, "marked": marked})
+        return ok({"marked": marked})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 # ======================== Quote Anomaly Admin Routes ========================
@@ -4480,7 +4545,7 @@ def admin_quote_anomaly_results():
             results = cur.fetchall()
             cur.execute("SELECT COUNT(*) as total FROM quote_anomaly_results")
             total = cur.fetchone()['total']
-    return jsonify({"results": [dict(r) for r in results], "total": total})
+    return ok({"results": [dict(r) for r in results], "total": total})
 
 
 @admin_bp.route('/admin/quote_anomaly_results/<int:id>', methods=['GET'])
@@ -4495,8 +4560,8 @@ def admin_quote_anomaly_detail(id):
             """, (id,))
             row = cur.fetchone()
             if not row:
-                return jsonify({"error": "Not found"}), 404
-    return jsonify(dict(row))
+                return err("Not found", "NOT_FOUND", 404)
+    return ok(dict(row))
 
 
 # ── Typo detection admin routes ──
@@ -4517,7 +4582,7 @@ def admin_typo_results():
             results = cur.fetchall()
             cur.execute("SELECT COUNT(*) as total FROM typo_detection_results")
             total = cur.fetchone()['total']
-    return jsonify({"results": [dict(r) for r in results], "total": total})
+    return ok({"results": [dict(r) for r in results], "total": total})
 
 
 # ── Relationship extraction admin routes ──
@@ -4538,7 +4603,7 @@ def admin_relationship_results():
             results = cur.fetchall()
             cur.execute("SELECT COUNT(*) as total FROM relationship_risk_summary")
             total = cur.fetchone()['total']
-    return jsonify({"results": [dict(r) for r in results], "total": total})
+    return ok({"results": [dict(r) for r in results], "total": total})
 
 
 @admin_bp.route('/admin/relationship_results/<task_id>', methods=['GET'])
@@ -4553,17 +4618,105 @@ def admin_relationship_detail(task_id):
             """, (task_id,))
             summary = cur.fetchone()
             if not summary:
-                return jsonify({"error": "Not found"}), 404
+                return err("Not found", "NOT_FOUND", 404)
 
             cur.execute("""
                 SELECT * FROM entity_relationships WHERE task_id = %s
                 ORDER BY module, confidence DESC
             """, (task_id,))
             relations = cur.fetchall()
-    return jsonify({
+    return ok({
         "summary": dict(summary),
         "relationships": [dict(r) for r in relations],
     })
+
+
+# ======================== AI Document Review ========================
+
+AI_DOC_REVIEW_PROMPT = """你是一个资深的招标文件审查专家。请用以下五轴法审查这份文档，每个轴给1-10分，指出具体问题，最后给出综合评分和修改建议。
+
+**审查五轴：**
+1. **合规性** — 是否满足招标文件的所有硬性要求？有没有遗漏必需的资质、证书、签章？
+2. **清晰度** — 语言是否清晰？结构和逻辑是否合理？数据和金额是否表述准确无歧义？
+3. **完整性** — 所有必填部分是否齐全？技术方案、商务报价、资质证明是否完整？
+4. **风险** — 是否存在不利条款、过高承诺、模糊免责声明、容易被质疑的计算或推理？
+5. **专业性** — 格式、用词、排版是否专业？是否符合行业规范？
+
+**输出格式（严格JSON，不要Markdown包裹）：**
+{
+  "scores": {"合规性": N, "清晰度": N, "完整性": N, "风险": N, "专业性": N},
+  "overall": N,
+  "verdict": "通过 / 需修改 / 不合格",
+  "issues": [
+    {"axis": "轴名", "severity": "高/中/低", "location": "段落或位置描述", "finding": "具体问题", "suggestion": "修改建议"}
+  ],
+  "summary": "一段中文总结（100字内），概括主要问题和整体评价"
+}"""
+
+
+@admin_bp.route('/admin/review/document', methods=['POST'])
+@admin_required
+def admin_review_document():
+    """AI document review using five-axis methodology (code-review-and-quality skill)."""
+    if 'file' not in request.files:
+        return err("请上传要审查的文件", "NO_FILE", 400)
+
+    file = request.files['file']
+    if not file.filename:
+        return err("文件名为空", "EMPTY_FILENAME", 400)
+
+    try:
+        from app.services.file_processing import extract_text_from_file
+        text, _ = extract_text_from_file(file)
+    except Exception as e:
+        logger.error(f"Text extraction failed for review: {e}")
+        return err("文件解析失败，请确认文件格式正确", "EXTRACT_FAILED", 400)
+
+    if not text or len(text.strip()) < 50:
+        return err("文件内容过短，无法审查（至少50字符）", "TOO_SHORT", 400)
+
+    axes_param = request.form.get('axes', 'all')
+    if axes_param != 'all':
+        try:
+            selected_axes = [a.strip() for a in axes_param.split(',')]
+        except Exception:
+            selected_axes = None
+    else:
+        selected_axes = None
+
+    prompt = AI_DOC_REVIEW_PROMPT
+    if selected_axes:
+        axis_list = "、".join(selected_axes)
+        prompt = prompt.replace(
+            "**审查五轴：**",
+            f"**审查五轴（用户仅选择了以下轴）：**\n仅审查用户选择的轴: {axis_list}"
+        )
+
+    try:
+        from app.services.agent import get_agent
+        agent = get_agent()
+        config = {"configurable": {"thread_id": f"doc_review_{uuid.uuid4()}"}}
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": f"{prompt}\n\n=== 待审查文档 ===\n{text[:12000]}"}]},
+            config
+        )
+        raw = response["messages"][-1].content
+    except Exception as e:
+        logger.error(f"AI review invoke failed: {e}", exc_info=True)
+        return err("AI审查服务暂时不可用", "AI_UNAVAILABLE", 503)
+
+    # Parse JSON from AI response
+    try:
+        import re as _re
+        json_match = _re.search(r'\{[\s\S]*\}', raw)
+        if json_match:
+            result = json.loads(json_match.group(0))
+        else:
+            result = {"raw_analysis": raw, "parse_error": True}
+    except json.JSONDecodeError:
+        result = {"raw_analysis": raw, "parse_error": True}
+
+    return ok(result, "审查完成")
 
 
 # ======================== Credit Check Routes ========================
