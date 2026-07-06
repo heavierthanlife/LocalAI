@@ -191,11 +191,22 @@
         const bar = _getProgressBar();
         const fill = _getProgressFill();
         const toast = _getProgressToast();
-        if (bar && fill) { fill.style.width = '100%'; setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 600); }
+        if (bar && fill) {
+            fill.style.width = '100%';
+            fill.style.background = success ? '#16a34a' : '#ef4444';
+            setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; fill.style.background = ''; }, success ? 600 : 0);
+        }
         if (message && toast) {
-            toast.textContent = message;
-            toast.style.background = '#ef4444';
-            setTimeout(() => { toast.style.display = 'none'; toast.style.background = '#1e293b'; }, 3000);
+            toast.textContent = (success ? '' : '❌ ') + message;
+            toast.style.background = success ? '#16a34a' : '#ef4444';
+            if (success) {
+                setTimeout(() => { toast.style.display = 'none'; toast.style.background = '#1e293b'; }, 2000);
+            } else {
+                toast.style.cursor = 'pointer';
+                toast.title = '点击关闭';
+                const dismiss = () => { toast.style.display = 'none'; toast.style.background = '#1e293b'; toast.style.cursor = ''; toast.title = ''; toast.removeEventListener('click', dismiss); };
+                toast.addEventListener('click', dismiss);
+            }
         }
     }
 
@@ -5986,55 +5997,35 @@
         const formData = new FormData();
         formData.append('file', file);
         updateProgress(30, '正在传输...');
-        const res = await fetch(`/admin/projects/${projectId}/folders/${folderId}/upload`, {
-            method: 'POST',
-            credentials: 'include',
-            body: formData
-        });
+        let res, data;
+        try {
+            res = await fetch(`/admin/projects/${projectId}/folders/${folderId}/upload`, {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            });
+            data = await res.json();
+        } catch (err) {
+            finishProgress(false, '网络错误，请重试');
+            return null;
+        }
         updateProgress(70, '正在保存...');
-        const data = await res.json();
         if (res.ok && data.success) {
             finishProgress(true);
-            return;
+            return { success: true };
         }
         if (data.duplicate) {
-            const existingFile = data.existing_file;
-            const newFileName = data.new_filename;
-            const choice = await showDuplicateFileOptions(existingFile, newFileName);
-            if (choice === 'keep') {
-                showToast(`文件已存在，保留原有文件 "${existingFile.original_name}"`, 'success', 3000);
-            } else if (choice === 'rename') {
-                const renameRes = await fetch(`/admin/projects/${projectId}/files/${existingFile.id}/rename`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ original_name: newFileName })
-                });
-                if (renameRes.ok) {
-                    showToast(`文件已重命名为 "${newFileName}"`, 'success', 3000);
-                } else {
-                    alert('重命名失败');
-                }
-            } else if (choice === 'force') {
-                const versionFormData = new FormData();
-                versionFormData.append('file', file);
-                const versionRes = await fetch(`/admin/projects/${projectId}/files/${existingFile.id}/new_version`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: versionFormData
-                });
-                const versionData = await versionRes.json();
-                if (versionRes.ok && versionData.success) {
-                    showToast(`文件已作为新版本 v${versionData.version} 上传`, 'success', 3000);
-                } else {
-                    alert('上传新版本失败: ' + (versionData.error || '未知错误'));
-                }
-            }
-            await loadFilesInFolder(projectId, currentFolderId);
-            await loadFolderTree(projectId, currentFolderId);
-            return;
+            finishProgress(false, '发现重复文件');
+            return {
+                conflict: true,
+                conflict_type: data.conflict_type || 'hash',
+                existing_file: data.existing_file,
+                new_filename: data.new_filename,
+                file: file
+            };
         }
-        alert('上传失败，请检查文件格式后重试');
+        finishProgress(false, data.error || '上传失败，请检查文件格式后重试');
+        return null;
     }
 
     async function showDuplicateFileOptions(existingFile, newFileName) {
@@ -7074,6 +7065,7 @@
 
         // Upload each file sequentially (to avoid overwhelming the server)
         let uploaded = 0;
+        let hadErrors = false;
         showProgress(`上传 ${files.length} 个文件...`, 'bar');
         for (const item of placeholders) {
             const { file, placeholder } = item;
@@ -7096,15 +7088,17 @@
                 } else {
                     // Show error and remove the placeholder
                     placeholder.remove();
+                    hadErrors = true;
                     showToast('上传失败，请检查文件格式', 'error', 3000);
                 }
             } catch (err) {
                 placeholder.remove();
+                hadErrors = true;
                 showToast('上传失败，请检查网络连接后重试', 'error', 3000);
             }
             uploaded++;
         }
-        finishProgress(true);
+        finishProgress(!hadErrors, hadErrors ? '部分文件上传失败' : undefined);
 
         // Clear the input so the same files can be uploaded again
         e.target.value = '';
@@ -10773,9 +10767,34 @@
             if (procInd) procInd.style.display = 'inline-block';
         }
 
+        let es;
+        let idleTimer;
         try {
-            const es = new EventSource(`/tasks/${encodeURIComponent(taskId)}/stream`);
+            es = new EventSource(`/tasks/${encodeURIComponent(taskId)}/stream`);
+            idleTimer = setTimeout(() => {
+                es.close();
+                _activeTaskIds.delete(taskId);
+                updateFloatingIndicator();
+                if (_activeTaskIds.size === 0) {
+                    if (progBar) progBar.style.display = 'none';
+                    if (procInd) procInd.style.display = 'none';
+                }
+                finishProgress(false, '连接超时，任务可能仍在后台运行');
+                loadBgTasks();
+            }, 30000);
             es.onmessage = (e) => {
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                    es.close();
+                    _activeTaskIds.delete(taskId);
+                    updateFloatingIndicator();
+                    if (_activeTaskIds.size === 0) {
+                        if (progBar) progBar.style.display = 'none';
+                        if (procInd) procInd.style.display = 'none';
+                    }
+                    finishProgress(false, '连接超时，任务可能仍在后台运行');
+                    loadBgTasks();
+                }, 30000);
                 try {
                     const d = JSON.parse(e.data);
                     if (d.progress !== undefined && progFill && !_taskMinimized) {
@@ -10787,6 +10806,7 @@
                     }
                     _taskResults[taskId] = { label: d.message || d.label || '处理中...', progress: d.progress };
                     if (d.event === 'complete') {
+                        clearTimeout(idleTimer);
                         es.close();
                         _activeTaskIds.delete(taskId);
                         updateFloatingIndicator();
@@ -10803,6 +10823,7 @@
                         loadBgTasks();
                     }
                     if (d.event === 'error') {
+                        clearTimeout(idleTimer);
                         es.close();
                         _activeTaskIds.delete(taskId);
                         updateFloatingIndicator();
@@ -10819,6 +10840,7 @@
                 } catch(parseErr) {}
             };
             es.onerror = () => {
+                clearTimeout(idleTimer);
                 es.close();
                 _activeTaskIds.delete(taskId);
                 updateFloatingIndicator();
