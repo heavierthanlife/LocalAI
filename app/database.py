@@ -624,6 +624,9 @@ def _run_table_creation(cur: "PgCursor"):
         "CREATE INDEX IF NOT EXISTS idx_company_kb_skill_hash ON company_knowledge_base(skill_summary_hash)",
         "CREATE INDEX IF NOT EXISTS idx_project_files_skill_hash ON project_files(skill_summary_hash)",
         "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_id_id ON chat_messages(thread_id, id)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated ON chat_sessions(user_id, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_feedback_thread_id ON feedback(thread_id)",
     ]
     for stmt in idx_statements:
         cur.execute(stmt)
