@@ -1,0 +1,63 @@
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──
+venv/
+.venv/
+env/
+.env/
+
+# ── IDE / Editor ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Git ──
+.git/
+.gitignore
+.gitattributes
+
+# ── Data (volume-mounted) ──
+data/
+logs/
+
+# ── Certificates (volume-mounted) ──
+# cert/ is mounted as a volume, keep cert/ in .dockerignore to avoid
+# baking certs into the image. Copy cert/ to the server separately.
+
+# ── Documentation ──
+*.md
+!README.md
+
+# ── Tests ──
+tests/
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Docker files ──
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ── Node modules (if any) ──
+node_modules/
+
+# ── Coverage ──
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ── Misc ──
+*.log
+msedgedriver.exe
