@@ -65,6 +65,7 @@ window.Compliance = {
                 const data = await resp.json();
                 if (data.success) {
                     extractedRulesTaskId = data.task_id;
+                    Compliance._taskIds.extracted = data.task_id;
                     statusSpan.textContent = `\u2705 \u63d0\u53d6\u5b8c\u6210: ${data.total} \u6761\u89c4\u5219 (AI:${data.ai_count} + \u6b63\u5219:${data.regex_count})`;
                     statusSpan.style.color = '#27ae60';
                     renderExtractedRules(data.rules);

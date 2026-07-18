@@ -376,10 +376,19 @@
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <button id="complianceExtractBtn" disabled style="font-size:0.68rem;padding:4px 10px;">🔍 提取规则</button>
                         <button id="complianceCheckBtn" disabled style="font-size:0.68rem;padding:4px 10px;background:#e67e22;color:#fff;">⚖️ 开始审查</button>
+                        <button id="complianceTextModeBtn" style="font-size:0.68rem;padding:4px 10px;background:#2980b9;color:#fff;border:none;border-radius:4px;cursor:pointer;">✏️ 文字编辑</button>
                         <label style="font-size:0.68rem;display:flex;align-items:center;gap:4px;">
                             <input type="checkbox" id="complianceUseAI" checked> AI分析
                         </label>
                         <span id="complianceStatus" style="font-size:0.68rem;color:var(--card-muted);"></span>
+                    </div>
+                    <div id="complianceEditorPanel" style="display:none;margin-top:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:0.65rem;color:var(--card-muted);">📝 投标文件编辑 — 变动自动增量审查</span>
+                            <span id="complianceEditorScore" style="font-size:0.68rem;font-weight:600;"></span>
+                        </div>
+                        <div id="complianceTiptapEditor" style="min-height:200px;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:10px 14px;background:var(--card-bg);font-size:0.78rem;line-height:1.6;outline:none;"></div>
+                        <div id="complianceEditorFindings" style="margin-top:4px;font-size:0.62rem;max-height:120px;overflow-y:auto;"></div>
                     </div>
                     <div id="complianceRulesPreview" style="display:none;margin-top:6px;max-height:300px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:6px;background:var(--card-bg);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -863,6 +872,7 @@
 </div>
 
 <script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/cases.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>
