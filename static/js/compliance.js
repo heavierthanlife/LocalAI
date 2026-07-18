@@ -432,8 +432,9 @@ window.Compliance = {
         });
         html += '</div>';
         if (versions.length >= 2) {
-            html += '<div style="margin-top:6px;font-size:0.65rem;">';
-            html += '<button class="law-timeline-btn" style="padding:2px 8px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);cursor:pointer;">\ud83d\udcdc \u7248\u672c\u65f6\u95f4\u7ebf</button>';
+            html += '<div style="margin-top:6px;font-size:0.65rem;display:flex;gap:6px;align-items:center;">';
+            html += '<button class="law-timeline-btn" style="padding:2px 8px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);cursor:pointer;">📜 版本时间线</button>';
+            html += '<button class="law-impact-btn" style="padding:2px 8px;border:1px solid #e74c3c;color:#e74c3c;border-radius:4px;background:var(--card-bg);cursor:pointer;">⚠️ 变更影响评估</button>';
             html += '</div>';
         }
         container.innerHTML = html;
@@ -450,6 +451,8 @@ window.Compliance = {
         if (versions.length >= 2) {
             const tlBtn = container.querySelector('.law-timeline-btn');
             if (tlBtn) tlBtn.onclick = () => showTimeline(versions);
+            const impactBtn = container.querySelector('.law-impact-btn');
+            if (impactBtn) impactBtn.onclick = () => showLawImpact(lawId);
         }
     }
 
@@ -474,6 +477,86 @@ window.Compliance = {
         document.body.insertAdjacentHTML('beforeend', html);
         const modal = document.getElementById('lawTimelineModal');
         modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+    }
+
+    function showLawImpact(lawId) {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = '<div class="modal-content" style="background:var(--card-bg);border-radius:12px;padding:20px;max-width:650px;width:90%;max-height:80vh;overflow-y:auto;">' +
+            '<span style="float:right;cursor:pointer;font-size:1.2rem;" onclick="this.closest(\'.modal\').remove()">&times;</span>' +
+            '<h4 style="margin:0 0 8px;">⚠️ 法规变更影响评估</h4>' +
+            '<span style="font-size:0.7rem;color:var(--card-muted);">正在分析受影响案例和模板...</span></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+
+        fetch('/compliance/laws/monitor/impact', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ law_id: lawId }),
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'failed');
+                const impact = data.data || data;
+                let html = '<span style="float:right;cursor:pointer;font-size:1.2rem;" onclick="this.closest(\'.modal\').remove()">&times;</span>';
+                html += '<h4 style="margin:0 0 8px;">⚠️ 法规变更影响评估</h4>';
+
+                html += '<div style="display:flex;gap:10px;margin-bottom:12px;">';
+                html += _impactStat('涉及条款', impact.affected_articles || 0, '#8e44ad');
+                html += _impactStat('影响案例', impact.total_affected_cases || 0, '#e67e22');
+                html += _impactStat('影响模板', impact.total_affected_templates || 0, '#27ae60');
+                html += '</div>';
+
+                if (impact.severity_breakdown) {
+                    const sb = impact.severity_breakdown;
+                    html += '<div style="margin-bottom:10px;font-size:0.65rem;">';
+                    html += '<span style="font-weight:600;">严重程度：</span>';
+                    html += '<span style="color:#e74c3c;">🚫 ' + (sb.critical || 0) + '</span> ';
+                    html += '<span style="color:#e67e22;">❌ ' + (sb.violation || 0) + '</span> ';
+                    html += '<span style="color:#f39c12;">⚠️ ' + (sb.warning || 0) + '</span> ';
+                    html += '| <span style="color:#e74c3c;">打开 ' + (sb.open || 0) + '</span> ';
+                    html += '<span style="color:#27ae60;">已解决 ' + (sb.resolved || 0) + '</span>';
+                    html += '</div>';
+                }
+
+                if (impact.affected_cases && impact.affected_cases.length) {
+                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">📋 受影响案例</strong>';
+                    html += '<div style="max-height:180px;overflow-y:auto;font-size:0.62rem;margin-top:4px;">';
+                    impact.affected_cases.forEach(c => {
+                        const sevCol = c.severity === 'critical' ? '#e74c3c' : c.severity === 'violation' ? '#e67e22' : '#f39c12';
+                        html += '<div style="padding:2px 4px;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;">';
+                        html += '<span>' + hlVerse(c.title) + '</span>';
+                        html += '<span style="color:' + sevCol + ';">' + c.severity + (c.is_resolved ? ' ✅' : '') + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                if (impact.affected_templates && impact.affected_templates.length) {
+                    html += '<div><strong style="font-size:0.68rem;">📑 受影响模板</strong>';
+                    html += '<div style="font-size:0.62rem;margin-top:4px;">';
+                    impact.affected_templates.forEach(t => {
+                        html += '<span style="background:var(--bg-color);padding:2px 6px;border-radius:3px;margin:2px;display:inline-block;">' + hlVerse(t.name) + '</span>';
+                    });
+                    html += '</div></div>';
+                }
+
+                modal.querySelector('.modal-content').innerHTML = html;
+            })
+            .catch(e => {
+                modal.querySelector('.modal-content').innerHTML =
+                    '<span style="float:right;cursor:pointer;font-size:1.2rem;" onclick="this.closest(\'.modal\').remove()">&times;</span>' +
+                    '<span style="color:#e74c3c;">影响评估失败: ' + e.message + '</span>';
+            });
+    }
+
+    function _impactStat(label, value, color) {
+        return '<div style="flex:1;padding:8px;background:var(--bg-color);border-radius:6px;text-align:center;border-left:3px solid ' + color + ';">' +
+            '<div style="font-size:1.2rem;font-weight:700;color:' + color + ';">' + (value || 0) + '</div>' +
+            '<div style="font-size:0.55rem;color:var(--card-muted);">' + label + '</div></div>';
     }
 
     function showDiff(lawId, fromVid, toVid) {

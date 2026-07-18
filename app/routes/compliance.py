@@ -899,3 +899,39 @@ def get_graph():
     except Exception as e:
         logger.error(f"get_graph error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
+
+
+# ── Law Change Monitoring (U14) ──
+
+@compliance_bp.route('/laws/monitor/impact', methods=['POST'])
+@_login_required
+def monitor_impact():
+    """Compute impact of a law change on cases and templates."""
+    try:
+        if not request.is_json:
+            return err("\u8bf7\u6c42\u4f53\u9700\u4e3a JSON", "VALIDATION_ERROR", 400)
+        data = request.get_json() or {}
+        law_id = data.get('law_id')
+        if not law_id:
+            return err("\u7f3a\u5c11 law_id", "VALIDATION_ERROR", 400)
+        from app.services.law_monitor import compute_impact
+        result = compute_impact(int(law_id))
+        return ok(result)
+    except Exception as e:
+        logger.error(f"monitor_impact error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/laws/monitor/events', methods=['GET'])
+@_login_required
+def get_change_events():
+    """Get law change event history."""
+    try:
+        law_id = request.args.get('law_id', type=int)
+        limit = request.args.get('limit', 20, type=int)
+        from app.services.law_monitor import get_change_history
+        result = get_change_history(law_id=law_id, limit=limit)
+        return ok({'events': result})
+    except Exception as e:
+        logger.error(f"get_change_events error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)

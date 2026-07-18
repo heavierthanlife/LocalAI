@@ -1113,6 +1113,21 @@ def _run_table_creation(cur: "PgCursor"):
     cur.execute("CREATE INDEX IF NOT EXISTS idx_tul_template ON template_usage_log(template_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_tul_used_at ON template_usage_log(used_at)")
 
+    # ── law change events (U14) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_change_events (
+            id              SERIAL PRIMARY KEY,
+            law_id          INTEGER REFERENCES laws(id),
+            from_version_id INTEGER,
+            to_version_id   INTEGER,
+            description     TEXT,
+            submitted_by    TEXT REFERENCES users(user_id),
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lce_law ON law_change_events(law_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lce_created ON law_change_events(created_at)")
+
     # ── audit cases (U13) ──
     cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_cases (
