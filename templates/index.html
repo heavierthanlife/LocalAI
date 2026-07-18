@@ -401,10 +401,12 @@
                     <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--card-border);">
                         <button id="complianceDashboardBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;">📊 仪表盘</button>
                         <button id="complianceCompareBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;margin-left:6px;">🔄 多项目对比</button>
+                        <button id="complianceGraphBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;margin-left:6px;">🔗 知识图谱</button>
                         <span id="complianceDashboardStatus" style="font-size:0.62rem;color:var(--card-muted);margin-left:8px;"></span>
                     </div>
                     <div id="complianceDashboardPanel" style="display:none;margin-top:6px;"></div>
                     <div id="complianceComparePanel" style="display:none;margin-top:6px;"></div>
+                    <div id="complianceGraphPanel" style="display:none;margin-top:6px;"></div>
                 </div>
             </details>
 
@@ -871,6 +873,7 @@
     <div class="ctx-item" data-action="copy" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;">🔗 复制内容</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js" crossorigin="anonymous"></script>
 <script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>

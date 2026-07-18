@@ -879,3 +879,23 @@ def get_compare():
     except Exception as e:
         logger.error(f"get_compare error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/graph', methods=['GET'])
+@_login_required
+def get_graph():
+    """Knowledge graph data (U12) — nodes + edges for Cytoscape.js."""
+    try:
+        center_type = request.args.get('center_type')
+        center_id = request.args.get('center_id', type=int)
+        max_nodes = request.args.get('max_nodes', 100, type=int)
+        depth = request.args.get('depth', 2, type=int)
+        from app.services.graph_service import get_graph_data
+        result = get_graph_data(
+            center_type=center_type, center_id=center_id,
+            max_nodes=max_nodes, depth=depth,
+        )
+        return ok(result)
+    except Exception as e:
+        logger.error(f"get_graph error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)

@@ -661,6 +661,8 @@ window.Compliance = {
         if (btn) btn.onclick = showDashboard;
         const cmpBtn = document.getElementById('complianceCompareBtn');
         if (cmpBtn) cmpBtn.onclick = showCompare;
+        const graphBtn = document.getElementById('complianceGraphBtn');
+        if (graphBtn) graphBtn.onclick = showGraph;
     };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', _dashInit);
@@ -878,6 +880,151 @@ window.Compliance = {
             .catch(e => {
                 panel.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">对比数据加载失败: ' + e.message + '</span>';
             });
+    }
+
+    // ── Knowledge Graph (U12) ──
+
+    let _cyGraph = null;
+
+    function showGraph() {
+        const panel = document.getElementById('complianceGraphPanel');
+        if (!panel) return;
+
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            if (_cyGraph) { _cyGraph.destroy(); _cyGraph = null; }
+            return;
+        }
+        panel.style.display = 'block';
+        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">⏳ 加载图谱...</span>';
+
+        fetch('/compliance/graph?max_nodes=60', { credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'failed');
+                const d = data.data || data;
+                if (!d.nodes || !d.nodes.length) {
+                    panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">暂无图谱数据</span>';
+                    return;
+                }
+
+                const typeColors = {
+                    law: '#2980b9', article: '#8e44ad', case: '#e67e22',
+                    template: '#27ae60', project: '#2c3e50',
+                };
+                const edgeColors = {
+                    CONTAINS: '#95a5a6', CITES: '#e67e22',
+                    RELATED_TO: '#27ae60', HAS_FINDING: '#8e44ad',
+                };
+
+                let html = '<div style="margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">';
+                html += '<strong style="font-size:0.68rem;">🔗 知识图谱</strong>';
+                html += '<span style="font-size:0.58rem;color:var(--card-muted);">' + d.total_nodes + ' 节点 · ' + d.total_edges + ' 边</span>';
+                html += '<div style="display:flex;gap:6px;font-size:0.55rem;">';
+                for (const [type, color] of Object.entries(typeColors)) {
+                    html += '<span style="display:flex;align-items:center;gap:2px;">';
+                    html += '<span style="width:8px;height:8px;background:' + color + ';border-radius:2px;display:inline-block;"></span>';
+                    html += type;
+                    html += '</span>';
+                }
+                html += '</div>';
+                html += '<button id="cyLayoutBtn" style="font-size:0.58rem;padding:2px 6px;border:1px solid var(--card-border);border-radius:3px;cursor:pointer;">🔄 重排</button>';
+                html += '</div>';
+                html += '<div id="cyGraphContainer" style="width:100%;height:400px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;"></div>';
+                panel.innerHTML = html;
+
+                setTimeout(() => _renderCyGraph(d.nodes, d.edges, typeColors, edgeColors), 100);
+
+                document.getElementById('cyLayoutBtn').onclick = () => {
+                    if (_cyGraph) _cyGraph.layout({ name: 'cose', animate: true }).run();
+                };
+            })
+            .catch(e => {
+                panel.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">图谱加载失败: ' + e.message + '</span>';
+            });
+    }
+
+    function _renderCyGraph(nodes, edges, typeColors, edgeColors) {
+        if (_cyGraph) { _cyGraph.destroy(); _cyGraph = null; }
+        if (typeof cytoscape === 'undefined') {
+            document.getElementById('cyGraphContainer').innerHTML =
+                '<span style="color:#e74c3c;font-size:0.7rem;padding:12px;">Cytoscape.js 未加载，请检查 CDN 连接</span>';
+            return;
+        }
+
+        const elements = [];
+        nodes.forEach(n => {
+            elements.push({
+                data: {
+                    id: n.id, label: n.label,
+                    nodeType: n.type, color: n.color || typeColors[n.type],
+                },
+            });
+        });
+        edges.forEach(e => {
+            elements.push({
+                data: {
+                    id: e.source + '-' + e.target + '-' + e.type,
+                    source: e.source, target: e.target,
+                    label: e.type, edgeColor: edgeColors[e.type] || '#95a5a6',
+                },
+            });
+        });
+
+        _cyGraph = cytoscape({
+            container: document.getElementById('cyGraphContainer'),
+            elements: elements,
+            style: [
+                { selector: 'node', css: {
+                    'label': 'data(label)', 'text-valign': 'center',
+                    'text-halign': 'center', 'font-size': '8px',
+                    'background-color': 'data(color)', 'color': '#fff',
+                    'text-wrap': 'wrap', 'text-max-width': '100px',
+                    'width': '30px', 'height': '30px',
+                    'border-width': 2, 'border-color': '#fff',
+                }},
+                { selector: 'node[color="#2c3e50"]', css: { 'shape': 'hexagon', 'width': '34px', 'height': '34px' }},
+                { selector: 'node[color="#27ae60"]', css: { 'shape': 'diamond', 'width': '28px', 'height': '28px' }},
+                { selector: 'node[color="#2980b9"]', css: { 'shape': 'rectangle', 'width': '36px', 'height': '24px' }},
+                { selector: 'node[color="#e67e22"]', css: { 'shape': 'round-rectangle' }},
+                { selector: 'edge', css: {
+                    'width': 1.5, 'line-color': 'data(edgeColor)',
+                    'target-arrow-color': 'data(edgeColor)',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier', 'opacity': 0.6,
+                }},
+                { selector: 'edge[label]', css: { 'font-size': '6px', 'color': '#95a5a6' }},
+                { selector: ':selected', css: { 'border-color': '#f39c12', 'border-width': 3 }},
+            ],
+            layout: { name: 'cose', animate: true, fit: true, padding: 20 },
+            wheelSensitivity: 0.3,
+        });
+
+        _cyGraph.on('tap', 'node', function (evt) {
+            const node = evt.target;
+            const type = node.data('nodeType');
+            const id = node.id().replace(type + '-', '');
+            // Navigate on double-click
+            if (evt.originalEvent.detail === 2) {
+                if (type === 'case') {
+                    if (window.Cases && window.Cases.showDetail) {
+                        const casesTab = document.getElementById('casesTabBtn');
+                        if (casesTab) casesTab.click();
+                        setTimeout(() => window.Cases.showDetail(parseInt(id)), 200);
+                    }
+                } else if (type === 'template') {
+                    if (window.Templates && window.Templates.showDetail) {
+                        const tplTab = document.getElementById('templatesTabBtn');
+                        if (tplTab) tplTab.click();
+                        setTimeout(() => window.Templates.showDetail(parseInt(id)), 200);
+                    }
+                }
+            }
+        });
+
+        _cyGraph.on('tap', function () {
+            // Center on clicked background
+        });
     }
 
 })();
