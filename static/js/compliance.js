@@ -658,6 +658,8 @@ window.Compliance = {
     const _dashInit = function () {
         const btn = document.getElementById('complianceDashboardBtn');
         if (btn) btn.onclick = showDashboard;
+        const cmpBtn = document.getElementById('complianceCompareBtn');
+        if (cmpBtn) cmpBtn.onclick = showCompare;
     };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', _dashInit);
@@ -767,6 +769,114 @@ window.Compliance = {
         return '<div style="flex:1;min-width:80px;padding:8px;background:var(--bg-color);border-radius:6px;text-align:center;border-top:3px solid ' + color + ';">' +
             '<div style="font-size:1.1rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
             '<div style="font-size:0.55rem;color:var(--card-muted);">' + label + '</div></div>';
+    }
+
+    // ── Multi-Project Comparison (U15) ──
+
+    function showCompare() {
+        const panel = document.getElementById('complianceComparePanel');
+        if (!panel) return;
+
+        if (panel.style.display === 'block') {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = 'block';
+        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">⏳ 加载对比数据...</span>';
+
+        fetch('/compliance/compare?days=90', { credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'failed');
+                const d = data.data || data;
+                const projects = d.projects || [];
+                const functions = d.functions || [];
+                const matrix = d.matrix || [];
+                const funcSummaries = d.function_summaries || [];
+                const projSummaries = d.project_summaries || [];
+
+                if (!projects.length) {
+                    panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">暂无项目数据用于对比</span>';
+                    return;
+                }
+
+                let html = '<div style="padding:8px 0;">';
+
+                // Project summary row
+                html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">📊 项目概览</strong>';
+                html += '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">';
+                projSummaries.forEach(p => {
+                    const sc = p.avg_score >= 80 ? '#27ae60' : p.avg_score >= 50 ? '#f39c12' : '#e74c3c';
+                    html += '<div style="padding:6px 10px;background:var(--bg-color);border-radius:4px;font-size:0.62rem;text-align:center;min-width:100px;">';
+                    html += '<div style="font-weight:600;">项目 #' + p.project_id + '</div>';
+                    html += '<div style="font-size:1rem;color:' + sc + ';font-weight:700;">' + p.avg_score + '</div>';
+                    html += '<div style="color:var(--card-muted);">' + p.runs + ' 次审查 | 通过率 ' + p.pass_rate + '%</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+
+                // Heatmap
+                if (functions.length <= 20) {
+                    const maxWidth = Math.min(projects.length * 100, 500);
+                    html += '<div style="margin-bottom:10px;overflow-x:auto;"><strong style="font-size:0.68rem;">🗺️ 项目×功能 合规热力图</strong>';
+                    html += '<div style="font-size:0.55rem;margin-top:4px;">';
+                    html += '<table style="border-collapse:collapse;width:auto;">';
+                    html += '<thead><tr><th style="padding:3px 6px;position:sticky;left:0;background:var(--bg-color);"></th>';
+                    functions.forEach(fn => {
+                        html += '<th style="padding:3px 6px;writing-mode:vertical-lr;text-orientation:mixed;max-height:100px;font-weight:400;">' + hlVerse(fn) + '</th>';
+                    });
+                    html += '</tr></thead><tbody>';
+                    matrix.forEach(row => {
+                        html += '<tr>';
+                        html += '<td style="padding:3px 6px;font-weight:600;position:sticky;left:0;background:var(--bg-color);"># ' + row.project_id + '</td>';
+                        row.function_scores.forEach(fs => {
+                            const score = fs.avg_score;
+                            let bg, color;
+                            if (score === null || score === undefined) {
+                                bg = 'var(--card-border)';
+                                color = 'var(--card-muted)';
+                            } else if (score >= 80) {
+                                bg = '#d4edda';
+                                color = '#155724';
+                            } else if (score >= 50) {
+                                bg = '#fff3cd';
+                                color = '#856404';
+                            } else if (score >= 30) {
+                                bg = '#f8d7da';
+                                color = '#721c24';
+                            } else {
+                                bg = '#f5c6cb';
+                                color = '#721c24';
+                            }
+                            html += '<td style="padding:3px 6px;text-align:center;background:' + bg + ';color:' + color + ';font-weight:600;min-width:36px;">' + (score !== null ? score : '-') + '</td>';
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table></div></div>';
+                } else {
+                    html += '<div style="color:var(--card-muted);font-size:0.62rem;">⚠️ 功能维度过多 (' + functions.length + ')，仅显示汇总。</div>';
+                }
+
+                // Most problematic functions
+                if (funcSummaries.length) {
+                    html += '<div style="margin-bottom:8px;"><strong style="font-size:0.68rem;">⚠️ 常见问题功能</strong>';
+                    html += '<div style="font-size:0.62rem;margin-top:4px;">';
+                    funcSummaries.slice(0, 10).forEach(f => {
+                        const sc = f.avg_score >= 80 ? '#27ae60' : f.avg_score >= 50 ? '#f39c12' : '#e74c3c';
+                        html += '<div style="display:flex;justify-content:space-between;padding:3px 4px;border-bottom:1px solid var(--card-border);">';
+                        html += '<span>' + hlVerse(f.function) + '</span>';
+                        html += '<span>均分 <b style="color:' + sc + ';">' + f.avg_score + '</b> | 问题率 ' + f.problem_rate + '% (' + f.problem_count + '/' + f.total_checks + ')</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                html += '</div>';
+                panel.innerHTML = html;
+            })
+            .catch(e => {
+                panel.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">对比数据加载失败: ' + e.message + '</span>';
+            });
     }
 
 })();

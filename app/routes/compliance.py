@@ -858,3 +858,24 @@ def get_dashboard():
     except Exception as e:
         logger.error(f"get_dashboard error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/compare', methods=['GET'])
+@_login_required
+def get_compare():
+    """Multi-project compliance comparison matrix (U15)."""
+    try:
+        days = request.args.get('days', 90, type=int)
+        pids_raw = request.args.get('project_ids', '')
+        project_ids = [int(x) for x in pids_raw.split(',') if x.strip().isdigit()] if pids_raw else None
+        funcs_raw = request.args.get('functions', '')
+        function_names = [x.strip() for x in funcs_raw.split(',') if x.strip()] if funcs_raw else None
+        from app.services.compare_service import get_comparison_matrix
+        result = get_comparison_matrix(
+            days=days, project_ids=project_ids,
+            function_names=function_names,
+        )
+        return ok(result)
+    except Exception as e:
+        logger.error(f"get_compare error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
