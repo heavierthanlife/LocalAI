@@ -844,3 +844,17 @@ def get_trends():
     except Exception as e:
         logger.error(f"get_trends error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/dashboard', methods=['GET'])
+@_login_required
+def get_dashboard():
+    """Get compliance dashboard data (overall stats + violations + recent runs)."""
+    try:
+        days = request.args.get('days', 30, type=int)
+        from app.services.dashboard_service import get_dashboard_data
+        result = get_dashboard_data(days)
+        return ok(result)
+    except Exception as e:
+        logger.error(f"get_dashboard error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)

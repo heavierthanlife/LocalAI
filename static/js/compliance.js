@@ -653,4 +653,120 @@ window.Compliance = {
         container.insertAdjacentHTML('beforeend', html);
     };
 
+    // ── Compliance Dashboard (U11) ──
+
+    const _dashInit = function () {
+        const btn = document.getElementById('complianceDashboardBtn');
+        if (btn) btn.onclick = showDashboard;
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _dashInit);
+    } else {
+        _dashInit();
+    }
+
+    function showDashboard() {
+        const panel = document.getElementById('complianceDashboardPanel');
+        if (!panel) return;
+        panel.style.display = 'block';
+        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">⏳ 加载仪表盘...</span>';
+
+        fetch('/compliance/dashboard?days=30', { credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'failed');
+                const d = data.data || data;
+                const ov = d.overall || {};
+
+                let html = '<div style="padding:8px 0;">';
+
+                // Stats row
+                html += '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">';
+                html += _dashCard('总审查数', ov.total_runs || 0, '#2980b9');
+                const prColor = (ov.pass_rate || 0) >= 70 ? '#27ae60' : (ov.pass_rate || 0) >= 40 ? '#f39c12' : '#e74c3c';
+                html += _dashCard('通过率', (ov.pass_rate || 0) + '%', prColor);
+                html += _dashCard('均分', ov.avg_score || 0, '#8e44ad');
+                html += _dashCard('文件检查', ov.total_file_checks || 0, '#16a085');
+                html += '</div>';
+
+                // Score distribution bar
+                if (d.score_distribution && d.score_distribution.length) {
+                    const maxCnt = Math.max(...d.score_distribution.map(s => s.count), 1);
+                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">📊 分数分布</strong>';
+                    html += '<div style="display:flex;gap:4px;margin-top:4px;height:30px;align-items:flex-end;">';
+                    d.score_distribution.forEach(s => {
+                        const pct = Math.max((s.count / maxCnt * 100), 4);
+                        const barColor = parseInt(s.bucket) >= 70 ? '#27ae60' : parseInt(s.bucket) >= 50 ? '#f39c12' : '#e74c3c';
+                        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">';
+                        html += '<span style="font-size:0.52rem;">' + s.count + '</span>';
+                        html += '<div style="width:100%;height:' + pct + '%;background:' + barColor + ';border-radius:2px 2px 0 0;min-height:4px;"></div>';
+                        html += '<span style="font-size:0.48rem;color:var(--card-muted);margin-top:1px;">' + s.bucket + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                // Top violations
+                if (d.top_violations && d.top_violations.length) {
+                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">⚠️ 常见违规 TOP5</strong>';
+                    html += '<div style="font-size:0.62rem;margin-top:4px;">';
+                    d.top_violations.forEach((v, i) => {
+                        const sc = v.status === 'critical' ? '#e74c3c' : '#e67e22';
+                        html += '<div style="display:flex;justify-content:space-between;padding:3px 4px;border-bottom:1px solid var(--card-border);">';
+                        html += '<span>' + (i + 1) + '. ' + hlVerse(v.function) + '</span>';
+                        html += '<span style="color:' + sc + ';">' + v.count + ' 次</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                // Recent runs
+                if (d.recent_runs && d.recent_runs.length) {
+                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">📋 最近审查</strong>';
+                    html += '<div style="max-height:180px;overflow-y:auto;font-size:0.62rem;margin-top:4px;">';
+                    html += '<div style="display:flex;font-weight:600;padding:3px 4px;border-bottom:2px solid var(--card-border);">';
+                    html += '<span style="flex:1;">项目/时间</span><span style="width:50px;text-align:center;">分数</span><span style="width:40px;text-align:center;">严重</span><span style="width:40px;text-align:center;">违规</span><span style="width:50px;text-align:center;">状态</span>';
+                    html += '</div>';
+                    d.recent_runs.forEach(r => {
+                        const scColor = r.status === 'PASS' ? '#27ae60' : '#e74c3c';
+                        const scoreColor = (r.score || 0) >= 80 ? '#27ae60' : (r.score || 0) >= 50 ? '#f39c12' : '#e74c3c';
+                        html += '<div style="display:flex;padding:3px 4px;border-bottom:1px solid var(--card-border);">';
+                        html += '<span style="flex:1;">' + hlVerse('#' + r.id + ' ' + (r.started_at || '')) + '</span>';
+                        html += '<span style="width:50px;text-align:center;font-weight:600;color:' + scoreColor + ';">' + (r.score || '-') + '</span>';
+                        html += '<span style="width:40px;text-align:center;color:#e74c3c;">' + (r.critical_count || 0) + '</span>';
+                        html += '<span style="width:40px;text-align:center;color:#e67e22;">' + (r.violation_count || 0) + '</span>';
+                        html += '<span style="width:50px;text-align:center;color:' + scColor + ';">' + (r.status === 'PASS' ? '✅' : '❌') + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                // Critical alerts
+                if (d.critical_alerts && d.critical_alerts.length) {
+                    html += '<div style="margin-bottom:8px;"><strong style="font-size:0.68rem;color:#e74c3c;">🚨 严重告警</strong>';
+                    html += '<div style="font-size:0.62rem;margin-top:4px;">';
+                    d.critical_alerts.forEach(a => {
+                        html += '<div style="padding:4px 6px;margin-bottom:3px;background:#fdf0f0;border-left:3px solid #e74c3c;border-radius:2px;">';
+                        html += '<span style="font-weight:600;">' + hlVerse(a.function) + '</span>';
+                        html += ' <span style="color:var(--card-muted);">' + hlVerse(a.filename || '') + '</span>';
+                        html += ' <span style="float:right;">score: ' + a.score + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                }
+
+                html += '</div>';
+                panel.innerHTML = html;
+            })
+            .catch(e => {
+                panel.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">仪表盘加载失败: ' + e.message + '</span>';
+            });
+    }
+
+    function _dashCard(label, value, color) {
+        return '<div style="flex:1;min-width:80px;padding:8px;background:var(--bg-color);border-radius:6px;text-align:center;border-top:3px solid ' + color + ';">' +
+            '<div style="font-size:1.1rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
+            '<div style="font-size:0.55rem;color:var(--card-muted);">' + label + '</div></div>';
+    }
+
 })();
