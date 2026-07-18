@@ -122,6 +122,12 @@ def register_all(flask_app):
     flask_app.register_blueprint(timeline_bp)
     logger.info(f"  OK timeline_bp ({time.time()-t0:.0f}s)")
 
+    # ── Cases: eager (case library from audit findings) ──
+    t0 = time.time()
+    from app.routes.cases import cases_bp
+    flask_app.register_blueprint(cases_bp)
+    logger.info(f"  OK cases_bp ({time.time()-t0:.0f}s)")
+
     # ── All blueprints loaded eagerly — no lazy-load needed ──
 
     logger.info("App ready (all blueprints eager).")

@@ -195,6 +195,7 @@
             <button id="adminTabBtn" class="tab-btn">📂 项目</button>
             <button id="knowledgeLabTabBtn" class="tab-btn">📚 知识库</button>
             <button id="templatesTabBtn" class="tab-btn" style="font-size:0.7rem;">📋 模板库</button>
+            <button id="casesTabBtn" class="tab-btn" style="font-size:0.7rem;">📊 案例库</button>
             <button id="wikiTabBtn" class="tab-btn" style="font-size:0.7rem;">📖 法规参考</button>
             <button id="timelineTabBtn" class="tab-btn" style="font-size:0.7rem;">⏱️ 时间线</button>
             <button id="recycleBinTabBtn" class="tab-btn">🗑️ 回收站</button>
@@ -554,6 +555,9 @@
         <!-- Templates Panel (U5) -->
         <div id="templatesPanel" style="display: none; flex: 1; overflow: hidden;"></div>
 
+        <!-- Cases Panel (U13) -->
+        <div id="casesPanel" style="display: none; flex: 1; overflow: hidden;"></div>
+
         <!-- Recycle Bin Panel -->
         <div id="recycleBinPanel" style="display: none; flex: 1; overflow-y: auto; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -853,6 +857,7 @@
 
 <script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
+<script defer src="{{ url_for('static', filename='js/cases.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>
 </body>
 </html>

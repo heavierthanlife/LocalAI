@@ -1099,3 +1099,62 @@ def _run_table_creation(cur: "PgCursor"):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_btv_template ON bid_template_versions(template_id)")
+
+    # ── audit cases (U13) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_cases (
+            id                  SERIAL PRIMARY KEY,
+            title               TEXT NOT NULL,
+            description         TEXT,
+            category            TEXT NOT NULL,
+            severity            TEXT NOT NULL,
+            resolution          TEXT,
+            source_finding_id   INTEGER REFERENCES audit_file_results(id) ON DELETE SET NULL,
+            source_run_id       INTEGER REFERENCES audit_runs(id) ON DELETE SET NULL,
+            project_id          INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            file_id             INTEGER REFERENCES project_files(id) ON DELETE SET NULL,
+            law_refs            JSONB DEFAULT '[]',
+            template_refs       JSONB DEFAULT '[]',
+            is_resolved         BOOLEAN DEFAULT FALSE,
+            created_by          TEXT REFERENCES users(user_id),
+            created_at          TIMESTAMPTZ DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_cases_severity ON audit_cases(severity)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_cases_project ON audit_cases(project_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_cases_resolved ON audit_cases(is_resolved)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS case_tags (
+            id      SERIAL PRIMARY KEY,
+            case_id INTEGER REFERENCES audit_cases(id) ON DELETE CASCADE,
+            tag     TEXT NOT NULL,
+            UNIQUE(case_id, tag)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_case_tags_case ON case_tags(case_id)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS case_law_links (
+            id          SERIAL PRIMARY KEY,
+            case_id     INTEGER REFERENCES audit_cases(id) ON DELETE CASCADE,
+            article_id  INTEGER REFERENCES law_articles(id) ON DELETE CASCADE,
+            relation    TEXT DEFAULT 'cited',
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(case_id, article_id)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_case_law_case ON case_law_links(case_id)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS case_template_links (
+            id          SERIAL PRIMARY KEY,
+            case_id     INTEGER REFERENCES audit_cases(id) ON DELETE CASCADE,
+            template_id INTEGER REFERENCES bid_templates(id) ON DELETE CASCADE,
+            section_id  TEXT,
+            relation    TEXT DEFAULT 'related',
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_case_tpl_case ON case_template_links(case_id)")

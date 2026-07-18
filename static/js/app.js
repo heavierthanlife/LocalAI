@@ -39,6 +39,7 @@
     const wikiPanel = document.getElementById('wikiPanel');
     const wikiTab = document.getElementById('wikiTabBtn');
     const templatesTab = document.getElementById('templatesTabBtn');
+    const casesTab = document.getElementById('casesTabBtn');
 
     // Get CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -4351,7 +4352,7 @@
 
     // Helper: hide all tab panels, then show only the active one
     function switchToPanel(activeId) {
-        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','wikiPanel','timelinePanel','analyticsPanel','reviewPanel','templatesPanel'];
+        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','wikiPanel','timelinePanel','analyticsPanel','reviewPanel','templatesPanel','casesPanel'];
         allPanels.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = (id === activeId) ? (id === 'chatInterface' ? 'flex' : 'block') : 'none';
@@ -8340,7 +8341,7 @@
                 updateProjectTabVisibility();
                 setTimeout(() => {
                     const activeTab = restoreActiveTab();
-                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
+                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn', cases:'casesTabBtn' };
                     const targetBtn = document.getElementById(tabMap[activeTab] || 'chatTabBtn');
                     _programmaticTabSwitch = true;
                     if (targetBtn) targetBtn.click();
@@ -9654,6 +9655,14 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             templatesTab.classList.add('active');
             switchToPanel('templatesPanel');
+            switchSidebarPane('chat');
+        };
+
+        casesTab.onclick = async () => {
+            saveActiveTab('cases');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            casesTab.classList.add('active');
+            switchToPanel('casesPanel');
             switchSidebarPane('chat');
         };
 
