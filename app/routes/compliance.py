@@ -359,6 +359,58 @@ def _run_check_sync(task_id: str, bid_text: str, rules: list, bid_name: str,
     return output
 
 
+@compliance_bp.route('/incremental_check', methods=['POST'])
+@limiter.limit("20/minute")
+@_login_required
+def incremental_check():
+    """Incremental compliance check — only re-checks modified sections (U9a).
+
+    Caches section results via Redis + memory fallback.
+
+    Request JSON:
+    {
+        "rules_task_id": "...",
+        "bid_doc_name": "投标文件.pdf",
+        "changed_sections": [{"id": "sec-1", "title": "...", "content": "..."}, ...],
+        "use_ai": true,
+        "region_code": "440000"  // optional
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        rules_task_id = data.get('rules_task_id')
+        bid_doc_name = data.get('bid_doc_name', 'unknown')
+        changed_sections = data.get('changed_sections', [])
+        use_ai = data.get('use_ai', True)
+        region_code = data.get('region_code')
+
+        if not rules_task_id:
+            return err("缺少 rules_task_id", "VALIDATION_ERROR", 400)
+        if not changed_sections:
+            return err("缺少 changed_sections", "VALIDATION_ERROR", 400)
+
+        rules_data = _load_result(f"rules_{rules_task_id}")
+        if not rules_data:
+            return err("规则数据已过期，请重新提取", "NOT_FOUND", 404)
+        rules = rules_data.get("rules", [])
+        if not rules:
+            return err("规则为空", "VALIDATION_ERROR", 400)
+
+        from app.services.incremental_check import incremental_check as inc_check
+        result = inc_check(
+            bid_text='',  # individual sections provide content
+            bid_doc_name=bid_doc_name,
+            rules=rules,
+            changed_sections=changed_sections,
+            use_ai=use_ai,
+            region_code=region_code,
+        )
+        return ok(result)
+    except Exception as e:
+        logger.error(f"incremental_check error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
 @compliance_bp.route('/result/<task_id>', methods=['GET'])
 @_login_required
 def get_result(task_id):
