@@ -819,3 +819,28 @@ def get_law_version(law_id: int, version_id: int):
     except Exception as e:
         logger.error(f"get_law_version error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
+
+
+# ── Compliance Trends & Dashboard (U10/U11) ──
+
+@compliance_bp.route('/trends', methods=['GET'])
+@_login_required
+def get_trends():
+    """Get compliance history trends."""
+    try:
+        days = request.args.get('days', 90, type=int)
+        type_ = request.args.get('type', 'all')
+        from app.services.trend_service import get_score_trend, get_violation_distribution, get_feedback_accuracy
+
+        result = {}
+        if type_ in ('all', 'score'):
+            result['score_trend'] = get_score_trend(days)
+        if type_ in ('all', 'violation'):
+            result['violation_distribution'] = get_violation_distribution(days)
+        if type_ in ('all', 'accuracy'):
+            result['feedback_accuracy'] = get_feedback_accuracy(days)
+
+        return ok(result)
+    except Exception as e:
+        logger.error(f"get_trends error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
