@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import os
+import logging
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 
 from psycopg2 import pool
@@ -40,25 +43,40 @@ def get_db_connection_args():
     return {
         'dbname': os.getenv('PG_DB', 'postgres'),
         'user': os.getenv('PG_USER', 'postgres'),
-        'password': os.getenv('PG_PASSWORD', 'postgres'),
+        'password': os.environ['PG_PASSWORD'],
         'host': os.getenv('PG_HOST', 'localhost'),
         'port': int(os.getenv('PG_PORT', 5432)),
         'client_encoding': 'utf8'
     }
 
-conn_args = get_db_connection_args()
-_DB_POOL_MIN = int(os.getenv("DB_POOL_MIN", "1"))
-_DB_POOL_MAX = int(os.getenv("DB_POOL_MAX", "20"))
-db_pool = pool.SimpleConnectionPool(_DB_POOL_MIN, _DB_POOL_MAX, **conn_args)
+_db_pool = None
+
+
+def get_db_pool():
+    global _db_pool
+    if _db_pool is None:
+        _db_pool = pool.SimpleConnectionPool(
+            int(os.getenv("DB_POOL_MIN", "1")),
+            int(os.getenv("DB_POOL_MAX", "20")),
+            **get_db_connection_args()
+        )
+    return _db_pool
 
 
 @contextmanager
 def get_db_connection():
-    conn = db_pool.getconn()
+    p = get_db_pool()
+    conn = p.getconn()
     try:
+        conn.cursor().execute("SELECT 1")
+        yield conn
+    except Exception:
+        logger.error("Database health check failed, reconnecting", exc_info=True)
+        p.putconn(conn, close=True)
+        conn = p.getconn()
         yield conn
     finally:
-        db_pool.putconn(conn)
+        p.putconn(conn)
 
 
 @contextmanager
@@ -119,8 +137,9 @@ def _run_table_creation(cur: "PgCursor"):
     # Seed admin accounts: CEO and COO (share same PIN as sys-admin)
     import uuid as _uuid
     admin_pin = os.getenv('ADMIN_PIN', '888888')
-    from werkzeug.security import generate_password_hash
-    admin_pin_hash = generate_password_hash(admin_pin)
+    import hashlib as _hl
+    _salt = os.urandom(16).hex()
+    admin_pin_hash = _salt + ":" + _hl.pbkdf2_hmac('sha256', admin_pin.encode(), _salt.encode(), 100000).hex()
     for uname in ('CEO', 'COO'):
         cur.execute("""
             INSERT INTO users (user_id, username, pin_hash, pin_length, role, is_active)
@@ -220,6 +239,8 @@ def _run_table_creation(cur: "PgCursor"):
             BEGIN ALTER TABLE projects ADD COLUMN deletion_scheduled_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE projects ADD COLUMN archive_filename TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE projects ADD COLUMN industry TEXT DEFAULT 'general'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE projects ADD COLUMN bidding_category TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE projects ADD COLUMN bid_method TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
     """)
     # Migration: add project_id and is_grilling to chat_sessions (after projects table exists)
@@ -288,6 +309,8 @@ def _run_table_creation(cur: "PgCursor"):
             BEGIN ALTER TABLE project_files ADD COLUMN skill_summary TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE project_files ADD COLUMN skill_generated_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE project_files ADD COLUMN skill_summary_hash TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE project_files ADD COLUMN category TEXT DEFAULT '通用'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE project_files ADD COLUMN status TEXT DEFAULT 'draft'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
     """)
     cur.execute("""
@@ -444,14 +467,6 @@ def _run_table_creation(cur: "PgCursor"):
         END $$;
     """)
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS credit_check_reports (
-            id SERIAL PRIMARY KEY, user_id TEXT REFERENCES users(user_id),
-            task_id TEXT UNIQUE NOT NULL, file_path TEXT NOT NULL,
-            companies_count INTEGER DEFAULT 0, created_at TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_credit_reports_user ON credit_check_reports(user_id)")
-    cur.execute("""
         CREATE TABLE IF NOT EXISTS knowledge_lab_files (
             id SERIAL PRIMARY KEY, user_id TEXT REFERENCES users(user_id) ON DELETE CASCADE,
             filename TEXT NOT NULL, original_name TEXT NOT NULL, file_size INTEGER,
@@ -474,6 +489,11 @@ def _run_table_creation(cur: "PgCursor"):
     cur.execute("""
         DO $$ BEGIN
             BEGIN ALTER TABLE knowledge_lab_files ADD COLUMN skill_summary_hash TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$;
+    """)
+    cur.execute("""
+        DO $$ BEGIN
+            BEGIN ALTER TABLE knowledge_lab_files ADD COLUMN category TEXT DEFAULT '通用'; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
     """)
     cur.execute("""
@@ -517,6 +537,22 @@ def _run_table_creation(cur: "PgCursor"):
     cur.execute("CREATE INDEX IF NOT EXISTS idx_file_text_cache_hash ON file_text_cache(file_hash)")
 
     cur.execute("""
+        CREATE TABLE IF NOT EXISTS wiki_origin_links (
+            id SERIAL PRIMARY KEY,
+            wiki_page_path TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_file_id INTEGER NOT NULL,
+            source_name TEXT NOT NULL,
+            source_status TEXT DEFAULT 'active',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(wiki_page_path, source_type, source_file_id)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_wiki_origin_source ON wiki_origin_links(source_type, source_file_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_wiki_origin_page ON wiki_origin_links(wiki_page_path)")
+
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS admin_audit_log (
             id SERIAL PRIMARY KEY, admin_user_id TEXT REFERENCES users(user_id),
             admin_username TEXT, action TEXT NOT NULL, table_name TEXT NOT NULL,
@@ -527,6 +563,194 @@ def _run_table_creation(cur: "PgCursor"):
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_log_admin ON admin_audit_log(admin_user_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created ON admin_audit_log(created_at)")
+
+    # ── Unified Bid Audit ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_config (
+            id SERIAL PRIMARY KEY,
+            function_name TEXT UNIQUE NOT NULL,
+            enabled_by_default BOOLEAN DEFAULT true,
+            fail_threshold REAL DEFAULT 50,
+            weight REAL DEFAULT 14.28,
+            severity_thresholds JSONB DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_runs (
+            id SERIAL PRIMARY KEY,
+            project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+            user_id TEXT REFERENCES users(user_id),
+            status TEXT NOT NULL DEFAULT 'running',
+            config_snapshot JSONB,
+            overall_score REAL,
+            overall_status TEXT,
+            bidder_count INTEGER,
+            file_count INTEGER,
+            docx_path TEXT,
+            xlsx_path TEXT,
+            error_message TEXT,
+            started_at TIMESTAMPTZ DEFAULT NOW(),
+            completed_at TIMESTAMPTZ
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_file_results (
+            id SERIAL PRIMARY KEY,
+            run_id INTEGER REFERENCES audit_runs(id) ON DELETE CASCADE,
+            file_id INTEGER REFERENCES project_files(id) ON DELETE SET NULL,
+            folder_id INTEGER REFERENCES project_folders(id) ON DELETE SET NULL,
+            bidder_label TEXT,
+            filename TEXT,
+            function_name TEXT,
+            score REAL,
+            status TEXT DEFAULT 'pending',
+            findings JSONB,
+            error_message TEXT,
+            retry_count INTEGER DEFAULT 0,
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ
+        )
+    """)
+
+    # ── Bidding Categories & Schedule Templates ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bidding_categories (
+            id SERIAL PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            name_zh TEXT NOT NULL,
+            regime TEXT NOT NULL DEFAULT 'bidding_law',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bidding_schedule_templates (
+            id SERIAL PRIMARY KEY,
+            category_code TEXT NOT NULL,
+            method_code TEXT NOT NULL,
+            milestone_code TEXT NOT NULL,
+            milestone_name TEXT NOT NULL,
+            days_from_start INTEGER,
+            days_from_prev_milestone INTEGER,
+            prev_milestone_code TEXT,
+            duration_days INTEGER,
+            date_type TEXT NOT NULL DEFAULT 'calendar',
+            mandatory BOOLEAN DEFAULT FALSE,
+            law_ref TEXT,
+            description TEXT,
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (category_code, method_code, milestone_code)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bidding_templates_cat_method ON bidding_schedule_templates(category_code, method_code, sort_order)")
+
+    # ── Project Timeline tables ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS project_timelines (
+            id SERIAL PRIMARY KEY,
+            project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+            category_code TEXT NOT NULL,
+            method_code TEXT NOT NULL,
+            planned_start_date DATE NOT NULL,
+            planned_end_date DATE,
+            actual_start_date DATE,
+            actual_end_date DATE,
+            status TEXT DEFAULT 'active',
+            created_by TEXT REFERENCES users(user_id),
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_timelines_project ON project_timelines(project_id, status)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS project_timeline_milestones (
+            id SERIAL PRIMARY KEY,
+            timeline_id INTEGER REFERENCES project_timelines(id) ON DELETE CASCADE,
+            milestone_code TEXT NOT NULL,
+            milestone_name TEXT NOT NULL,
+            planned_date DATE,
+            actual_date DATE,
+            diff_days INTEGER,
+            diff_reason TEXT,
+            reason_category TEXT,
+            status TEXT DEFAULT 'pending',
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(timeline_id, milestone_code)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_timeline_ms_timeline ON project_timeline_milestones(timeline_id, sort_order)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS timeline_diff_log (
+            id SERIAL PRIMARY KEY,
+            milestone_id INTEGER REFERENCES project_timeline_milestones(id) ON DELETE CASCADE,
+            milestone_code TEXT NOT NULL,
+            planned_date DATE,
+            actual_date DATE,
+            diff_days INTEGER,
+            diff_type TEXT,
+            reason_category TEXT,
+            reason_detail TEXT,
+            created_by TEXT REFERENCES users(user_id),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_diff_log_milestone ON timeline_diff_log(milestone_id, created_at DESC)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS project_workflow_steps (
+            id SERIAL PRIMARY KEY,
+            milestone_id INTEGER REFERENCES project_timeline_milestones(id) ON DELETE CASCADE,
+            step_name TEXT NOT NULL,
+            step_order INTEGER DEFAULT 0,
+            assigned_to TEXT,
+            completed BOOLEAN DEFAULT FALSE,
+            completed_at TIMESTAMPTZ,
+            notes TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_workflow_milestone ON project_workflow_steps(milestone_id, step_order)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS timeline_suggestions (
+            id SERIAL PRIMARY KEY,
+            timeline_id INTEGER REFERENCES project_timelines(id) ON DELETE CASCADE,
+            milestone_code TEXT NOT NULL,
+            type TEXT NOT NULL,
+            priority TEXT NOT NULL DEFAULT 'medium',
+            content TEXT NOT NULL,
+            suggestion TEXT,
+            is_read BOOLEAN DEFAULT FALSE,
+            is_actioned BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_timeline_sugs_timeline ON timeline_suggestions(timeline_id, created_at DESC)")
+
+    # Seed default audit config if empty
+    cur.execute("SELECT COUNT(*) FROM audit_config")
+    if cur.fetchone()[0] == 0:
+        defaults = [
+            ('rule_extraction', True, 40, 15.0, '{"min_extracted_rules": 5}'),
+            ('compliance_check', True, 50, 25.0, '{"critical": 1, "violation": 3}'),
+            ('typo_detection', True, 60, 10.0, '{"penalty_per_10k": 5}'),
+            ('quote_anomaly', True, 50, 20.0, '{"same_rate": 0.05, "drop": 0.15}'),
+            ('relationship_extraction', True, 60, 10.0, '{"risk_signal_weight": 15}'),
+            ('ai_doc_review', True, 50, 15.0, '{"min_chars": 500}'),
+            ('style_analysis', False, 70, 5.0, '{}'),
+        ]
+        for func_name, enabled, threshold, weight, sev in defaults:
+            cur.execute(
+                """INSERT INTO audit_config (function_name, enabled_by_default, fail_threshold, weight, severity_thresholds)
+                   VALUES (%s, %s, %s, %s, %s::jsonb)""",
+                (func_name, enabled, threshold, weight, sev)
+            )
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS file_analysis (
@@ -627,6 +851,10 @@ def _run_table_creation(cur: "PgCursor"):
         "CREATE INDEX IF NOT EXISTS idx_chat_messages_thread_id_id ON chat_messages(thread_id, id)",
         "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated ON chat_sessions(user_id, updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_feedback_thread_id ON feedback(thread_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_runs_project ON audit_runs(project_id, started_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_file_results_run ON audit_file_results(run_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_file_results_run_func ON audit_file_results(run_id, function_name)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_config_func ON audit_config(function_name)",
     ]
     for stmt in idx_statements:
         cur.execute(stmt)
@@ -763,3 +991,111 @@ def _run_table_creation(cur: "PgCursor"):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_rel_risk_task ON relationship_risk_summary(task_id)")
+
+    # ── Law library (Wiki U1+U3+U4) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_masters (
+            id                  SERIAL PRIMARY KEY,
+            law_name            TEXT NOT NULL,
+            short_name          TEXT,
+            category            TEXT NOT NULL,
+            issuing_authority   TEXT,
+            effective_date      DATE,
+            expiry_date         DATE,
+            status              TEXT DEFAULT 'active',
+            scope               TEXT DEFAULT 'national',
+            created_at          TIMESTAMPTZ DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_versions (
+            id              SERIAL PRIMARY KEY,
+            law_id          INTEGER REFERENCES law_masters(id) ON DELETE CASCADE,
+            version_label   TEXT NOT NULL,
+            version_date    DATE,
+            is_current      BOOLEAN DEFAULT FALSE,
+            change_summary  TEXT,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_articles (
+            id              SERIAL PRIMARY KEY,
+            version_id      INTEGER REFERENCES law_versions(id) ON DELETE CASCADE,
+            article_label   TEXT NOT NULL,
+            article_text    TEXT NOT NULL,
+            tags            TEXT[] DEFAULT '{}',
+            sort_order      INTEGER DEFAULT 0,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_law_articles_tags ON law_articles USING GIN(tags)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_law_versions_current ON law_versions(law_id, is_current)")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_regions (
+            id          SERIAL PRIMARY KEY,
+            region_code TEXT UNIQUE NOT NULL,
+            region_name TEXT NOT NULL,
+            parent_code TEXT,
+            level       TEXT DEFAULT 'national',
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_region_bindings (
+            id              SERIAL PRIMARY KEY,
+            law_id          INTEGER REFERENCES law_masters(id) ON DELETE CASCADE,
+            region_code     TEXT REFERENCES law_regions(region_code) ON DELETE CASCADE,
+            binding_type    TEXT DEFAULT 'baseline',
+            created_at      TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(law_id, region_code)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_law_region_bindings_region ON law_region_bindings(region_code)")
+
+    # ── law version diffs (U3) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS law_version_diffs (
+            id              SERIAL PRIMARY KEY,
+            law_id          INTEGER REFERENCES law_masters(id) ON DELETE CASCADE,
+            from_version_id INTEGER REFERENCES law_versions(id) ON DELETE CASCADE,
+            to_version_id   INTEGER REFERENCES law_versions(id) ON DELETE CASCADE,
+            diff_data       JSONB NOT NULL,
+            created_at      TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(law_id, from_version_id, to_version_id)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_law_diff_law ON law_version_diffs(law_id)")
+
+    # ── bid templates (U5) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bid_templates (
+            id              SERIAL PRIMARY KEY,
+            name            TEXT NOT NULL,
+            category        TEXT NOT NULL,
+            description     TEXT,
+            sections        JSONB NOT NULL DEFAULT '[]',
+            tags            TEXT[] DEFAULT '{}',
+            is_active       BOOLEAN DEFAULT TRUE,
+            version         INTEGER DEFAULT 1,
+            created_by      TEXT REFERENCES users(user_id),
+            created_at      TIMESTAMPTZ DEFAULT NOW(),
+            updated_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bid_templates_cat ON bid_templates(category, is_active)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bid_templates_tags ON bid_templates USING GIN(tags)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bid_template_versions (
+            id              SERIAL PRIMARY KEY,
+            template_id     INTEGER REFERENCES bid_templates(id) ON DELETE CASCADE,
+            version_label   TEXT NOT NULL,
+            snapshot        JSONB NOT NULL,
+            change_summary  TEXT,
+            created_by      TEXT REFERENCES users(user_id),
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_btv_template ON bid_template_versions(template_id)")

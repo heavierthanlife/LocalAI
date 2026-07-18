@@ -17,10 +17,23 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request, session
 from app.config import DATA_DIR
+from app.utils.helpers import ok, err
+from app import limiter
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
 compliance_bp = Blueprint('compliance', __name__, url_prefix='/compliance')
+
+
+def _login_required(f):
+    """Decorator: require registered user."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get('consent_value', 0) != 1:
+            return err("请先登录", "AUTH_REQUIRED", 401)
+        return f(*args, **kwargs)
+    return wrapper
 
 # ── In-memory result store (persisted to files) ──
 COMPLIANCE_DIR = os.path.join(str(DATA_DIR), 'compliance_results')
@@ -47,10 +60,14 @@ os.makedirs(LAWS_DIR, exist_ok=True)
 
 
 @compliance_bp.route('/laws', methods=['GET'])
+@_login_required
 def list_laws():
-    """List all available laws (built-in seed + user-uploaded)."""
+    """List all available laws (DB built-in + user-uploaded)."""
     try:
         from app.services.compliance_checker import _get_seed_laws
+        from app.database import get_db_connection
+        from psycopg2.extras import RealDictCursor
+
         seed = _get_seed_laws()
 
         # Group seed laws by law_name
@@ -73,6 +90,32 @@ def list_laws():
             })
             laws_map[name]["article_count"] += 1
 
+        # Enrich with DB metadata (versions, effective_date, etc.)
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT lm.law_name, lm.category, lm.issuing_authority,
+                               lm.effective_date, lm.expiry_date, lm.status, lm.scope,
+                               lm.id AS law_id, COUNT(lv.id) AS version_count
+                        FROM law_masters lm
+                        LEFT JOIN law_versions lv ON lv.law_id = lm.id
+                        WHERE lm.status = 'active'
+                        GROUP BY lm.id
+                    """)
+                    for row in cur.fetchall():
+                        name = row["law_name"]
+                        if name in laws_map:
+                            laws_map[name]["issuing_authority"] = row.get("issuing_authority")
+                            laws_map[name]["effective_date"] = str(row["effective_date"]) if row.get("effective_date") else None
+                            laws_map[name]["expiry_date"] = str(row["expiry_date"]) if row.get("expiry_date") else None
+                            laws_map[name]["status"] = row.get("status")
+                            laws_map[name]["scope"] = row.get("scope")
+                            laws_map[name]["version_count"] = row.get("version_count", 1)
+                            laws_map[name]["law_id"] = row.get("law_id")
+        except Exception:
+            logger.warning("Failed to enrich law list with DB metadata")
+
         # User-uploaded laws
         user_laws = []
         if os.path.exists(LAWS_DIR):
@@ -85,33 +128,35 @@ def list_laws():
                         ul["id"] = fn.replace('.json', '')
                         user_laws.append(ul)
                     except Exception:
-                        pass
+                        logger.warning(f"Failed to load user law: {fn}")
 
-        return jsonify({
+        return ok({
             "built_in": list(laws_map.values()),
             "user_laws": user_laws,
             "total_articles": len(seed),
         })
     except Exception as e:
         logger.error(f"List laws error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 @compliance_bp.route('/laws/upload', methods=['POST'])
+@limiter.limit("10/minute")
+@_login_required
 def upload_law():
     """Upload a user-defined law document for rule extraction."""
     try:
         if 'file' not in request.files:
-            return jsonify({"error": "请上传法规文件"}), 400
+            return err("请上传法规文件", "VALIDATION_ERROR", 400)
         f = request.files['file']
         if not f.filename:
-            return jsonify({"error": "文件名不能为空"}), 400
+            return err("文件名不能为空", "VALIDATION_ERROR", 400)
 
         # Extract text
         from app.services.file_processing import extract_text_from_file
         text, _ = extract_text_from_file(f)
         if not text or text.startswith('['):
-            return jsonify({"error": "无法提取文件文本"}), 400
+            return err("无法提取文件文本", "VALIDATION_ERROR", 400)
 
         # Extract law articles using AI
         from app.services.rule_extractor import RuleExtractor
@@ -120,7 +165,7 @@ def upload_law():
         rules_result = extractor.extract(text, f.filename, use_ai=False)
 
         if not rules_result.get("rules"):
-            return jsonify({"error": "未能从文件中提取到法律条款"}), 400
+            return err("未能从文件中提取到法律条款", "VALIDATION_ERROR", 400)
 
         # Save as user law
         law_id = str(uuid.uuid4())[:8]
@@ -134,7 +179,7 @@ def upload_law():
         with open(os.path.join(LAWS_DIR, f"{law_id}.json"), 'w', encoding='utf-8') as fw:
             json.dump(law_data, fw, ensure_ascii=False, default=str)
 
-        return jsonify({
+        return ok({
             "success": True,
             "law_id": law_id,
             "article_count": len(rules_result["rules"]),
@@ -142,20 +187,23 @@ def upload_law():
         })
     except Exception as e:
         logger.error(f"Upload law error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 @compliance_bp.route('/laws/<law_id>', methods=['DELETE'])
+@_login_required
 def delete_law(law_id):
     """Delete a user-uploaded law."""
     path = os.path.join(LAWS_DIR, f"{law_id}.json")
     if os.path.exists(path):
         os.unlink(path)
-        return jsonify({"success": True})
-    return jsonify({"error": "法规不存在"}), 404
+        return ok(message="ok")
+    return err("法规不存在", "NOT_FOUND", 404)
 
 
 @compliance_bp.route('/extract_rules', methods=['POST'])
+@limiter.limit("10/minute")
+@_login_required
 def extract_rules():
     """Extract rules from an uploaded bidding document (reference file).
 
@@ -164,10 +212,10 @@ def extract_rules():
     """
     try:
         if 'file' not in request.files:
-            return jsonify({"error": "请上传招标文件"}), 400
+            return err("请上传招标文件", "VALIDATION_ERROR", 400)
         f = request.files['file']
         if not f.filename:
-            return jsonify({"error": "文件名不能为空"}), 400
+            return err("文件名不能为空", "VALIDATION_ERROR", 400)
 
         use_ai = request.form.get('use_ai', 'true').lower() != 'false'
 
@@ -175,7 +223,7 @@ def extract_rules():
         from app.services.file_processing import extract_text_from_file
         text, _ = extract_text_from_file(f)
         if not text or text.startswith('['):
-            return jsonify({"error": "无法提取文件文本，请检查文件格式"}), 400
+            return err("无法提取文件文本，请检查文件格式", "VALIDATION_ERROR", 400)
 
         # Extract rules
         from app.services.rule_extractor import RuleExtractor
@@ -186,17 +234,19 @@ def extract_rules():
         task_id = str(uuid.uuid4())
         _save_result(f"rules_{task_id}", result)
 
-        return jsonify({
+        return ok({
             "success": True,
             "task_id": task_id,
             **result,
         })
     except Exception as e:
         logger.error(f"Extract rules error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 @compliance_bp.route('/check', methods=['POST'])
+@limiter.limit("10/minute")
+@_login_required
 def start_check():
     """Start a compliance check (async via Celery or sync fallback).
 
@@ -226,10 +276,12 @@ def start_check():
             bid_name = data.get('bid_file_name', '投标文件')
             use_ai = data.get('use_ai', True)
             include_laws = data.get('include_laws', True)
+            region_code = data.get('region_code')
         else:
             rules_task_id = request.form.get('rules_task_id')
             use_ai = request.form.get('use_ai', 'true').lower() != 'false'
             include_laws = request.form.get('include_laws', 'true').lower() != 'false'
+            region_code = request.form.get('region_code')
             if 'bid_file' in request.files:
                 f = request.files['bid_file']
                 if f.filename:
@@ -238,28 +290,28 @@ def start_check():
                     bid_text, _ = extract_text_from_file(f)
 
         if not rules_task_id:
-            return jsonify({"error": "缺少 rules_task_id，请先提取招标文件规则"}), 400
+            return err("缺少 rules_task_id，请先提取招标文件规则", "VALIDATION_ERROR", 400)
         if not bid_text:
-            return jsonify({"error": "缺少投标文件内容"}), 400
+            return err("缺少投标文件内容", "VALIDATION_ERROR", 400)
 
         # Load rules
         rules_data = _load_result(f"rules_{rules_task_id}")
         if not rules_data:
-            return jsonify({"error": "规则数据已过期，请重新提取"}), 404
+            return err("规则数据已过期，请重新提取", "NOT_FOUND", 404)
         rules = rules_data.get("rules", [])
         if not rules:
-            return jsonify({"error": "规则为空，请重新提取招标文件规则"}), 400
+            return err("规则为空，请重新提取招标文件规则", "VALIDATION_ERROR", 400)
 
         # Try Celery async
         task_id = str(uuid.uuid4())
         try:
             from celery_app import compliance_check_task
             compliance_check_task.apply_async(
-                args=[task_id, bid_text, rules, bid_name, use_ai, include_laws],
+                args=[task_id, bid_text, rules, bid_name, use_ai, include_laws, region_code],
                 task_id=task_id,
             )
             logger.info(f"Compliance check queued: {task_id}")
-            return jsonify({
+            return ok({
                 "task_id": task_id,
                 "status": "queued",
                 "message": "合规检查已提交，请轮询结果",
@@ -267,8 +319,8 @@ def start_check():
         except (ImportError, Exception) as e:
             logger.warning(f"Celery unavailable, running sync: {e}")
             # Sync fallback
-            result = _run_check_sync(task_id, bid_text, rules, bid_name, use_ai, include_laws)
-            return jsonify({
+            result = _run_check_sync(task_id, bid_text, rules, bid_name, use_ai, include_laws, region_code)
+            return ok({
                 "task_id": task_id,
                 "status": "completed",
                 **result,
@@ -276,16 +328,16 @@ def start_check():
 
     except Exception as e:
         logger.error(f"Start check error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 def _run_check_sync(task_id: str, bid_text: str, rules: list, bid_name: str,
-                    use_ai: bool, include_laws: bool) -> dict:
+                    use_ai: bool, include_laws: bool, region_code: str = None) -> dict:
     """Run compliance check synchronously (Celery fallback)."""
     from app.services.compliance_checker import ComplianceChecker
 
     checker = ComplianceChecker()
-    result = checker.check(bid_text, rules, bid_name, use_ai=use_ai)
+    result = checker.check(bid_text, rules, bid_name, use_ai=use_ai, region_code=region_code)
 
     # Generate report
     report_html = checker.generate_report(
@@ -308,6 +360,7 @@ def _run_check_sync(task_id: str, bid_text: str, rules: list, bid_name: str,
 
 
 @compliance_bp.route('/result/<task_id>', methods=['GET'])
+@_login_required
 def get_result(task_id):
     """Get compliance check result by task ID."""
     data = _load_result(task_id)
@@ -318,35 +371,37 @@ def get_result(task_id):
             from celery_app import celery_app
             task = AsyncResult(task_id, app=celery_app)
             if task.state == 'PENDING':
-                return jsonify({"status": "pending", "message": "检查进行中..."})
+                return ok({"status": "pending", "message": "检查进行中..."})
             elif task.state == 'FAILED':
-                return jsonify({"status": "failed", "error": str(task.info)})
+                return ok({"status": "failed", "error": str(task.info)})
             elif task.state == 'SUCCESS':
                 result = task.result
                 if isinstance(result, dict):
-                    return jsonify({"status": "completed", **result})
+                    return ok({"status": "completed", **result})
         except ImportError:
             pass
-        return jsonify({"status": "not_found", "error": "检查结果不存在或已过期"}), 404
+        return ok({"status": "not_found", "error": "检查结果不存在或已过期"}), 404
 
-    return jsonify({"status": "completed", **data})
+    return ok({"status": "completed", **data})
 
 
 @compliance_bp.route('/rules/<task_id>', methods=['GET'])
+@_login_required
 def get_rules(task_id):
     """Get extracted rules by task ID (for user review before check)."""
     data = _load_result(f"rules_{task_id}")
     if not data:
-        return jsonify({"error": "规则数据不存在或已过期"}), 404
-    return jsonify(data)
+        return err("规则数据不存在或已过期", "NOT_FOUND", 404)
+    return ok(data)
 
 
 @compliance_bp.route('/rules/<task_id>', methods=['PUT'])
+@_login_required
 def update_rules(task_id):
     """Update/modify extracted rules (user review/edit)."""
     data = _load_result(f"rules_{task_id}")
     if not data:
-        return jsonify({"error": "规则数据不存在或已过期"}), 404
+        return err("规则数据不存在或已过期", "NOT_FOUND", 404)
 
     updates = request.get_json() or {}
     if "rules" in updates:
@@ -364,12 +419,13 @@ def update_rules(task_id):
         data["user_modified"] = True
 
     _save_result(f"rules_{task_id}", data)
-    return jsonify({"success": True, "total": data["total"]})
+    return ok({"total": data["total"]})
 
 
 # ── Feedback Endpoints ──
 
 @compliance_bp.route('/feedback', methods=['POST'])
+@_login_required
 def submit_feedback():
     """Submit forced feedback on a compliance check result.
 
@@ -396,16 +452,16 @@ def submit_feedback():
         user_explain = data.get('user_explain', '')
 
         if not all([task_id, check_file, user_verdict]):
-            return jsonify({"error": "缺少必填字段: task_id, check_file_name, user_verdict"}), 400
+            return err("缺少必填字段: task_id, check_file_name, user_verdict", "VALIDATION_ERROR", 400)
 
         valid_verdicts = {'true_violation', 'false_positive', 'not_matter'}
         if user_verdict not in valid_verdicts:
-            return jsonify({"error": f"user_verdict 必须为: {', '.join(valid_verdicts)}"}), 400
+            return err(f"user_verdict 必须为: {', '.join(valid_verdicts)}", "VALIDATION_ERROR", 400)
 
         # Load original check result
         orig = _load_result(task_id)
         if not orig:
-            return jsonify({"error": "检查结果不存在"}), 404
+            return err("检查结果不存在", "NOT_FOUND", 404)
 
         # Determine user context
         user_id = session.get('user_id', 'anonymous')
@@ -451,13 +507,29 @@ def submit_feedback():
             f"ai={ai_verdict} user={user_verdict} by={user_id}"
         )
 
-        return jsonify({"success": True, "message": "反馈已保存"})
+        # Dual-write to training_logger for unified training pipeline
+        try:
+            _rating_map = {'true_violation': 5, 'false_positive': 1, 'not_matter': 3}
+            from app.services.training_logger import log_interaction
+            log_interaction(
+                thread_id=f"compliance_{task_id}_{check_file[:40]}",
+                user_msg=f"标书: {bid_doc}\n检查文件: {check_file}\n规则数: {rule_count}\nAI判定: {ai_verdict}",
+                assistant_response=f"用户判定: {user_verdict}\n说明: {user_explain}",
+                rating=_rating_map.get(user_verdict, 3),
+                source='compliance',
+                model='compliance_checker',
+            )
+        except Exception:
+            logger.warning("Failed to log compliance feedback to training", exc_info=True)
+
+        return ok({"message": "反馈已保存"})
     except Exception as e:
         logger.error(f"Submit feedback error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 @compliance_bp.route('/feedback/history', methods=['GET'])
+@_login_required
 def feedback_history():
     """List saved feedback records."""
     try:
@@ -480,7 +552,7 @@ def feedback_history():
                 cur.execute("SELECT COUNT(*) FROM compliance_feedback")
                 total = cur.fetchone()[0]
 
-        return jsonify({
+        return ok({
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -494,10 +566,11 @@ def feedback_history():
         })
     except Exception as e:
         logger.error(f"Feedback history error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
 
 
 @compliance_bp.route('/training_data', methods=['GET'])
+@_login_required
 def export_training_data():
     """Export feedback data in LoRA fine-tuning format.
 
@@ -527,7 +600,7 @@ def export_training_data():
                 rows = cur.fetchall()
 
         if len(rows) < min_samples:
-            return jsonify({
+            return ok({
                 "ready": False,
                 "message": f"需要至少 {min_samples} 条反馈才能导出（当前 {len(rows)} 条）",
                 "current_count": len(rows),
@@ -585,7 +658,7 @@ def export_training_data():
             f"distribution: {verdict_counts}"
         )
 
-        return jsonify({
+        return ok({
             "ready": True,
             "total_samples": len(samples),
             "verdict_distribution": verdict_counts,
@@ -595,4 +668,102 @@ def export_training_data():
         })
     except Exception as e:
         logger.error(f"Training data export error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+# ── Law Version Management (U3) ──
+
+@compliance_bp.route('/laws/<int:law_id>/versions', methods=['GET'])
+@_login_required
+def list_law_versions(law_id: int):
+    """List all versions of a DB law."""
+    try:
+        from app.services.law_version import list_versions
+        versions = list_versions(law_id)
+        return ok({"law_id": law_id, "versions": versions})
+    except Exception as e:
+        logger.error(f"list_law_versions error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/laws/<int:law_id>/versions', methods=['POST'])
+@_login_required
+def create_law_version(law_id: int):
+    """Create a new version for a DB law."""
+    try:
+        if not request.is_json:
+            return err("请求体需为 JSON", "VALIDATION_ERROR", 400)
+        data = request.get_json() or {}
+        label = data.get('version_label')
+        articles = data.get('articles', [])
+        if not label:
+            return err("缺少 version_label", "VALIDATION_ERROR", 400)
+        if not articles:
+            return err("缺少 articles", "VALIDATION_ERROR", 400)
+        from app.services.law_version import create_version
+        result = create_version(
+            law_id, label, articles,
+            version_date=data.get('version_date'),
+            change_summary=data.get('change_summary'),
+        )
+        return ok(result, message="版本已创建")
+    except ValueError as e:
+        return err(str(e), "NOT_FOUND", 404)
+    except Exception as e:
+        logger.error(f"create_law_version error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/laws/<int:law_id>/versions/activate', methods=['POST'])
+@_login_required
+def activate_law_version(law_id: int):
+    """Activate a specific version (admin only)."""
+    if session.get('role') != 'admin':
+        return err("Admin access required", "FORBIDDEN", 403)
+    try:
+        if not request.is_json:
+            return err("请求体需为 JSON", "VALIDATION_ERROR", 400)
+        data = request.get_json() or {}
+        version_id = data.get('version_id')
+        if not version_id:
+            return err("缺少 version_id", "VALIDATION_ERROR", 400)
+        from app.services.law_version import activate_version
+        result = activate_version(law_id, version_id)
+        if result is None:
+            return err("版本不存在", "NOT_FOUND", 404)
+        return ok(result, message="版本已激活")
+    except Exception as e:
+        logger.error(f"activate_law_version error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/laws/<int:law_id>/diff', methods=['GET'])
+@_login_required
+def get_law_diff(law_id: int):
+    """Get diff between two law versions."""
+    try:
+        from_vid = request.args.get('from', type=int)
+        to_vid = request.args.get('to', type=int)
+        if not from_vid or not to_vid:
+            return err("缺少 from 和 to 参数 (version_id)", "VALIDATION_ERROR", 400)
+        from app.services.law_version import get_diff
+        result = get_diff(law_id, from_vid, to_vid)
+        return ok(result.to_dict() if hasattr(result, 'to_dict') else result)
+    except Exception as e:
+        logger.error(f"get_law_diff error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@compliance_bp.route('/laws/<int:law_id>/versions/<int:version_id>', methods=['GET'])
+@_login_required
+def get_law_version(law_id: int, version_id: int):
+    """Get a specific version with its articles."""
+    try:
+        from app.services.law_version import get_version
+        result = get_version(version_id)
+        if result is None:
+            return err("版本不存在", "NOT_FOUND", 404)
+        return ok(result)
+    except Exception as e:
+        logger.error(f"get_law_version error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)

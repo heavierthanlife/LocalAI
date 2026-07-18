@@ -7,8 +7,9 @@ logger = logging.getLogger(__name__)
 def register_all(flask_app):
     """Register bootstrap routes + all Blueprints at startup."""
     import os
-    from flask import render_template, jsonify, request, session, send_from_directory
+    from flask import render_template, request, session, send_from_directory
     from flask_wtf.csrf import generate_csrf
+    from app.utils.helpers import ok
 
     logger.info("Boot-routing (no ML imports yet)...")
 
@@ -22,7 +23,7 @@ def register_all(flask_app):
 
     @flask_app.route('/get_csrf_token')
     def get_csrf_token_route():
-        return jsonify({'csrf_token': generate_csrf()})
+        return ok({"csrf_token": generate_csrf()})
 
     @flask_app.route('/favicon.ico')
     def favicon():
@@ -85,21 +86,41 @@ def register_all(flask_app):
     flask_app.register_blueprint(tasks_bp)
     logger.info(f"  OK tasks_bp ({time.time()-t0:.0f}s)")
 
-    # ── Batch + Credit: eager (Flask locks blueprint registration after first request)
+    # ── Batch: eager (Flask locks blueprint registration after first request)
     t0 = time.time()
     from app.routes.batch import batch_bp
     flask_app.register_blueprint(batch_bp)
     logger.info(f"  OK batch_bp ({time.time()-t0:.0f}s)")
-    t0 = time.time()
-    from app.routes.credit import credit_bp
-    flask_app.register_blueprint(credit_bp)
-    logger.info(f"  OK credit_bp ({time.time()-t0:.0f}s)")
 
     # ── Compliance: eager (lightweight, needed for bid compliance checks) ──
     t0 = time.time()
     from app.routes.compliance import compliance_bp
     flask_app.register_blueprint(compliance_bp)
     logger.info(f"  OK compliance_bp ({time.time()-t0:.0f}s)")
+
+    # ── Templates: eager (bid template CRUD + .docx import) ──
+    t0 = time.time()
+    from app.routes.templates import templates_bp
+    flask_app.register_blueprint(templates_bp)
+    logger.info(f"  OK templates_bp ({time.time()-t0:.0f}s)")
+
+    # ── Audit: eager (lightweight, needed for unified bid audit) ──
+    t0 = time.time()
+    from app.routes.audit import audit_bp
+    flask_app.register_blueprint(audit_bp)
+    logger.info(f"  OK audit_bp ({time.time()-t0:.0f}s)")
+
+    # ── Wiki: eager (needed for wiki tab) ──
+    t0 = time.time()
+    from app.routes.wiki import wiki_bp
+    flask_app.register_blueprint(wiki_bp)
+    logger.info(f"  OK wiki_bp ({time.time()-t0:.0f}s)")
+
+    # ── Timeline: eager (needed for bidding timeline tab) ──
+    t0 = time.time()
+    from app.routes.timeline import timeline_bp
+    flask_app.register_blueprint(timeline_bp)
+    logger.info(f"  OK timeline_bp ({time.time()-t0:.0f}s)")
 
     # ── All blueprints loaded eagerly — no lazy-load needed ──
 

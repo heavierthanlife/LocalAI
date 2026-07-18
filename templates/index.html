@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/darkly.css') }}" id="highlight-dark" disabled>
     <script src="{{ url_for('static', filename='js/highlight.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260702g">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260706c">
 </head>
 <body class="light">
 <div class="sidebar" id="sidebar">
@@ -116,6 +116,14 @@
             </div>
         </div>
 
+        <!-- ===== WIKI SECTION ===== -->
+        <div class="sidebar-tab-pane" id="sidebar-wiki-pane" style="display:none;">
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📖 Wiki 目录</h3>
+            <div id="sidebarWikiStats" style="font-size:0.65rem;color:var(--card-muted);margin-bottom:6px;"></div>
+            <div id="sidebarWikiTabs" style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:2px;"></div>
+            <div id="sidebarWikiTree" style="font-size:0.78rem;overflow-y:auto;max-height:calc(100vh - 240px);"></div>
+        </div>
+
         <!-- ===== REVIEW SECTION (Review & Ingestion tab) ===== -->
         <div class="sidebar-tab-pane" id="sidebar-review-pane" style="display:none;">
             <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">🔍 审核中心</h3>
@@ -182,16 +190,20 @@
         </div>
 
         <!-- Admin/User Tab Bar — user tabs first, admin tabs separated -->
-        <div id="tabBar" style="padding: 0 1rem; display:flex; align-items:center; gap:2px;">
+        <div id="tabBar" style="padding: 0 1rem; display:flex; align-items:center; gap:2px; position:relative;">
             <button id="chatTabBtn" class="tab-btn active">💬 对话</button>
             <button id="adminTabBtn" class="tab-btn">📂 项目</button>
             <button id="knowledgeLabTabBtn" class="tab-btn">📚 知识库</button>
+            <button id="templatesTabBtn" class="tab-btn" style="font-size:0.7rem;">📋 模板库</button>
+            <button id="wikiTabBtn" class="tab-btn" style="font-size:0.7rem;">📖 法规参考</button>
+            <button id="timelineTabBtn" class="tab-btn" style="font-size:0.7rem;">⏱️ 时间线</button>
             <button id="recycleBinTabBtn" class="tab-btn">🗑️ 回收站</button>
-            <span style="color:var(--card-border);margin:0 4px;font-size:0.7rem;user-select:none;">│</span>
-            <button id="skillAuditTabBtn" class="tab-btn" style="display:none;font-size:0.7rem;">🧠 技能</button>
-            <button id="reviewTabBtn" class="tab-btn" style="display:none;font-size:0.7rem;">🔍 审核</button>
-            <button id="databaseTabBtn" class="tab-btn" style="font-size:0.7rem;">🗄️ 数据</button>
-            <button id="analyticsTabBtn" class="tab-btn" style="font-size:0.7rem;">📊 总览</button>
+            <span class="tab-separator" style="color:var(--card-border);margin:0 4px;font-size:0.7rem;user-select:none;">│</span>
+            <button id="reviewTabBtn" class="tab-btn admin-tab" style="display:none;font-size:0.7rem;">🔍 审核</button>
+            <button id="databaseTabBtn" class="tab-btn admin-tab" style="font-size:0.7rem;">🗄️ 数据</button>
+            <button id="analyticsTabBtn" class="tab-btn admin-tab" style="font-size:0.7rem;">⚙️ 配置</button>
+            <button id="mobileMoreTabsBtn" class="tab-btn" style="display:none;font-size:0.7rem;flex-shrink:0;">更多 ▾</button>
+            <div id="mobileMoreDropdown"></div>
         </div>
 
         <!-- Chat Interface -->
@@ -221,16 +233,25 @@
                 <textarea id="messageInput" rows="1" placeholder="输入您的问题..."></textarea>
                 <div class="file-btn" id="fileBtn" aria-label="上传文件">📄 附加文件</div>
                 <div class="file-btn" id="knowledgeBaseBtn">📚 知识库</div>
-                <div class="file-btn" id="promptTemplatesBtn" title="提示词模板">📋</div>
                 <input type="file" id="fileInput" style="display:none" multiple>
                 <button class="send-btn" id="sendBtn" aria-label="发送消息">发送 ➤</button>
             </div>
 
-            <!-- Advanced tools: collapsed by default for clean chat -->
+            <!-- Knowledge category filter pills -->
+            <div id="categoryFilterBar" style="display:none;margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap;font-size:0.75rem;">
+                <span style="color:var(--card-muted);">📂 分类筛选:</span>
+                <span class="cat-pill active" data-cat="" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);background:var(--accent);color:white;">全部</span>
+                <span class="cat-pill" data-cat="规章" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">规章</span>
+                <span class="cat-pill" data-cat="模板" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">模板</span>
+                <span class="cat-pill" data-cat="项目经验" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">项目经验</span>
+                <span class="cat-pill" data-cat="专家意见" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">专家意见</span>
+                <span id="catFilterClear" style="cursor:pointer;padding:2px 6px;color:var(--card-muted);display:none;">✕ 清除</span>
+            </div>
+            <!-- Advanced tools: collapsed by default, ≤3 lines when expanded (excluding nested) -->
             <details id="advancedToolsDetails" style="margin-top:6px;font-size:0.75rem;color:var(--card-muted);">
                 <summary style="cursor:pointer;padding:2px 0;">🔧 高级工具</summary>
 
-            <!-- Settings row (Token + VL toggle) -->
+            <!-- Row 1: Token + VL + Prompt Templates -->
             <div class="settings-row">
                 <div class="token-control">
                     <span>🎛️ token输出（上限4800，下限100）</span>
@@ -242,10 +263,19 @@
                     <label>
                         <input type="checkbox" id="analyzeImagesCheckbox" checked> 🖼️ 分析图片 (VL)
                     </label>
+                    <label style="margin-left:8px;">
+                        <input type="checkbox" id="analyzeVideosCheckbox" checked> 📹 分析视频
+                    </label>
+                </div>
+                <div class="settings-group">
+                    <button id="promptTemplatesBtn" class="file-btn" title="提示词模板" style="font-size:0.78rem;">📋 模板</button>
+                </div>
+                <div class="settings-group">
+                    <button id="chatFullAuditBtn" class="file-btn" onclick="if(!window._showAuditModal){showToast('审计模块未就绪，请刷新页面','error',3000);return;}window._showAuditModal()" style="background:#7c3aed;color:#fff;border-color:#6d28d9;font-size:0.75rem;">📋 全量审计</button>
                 </div>
             </div>
 
-            <!-- Batch & File Station row -->
+            <!-- Row 2: Batch Compare + File Station -->
             <div class="action-buttons-row">
                 <div class="risk-row">
                     <span>🔬 对比因子：</span>
@@ -270,91 +300,123 @@
                     <span id="storageWarning" class="storage-warning"></span>
                 </div>
             </div>
-            </details>
 
-            <!-- Quote Anomaly: standalone price analysis -->
-            <details id="quoteAnomalyToggle" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:4px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;">💰 报价异常检测</summary>
-                <div style="margin-top:8px;font-size:0.75rem;">
+            <!-- Row 3: Document analysis tools (nested collapsible, folded by default) -->
+            <details id="docAnalysisTools" style="margin-top:2px;border:1px dashed var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.75rem;">📊 文档分析工具</summary>
+                <div style="padding:4px 0;">
+
+            <!-- Quote Anomaly -->
+            <details id="quoteAnomalyToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">💰 报价异常检测</summary>
+                <div style="margin-top:6px;font-size:0.72rem;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <input type="file" id="quoteAnomalyFileInput" accept=".pdf,.docx,.doc,.txt,.xlsx,.xls" multiple style="display:none">
                         <button id="selectQuoteAnomalyFilesBtn" class="file-btn">📄 选择投标文件</button>
                         <button id="runQuoteAnomalyBtn" class="file-btn" style="background:#e67e22;color:#fff;border-color:#d35400;" disabled>🔍 检测报价异常</button>
                         <span id="quoteAnomalyFileNames" class="template-info"></span>
                     </div>
-                    <div id="quoteAnomalyStatus" style="font-size:0.7rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="quoteAnomalyResultsPanel" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--bg-color);"></div>
+                    <div id="quoteAnomalyStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
+                    <div id="quoteAnomalyResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
                 </div>
             </details>
 
-            <!-- Relationship Extraction: entity & collusion analysis -->
-            <details id="relationshipToggle" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:4px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;">🔗 关联关系分析</summary>
-                <div style="margin-top:8px;font-size:0.75rem;">
+            <!-- Relationship Extraction -->
+            <details id="relationshipToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">🔗 关联关系分析</summary>
+                <div style="margin-top:6px;font-size:0.72rem;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <input type="file" id="relationshipFileInput" accept=".pdf,.docx,.doc,.txt" multiple style="display:none">
                         <button id="selectRelationshipFilesBtn" class="file-btn">📄 选择投标文件</button>
                         <button id="runRelationshipBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 提取关联关系</button>
                         <span id="relationshipFileNames" class="template-info"></span>
                     </div>
-                    <div id="relationshipStatus" style="font-size:0.7rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="relationshipResultsPanel" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--bg-color);"></div>
+                    <div id="relationshipStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
+                    <div id="relationshipResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
                 </div>
             </details>
 
-            <!-- Typo Detection: standalone spell/typo check -->
-            <details id="typoDetectionToggle" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:4px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;">📝 错别字检测</summary>
-                <div style="margin-top:8px;font-size:0.75rem;">
+            <!-- Typo Detection -->
+            <details id="typoDetectionToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">📝 错别字检测</summary>
+                <div style="margin-top:6px;font-size:0.72rem;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                         <input type="file" id="typoFileInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
                         <button id="selectTypoFileBtn" class="file-btn">📄 选择文档</button>
                         <button id="runTypoBtn" class="file-btn" style="background:#16a085;color:#fff;border-color:#138d75;" disabled>🔍 检测错别字</button>
-                        <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">
+                        <label style="font-size:0.68rem;display:flex;align-items:center;gap:4px;">
                             <input type="checkbox" id="typoDiffMode"> 差异审查模式
                         </label>
                         <span id="typoFileName" class="template-info"></span>
                     </div>
-                    <div id="typoStatus" style="font-size:0.7rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="typoResultsPanel" style="display:none;margin-top:8px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--bg-color);"></div>
+                    <div id="typoStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
+                    <div id="typoResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
                 </div>
             </details>
 
-            <!-- Compliance Checker: bid compliance against rules + laws -->
-            <details id="complianceToggle" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:4px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;">⚖️ 合规审查</summary>
-                <div style="margin-top:8px;font-size:0.75rem;">
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+            <!-- Compliance Checker -->
+            <details id="complianceToggle" style="margin-bottom:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">⚖️ 合规审查</summary>
+                <div style="margin-top:6px;font-size:0.72rem;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px;">
                         <div class="action-group">
-                            <span style="font-size:0.72rem;color:var(--card-muted);">📋 招标文件：</span>
+                            <span style="font-size:0.68rem;color:var(--card-muted);">📋 招标文件：</span>
                             <input type="file" id="complianceBidDocInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
                             <button id="selectComplianceBidDocBtn" class="file-btn">选择招标文件</button>
                             <span id="complianceBidDocName" class="template-info"></span>
                         </div>
                         <div class="action-group">
-                            <span style="font-size:0.72rem;color:var(--card-muted);">📝 投标文件：</span>
+                            <span style="font-size:0.68rem;color:var(--card-muted);">📝 投标文件：</span>
                             <input type="file" id="complianceCheckFileInput" accept=".pdf,.docx,.doc,.txt" multiple style="display:none">
                             <button id="selectComplianceCheckFileBtn" class="file-btn">选投标文件</button>
                             <span id="complianceCheckFileNames" class="template-info"></span>
                         </div>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <button id="complianceExtractBtn" disabled style="font-size:0.72rem;padding:4px 10px;">🔍 提取规则</button>
-                        <button id="complianceCheckBtn" disabled style="font-size:0.72rem;padding:4px 10px;background:#e67e22;color:#fff;">⚖️ 开始审查</button>
-                        <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">
+                        <button id="complianceExtractBtn" disabled style="font-size:0.68rem;padding:4px 10px;">🔍 提取规则</button>
+                        <button id="complianceCheckBtn" disabled style="font-size:0.68rem;padding:4px 10px;background:#e67e22;color:#fff;">⚖️ 开始审查</button>
+                        <label style="font-size:0.68rem;display:flex;align-items:center;gap:4px;">
                             <input type="checkbox" id="complianceUseAI" checked> AI分析
                         </label>
-                        <span id="complianceStatus" style="font-size:0.7rem;color:var(--card-muted);"></span>
+                        <span id="complianceStatus" style="font-size:0.68rem;color:var(--card-muted);"></span>
                     </div>
-                    <div id="complianceRulesPreview" style="display:none;margin-top:8px;max-height:300px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:6px;background:var(--bg-color);">
+                    <div id="complianceRulesPreview" style="display:none;margin-top:6px;max-height:300px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:6px;background:var(--card-bg);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <strong style="font-size:0.72rem;">📜 已提取规则 (<span id="complianceRuleCount">0</span>条)</strong>
-                            <span style="font-size:0.65rem;color:var(--card-muted);">可删除不需要的规则</span>
+                            <strong style="font-size:0.7rem;">📜 已提取规则 (<span id="complianceRuleCount">0</span>条)</strong>
+                            <span style="font-size:0.63rem;color:var(--card-muted);">可删除不需要的规则</span>
                         </div>
                         <div id="complianceRulesList"></div>
                     </div>
-                    <div id="complianceResultsPanel" style="display:none;margin-top:8px;"></div>
+                    <div id="complianceResultsPanel" style="display:none;margin-top:6px;"></div>
                 </div>
+            </details>
+
+            <!-- AI Document Review (moved from review panel to same level as other audit tools) -->
+            <details id="docReviewDetails" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">🤖 AI 文档审查</summary>
+                <div style="margin-top:6px;font-size:0.72rem;">
+                    <p style="color:var(--card-muted);margin-bottom:8px;">上传一份文档（投标函、合同、技术方案等），AI 用五轴法审查并打分。</p>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                        <input type="file" id="docReviewFileInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
+                        <button id="selectDocReviewFileBtn" class="file-btn">📄 选择文件</button>
+                        <span id="docReviewFileName" class="template-info"></span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                        <span style="font-size:0.68rem;color:var(--card-muted);">审查维度：</span>
+                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="合规性" checked> 合规性</label>
+                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="清晰度" checked> 清晰度</label>
+                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="完整性" checked> 完整性</label>
+                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="风险" checked> 风险</label>
+                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="专业性" checked> 专业性</label>
+                    </div>
+                    <button id="runDocReviewBtn" class="file-btn" style="background:#7c3aed;color:#fff;border-color:#6d28d9;" disabled>🔍 开始审查</button>
+                    <span id="docReviewStatus" style="font-size:0.68rem;color:var(--card-muted);margin-left:8px;"></span>
+                    <div id="docReviewResults" style="display:none;margin-top:10px;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:10px;background:var(--card-bg);"></div>
+                </div>
+            </details>
+
+                </div>
+            </details>
             </details>
         </div>
 
@@ -362,7 +424,7 @@
 
         <!-- Analytics Panel (Admin only: stats + config + assets) -->
         <div id="analyticsPanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
-            <h4 style="margin:0 0 8px 0;font-size:0.85rem;">📊 用量统计</h4>
+            <h4 style="margin:0 0 8px 0;font-size:0.85rem;">⚙️ 配置与统计</h4>
             <div id="analyticsContent">
                 <p style="font-size:0.75rem;color:var(--card-muted);">加载中...</p>
             </div>
@@ -388,6 +450,70 @@
                     <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">✍️ 写作风格</summary>
                     <div id="styleManagerPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
+                <details id="auditConfigDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📋 审计设置 <span id="auditConfigModifiedDot" style="display:none;color:#f59e0b;font-size:0.65rem;">● 已修改</span></summary>
+                    <div id="auditConfigContent" style="font-size:0.72rem;margin-top:6px;">
+                        <table style="width:100%;border-collapse:collapse;" id="auditConfigTable">
+                            <thead><tr style="background:#f1f5f9;">
+                                <th style="padding:4px;text-align:left;">功能</th>
+                                <th style="padding:4px;">默认启用</th>
+                                <th style="padding:4px;">失败阈值</th>
+                                <th style="padding:4px;">权重</th>
+                                <th style="padding:4px;">严重度阈值</th>
+                            </tr></thead>
+                            <tbody id="auditConfigTbody"></tbody>
+                        </table>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-top:10px;">
+                        <button id="auditConfigSaveBtn" class="file-btn" style="flex:1;background:#3b82f6;color:white;border-color:#2563eb;font-size:0.75rem;padding:6px;">💾 保存审计配置</button>
+                    </div>
+                    <div id="auditConfigMsg" style="margin-top:6px;font-size:0.7rem;"></div>
+                </details>
+                <details id="skillAuditDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">🧠 技能审核</summary>
+                    <div id="skillAuditContent" style="font-size:0.72rem;margin-top:6px;"><p>展开后加载...</p></div>
+                </details>
+            </div>
+        </div>
+
+        <!-- Wiki Panel -->
+        <div id="wikiPanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h4 style="margin:0 0 8px 0;font-size:0.85rem;">📖 知识库Wiki</h4>
+                <span id="wikiStatsBadge" style="font-size:0.65rem;color:var(--card-muted);"></span>
+            </div>
+            <div id="wikiToolbar" style="display:flex;gap:6px;margin-bottom:8px;">
+                <input id="wikiSearchInput" type="text" placeholder="搜索Wiki..." style="flex:1;padding:6px 10px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;background:var(--card-bg);color:var(--text-color);">
+                <button id="wikiRefreshBtn" class="file-btn" style="font-size:0.72rem;">🔄 刷新</button>
+                <button id="wikiImportLegalBtn" class="file-btn" style="display:none;font-size:0.72rem;">📤 导入法规</button>
+            </div>
+            <div id="wikiContent" style="font-size:0.78rem;">
+                <p style="color:var(--card-muted);">加载中...</p>
+            </div>
+            <input type="file" id="wikiLegalFileInput" accept=".doc,.docx,.pdf" multiple style="display:none">
+        </div>
+
+        <!-- Timeline Panel -->
+        <div id="timelinePanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <h4 style="margin:0;font-size:0.85rem;">⏱️ 招标时间线</h4>
+                <span id="timelineStatusBadge" style="font-size:0.65rem;color:var(--card-muted);"></span>
+            </div>
+            <div id="timelineSetup" style="display:none;margin-bottom:12px;padding:10px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);">
+                <p style="font-size:0.75rem;color:var(--card-muted);margin-bottom:6px;">尚未为该招标项目创建时间线。选择类别与采购方式以创建:</p>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <select id="timelineCategorySelect" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
+                        <option value="">选择类别...</option>
+                    </select>
+                    <select id="timelineMethodSelect" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
+                        <option value="">选择方式...</option>
+                    </select>
+                    <input type="date" id="timelineStartDate" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
+                    <button id="timelineCreateBtn" class="file-btn" style="font-size:0.72rem;padding:6px 12px;">创建时间线</button>
+                </div>
+            </div>
+            <div id="timelineContent" style="font-size:0.78rem;">
+                <p style="color:var(--card-muted);">加载中...</p>
             </div>
         </div>
 
@@ -418,14 +544,15 @@
                     <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📈 审核工作量</summary>
                     <div id="workloadPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
+                <details id="auditHistoryDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📋 审计历史</summary>
+                    <div id="auditHistoryPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
+                </details>
             </div>
         </div>
 
-        <!-- Skill Audit Panel (auditors only) -->
-        <div id="skillAuditPanel" style="display: none; flex: 1; overflow-y: auto; padding: 1rem;">
-            <h4 style="margin:0 0 15px 0;">🧠 技能审核</h4>
-            <div id="skillAuditContent"><p>加载中...</p></div>
-        </div>
+        <!-- Templates Panel (U5) -->
+        <div id="templatesPanel" style="display: none; flex: 1; overflow: hidden;"></div>
 
         <!-- Recycle Bin Panel -->
         <div id="recycleBinPanel" style="display: none; flex: 1; overflow-y: auto; padding: 1rem;">
@@ -460,8 +587,8 @@
             <details open class="recycle-section" style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
                 <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;">📁 项目文件 <span id="projectRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
                 <div style="display:flex;gap:4px;margin:6px 0;">
-                    <button class="restore-section-btn" data-section="project" style="font-size:0.68rem;padding:2px 8px;">恢复全部</button>
-                    <button class="empty-section-btn" data-section="project" style="font-size:0.68rem;padding:2px 8px;">清空此区</button>
+                    <button class="restore-section-btn" data-section="project_files" style="font-size:0.68rem;padding:2px 8px;">恢复全部</button>
+                    <button class="empty-section-btn" data-section="project_files" style="font-size:0.68rem;padding:2px 8px;">清空此区</button>
                 </div>
                 <div id="projectRecycleList" style="font-size:0.72rem;">加载中...</div>
                 <div id="folderRecycleList" style="font-size:0.72rem;margin-top:4px;"></div>
@@ -505,8 +632,18 @@
                 <!-- LEFT COLUMN: Personal Knowledge Lab -->
                 <div>
                     <h4>📁 我的知识库 (仅自己可见)</h4>
-                    <div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <input type="file" id="labFileInput" style="display:none" multiple>
+                        <select id="labCategorySelect">
+                            <option value="">-- 分类(可选) --</option>
+                            <option value="规章">规章</option>
+                            <option value="模板">模板</option>
+                            <option value="项目经验">项目经验</option>
+                            <option value="专家意见">专家意见</option>
+                            <option value="自定义">自定义</option>
+                        </select>
+                        <input type="text" id="labCustomCategory" placeholder="新分类名称"
+                               style="display: none; width: 150px; padding: 4px;">
                         <button id="uploadLabFileBtn" class="file-btn">📤 上传文件</button>
                         <button id="refreshLabListBtn" class="file-btn">🔄 刷新</button>
                     </div>
@@ -526,7 +663,7 @@
                                 <option value="">-- 请选择分类 --</option>
                                 <option value="规章">规章</option>
                                 <option value="模板">模板</option>
-                                <option value="以往项目参考">以往项目参考</option>
+                                <option value="项目经验">项目经验</option>
                                 <option value="专家意见">专家意见</option>
                                 <option value="自定义">自定义</option>
                             </select>
@@ -610,15 +747,15 @@
                 <div class="option-title">📝 创建账户</div>
                 <div class="option-desc">注册后可跨设备同步聊天记录和文件。</div>
                 <form onsubmit="return false" id="createAccountForm" style="display:none;" class="consent-form-fields">
-                    <input type="text" id="regUsername" placeholder="用户名 (5-18字符)" autocomplete="username" style="width:100%; margin-bottom:8px; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
+                    <input type="text" id="regUsername" placeholder="用户名 (5-18字符)" autocomplete="username" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
                     <div style="display: flex; gap: 8px; margin-bottom:8px;">
-                        <select id="regPinLength" style="flex:1; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
+                        <select id="regPinLength" style="flex:1; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
                             <option value="4">4位PIN</option>
                             <option value="6" selected>6位PIN</option>
                         </select>
-                        <input type="password" id="regPin" placeholder="PIN" autocomplete="new-password" style="flex:2; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
+                        <input type="password" id="regPin" placeholder="PIN" autocomplete="new-password" style="flex:2; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
                     </div>
-                    <input type="password" id="regConfirmPin" placeholder="确认PIN" autocomplete="new-password" style="width:100%; margin-bottom:8px; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
+                    <input type="password" id="regConfirmPin" placeholder="确认PIN" autocomplete="new-password" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
                     <button id="confirmCreateAccountBtn" class="consent-action-btn">创建账户并开始</button>
                 </form>
             </div>
@@ -626,16 +763,12 @@
                 <div class="option-title">🔑 登录已有账户</div>
                 <div class="option-desc">使用已有的用户名和PIN登录。</div>
                 <form onsubmit="return false" id="loginForm" style="display:none;" class="consent-form-fields">
-                    <input type="text" id="loginUsername" placeholder="用户名" autocomplete="username" style="width:100%; margin-bottom:8px; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
-                    <input type="password" id="loginPin" placeholder="PIN" autocomplete="current-password" style="width:100%; margin-bottom:8px; padding:8px; border-radius:8px; border:1px solid #c8d0d8;">
+                    <input type="text" id="loginUsername" placeholder="用户名" autocomplete="username" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
+                    <input type="password" id="loginPin" placeholder="PIN" autocomplete="current-password" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
                     <button id="confirmLoginBtn" class="consent-action-btn">登录并开始</button>
                 </form>
             </div>
-            <div class="consent-option-btn" id="consentDeclineOption">
-                <div class="option-title">👤 匿名试用</div>
-                <div class="option-desc">AI对话 + 临时文件(<5MB×5个)。关闭页面后全部清除，不支持下载。</div>
-                <button id="confirmDeclineBtn" class="consent-action-btn" style="margin-top:12px; background:#95a5a6;">匿名开始使用</button>
-            </div>
+
         </div>
     </div>
 </div>
@@ -718,6 +851,8 @@
     <div class="ctx-item" data-action="copy" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;">🔗 复制内容</div>
 </div>
 
-<script defer src="{{ url_for('static', filename='js/app.js') }}?v=20260702k"></script>
+<script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
+<script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
+<script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 /* AI_Services Application Logic */
 // ======================== Global Variables & Setup ========================
+    window._showAuditModal = null;  // placeholder — set after audit functions defined
     let selectedFiles = [];
     let currentFeedbackState = new Map();
     let isProcessing = false;
@@ -35,6 +36,9 @@
     const recycleBinTab = document.getElementById('recycleBinTabBtn');
     const databaseTab = document.getElementById('databaseTabBtn');
     const knowledgeLabTab = document.getElementById('knowledgeLabTabBtn');
+    const wikiPanel = document.getElementById('wikiPanel');
+    const wikiTab = document.getElementById('wikiTabBtn');
+    const templatesTab = document.getElementById('templatesTabBtn');
 
     // Get CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -261,6 +265,7 @@
     // Track user scroll: if they scroll up, we stop auto-following
     // When user scrolls to bottom, auto mark project chat as read
     let _lastMarkReadTs = 0;
+    let pinnedSessions = null;  // hoisted — initialized at ~line 9380
     document.addEventListener('DOMContentLoaded', () => {
         const mc = _getChatMessages();
         if (mc) {
@@ -356,6 +361,78 @@
             return m;
         });
     }
+
+    window.showSkillFeedback = function(containerEl, data, source, fileId) {
+        const preview = escapeHtml(data.skill_content || '').slice(0, 300);
+        const hasMore = (data.skill_content || '').length > 300;
+        containerEl.innerHTML = `<div style="margin:4px 0;padding:6px;background:var(--bg-color);border-radius:6px;border:1px solid var(--card-border);">
+            <div style="font-size:.7rem;color:var(--card-muted);margin-bottom:4px;">🧠 技能提取结果</div>
+            <div class="skill-preview" style="font-size:.75rem;line-height:1.5;max-height:80px;overflow:hidden;cursor:pointer;"
+                 onclick="if(this.style.maxHeight!=='none'){this.style.maxHeight='none';this.style.cursor='default';if(this.nextSibling)this.nextSibling.style.display='none';}">
+                ${preview}${hasMore ? '<span style="color:var(--accent);font-size:.65rem;"> 点击展开</span>' : ''}
+            </div>
+            <div style="margin-top:6px;display:flex;gap:6px;">
+                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',5,this)">👍 满意</button>
+                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',1,this)">👎 不满意</button>
+            </div>
+        </div>`;
+    };
+
+    window.submitSkillFeedback = function(fileId, source, rating, btn) {
+        const container = btn.closest('[data-feedback-skill]') || btn.parentElement.parentElement;
+        fetch('/knowledge_lab/feedback', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({file_id: fileId, source: source, rating: rating})
+        }).then(r => r.json()).then(function(d) {
+            if (d.success) {
+                container.innerHTML = '<span style="color:#22c55e;font-size:.7rem;">✅ 已反馈</span>';
+                showToast('感谢反馈!', 'success');
+            }
+        }).catch(function(){});
+    };
+
+    window.submitIngestFeedback = function(taskId, rating, btn) {
+        const container = btn.parentElement;
+        fetch('/admin/ingest/feedback', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({task_id: taskId, rating: rating})
+        }).then(r => r.json()).then(function(d) {
+            if (d.success) {
+                container.innerHTML = '<span style="color:#22c55e;font-size:.7rem;">✅ 已反馈</span>';
+                showToast('感谢反馈!', 'success');
+            }
+        }).catch(function(){});
+    };
+
+    window.submitAuditFeedback = function(rating, btn) {
+        const container = btn.parentElement;
+        fetch('/admin/skill_audit/feedback', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({rating: rating})
+        }).then(r => r.json()).then(function(d) {
+            if (d.success) {
+                container.innerHTML = '<div style="margin-top:8px;font-size:0.7rem;color:#22c55e;">✅ 已反馈</div>';
+                showToast('感谢反馈!', 'success');
+            }
+        }).catch(function(){});
+    };
+
+    window.submitQuoteFeedback = function(docName, rating, btn) {
+        const container = btn.parentElement.parentElement;
+        fetch('/check_quote_anomaly/feedback', {
+            method: 'POST', credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({doc_name: docName, rating: rating})
+        }).then(r => r.json()).then(function(d) {
+            if (d.success) {
+                container.innerHTML = '<div style="margin-top:8px;font-size:0.7rem;color:#22c55e;">✅ 已反馈</div>';
+                showToast('感谢反馈!', 'success');
+            }
+        }).catch(function(){});
+    };
 
     function fallbackCopy(text) {
         const ta = document.createElement('textarea');
@@ -678,12 +755,13 @@
 
     // ======================== Account Management ========================
     // ── Provider / Model selector ──
-    const PROVIDER_NAMES = { deepseek:'DeepSeek', zhipu:'智谱AI', qwen:'通义千问', siliconflow:'硅基流动' };
+    const PROVIDER_NAMES = { deepseek:'DeepSeek', zhipu:'智谱AI', qwen:'通义千问', siliconflow:'硅基流动', nvidia:'NVIDIA' };
     const PROVIDER_MODELS = {
         deepseek: ['deepseek-v4-pro','deepseek-v4-flash','deepseek-chat'],
         zhipu: ['glm-4-flash','glm-4-plus','glm-4-air'],
         qwen: ['qwen3.7-plus','qwen-max','qwen-plus','qwen-turbo'],
-        siliconflow: ['Qwen/Qwen2.5-7B-Instruct','deepseek-ai/DeepSeek-V3','Qwen/Qwen2.5-72B-Instruct']
+        siliconflow: ['Qwen/Qwen2.5-7B-Instruct','deepseek-ai/DeepSeek-V3','Qwen/Qwen2.5-72B-Instruct'],
+        nvidia: ['z-ai/glm-5.2','moonshotai/kimi-k2.6','meta/llama-3.1-8b-instruct','meta/llama-3.1-70b-instruct','meta/llama-3.1-405b-instruct','mistralai/mixtral-8x22b-instruct-v0.1','nvidia/llama-3.1-nemotron-70b-instruct']
     };
 
     async function loadUserStyle() {
@@ -827,7 +905,7 @@
                 <label>当前PIN (必填):</label>
                 <input type="password" id="currentPin" placeholder="当前PIN" style="width:100%; margin-bottom:8px;">
                 <button id="updateAccountBtn" class="file-btn" style="margin-top: 10px;">更新账户</button>
-                <button id="deleteAccountBtn" class="file-btn" style="margin-top: 10px; font-weight: bold;">⚠️ 申请删除账户</button>
+                <button id="deleteAccountBtn" class="file-btn" style="margin-top: 10px; font-weight: bold;">${sessionStorage.getItem('deletion_pending') === '1' ? '⚠️ 输入验证码确认删除' : '⚠️ 申请删除账户'}</button>
                 <button id="logoutBtn" class="file-btn" style="margin-top: 10px;">退出登录</button>
             `;
             document.getElementById('updateAccountBtn')?.addEventListener('click', updateAccount);
@@ -1181,6 +1259,10 @@
     }
 
     async function requestDeleteAccount() {
+        if (sessionStorage.getItem('deletion_pending') === '1') {
+            showConfirmDeleteModal();
+            return;
+        }
         const res = await fetch('/request_delete_account', { method:'POST', credentials:'include' });
         const d = await res.json();
         if (!res.ok) { alert(d.error || '加载失败'); return; }
@@ -1217,7 +1299,7 @@
             if (!confirm(`确定提交删除申请吗？\\n保留 ${keep.length} 项数据给公司，其余 ${inventory.length - keep.length} 项将永久删除。`)) return;
             const r = await fetch('/submit_delete_choices', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({keep_ids:keep}) });
             const rd = await r.json();
-            if (r.ok) { showToast(rd.message || '已提交', 'info', 6000); modal.remove(); alert('删除申请已提交。管理员审核后您将收到验证码，届时再次打开账户面板输入验证码确认删除。'); }
+            if (r.ok) { showToast(rd.message || '已提交', 'info', 6000); modal.remove(); sessionStorage.setItem('deletion_pending', '1'); showConfirmDeleteModal(); }
             else alert(rd.error || '提交失败');
         };
     }
@@ -1243,6 +1325,60 @@
         }
     }
 
+    function showConfirmDeleteModal() {
+        const modal = createQuickModal('确认删除账户');
+        const lastRequest = sessionStorage.getItem('deletion_last_request') || '';
+        if (lastRequest) {
+            const elapsed = (Date.now() - parseInt(lastRequest)) / 1000;
+            if (elapsed < 300) {
+                modal.innerHTML(`<p>请等待 ${Math.ceil(300 - elapsed)} 秒后重试。</p>`);
+                return;
+            }
+        }
+        modal.innerHTML(`
+            <p style="font-size:.78rem;color:var(--card-muted);margin-bottom:8px;">管理员已发送验证码到您的邮箱，请在此输入。</p>
+            <label>验证码 (4位):</label>
+            <input type="text" id="delConfirmCode" maxlength="4" placeholder="管理员发送的验证码" style="width:100%;margin-bottom:8px;">
+            <label>PIN:</label>
+            <input type="password" id="delConfirmPin" placeholder="您的PIN" style="width:100%;margin-bottom:8px;">
+            <div style="display:flex;gap:8px;">
+                <button id="delConfirmBtn" class="file-btn" style="background:#e74c3c;color:white;">确认删除</button>
+                <button id="delCancelReqBtn" class="file-btn">取消删除请求</button>
+            </div>
+            <span id="delConfirmStatus" style="font-size:.7rem;color:var(--card-muted);"></span>
+        `);
+        modal.querySelector('#delConfirmBtn').onclick = async () => {
+            const code = modal.querySelector('#delConfirmCode').value.trim();
+            const pin = modal.querySelector('#delConfirmPin').value.trim();
+            if (!code || !pin) { modal.querySelector('#delConfirmStatus').textContent = '请填写验证码和PIN'; return; }
+            const btn = modal.querySelector('#delConfirmBtn');
+            btn.disabled = true; btn.textContent = '...';
+            try {
+                const res = await fetch('/confirm_delete_account', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({code, pin}) });
+                const d = await res.json();
+                if (res.ok) {
+                    sessionStorage.removeItem('deletion_pending');
+                    sessionStorage.setItem('deletion_last_request', Date.now().toString());
+                    showToast('账户已删除', 'success', 3000);
+                    modal.remove();
+                    setTimeout(() => { location.href = '/'; }, 1000);
+                } else {
+                    modal.querySelector('#delConfirmStatus').textContent = d.error || '确认失败';
+                }
+            } catch (_) {
+                modal.querySelector('#delConfirmStatus').textContent = '网络错误';
+            }
+            btn.disabled = false; btn.textContent = '确认删除';
+        };
+        modal.querySelector('#delCancelReqBtn').onclick = async () => {
+            if (!confirm('取消删除请求？')) return;
+            sessionStorage.removeItem('deletion_pending');
+            sessionStorage.setItem('deletion_last_request', Date.now().toString());
+            showToast('删除请求已取消', 'info', 3000);
+            modal.remove();
+        };
+    }
+
     const accountSettingsBtn = document.getElementById('accountSettingsBtn');
     if (accountSettingsBtn) {
         accountSettingsBtn.onclick = () => {
@@ -1256,13 +1392,19 @@
     }
 
     // ======================== STREAMING SEND FUNCTION ========================
-    async function sendMessageStreaming(userMsg, messageId, files, userGroup = null) {
+    async function sendMessageStreaming(userMsg, messageId, files, userGroup = null, retryCount = 0) {
         const formData = new FormData();
         formData.append('message_id', messageId);
         if (userMsg) formData.append('message', userMsg);
         for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
         if (selectedKnowledgeFiles.length) {
             formData.append('knowledge_files', JSON.stringify(selectedKnowledgeFiles));
+        }
+        if (window._selectedRagCategory) {
+            formData.append('rag_category', window._selectedRagCategory);
+        }
+        if (retryCount > 0) {
+            formData.append('fallback_retry', String(retryCount));
         }
         // Quote context is already inlined in userMsg above — don't duplicate to backend
 
@@ -1410,8 +1552,42 @@
                                 scrollToBottom(true);
                             } else if (data.type === 'error') {
                                 answerDiv.innerHTML += `<p class="stream-error">[Error: ${escapeHtml(data.text)}]</p>`;
+                            } else if (data.type === 'fallback_retry') {
+                                stopBtn.remove();
+                                if (retryCount >= 3) {
+                                    answerDiv.innerHTML += '<p class="stream-error">[自动重试已达上限，请手动重试]</p>';
+                                    break;
+                                }
+                                clearInterval(timerInterval);
+                                activeStreamController = null;
+                                tempGroup.remove();
+                                return sendMessageStreaming(userMsg, messageId, files, userGroup, retryCount + 1);
                             } else if (data.type === 'done') {
                                 stopBtn.remove();
+                                // If backend sent pre-split answer/thinking (e.g. JSON format),
+                                // replace raw streaming content with properly formatted version
+                                if (data.answer) {
+                                    const finalThinking = data.thinking || '';
+                                    const finalAnswer = data.answer || '';
+                                    if (finalThinking) {
+                                        const thinkingHtml2 = `<div class="message-thinking" style="font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;" onclick="this.classList.toggle('collapsed');const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none';">
+                                            💭 思考过程 <span style="font-size:0.6rem;">(点击展开)</span></div>
+                                        <div class="thinking-content" style="display:none;font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;">${md.render(finalThinking)}</div>`;
+                                        answerDiv.innerHTML = thinkingHtml2 + md.render(finalAnswer);
+                                    } else {
+                                        answerDiv.innerHTML = md.render(finalAnswer);
+                                    }
+                                    scrollToBottom(true);
+                                }
+                                if (data.user_msg_id || data.assistant_msg_id) {
+                                    _pollLastId = Math.max(_pollLastId || 0, data.user_msg_id || 0, data.assistant_msg_id || 0);
+                                    _lastKnownMessageId = Math.max(_lastKnownMessageId || 0, _pollLastId);
+                                }
+                                addBranchButton(wrapper, tempGroup);
+                                if (data.assistant_msg_id) {
+                                    addFeedbackButtons(tempGroup, data.assistant_msg_id);
+                                    addActionButtons(tempGroup, userMsg, fullResponse, '', data.assistant_msg_id);
+                                }
                             }
                         } catch (e) {
                             // Partial JSON — accumulate
@@ -1772,9 +1948,9 @@
             if (commonSessions.length === 0 && projectSessions.length === 0 && !currentProjectId) {
                 const newRes = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
                 const newData = await newRes.json();
-                commonSessions.push({ thread_id: newData.thread_id, title: '新对话', updated_at: new Date().toISOString() });
+                commonSessions.push({ thread_id: newData.data?.thread_id || newData.thread_id, title: '新对话', updated_at: new Date().toISOString() });
                 if (!sessionStorage.getItem('currentThreadId')) {
-                    await loadSession(newData.thread_id);
+                    await loadSession(newData.data?.thread_id || newData.thread_id);
                 }
             }
             
@@ -1864,17 +2040,19 @@
                 infoDiv.appendChild(titleSpan);
                 infoDiv.appendChild(timeSpan);
                 // Pin + Archive buttons (right side)
+                const pinIsActive = pinnedSessions && pinnedSessions.has(sess.thread_id);
                 const pinBtn = document.createElement('button');
                 pinBtn.className = 'pin-button';
-                pinBtn.textContent = pinnedSessions.has(sess.thread_id) ? '📌' : '📍';
-                pinBtn.title = pinnedSessions.has(sess.thread_id) ? '取消置顶' : '置顶';
+                pinBtn.textContent = pinIsActive ? '📌' : '📍';
+                pinBtn.title = pinIsActive ? '取消置顶' : '置顶';
                 pinBtn.style.background = 'none';
                 pinBtn.style.border = 'none';
                 pinBtn.style.cursor = 'pointer';
                 pinBtn.style.fontSize = '1rem';
-                pinBtn.style.opacity = pinnedSessions.has(sess.thread_id) ? '1' : '0.4';
+                pinBtn.style.opacity = pinIsActive ? '1' : '0.4';
                 pinBtn.onclick = (e) => {
                     e.stopPropagation();
+                    if (!pinnedSessions) return;
                     if (pinnedSessions.has(sess.thread_id)) {
                         pinnedSessions.delete(sess.thread_id);
                         pinBtn.textContent = '📍';
@@ -1912,6 +2090,7 @@
                             localStorage.removeItem('selectedKnowledgeFiles');
                             const btn = document.getElementById('knowledgeBaseBtn');
                             if (btn) btn.innerHTML = '📚 知识库';
+                            showCatFilterIfNeeded();
                             await loadMostRecentSession();
                             }
                             showToast('已归档', 'success', 2000);
@@ -1969,7 +2148,7 @@
                 };
                 li.appendChild(infoDiv);
                 li.appendChild(deleteBtn);
-                li.onclick = () => loadSession(sess.thread_id);
+                li.onclick = async () => { switchToPanel('chatInterface'); await loadSession(sess.thread_id); };
                 historyList.appendChild(li);
             }
             if (commonSessions.length === 0) {
@@ -2006,7 +2185,7 @@
                         infoDiv.appendChild(timeSpan);
                         li.appendChild(infoDiv);
                         li.style.cursor = 'pointer';
-                        li.onclick = () => loadSession(sess.thread_id);
+                        li.onclick = async () => { switchToPanel('chatInterface'); await loadSession(sess.thread_id); };
                         projectHistoryList.appendChild(li);
                         // Unread: compare last_msg_id vs per-browser read position
                         const projectUnread = _getUnreadCount(sess.thread_id, sess.last_msg_id || 0);
@@ -2025,13 +2204,13 @@
 
     async function loadSession(threadId, force = false, targetMessageId = null) {
         if (!force && isLoadingSession) {
-            console.log('Already loading a session, skipping.');
+            showToast('正在加载，请稍候…', 'info', 1500);
             return;
         }
         const currentActive = sessionStorage.getItem('currentThreadId');
-        if (!force && currentActive && currentActive === threadId && messagesDiv.children.length > 0) {
-            console.log('Same session already active and displayed, skipping load.');
-            return;
+        if (!force && currentActive === threadId && messagesDiv.children.length > 0) {
+            const chatPanel = document.getElementById('chatInterface');
+            if (chatPanel && chatPanel.style.display !== 'none') return;
         }
         if (isProcessing && !force) {
             addSystemMessage('请等待当前请求完成后再切换会话。');
@@ -2041,10 +2220,10 @@
         isLoadingSession = true;
         const timeoutId = setTimeout(() => { isLoadingSession = false; }, 10000);
         try {
+            messagesDiv.innerHTML = '';
             const res = await fetch(`/load_session/${threadId}`, { credentials: 'include' });
             const data = await res.json();
             if (res.ok && data.messages) {
-                messagesDiv.innerHTML = '';
                 // Determine if this is a project chat (for quote mode + regen button)
                 let isProjectChat = false;
                 let projId = null;
@@ -2099,6 +2278,7 @@
                 for (const m of data.messages || []) {
                     if (m.id && m.id > _lastKnownMessageId) _lastKnownMessageId = m.id;
                 }
+                if (_lastKnownMessageId > 0) { localStorage.setItem('zlai_read_' + threadId, String(_lastKnownMessageId)); }
                 // Mark project chat as read + start polling (common and project)
                 let foundProject = false;
                 for (const s of data.sessions || []) {
@@ -2170,11 +2350,11 @@
                 const res = await fetch(`/chat/poll/${currentThread}?since_id=${_pollLastId}`, { credentials: 'include' });
                 if (!res.ok) return;
                 const data = await res.json();
-                if (!data.success || !data.data) return;
-                const newMsgs = data.data.messages || [];
+                if (!data.success) return;
+                const newMsgs = data.messages || [];
                 if (projectId) loadProjectVotes(projectId);
                 if (newMsgs.length > 0) {
-                    _pollLastId = data.data.max_id;
+                    _pollLastId = data.max_id;
                     const wasNearBottom = _isUserNearBottom();
                     for (const msg of newMsgs) {
                         if (msg.role === 'user') {
@@ -2241,7 +2421,7 @@
                 const newChatRes = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
                 if (newChatRes.ok) {
                     const newData = await newChatRes.json();
-                    await loadSession(newData.thread_id);
+                    await loadSession(newData.data?.thread_id || newData.thread_id);
                 }
             }
         } catch (err) { console.error('Failed to load most recent session', err); }
@@ -2840,6 +3020,17 @@
 
     // Global variable to store selected knowledge files and IDs
     let selectedKnowledgeFiles = [];
+    try {
+        const stored = localStorage.getItem('selectedKnowledgeFiles');
+        if (stored) {
+            selectedKnowledgeFiles = JSON.parse(stored);
+        }
+    } catch (e) {
+        console.warn('Failed to parse selectedKnowledgeFiles from localStorage:', e);
+        selectedKnowledgeFiles = [];
+    }
+    // Initialize category filter bar visibility
+    showCatFilterIfNeeded();
     async function loadKnowledgeFiles() {
         const container = document.getElementById('knowledgeFileList');
         if (!container) return;
@@ -2938,15 +3129,14 @@
                 } else {
                     selectedKnowledgeFiles = selectedKnowledgeFiles.filter(sf => !(sf.source === source && String(sf.id) === String(id)));
                 }
-                // Update knowledge base button text
                 const btn = document.getElementById('knowledgeBaseBtn');
                 if (selectedKnowledgeFiles.length) {
                     btn.innerHTML = `📚 知识库(${selectedKnowledgeFiles.length})`;
                 } else {
                     btn.innerHTML = '📚 知识库';
                 }
-                // Persist to localStorage
                 localStorage.setItem('selectedKnowledgeFiles', JSON.stringify(selectedKnowledgeFiles));
+                showCatFilterIfNeeded();
             };
         });
     }
@@ -2960,6 +3150,8 @@
     // Close modal
     function closeKnowledgeModal() {
         document.getElementById('knowledgeBaseModal').style.display = 'none';
+        // Update category filter bar visibility after closing
+        showCatFilterIfNeeded();
     }
     document.getElementById('closeKnowledgeBaseModal').onclick = closeKnowledgeModal;
     document.getElementById('cancelKnowledgeBtn').onclick = closeKnowledgeModal;
@@ -2980,6 +3172,8 @@
         } else {
             btn.innerHTML = '📚 知识库';
         }
+        // Update category filter bar visibility
+        showCatFilterIfNeeded();
     };
 
     // ======================== Storage Check ========================
@@ -3097,11 +3291,10 @@
                 btn.style.display = 'none';
             } else {
                 btn.classList.remove('visible');
-                btn.style.display = btn.id === 'skillAuditTabBtn' || btn.id === 'reviewTabBtn'
+                btn.style.display = btn.id === 'reviewTabBtn'
                     ? (btn.style.display) : '';  // restore original visibility
                 const role = sessionStorage.getItem('role') || '';
                 const isAuditor = sessionStorage.getItem('is_auditor') === '1';
-                if (btn.id === 'skillAuditTabBtn' && (role === 'admin' || isAuditor)) btn.style.display = 'inline-block';
                 if (btn.id === 'reviewTabBtn' && (role === 'admin' || isAuditor)) btn.style.display = 'inline-block';
                 if (btn.id === 'databaseTabBtn') btn.style.display = 'inline-block';
                 if (btn.id === 'analyticsTabBtn') btn.style.display = 'inline-block';
@@ -3138,10 +3331,8 @@
         const loginForm = document.getElementById('loginForm');
         const consentCreateOption = document.getElementById('consentCreateOption');
         const consentLoginOption = document.getElementById('consentLoginOption');
-        const consentDeclineOption = document.getElementById('consentDeclineOption');
         const confirmCreateAccountBtn = document.getElementById('confirmCreateAccountBtn');
         const confirmLoginBtn = document.getElementById('confirmLoginBtn');
-        const confirmDeclineBtn = document.getElementById('confirmDeclineBtn');
 
         function collapseAllForms() {
             if (createAccountForm) createAccountForm.style.display = 'none';
@@ -3165,14 +3356,6 @@
                 consentLoginOption.classList.add('selected');
             };
         }
-        if (consentDeclineOption) {
-            consentDeclineOption.onclick = (e) => {
-                e.stopPropagation();
-                collapseAllForms();
-                consentDeclineOption.classList.add('selected');
-            };
-        }
-
         if (confirmCreateAccountBtn) {
             confirmCreateAccountBtn.onclick = async (e) => {
                 e.stopPropagation();
@@ -3237,15 +3420,6 @@
                     console.error(err);
                     alert('网络错误，请重试');
                 }
-            };
-        }
-
-        if (confirmDeclineBtn) {
-            confirmDeclineBtn.onclick = (e) => {
-                e.stopPropagation();
-                // Anonymous mode — just close the modal and start
-                const modal = document.getElementById('consentModal');
-                if (modal) modal.remove();
             };
         }
 
@@ -3370,7 +3544,7 @@
         const res = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
         if (res.ok) {
             const data = await res.json();
-            await loadSession(data.thread_id);
+            await loadSession(data.data?.thread_id || data.thread_id);
             await loadHistoryList();
             scrollToBottom();
             closeSidebar();
@@ -3378,6 +3552,7 @@
             localStorage.removeItem('selectedKnowledgeFiles');
             const btn = document.getElementById('knowledgeBaseBtn');
             if (btn) btn.innerHTML = '📚 知识库';
+            showCatFilterIfNeeded();
         }
     };
 
@@ -3403,6 +3578,7 @@
                     localStorage.removeItem('selectedKnowledgeFiles');
                     const btn = document.getElementById('knowledgeBaseBtn');
                     if (btn) btn.innerHTML = '📚 知识库';
+                    showCatFilterIfNeeded();
                 } else {
                     showToast('创建质问模式失败', 'error', 3000);
                 }
@@ -3418,6 +3594,19 @@
         analyzeImagesCheckbox.addEventListener('change', async () => {
             const enabled = analyzeImagesCheckbox.checked;
             await fetch('/set_image_analysis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ enabled })
+            });
+        });
+    }
+
+    const analyzeVideosCheckbox = document.getElementById('analyzeVideosCheckbox');
+    if (analyzeVideosCheckbox) {
+        analyzeVideosCheckbox.addEventListener('change', async () => {
+            const enabled = analyzeVideosCheckbox.checked;
+            await fetch('/set_video_analysis', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -3514,9 +3703,6 @@
         templateFileInput.value = '';
         templateFileNameSpan.textContent = '';
     };
-
-    // ── Compliance Checker ──
-    initComplianceChecker();
 
     // ── Quote Anomaly standalone ──
     initQuoteAnomalyTool();
@@ -3632,12 +3818,15 @@
             if (!projects.length) {
                 html = '<li style="color:var(--card-muted);">暂无项目</li>';
             } else {
-                html = projects.map(p => 
-                    `<li style="padding:4px 8px;margin-bottom:4px;border-radius:4px;cursor:pointer;transition:background .15s;"
-                         onmouseover="this.style.background='var(--card-bg)'" onmouseout="this.style.background=''"
-                         onclick="document.getElementById('adminTabBtn').click(); if(typeof openProject==='function') openProject(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.status || 'active'}')">
+                html = projects.map(p =>
+                    `<li style="padding:4px 8px;margin-bottom:4px;border-radius:4px;cursor:pointer;transition:background .15s;display:flex;align-items:center;"
+                         onmouseover="this.style.background='var(--card-bg)'" onmouseout="this.style.background=''">
+                         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;"
+                               onclick="document.getElementById('adminTabBtn').click(); if(typeof openProject==='function') openProject(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.status || 'active'}')">
                          📁 ${escapeHtml(p.name)}
-                         ${p.status && p.status !== 'active' ? `<span style="float:right;font-size:.7rem;color:var(--card-muted);">${p.status}</span>` : ''}
+                         ${p.status && p.status !== 'active' ? `<span style="font-size:.7rem;color:var(--card-muted);">${p.status}</span>` : ''}
+                         </span>
+                         ${(!p.status || p.status === 'active') ? `<button onclick="event.stopPropagation();if(!window._showAuditModal){showToast('审计模块未就绪，请刷新页面','error',3000);return;}window._currentProjectId=${p.id};window._showAuditModal()" style="background:#7c3aed;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:.65rem;cursor:pointer;flex-shrink:0;margin-left:4px;" title="全量审计">📋</button>` : ''}
                      </li>`
                 ).join('');
             }
@@ -3872,7 +4061,6 @@
                 system.innerHTML = `<div style="background:var(--card-bg);border-radius:6px;padding:6px;margin-top:4px;">
                     <div style="font-size:.7rem;">总存储: ${s.storage_mb}MB</div>
                     <div style="font-size:.7rem;">总文件: ${s.total_files}</div>
-                    <div style="font-size:.7rem;">征信查询: ${s.credit_checks || 0}次</div>
                 </div>`;
             }
 
@@ -3994,7 +4182,11 @@
     const quickMergeBtn = document.getElementById('sidebarAuditQuickMergeBtn');
     const quickArchiveBtn = document.getElementById('sidebarAuditQuickArchiveBtn');
     const auditStatsEl = document.getElementById('sidebarAuditStats');
-    if (runAuditBtn) runAuditBtn.onclick = () => { document.getElementById('skillAuditTabBtn')?.click(); };
+    if (runAuditBtn) runAuditBtn.onclick = () => {
+        document.getElementById('analyticsTabBtn')?.click();
+        const details = document.getElementById('skillAuditDetails');
+        if (details) details.open = true;
+    };
     if (quickMergeBtn) quickMergeBtn.onclick = () => {
         const firstPair = document.querySelector('.audit-pair');
         if (firstPair) { firstPair.click(); firstPair.scrollIntoView({behavior:'smooth'}); }
@@ -4040,12 +4232,18 @@
             if (overview) {
                 overview.innerHTML = '<div style="padding:4px 0;">加载表信息...</div>';
                 const tableInfos = [];
-                for (const t of tables) {
-                    try {
-                        const dbRes = await fetch('/admin/db_data?table=' + t + '&page=1&per_page=1', { credentials: 'include' });
-                        const dbData = await dbRes.json();
-                        tableInfos.push({ name: t, rows: dbData.total || 0 });
-                    } catch(e) { tableInfos.push({ name: t, rows: -1 }); }
+                try {
+                    const ovRes = await fetch('/admin/db_tables_overview', { credentials: 'include' });
+                    const ovData = await ovRes.json();
+                    if (ovData.success) {
+                        for (const t of (ovData.tables || [])) {
+                            tableInfos.push({ name: t.table_name, rows: t.row_count });
+                        }
+                    } else {
+                        throw new Error('Batch query failed');
+                    }
+                } catch(e) {
+                    // Server-side already handles fallback; no client-side fallback
                 }
                 const totalRows = tableInfos.reduce((s,i) => s + Math.max(0,i.rows), 0);
                 overview.innerHTML = '<div style="font-size:.65rem;color:var(--card-muted);margin-bottom:4px;">预估总行数: ' + totalRows.toLocaleString() + '</div>' +
@@ -4106,24 +4304,26 @@
     }
 
     function syncActiveTabWithView() {
-        const tabMap = [
-            { panel: chatInterface, tab: chatTab },
-            { panel: adminPanel, tab: adminTab },
-            { panel: recycleBinPanel, tab: recycleBinTab },
-            { panel: databasePanel, tab: databaseTab },
-            { panel: knowledgeLabPanel, tab: knowledgeLabTab },
-            { panel: analyticsPanel, tab: analyticsTabBtn },
-            { panel: reviewPanel, tab: reviewTabBtn },
-        ];
-        // Remove all active classes first
-        tabMap.forEach(({ tab }) => tab?.classList.remove('active'));
-        // Set active based on visible panel
-        for (const { panel, tab } of tabMap) {
-            if (panel && panel.style.display !== 'none') {
-                tab?.classList.add('active');
-                break;
+        try {
+            const tabMap = [
+                { panel: chatInterface, tab: chatTab },
+                { panel: adminPanel, tab: adminTab },
+                { panel: recycleBinPanel, tab: recycleBinTab },
+                { panel: databasePanel, tab: databaseTab },
+                { panel: knowledgeLabPanel, tab: knowledgeLabTab },
+                { panel: wikiPanel, tab: wikiTab },
+                { panel: timelinePanel, tab: timelineTabBtn },
+                { panel: analyticsPanel, tab: analyticsTabBtn },
+                { panel: reviewPanel, tab: reviewTabBtn },
+            ];
+            tabMap.forEach(({ tab }) => tab?.classList.remove('active'));
+            for (const { panel, tab } of tabMap) {
+                if (panel && panel.style.display !== 'none') {
+                    tab?.classList.add('active');
+                    break;
+                }
             }
-        }
+        } catch(_) { /* panels not yet initialized — skip */ }
     }
 
     async function updateProjectTabVisibility() {
@@ -4132,11 +4332,13 @@
         const adminTab = document.getElementById('adminTabBtn');
         const recycleTab = document.getElementById('recycleBinTabBtn');
         const analyticsTab = document.getElementById('analyticsTabBtn');
+        const timelineTab = document.getElementById('timelineTabBtn');
 
         if (tabBar) tabBar.style.display = 'flex';
         if (adminTab) adminTab.style.display = 'inline-block';
         if (recycleTab) recycleTab.style.display = 'inline-block';
         if (analyticsTab) analyticsTab.style.display = 'inline-block';
+        if (timelineTab) timelineTab.style.display = currentProjectId ? 'inline-block' : 'none';
     }
 
     // ======================== Sidebar Tab Switching ========================
@@ -4149,7 +4351,7 @@
 
     // Helper: hide all tab panels, then show only the active one
     function switchToPanel(activeId) {
-        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','analyticsPanel','reviewPanel','skillAuditPanel'];
+        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','wikiPanel','timelinePanel','analyticsPanel','reviewPanel','templatesPanel'];
         allPanels.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = (id === activeId) ? (id === 'chatInterface' ? 'flex' : 'block') : 'none';
@@ -4247,26 +4449,8 @@
             syncActiveTabWithView();
         };
     }
-    // Skill audit tab (auditors only)
-    const skillAuditTab = document.getElementById('skillAuditTabBtn');
-    const skillAuditPanel = document.getElementById('skillAuditPanel');
-    if (skillAuditTab && skillAuditPanel) {
-        // Show tab for admins and auditors
-        const role = sessionStorage.getItem('role') || '';
-        const isAuditor = sessionStorage.getItem('is_auditor') === '1';
-        if (role === 'admin' || isAuditor) {
-            skillAuditTab.style.display = 'inline-block';
-        }
-        skillAuditTab.onclick = async () => {
-            saveActiveTab('audit');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            skillAuditTab.classList.add('active');
-            switchToPanel('skillAuditPanel');
-            switchSidebarPane('audit');
-            loadSkillAuditWorkspace();
-        };
-
-        async function loadSkillAuditWorkspace() {
+    // Skill audit workspace (loaded inline in config panel)
+    async function loadSkillAuditWorkspace() {
             const content = document.getElementById('skillAuditContent');
             content.innerHTML = '<p style="text-align:center;padding:40px;">🧠 AI正在分析技能库...</p>';
             try {
@@ -4286,6 +4470,22 @@
                 html += '</div>';
                 if (data.analysis_skipped) {
                     html += '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;margin-bottom:12px;font-size:0.7rem;color:#92400e;">⏳ '+escapeHtml(data.analysis_note||'相似度分析模型首次加载中(需下载约120MB)，请稍后刷新。基础统计已可用。')+'</div>';
+                }
+
+                // All skills listing
+                if (data.skills?.length) {
+                    const catIcons = {'规章':'📋','模板':'📄','项目经验':'📊','专家意见':'💡'};
+                    html += '<h4 style="margin:16px 0 8px;">📦 所有技能</h4>';
+                    html += '<div style="margin-bottom:12px;">';
+                    data.skills.forEach(s => {
+                        const icon = catIcons[s.category] || '📄';
+                        const srcLabel = s.source === 'company' ? '🏢' : s.source === 'personal' ? '👤' : '📁';
+                        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--card-bg);border-radius:4px;margin-bottom:3px;font-size:.78rem;">
+                            <span>${icon} ${escapeHtml(s.name)} <small style="color:var(--card-muted);">${srcLabel} ${s.category||'通用'} · ${s.username||'—'}</small></span>
+                            <small style="color:var(--card-muted);">使用${s.usage_count}次 · ${s.uploaded_at||''}</small>
+                        </div>`;
+                    });
+                    html += '</div>';
                 }
 
                 // Side-by-side merge workspace
@@ -4342,6 +4542,11 @@
                         </div>`;
                     });
                 }
+                html += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--card-border);display:flex;gap:6px;align-items:center;font-size:0.7rem;">';
+                html += '<span style="color:var(--card-muted);">审计建议有帮助吗？</span>';
+                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(5,this)">👍 有帮助</button>';
+                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(1,this)">👎 无帮助</button>';
+                html += '</div>';
                 content.innerHTML = html;
 
                 // Wire archive buttons
@@ -4423,8 +4628,8 @@
                 }, 100);
             } catch(e) { content.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; }
         }
-    }
 
+    // ======================== Knowledge Lab Tab ========================
     if (knowledgeLabTab) {
         knowledgeLabTab.onclick = async () => {
             saveActiveTab('knowledge');
@@ -4916,9 +5121,9 @@
             const label = filter === 'all' ? '所有项目' : '筛选的项目';
             if (!confirm('确定永久删除' + label + '？此操作不可恢复。')) return;
             try {
-                const res = await fetch('/empty_recycle_bin', { method: 'POST', credentials: 'include' });
+                const res = await fetch('/empty_recycle_bin', { method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: filter || 'all'}) });
                 if (res.ok) { showToast('已清空', 'success'); loadSidebarRecycle(); if (typeof loadRecycleBin === 'function') loadRecycleBin(); }
-            } catch(e) {}
+            } catch(e) { console.error('sidebar empty failed:', e); }
         };
 
         // Age-based cleanup buttons (delegated, since they're created dynamically)
@@ -4929,9 +5134,9 @@
                 if (!confirm('确定永久删除' + (isOld ? '30天前' : '7天前') + '的项目？此操作不可恢复。')) return;
                 btn.disabled = true; btn.textContent = '清理中...';
                 try {
-                    const res = await fetch('/empty_recycle_bin', { method: 'POST', credentials: 'include' });
+                    const res = await fetch('/empty_recycle_bin', { method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: 'all'}) });
                     if (res.ok) { showToast('已清理', 'success'); loadSidebarRecycle(); if (typeof loadRecycleBin === 'function') loadRecycleBin(); }
-                } catch(err) {}
+                } catch(err) { console.error('age cleanup failed:', err); }
                 btn.disabled = false;
             }
         });
@@ -4963,6 +5168,10 @@
                 if (p.member_role) statusBadge += ` <span style="font-size:.65rem;color:var(--card-muted);">${p.member_role === 'manager' ? '👑 管理' : '👤 成员'}</span>`;
                 const industryLabels = {bidding_agency:'🏗️ 招标代理', engineering_cost:'💰 工程造价', engineering_audit:'🔍 工程审计', general:'📋 通用'};
                 if (p.industry && p.industry !== 'general') statusBadge += ` <span style="font-size:.65rem;background:#eff6ff;color:#1e40af;border-radius:4px;padding:1px 5px;">${industryLabels[p.industry]||p.industry}</span>`;
+                const catLabels = {construction:'🏗️ 工程建设', goods:'📦 货物采购', services:'💼 服务采购'};
+                const methLabels = {open_bid:'公开招标', invited_bid:'邀请招标', competitive_negotiation:'竞争性谈判', inquiry:'询价', single_source:'单一来源', competitive_consultation:'竞争性磋商'};
+                if (p.bidding_category) statusBadge += ` <span style="font-size:.65rem;background:#f0fff4;color:#166534;border-radius:4px;padding:1px 5px;">${catLabels[p.bidding_category]||p.bidding_category}</span>`;
+                if (p.bid_method) statusBadge += ` <span style="font-size:.65rem;background:#fefce8;color:#854d0e;border-radius:4px;padding:1px 5px;">${methLabels[p.bid_method]||p.bid_method}</span>`;
 
                 let buttonsHtml = '';
                 if (!isQuitted) {
@@ -5031,6 +5240,8 @@
         let description = '';
         let archiveFilename = '';
         let industry = 'general';
+        let biddingCategory = '';
+        let bidMethod = '';
         try {
             const res = await fetch(`/admin/projects`, { credentials: 'include' });
             if (!res.ok) throw new Error('Failed to fetch projects');
@@ -5040,6 +5251,8 @@
                 description = project.description || '';
                 archiveFilename = project.archive_filename || '';
                 industry = project.industry || 'general';
+                biddingCategory = project.bidding_category || '';
+                bidMethod = project.bid_method || '';
                 if (!status) status = project.status || 'active';
             }
         } catch(e) { console.warn('Could not fetch description', e); }
@@ -5051,7 +5264,7 @@
         projectsListView.style.display = 'none';
         fileExplorerView.style.display = 'block';
         toggleQuickLinksButton(true);
-        await loadProjectInfo(projectId, projectName, status, description, archiveFilename, industry);
+        await loadProjectInfo(projectId, projectName, status, description, archiveFilename, industry, biddingCategory, bidMethod);
         await loadFolderTree(projectId);
 
         // ── Auto-load project chat into sidebar ──
@@ -5075,15 +5288,30 @@
             }
         } catch(e) { console.warn('Project chat load failed:', e); }
 
+        // Reset per-project audit history when switching projects
+        const auditDetails = document.getElementById('projectAuditHistoryDetails');
+        if (auditDetails) {
+            auditDetails.open = false;
+            auditDetails._auditLoaded = false;
+            const auditPanel = document.getElementById('projectAuditHistoryPanel');
+            if (auditPanel) auditPanel.innerHTML = '<span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>';
+            const auditCount = document.getElementById('projectAuditCount');
+            if (auditCount) auditCount.textContent = '';
+        }
+
         syncActiveTabWithView();
     }
 
-    async function loadProjectInfo(projectId, projectName, status, description, archiveFilename, industry) {
+    async function loadProjectInfo(projectId, projectName, status, description, archiveFilename, industry, biddingCategory, bidMethod) {
         const container = document.getElementById('fileExplorerContent');
         const statusLabel = status === 'active' ? '进行中' : (status === 'archived' ? '已归档' : '已中止');
         const statusClass = status === 'active' ? 'status-active' : (status === 'archived' ? 'status-archived' : 'status-aborted');
         const industryLabels = {bidding_agency:'🏗️ 招标代理', engineering_cost:'💰 工程造价', engineering_audit:'🔍 工程审计', general:'📋 通用'};
         const industryBadge = (industry && industry !== 'general') ? `<span style="font-size:.65rem;background:#eff6ff;color:#1e40af;border-radius:4px;padding:1px 5px;">${industryLabels[industry]||industry}</span>` : '';
+        const catLabels = {construction:'🏗️ 工程建设', goods:'📦 货物采购', services:'💼 服务采购'};
+        const methLabels = {open_bid:'公开招标', invited_bid:'邀请招标', competitive_negotiation:'竞争性谈判', inquiry:'询价', single_source:'单一来源', competitive_consultation:'竞争性磋商'};
+        const catBadge = biddingCategory ? `<span style="font-size:.65rem;background:#f0fff4;color:#166534;border-radius:4px;padding:1px 5px;">${catLabels[biddingCategory]||biddingCategory}</span>` : '';
+        const methBadge = bidMethod ? `<span style="font-size:.65rem;background:#fefce8;color:#854d0e;border-radius:4px;padding:1px 5px;">${methLabels[bidMethod]||bidMethod}</span>` : '';
 
         // Archive banner for non-active projects
         let archiveBanner = '';
@@ -5106,6 +5334,8 @@
                         <h4 id="projectNameDisplay" style="margin:0;">${escapeHtml(projectName)}</h4>
                         <span class="project-status-badge ${statusClass}">${statusLabel}</span>
                         ${industryBadge}
+                        ${catBadge}
+                        ${methBadge}
                         ${status === 'active' ? '<button id="editProjectBtn" class="file-btn" style="padding: 2px 8px; font-size:0.7rem;">✏️ 编辑项目</button>' : ''}
                     </div>
                     <div id="projectDescriptionDisplay" style="margin-top:8px;color:#666;font-size:0.85rem;cursor:text;" title="双击编辑项目描述">
@@ -5150,62 +5380,81 @@
             </details>` : ''}
             <div id="folderTreeContainer" style="margin-bottom: 20px;"></div>
             <div id="fileListContainer"></div>
+            <details id="projectAuditHistoryDetails" style="margin-top:16px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.82rem;cursor:pointer;color:var(--card-muted);">
+                    📋 审计历史 <span id="projectAuditCount" style="font-size:0.7rem;color:var(--card-muted);font-weight:normal;"></span>
+                </summary>
+                <div id="projectAuditHistoryPanel" style="font-size:0.72rem;margin-top:8px;">
+                    <span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>
+                </div>
+            </details>
         `;
 
         let currentDescription = description || '';
 
         // Wire "💬 项目对话" button — jumps to shared project chat
-        setTimeout(() => {
-            const chatBtn = document.getElementById('openProjectChatBtn');
-            if (chatBtn) {
-                chatBtn.onclick = async () => {
-                    try {
-                        const res = await fetch('/get_sessions', { credentials: 'include' });
-                        const data = await res.json();
-                        const projChat = (data.sessions || []).find(s => s.project_id == projectId && !s.is_grilling);
-                        if (projChat) {
-                            // Switch to chat tab and load the project chat
+        // innerHTML is synchronous so buttons exist immediately
+        const chatBtn = document.getElementById('openProjectChatBtn');
+        if (chatBtn) {
+            chatBtn.onclick = async () => {
+                try {
+                    const res = await fetch('/get_sessions', { credentials: 'include' });
+                    const data = await res.json();
+                    const projChat = (data.sessions || []).find(s => s.project_id == projectId && !s.is_grilling);
+                    if (projChat) {
+                        document.getElementById('chatTabBtn')?.click();
+                        await loadSession(projChat.thread_id);
+                    } else {
+                        const bfRes = await fetch(`/admin/projects/${projectId}/backfill_chat`, { method: 'POST', credentials: 'include' });
+                        if (bfRes.ok) {
+                            const bf = await bfRes.json();
                             document.getElementById('chatTabBtn')?.click();
-                            await loadSession(projChat.thread_id);
+                            await loadSession(bf.thread_id);
                         } else {
-                            // Backfill if missing
-                            const bfRes = await fetch(`/admin/projects/${projectId}/backfill_chat`, { method: 'POST', credentials: 'include' });
-                            if (bfRes.ok) {
-                                const bf = await bfRes.json();
-                                document.getElementById('chatTabBtn')?.click();
-                                await loadSession(bf.thread_id);
-                            } else {
-                                showToast('未找到项目对话，请刷新重试', 'error', 3000);
-                            }
+                            showToast('未找到项目对话，请刷新重试', 'error', 3000);
                         }
-                    } catch(e) {
-                        console.error('Project chat button error:', e);
-                        showToast('打开项目对话失败', 'error', 3000);
                     }
-                };
-            }
-            const grillBtn = document.getElementById('openProjectGrillBtn');
-            if (grillBtn) {
-                grillBtn.onclick = async () => {
-                    try {
-                        const res = await fetch(`/api/projects/${projectId}/get_or_create_grill_thread`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include'
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            document.getElementById('chatTabBtn')?.click();
-                            await loadSession(data.thread_id);
-                            await loadHistoryList();
-                        } else {
-                            showToast('创建项目质问模式失败', 'error', 3000);
-                        }
-                    } catch(e) {
-                        console.error('Project grill button error:', e);
+                } catch(e) {
+                    console.error('Project chat button error:', e);
+                    showToast('打开项目对话失败', 'error', 3000);
+                }
+            };
+        }
+        const grillBtn = document.getElementById('openProjectGrillBtn');
+        if (grillBtn) {
+            grillBtn.onclick = async () => {
+                try {
+                    const res = await fetch(`/api/projects/${projectId}/get_or_create_grill_thread`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        document.getElementById('chatTabBtn')?.click();
+                        await loadSession(data.thread_id);
+                        await loadHistoryList();
+                    } else {
                         showToast('创建项目质问模式失败', 'error', 3000);
                     }
-                };
+                } catch(e) {
+                    console.error('Project grill button error:', e);
+                    showToast('创建项目质问模式失败', 'error', 3000);
+                }
+            };
+        }
+
+        // Wire audit history lazy-load toggle (inside project view)
+        setTimeout(() => {
+            const auditDetails = document.getElementById('projectAuditHistoryDetails');
+            if (auditDetails && !auditDetails._auditListenerSet) {
+                auditDetails._auditListenerSet = true;
+                auditDetails.addEventListener('toggle', () => {
+                    if (auditDetails.open && !auditDetails._auditLoaded) {
+                        auditDetails._auditLoaded = true;
+                        loadProjectAuditHistory();
+                    }
+                });
             }
         }, 100);
 
@@ -5816,6 +6065,7 @@
                                     <th class="file-checkbox"><input type="checkbox" id="selectAllCheckbox"></th>
                                     <th>文件名</th>
                                     <th>大小</th>
+                                    <th>状态</th>
                                     <th>上传人</th>
                                     <th>上传时间</th>
                                     <th>操作</th>
@@ -5849,9 +6099,14 @@
                     `;
 
                     row.insertCell(2).innerHTML = `${f.file_size_kb} KB`;
-                    row.insertCell(3).innerHTML = escapeHtml(f.uploaded_by_name || f.uploaded_by);
-                    row.insertCell(4).innerHTML = f.uploaded_at_str;
-                    const actionsCell = row.insertCell(5);
+                    const statusCell = row.insertCell(3);
+                    const st = f.status || 'draft';
+                    const stColors = {final:'#38a169', draft:'#a0aec0'};
+                    const stLabels = {final:'定稿', draft:'草稿'};
+                    statusCell.innerHTML = `<span style="font-size:.6rem;background:${stColors[st]||'#a0aec0'};color:#fff;padding:1px 5px;border-radius:3px;cursor:pointer;" title="点击切换状态" onclick="event.stopPropagation();fetch('/admin/projects/${projectId}/files/${f.id}/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st==='final'?'draft':'final'}),credentials:'include'}).then(r=>r.json()).then(()=>loadFilesInFolder(projectId,folderId)).catch(()=>{})">${stLabels[st]||st}</span>`;
+                    row.insertCell(4).innerHTML = escapeHtml(f.uploaded_by_name || f.uploaded_by);
+                    row.insertCell(5).innerHTML = f.uploaded_at_str;
+                    const actionsCell = row.insertCell(6);
                     actionsCell.className = 'action-buttons';
                     let buttons = '';
                     if (f.can_download !== false) buttons += `<button class="download-file" data-id="${f.id}" style="background:#3498db; color:white; border:none; border-radius:4px; padding:4px 8px;">⬇️ 下载</button>`;
@@ -6053,11 +6308,13 @@
         }
     }
 
-    async function uploadFileToFolder(projectId, folderId, file) {
+    async function uploadFileToFolder(projectId, folderId, file, category, status) {
         showProgress(`上传中: ${file.name}`, 'bar');
         updateProgress(10, `正在处理 ${file.name}...`);
         const formData = new FormData();
         formData.append('file', file);
+        if (category) formData.append('category', category);
+        if (status) formData.append('status', status);
         updateProgress(30, '正在传输...');
         let res, data;
         try {
@@ -6219,7 +6476,7 @@
                 });
                 if (res.ok) {
                     const d = await res.json();
-                    existingText = d.data ? d.data.text : (d.text || '');
+                    existingText = d.text || '';
                 }
             } catch (err) {
                 existingText = '[加载失败]';
@@ -6631,7 +6888,11 @@
         const data = await res.json();
         const versions = data.versions || [];
         if (versions.length === 0) { alert('没有版本历史'); return; }
-        let html = `<h4>${escapeHtml(fileName)} - 版本历史</h4><ul>`;
+        let html = `<h4>${escapeHtml(fileName)} - 版本历史</h4>
+        <div style="margin-bottom:8px;">
+            <button onclick="event.stopPropagation();fetch('/admin/projects/${currentProjectId}/files/${fileId}/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'final'}),credentials:'include'}).then(r=>r.json()).then(()=> { location.reload(); }).catch(()=>{})" style="background:#38a169;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:.7rem;cursor:pointer;margin-right:4px;">设为定稿</button>
+            <button onclick="event.stopPropagation();fetch('/admin/projects/${currentProjectId}/files/${fileId}/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'draft'}),credentials:'include'}).then(r=>r.json()).then(()=> { location.reload(); }).catch(()=>{})" style="background:#a0aec0;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:.7rem;cursor:pointer;">设为草稿</button>
+        </div><ul>`;
         for (const v of versions) {
             html += `<li>版本 v${v.version} - ${(v.file_size / 1024).toFixed(1)} KB - 由 ${escapeHtml(v.uploaded_by_name || v.uploaded_by)}上传于 ${new Date(v.uploaded_at).toLocaleString()}
                       <button onclick="window.open('/admin/projects/${currentProjectId}/files/${fileId}/download?version=${v.version}', '_blank')">下载此版本</button></li>`;
@@ -6776,8 +7037,7 @@
                     const res = await fetch('/project_files/' + fileId + '/generate_skill', { method: 'POST', credentials: 'include' });
                     const data = await res.json();
                     if (res.ok) {
-                        showToast(data.message || '技能已生成并保存至个人知识库', 'success', 3000);
-                        btn.textContent = '✅ 已提取';
+                        showSkillFeedback(btn, data, 'project_file', parseInt(fileId));
                     } else {
                         const msg = data.error || '生成失败';
                         const hint = data.hint || '';
@@ -6894,6 +7154,25 @@
                 </div>
                 <div id="selectedManager" style="font-size:0.75rem;color:#6b7280;min-height:18px;margin-bottom:12px;"></div>
 
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">📋 招标类别（可选）</label>
+                <select id="projBiddingCat" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.85rem;box-sizing:border-box;margin-bottom:8px;">
+                    <option value="">-- 不指定 --</option>
+                    <option value="construction">🏗️ 工程建设</option>
+                    <option value="goods">📦 货物采购</option>
+                    <option value="services">💼 服务采购</option>
+                </select>
+
+                <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">🔧 采购方式（可选）</label>
+                <select id="projBidMethod" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.85rem;box-sizing:border-box;margin-bottom:12px;">
+                    <option value="">-- 不指定 --</option>
+                    <option value="open_bid">公开招标</option>
+                    <option value="invited_bid">邀请招标</option>
+                    <option value="competitive_negotiation">竞争性谈判</option>
+                    <option value="inquiry">询价</option>
+                    <option value="single_source">单一来源</option>
+                    <option value="competitive_consultation">竞争性磋商</option>
+                </select>
+
                 <label style="font-weight:600;font-size:0.82rem;display:block;margin-bottom:4px;">📝 项目名称</label>
                 <input type="text" id="projNameInput" placeholder="输入项目名称..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #d1d5db;font-size:0.85rem;box-sizing:border-box;margin-bottom:12px;">
 
@@ -6904,7 +7183,7 @@
             </div>`;
         };
 
-        let state = { industry: 'general', managerId: '', managerName: '' };
+        let state = { industry: 'general', managerId: '', managerName: '', bidding_category: '', bid_method: '' };
         overlay.innerHTML = buildContent('general');
         document.body.appendChild(overlay);
 
@@ -6916,6 +7195,12 @@
                 btn.onmouseenter = (e) => { if (btn.dataset.code !== state.industry) e.target.style.background = '#f9fafb'; };
                 btn.onmouseleave = (e) => { if (btn.dataset.code !== state.industry) e.target.style.background = 'white'; };
             });
+
+            // Bidding category/method select preservation
+            const catSel = overlay.querySelector('#projBiddingCat');
+            const methSel = overlay.querySelector('#projBidMethod');
+            if (catSel) { catSel.value = state.bidding_category; catSel.onchange = () => { state.bidding_category = catSel.value; }; }
+            if (methSel) { methSel.value = state.bid_method; methSel.onchange = () => { state.bid_method = methSel.value; }; }
 
             // Searchable user dropdown
             const searchInput = overlay.querySelector('#managerSearch');
@@ -6967,6 +7252,8 @@
                 const name = (overlay.querySelector('#projNameInput')?.value || '').trim();
                 if (!name) { alert('请输入项目名称'); return; }
                 if (!state.managerId) { alert('请选择项目负责人'); return; }
+                const biddingCat = overlay.querySelector('#projBiddingCat')?.value || '';
+                const biddingMeth = overlay.querySelector('#projBidMethod')?.value || '';
                 overlay.querySelector('#projCreateConfirm').disabled = true;
                 overlay.querySelector('#projCreateConfirm').textContent = '⏳ 创建中...';
 
@@ -6974,7 +7261,7 @@
                     const res = await fetch('/admin/projects', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ name, industry: state.industry, manager_id: state.managerId })
+                        body: JSON.stringify({ name, industry: state.industry, manager_id: state.managerId, bidding_category: biddingCat, bid_method: biddingMeth })
                     });
                     if (res.ok) {
                         const result = await res.json();
@@ -7150,9 +7437,7 @@
                         const res = await fetch(`/knowledge_lab/generate_skill/${fileId}`, { method: 'POST', credentials: 'include' });
                         const data = await res.json();
                         if (res.ok) {
-                            showToast(data.message || '技能已生成', 'success', 2000);
-                            loadKnowledgeLabFiles();
-                            loadSidebarKnowledge();
+                            showSkillFeedback(btn, data, 'knowledge_lab', parseInt(fileId));
                         } else {
                             const msg = data.error || '生成失败';
                             const hint = data.hint || '';
@@ -7191,6 +7476,19 @@
         } else {
             btn.innerHTML = '📚 知识库';
         }
+    }
+    // Personal KB category handling
+    const labCatSelect = document.getElementById('labCategorySelect');
+    const labCustomCat = document.getElementById('labCustomCategory');
+    if (labCatSelect) {
+        labCatSelect.addEventListener('change', () => {
+            if (labCatSelect.value === '自定义') {
+                labCustomCat.style.display = 'inline-block';
+            } else {
+                labCustomCat.style.display = 'none';
+                labCustomCat.value = '';
+            }
+        });
     }
     document.getElementById('uploadLabFileBtn').onclick = () => document.getElementById('labFileInput').click();
     document.getElementById('labFileInput').addEventListener('change', async (e) => {
@@ -7244,7 +7542,7 @@
                     try {
                         const res = await fetch('/knowledge_lab/generate_skill/' + genLink.dataset.fileid, { method: 'POST', credentials: 'include' });
                         const data = await res.json();
-                        if (res.ok) { genLink.outerHTML = '<span style="font-size:.65rem;color:#22c55e;margin:0 4px;" title="技能已生成">🧠</span>'; showToast('技能已生成，可在侧边栏下载', 'success'); }
+                        if (res.ok) { showSkillFeedback(genLink, data, 'knowledge_lab', parseInt(genLink.dataset.fileid)); }
                         else { genLink.textContent = '重试'; genLink.style.cursor = 'pointer'; genLink.style.color = '#ef4444'; showToast(data.error || '提取失败', 'error'); }
                     } catch(e) { genLink.textContent = '重试'; genLink.style.cursor = 'pointer'; genLink.style.color = '#ef4444'; }
                 };
@@ -7281,6 +7579,9 @@
             const { file, placeholder } = item;
             const formData = new FormData();
             formData.append('file', file);
+            let labCat = labCatSelect ? labCatSelect.value : '';
+            if (labCat === '自定义') labCat = labCustomCat ? labCustomCat.value.trim() : '';
+            if (labCat) formData.append('category', labCat);
             try {
                 updateProgress((uploaded / files.length) * 90, `上传中: ${file.name} (${uploaded+1}/${files.length})`);
                 const res = await fetch('/knowledge_lab/upload', { method: 'POST', credentials: 'include', body: formData });
@@ -7446,6 +7747,10 @@
                         ? `<a href="/company_kb/skill/${f.id}" target="_blank" style="background:#16a34a; color:white; text-decoration:none; border-radius:4px; padding:2px 8px; font-size:0.7rem; display:inline-block;">📥 下载技能</a>`
                         : (isAdmin ? `<button class="generate-company-skill" data-id="${f.id}" style="background:#bccfde; color:#1e293b; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">🧠 提取技能</button>` : '')
                     }
+                    ${hasSkill && f.category === '模板'
+                        ? `<button class="generate-template-doc" data-id="${f.id}" data-source="company_knowledge_base" style="background:#f59e0b; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">📝 生成文档</button>`
+                        : ''
+                    }
                 </div>
             </li>`;
         }
@@ -7507,9 +7812,25 @@
                     try {
                         const res = await fetch(`/company_kb/generate_skill/${fileId}`, { method: 'POST', credentials: 'include' });
                         const d = await res.json();
-                        if (res.ok) { showToast(d.message||'技能已生成', 'success', 2000); loadCompanyKnowledgeBase(); loadSidebarKnowledge(); }
+                        if (res.ok) { showSkillFeedback(btn, d, 'company_kb', parseInt(fileId)); }
                         else { alert((d.error||'生成失败')+((d.hint||'')?'\n'+d.hint:'')); btn.disabled = false; btn.textContent = '🧠 提取技能'; }
                     } catch(_) { alert('网络错误'); btn.disabled = false; btn.textContent = '🧠 提取技能'; }
+                };
+            });
+            document.querySelectorAll('.generate-template-doc').forEach(btn => {
+                btn.onclick = async (e) => {
+                    e.stopPropagation(); const fileId = btn.dataset.id; const source = btn.dataset.source || 'company_knowledge_base';
+                    btn.disabled = true; const origText = btn.textContent; btn.textContent = '⏳ 生成中...';
+                    try {
+                        const formData = new FormData(); formData.append('source', source);
+                        const res = await fetch(`/templates/${fileId}/generate_doc`, { method: 'POST', credentials: 'include', body: formData });
+                        if (res.ok) {
+                            const blob = await res.blob(); const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a'); a.href = url; a.download = '文档.docx'; a.click();
+                            URL.revokeObjectURL(url); showToast('✅ 文档已生成', 'success', 2000);
+                        } else { const d = await res.json().catch(()=>({})); alert(d.error || '生成失败'); }
+                    } catch(_) { alert('网络错误'); }
+                    btn.disabled = false; btn.textContent = origText;
                 };
             });
         }
@@ -7650,6 +7971,9 @@
                     const data = await res.json();
                     if (res.ok) {
                         showToast(`✅ ${data.filename} 上传成功 (分类: ${category})`, 'success', 2000);
+                        if (data.overlap_suggestions && data.overlap_suggestions.length) {
+                            setTimeout(() => showOverlapSuggestions(data.overlap_suggestions, data.file_id, 'company_knowledge_base'), 500);
+                        }
                     } else {
                         showToast('上传失败，请重试', 'error', 3000);
                     }
@@ -7673,6 +7997,71 @@
     });
     if (sessionStorage.getItem('isAdmin') === 'true') {
         document.getElementById('adminCompanyTools').style.display = 'block';
+    }
+
+    // ── Category filter pills for chat RAG ──
+    window._selectedRagCategory = '';
+    const catFilterBar = document.getElementById('categoryFilterBar');
+    const catPills = document.querySelectorAll('.cat-pill');
+    const catClearBtn = document.getElementById('catFilterClear');
+
+    function showCatFilterIfNeeded() {
+        const el = document.getElementById('categoryFilterBar');
+        if (!el) return;
+        if (selectedKnowledgeFiles.length > 0) {
+            el.style.display = 'flex';
+        } else {
+            el.style.display = 'none';
+            window._selectedRagCategory = '';
+        }
+    }
+
+    if (catPills.length) {
+        catPills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                catPills.forEach(p => {
+                    p.style.background = '';
+                    p.style.color = '';
+                });
+                pill.style.background = 'var(--accent)';
+                pill.style.color = 'white';
+                window._selectedRagCategory = pill.dataset.cat || '';
+                if (catClearBtn) catClearBtn.style.display = window._selectedRagCategory ? 'inline' : 'none';
+            });
+        });
+    }
+    if (catClearBtn) {
+        catClearBtn.addEventListener('click', () => {
+            catPills.forEach(p => { p.style.background = ''; p.style.color = ''; });
+            const allPill = document.querySelector('.cat-pill[data-cat=""]');
+            if (allPill) { allPill.style.background = 'var(--accent)'; allPill.style.color = 'white'; }
+            window._selectedRagCategory = '';
+            catClearBtn.style.display = 'none';
+        });
+    }
+    // ── Skill overlap suggestions after upload ──
+    function showOverlapSuggestions(overlaps, newFileId, sourceTable) {
+        if (!overlaps || !overlaps.length) return;
+        const msg = overlaps.map(o =>
+            `📄 ${escapeHtml(o.name)} (相似度 ${o.similarity}%)`
+        ).join('\n');
+        if (!confirm(`检测到新上传的文件与以下 ${overlaps.length} 个同分类技能高度相似，是否合并？\n\n${msg}\n\n选择「确定」合并，「取消」忽略`)) return;
+        // Merge the top overlap into the new file
+        const top = overlaps[0];
+        fetch('/admin/skill_supersession/respond', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'merge',
+                keep_id: newFileId,
+                merge_id: top.id,
+                source: sourceTable || 'company_knowledge_base'
+            })
+        }).then(r => r.json()).then(data => {
+            if (data.success) showToast(`✅ 已与「${top.name}」合并`, 'success', 3000);
+            else showToast('❌ 合并失败: ' + (data.error || ''), 'error', 5000);
+        }).catch(() => showToast('❌ 合并请求失败', 'error', 3000));
     }
 
     // ======================== Editable Quick Links ========================
@@ -7710,16 +8099,8 @@
                         <button id="addLinkBtn">添加链接</button>
                     </div>
                 </div>
-                <!-- Right column: Credit check -->
+                <!-- Right column: Batch compare history -->
                 <div>
-                    <h4>🔍 批量征信查询</h4>
-                    <textarea id="companyNames" rows="5" placeholder="每行一个公司名称"></textarea>
-                    <button id="startCreditCheckBtn" class="file-btn" style="background:#27ae60; color:white;">开始查询</button>
-                    <span id="creditProgress"></span>
-                    <hr>
-                    <h4>📋 历史报告</h4>
-                    <div id="creditHistoryList" style="max-height:200px; overflow-y:auto;"></div>
-                    <hr>
                     <h4>📦 批量对比历史</h4>
                     <div id="batchHistoryList" style="max-height:200px; overflow-y:auto;"></div>
                 </div>
@@ -7795,167 +8176,6 @@
         // Initial render of links
         refreshCustomLinksDisplay();
 
-        // ----- Credit check logic -----
-        let creditTaskId = null;
-
-        modal.querySelector('#startCreditCheckBtn').onclick = async () => {
-            const companyText = modal.querySelector('#companyNames').value.trim();
-            const companies = companyText.split('\n').filter(c => c.trim());
-            if (!companies.length) {
-                alert('请输入至少一个公司名称');
-                return;
-            }
-            const allLinks = [
-                ...fixedLinks.map(l => l.url),
-                ...customLinks.map(l => l.url)
-            ];
-            if (!allLinks.length) {
-                alert('没有可用链接');
-                return;
-            }
-            const res = await fetch('/start_credit_check', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ companies, urls: allLinks })
-            });
-            const data = await res.json();
-            if (data.task_id) {
-                creditTaskId = data.task_id;
-                pollCreditCheck(creditTaskId, modal);
-            }
-        };
-
-        async function pollCreditCheck(taskId, modal) {
-            const res = await fetch(`/credit_check_status/${taskId}`);
-            const status = await res.json();
-            const progressSpan = modal.querySelector('#creditProgress');
-            if (progressSpan) progressSpan.textContent = `${status.progress}/${status.total} 完成`;
-
-            // Handle CAPTCHA — dynamically create UI
-            let captchaBlock = modal.querySelector('#captchaBlock');
-            if (status.captcha_needed) {
-                if (!captchaBlock) {
-                    captchaBlock = document.createElement('div');
-                    captchaBlock.id = 'captchaBlock';
-                    captchaBlock.style.cssText = 'margin-top:10px;padding:10px;background:#fef9e7;border:1px solid #f9e79f;border-radius:8px;';
-                    captchaBlock.innerHTML = '<p style="font-size:.8rem;margin-bottom:6px;">🤖 检测到验证码，请输入后提交</p>' +
-                        '<img id="captchaImg" style="max-width:100%;border:1px solid #ccc;border-radius:4px;margin-bottom:6px;" src="">' +
-                        '<div style="display:flex;gap:6px;align-items:center;">' +
-                        '<input id="captchaInput" placeholder="输入验证码" style="flex:1;padding:6px;border-radius:4px;border:1px solid #ccc;">' +
-                        '<button id="submitCaptchaBtn" style="background:#27ae60;color:white;border:none;border-radius:4px;padding:6px 12px;white-space:nowrap;">提交</button>' +
-                        '<button id="reloadCaptchaBtn" style="background:#3498db;color:white;border:none;border-radius:4px;padding:6px 12px;white-space:nowrap;">🔄 刷新</button>' +
-                        '</div>';
-                    progressSpan.parentNode.insertBefore(captchaBlock, progressSpan.nextSibling);
-                    // Wire captcha buttons now
-                    modal.querySelector('#submitCaptchaBtn').onclick = async () => {
-                        const solution = modal.querySelector('#captchaInput').value;
-                        await fetch(`/solve_captcha/${taskId}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ solution })
-                        });
-                        modal.querySelector('#captchaInput').value = '';
-                    };
-                    modal.querySelector('#reloadCaptchaBtn').onclick = async () => {
-                        await fetch(`/reload_captcha/${taskId}`, { method: 'POST' });
-                        setTimeout(() => {
-                            const img = modal.querySelector('#captchaImg');
-                            if (img) img.src = `/get_captcha_image/${taskId}?t=${Date.now()}`;
-                        }, 500);
-                    };
-                }
-                const img = modal.querySelector('#captchaImg');
-                if (img && !img.src.includes('/get_captcha_image/')) {
-                    img.src = `/get_captcha_image/${taskId}?t=${Date.now()}`;
-                }
-            } else if (captchaBlock) {
-                captchaBlock.remove();
-            }
-
-            // Show/hide "继续" button based on waiting flag
-            let continueBtn = modal.querySelector('#continueBtn');
-            if (status.waiting && !continueBtn) {
-                continueBtn = document.createElement('button');
-                continueBtn.id = 'continueBtn';
-                continueBtn.textContent = '✅ 确认搜索结果，继续下一步';
-                continueBtn.style.background = '#27ae60';
-                continueBtn.style.color = 'white';
-                continueBtn.style.border = 'none';
-                continueBtn.style.borderRadius = '8px';
-                continueBtn.style.padding = '8px 16px';
-                continueBtn.style.marginTop = '10px';
-                continueBtn.style.cursor = 'pointer';
-                continueBtn.onclick = async () => {
-                    await fetch(`/credit_check_resume/${taskId}`, { method: 'POST' });
-                    continueBtn.disabled = true;
-                    continueBtn.textContent = '⏳ 已继续，等待下一步...';
-                };
-                modal.querySelector('#creditProgress').parentNode.appendChild(continueBtn);
-            } else if (!status.waiting && continueBtn) {
-                continueBtn.remove();
-            }
-
-            if (status.status === 'completed') {
-                if (continueBtn) continueBtn.remove();
-                window.open(status.download_url, '_blank');
-                progressSpan.textContent = '完成！文档已下载';
-                loadHistory();
-                return;
-            } else if (status.status === 'error') {
-                if (continueBtn) continueBtn.remove();
-                progressSpan.textContent = '出错: ' + status.error;
-                return;
-            }
-            setTimeout(() => pollCreditCheck(taskId, modal), 2000);
-        }
-
-        // Load credit report history (shared: all users see all reports)
-        async function loadHistory() {
-            const listDiv = modal.querySelector('#creditHistoryList');
-            try {
-                const res = await fetch('/list_credit_reports', { credentials: 'include' });
-                const data = await res.json();
-                const reports = data.reports || [];
-                if (reports.length === 0) {
-                    listDiv.innerHTML = '<p style="color:#999;">暂无历史报告</p>';
-                    return;
-                }
-                let html = '<ul style="list-style:none; padding:0;">';
-                for (const r of reports) {
-                    html += `
-                        <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee; flex-wrap:wrap; gap:4px;">
-                            <div>
-                                <span>📄 报告 (${r.companies_count}家公司)</span>
-                                <small style="color:var(--card-muted);"> · ${escapeHtml(r.created_by_name || '?')} · ${new Date(r.created_at).toLocaleString()}</small>
-                            </div>
-                            <div>
-                                <a href="/download_credit_report/${r.task_id}" class="file-btn" style="padding:2px 8px; text-decoration:none;" download>⬇️ 下载</a>
-                                ${sessionStorage.getItem('isAdmin') === 'true' ? `<button class="delete-report-btn" data-id="${r.id}" style="background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 8px; margin-left:4px;">🗑️ 删除</button>` : ''}
-                            </div>
-                        </li>`;
-                }
-                html += '</ul>';
-                listDiv.innerHTML = html;
-
-                listDiv.querySelectorAll('.delete-report-btn').forEach(btn => {
-                    btn.onclick = async () => {
-                        if (!await confirm('确定要永久删除此报告吗？')) return;
-                        const reportId = btn.dataset.id;
-                        const delRes = await fetch(`/delete_credit_report/${reportId}`, { method: 'POST', credentials: 'include' });
-                        if (delRes.ok) {
-                            showToast('报告已删除', 'success', 2000);
-                            loadHistory();
-                        } else {
-                            alert('删除失败');
-                        }
-                    };
-                });
-            } catch (err) {
-                listDiv.innerHTML = '<p style="color:red;">加载失败</p>';
-            }
-        }
-        loadHistory();
         loadBatchHistory();
 
         async function loadBatchHistory() {
@@ -8120,7 +8340,7 @@
                 updateProjectTabVisibility();
                 setTimeout(() => {
                     const activeTab = restoreActiveTab();
-                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', audit:'skillAuditTabBtn' };
+                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
                     const targetBtn = document.getElementById(tabMap[activeTab] || 'chatTabBtn');
                     _programmaticTabSwitch = true;
                     if (targetBtn) targetBtn.click();
@@ -8787,6 +9007,8 @@
                 sessionStorage.setItem('username', data.username || '');
                 if (data.is_admin) sessionStorage.setItem('isAdmin', 'true');
                 else sessionStorage.removeItem('isAdmin');
+                const adminExtras = document.getElementById('sidebarAdminExtras');
+                if (adminExtras) adminExtras.style.display = data.is_admin ? '' : 'none';
                 sessionStorage.setItem('is_auditor', (data.is_auditor || data.is_admin) ? '1' : '0');
                 if (data.role) sessionStorage.setItem('role', data.role);
                 sessionStorage.setItem('user_id', data.user_id || '');
@@ -8816,13 +9038,6 @@
             }
 
 
-            // Skill audit tab for admins and auditors
-            const skillAuditTab = document.getElementById('skillAuditTabBtn');
-            if (skillAuditTab) {
-                if (data.is_admin || data.is_auditor) {
-                    skillAuditTab.style.display = 'inline-block';
-                }
-            }
             // Review tab for admins and auditors
             const reviewTab = document.getElementById('reviewTabBtn');
             if (reviewTab) {
@@ -8838,7 +9053,7 @@
                     const wm = document.createElement('div');
                     wm.id = 'anonWatermark';
                     wm.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);font-size:.72rem;color:var(--card-muted);opacity:.4;pointer-events:none;z-index:0;text-align:center;line-height:1.6;max-width:85%;';
-                    wm.textContent = '注册即可解锁：知识库 · 项目管理 · 文件站下载 · 聊天搜索 · 征信查询 · 批量对比 · 工作报告';
+                    wm.textContent = '注册即可解锁：知识库 · 项目管理 · 文件站下载 · 聊天搜索 · 批量对比 · 工作报告';
                     chatEl.style.position = 'relative';
                     chatEl.appendChild(wm);
                 }
@@ -9134,7 +9349,7 @@
     }
 
     // ======================== Conversation Pinning ========================
-    let pinnedSessions = new Set();
+    pinnedSessions = new Set();
     try { pinnedSessions = new Set(JSON.parse(localStorage.getItem('pinnedSessions') || '[]')); } catch(e) {}
 
     function persistPins() { localStorage.setItem('pinnedSessions', JSON.stringify([...pinnedSessions])); }
@@ -9145,6 +9360,7 @@
     }
 
     function sortPinnedFirst(items) {
+        if (!pinnedSessions) return items;
         return [...items].sort((a, b) => {
             const aPin = pinnedSessions.has(a.thread_id) ? 0 : 1;
             const bPin = pinnedSessions.has(b.thread_id) ? 0 : 1;
@@ -9284,18 +9500,563 @@
         if (indicator) indicator.textContent = '';
     }
 
+    // ======================== Wiki Tab ========================
+    if (wikiTab && wikiPanel) {
+        (function() {
+            var wc = document.getElementById('wikiContent');
+            if (!wc) return;
+            wc.addEventListener('click', function(e) {
+                var editBtn = e.target.closest('.wiki-edit-btn');
+                if (editBtn && editBtn.dataset.editPath) {
+                    var container = editBtn.closest('#wikiContent > div') || editBtn.parentElement.parentElement;
+                    if (!container) container = wc;
+                    _startWikiEdit(container, null, editBtn.dataset.editPath);
+                    return;
+                }
+                var delBtn = e.target.closest('.wiki-delete-btn');
+                if (delBtn && delBtn.dataset.deletePath) {
+                    if (!confirm('确定删除此页面？')) return;
+                    fetch('/wiki/page/' + encodeURIComponent(delBtn.dataset.deletePath), { method: 'DELETE', credentials: 'include' })
+                        .then(function(r) { return r.json(); }).then(function(r) { showToast(r.message, 'success'); var wt2 = document.getElementById('wikiTabBtn'); if (wt2) wt2.click(); }).catch(function() { showToast('删除失败', 'error'); });
+                }
+            });
+        })();
+        var _currentWikiPrefix = '';
+
+        async function _loadWiki(prefix) {
+            _currentWikiPrefix = prefix || '';
+            var idxUrl = '/wiki/index';
+            if (_currentWikiPrefix) idxUrl += '?prefix=' + encodeURIComponent(_currentWikiPrefix);
+            var content = document.getElementById('wikiContent');
+            try {
+                var indexRes = await fetch(idxUrl, { credentials: 'include' });
+                var statsRes = await fetch('/wiki/stats', { credentials: 'include' });
+                var indexData = await indexRes.json();
+                var statsData = await statsRes.json();
+                var badge = document.getElementById('wikiStatsBadge');
+                if (badge && statsData.success) {
+                    var s = statsData.stats || {};
+                    badge.textContent = (s.total_pages||0) + '页 · ' + (s.total_sources||0) + '来源';
+                }
+                loadSidebarWiki(indexData, statsData);
+                var html = '';
+                var tree = indexData && indexData.tree;
+                var recent = indexData && indexData.recent;
+                if (tree && tree.children && tree.children.length) {
+                    var sections = [];
+                    function _findLeafSections(nodes) {
+                        if (!nodes) return;
+                        nodes.forEach(function(n) {
+                            if (n.type === 'dir') {
+                                var hasDirectFiles = false;
+                                if (n.children) {
+                                    n.children.forEach(function(c) { if (c.type === 'file') hasDirectFiles = true; });
+                                    if (hasDirectFiles) sections.push(n);
+                                    else _findLeafSections(n.children);
+                                }
+                            }
+                        });
+                    }
+                    _findLeafSections(tree.children);
+                    sections.forEach(function(node) {
+                        var count = 0;
+                        function _cnt(n) { if (n.type === 'file') count++; if (n.children) n.children.forEach(_cnt); }
+                        _cnt(node);
+                        var sampleFiles = [];
+                        function _collect(n) { if (n.type === 'file' && sampleFiles.length < 5) sampleFiles.push(n); if (n.children && sampleFiles.length < 5) n.children.forEach(_collect); }
+                        _collect(node);
+                        var icon = '📁';
+                        var pp = (node.path||'').toLowerCase();
+                        if (pp.startsWith('legal')) icon = '📜';
+                        else if (pp.startsWith('projects')) icon = '📊';
+                        else if (pp.startsWith('sources')) icon = '📄';
+                        else if (pp.startsWith('entities')) icon = '🏢';
+                        else if (pp.startsWith('concepts')) icon = '📖';
+                        html += '<div style="margin-bottom:10px;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;">';
+                        html += '<div style="background:var(--card-bg);padding:8px 12px;font-size:0.8rem;font-weight:600;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:center;">';
+                        html += '<span>' + icon + ' ' + escapeHtml(node.name) + ' <span style="font-weight:400;font-size:0.72rem;color:var(--card-muted);">(' + count + '页)</span></span>';
+                        html += '<span class="wiki-page-link" data-path="' + escapeHtml((node.path||'') + '/index') + '" style="font-size:0.7rem;color:var(--accent-color);cursor:pointer;">更多 →</span>';
+                        html += '</div><div style="padding:4px 8px;">';
+                        sampleFiles.forEach(function(f) {
+                            var name = f.name.replace(/\.md$/i, '');
+                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(f.path) + '" style="padding:5px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;">📄 ' + escapeHtml(name) + '</div>';
+                        });
+                        if (count > 5) html += '<div class="wiki-page-link" data-path="' + escapeHtml((node.path||'') + '/index') + '" style="padding:3px 8px;font-size:0.72rem;cursor:pointer;border-radius:3px;border:1px solid transparent;color:var(--card-muted);">全部 ' + count + ' 个页面 →</div>';
+                        html += '</div></div>';
+                    });
+                    tree.children.forEach(function(node) {
+                        if (node.type === 'file') {
+                            var name = node.name.replace(/\.md$/i, '');
+                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(node.path) + '" style="padding:5px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;margin-bottom:4px;">📝 ' + escapeHtml(name) + '</div>';
+                        }
+                    });
+                    if (recent && recent.length) {
+                        html += '<div style="margin-top:16px;border-top:1px solid var(--card-border);padding-top:10px;">';
+                        html += '<div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;">🕐 最近更新</div>';
+                        recent.forEach(function(r) {
+                            var name = (r.title||'').replace(/\.md$/i, '');
+                            var mtimeStr = '';
+                            try {
+                                var d = new Date(r.mtime * 1000);
+                                mtimeStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+                            } catch(e) { mtimeStr = ''; }
+                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(r.path) + '" style="padding:4px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;display:flex;justify-content:space-between;">';
+                            html += '<span>📄 ' + escapeHtml(name) + '</span>';
+                            html += '<span style="color:var(--card-muted);font-size:0.68rem;">' + mtimeStr + '</span></div>';
+                        });
+                        html += '</div>';
+                    }
+                } else {
+                    html += '<p style="color:var(--card-muted);">Wiki暂无内容。上传知识库文件后，系统将自动生成Wiki页面。</p>';
+                }
+                content.innerHTML = html;
+                content.querySelectorAll('.wiki-page-link').forEach(function(el) {
+                    el.onmouseenter = function() { el.style.borderColor = 'var(--card-border)'; };
+                    el.onmouseleave = function() { el.style.borderColor = 'transparent'; };
+                    el.onclick = async function() {
+                        try {
+                            var path = el.dataset.path.replace(/\.md$/i, '');
+                            var pageRes = await fetch('/wiki/page/' + encodeURIComponent(path), { credentials: 'include' });
+                            var pageData = await pageRes.json();
+                            if (pageData.success) {
+                                var d = pageData;
+                                var detailHtml = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+                                detailHtml += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
+                                if (sessionStorage.getItem('isAdmin') === 'true') {
+                                    detailHtml += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(path) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
+                                    detailHtml += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(path) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
+                                }
+                                detailHtml += '</div>';
+                                detailHtml += '<div id="wikiPageContent" style="background:var(--card-bg);border-radius:8px;padding:16px;">';
+                                if (d.frontmatter?.tags) {
+                                    detailHtml += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(function(t) { return '<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#' + escapeHtml(t) + '</span>'; }).join('') + '</div>';
+                                }
+                                detailHtml += d.html;
+                                detailHtml += '</div>';
+                                content.innerHTML = detailHtml;
+                                content.querySelector('.wiki-back-btn').onclick = function() { var wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
+                            } else {
+                                console.warn('Wiki page load fail:', path, pageData);
+                            }
+                        } catch(e) {
+                            console.error('Wiki page click error:', e);
+                        }
+                    };
+                });
+            } catch(e) {
+                console.error('Wiki load failed:', e);
+                content.innerHTML = '<p style="color:#ef4444;font-size:.78rem;">加载Wiki失败</p>';
+            }
+        }
+
+        templatesTab.onclick = async () => {
+            saveActiveTab('templates');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            templatesTab.classList.add('active');
+            switchToPanel('templatesPanel');
+            switchSidebarPane('chat');
+        };
+
+        wikiTab.onclick = async () => {
+            saveActiveTab('wiki');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            wikiTab.classList.add('active');
+            switchToPanel('wikiPanel');
+            switchSidebarPane('wiki');
+            const content = document.getElementById('wikiContent');
+            content.innerHTML = '<p style="color:var(--card-muted);">加载Wiki...</p>';
+            const legalImportBtn = document.getElementById('wikiImportLegalBtn');
+            const legalFileInput = document.getElementById('wikiLegalFileInput');
+            if (sessionStorage.getItem('isAdmin') === 'true') {
+                if (legalImportBtn) legalImportBtn.style.display = '';
+                if (legalImportBtn) legalImportBtn.onclick = () => { legalFileInput.click(); };
+                if (legalFileInput) legalFileInput.onchange = async () => {
+                    if (!legalFileInput.files.length) return;
+                    const fileCount = legalFileInput.files.length;
+                    const wikiContentEl = document.getElementById('wikiContent');
+                    wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">⏳ 正在导入 ' + fileCount + ' 个文件，请稍候...</p>';
+                    const formData = new FormData();
+                    for (const f of legalFileInput.files) formData.append('files', f);
+                    try {
+                        const res = await fetch('/wiki/legal/import', { method: 'POST', credentials: 'include', body: formData });
+                        const d = await res.json();
+                        showToast(d.message, d.success ? 'success' : 'error', 4000);
+                        legalFileInput.value = '';
+                        wikiTab.click();
+                    } catch(e) { showToast('导入失败', 'error'); wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">导入失败，请重试。</p>'; }
+                };
+            } else {
+                if (legalImportBtn) legalImportBtn.style.display = 'none';
+            }
+            _loadWiki('');
+        };
+        // Search handler
+        const searchInput = document.getElementById('wikiSearchInput');
+        const refreshBtn = document.getElementById('wikiRefreshBtn');
+        if (searchInput) {
+            let searchTimer;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(async () => {
+                    const q = searchInput.value.trim();
+                    if (!q) { wikiTab.click(); return; }
+                    const res = await fetch('/wiki/search?q=' + encodeURIComponent(q), { credentials: 'include' });
+                    const data = await res.json();
+                    const content = document.getElementById('wikiContent');
+                    if (data.success && data.data?.results?.length) {
+                        let html = '<div style="margin-bottom:8px;font-size:.72rem;color:var(--card-muted);">搜索 ' + escapeHtml(q) + ' 共 ' + data.data.results.length + ' 条结果</div>';
+                        data.data.results.forEach(r => {
+                            html += `<div style="padding:6px 10px;background:var(--card-bg);border-radius:4px;margin-bottom:3px;font-size:.78rem;"><strong>${escapeHtml(r.filename||r.path)}</strong><br><small style="color:var(--card-muted);">${escapeHtml(r.snippet||'')}</small></div>`;
+                        });
+                        content.innerHTML = html;
+                    } else {
+                        content.innerHTML = '<p style="color:var(--card-muted);font-size:.78rem;">无匹配结果</p>';
+                    }
+                }, 300);
+            });
+        }
+        if (refreshBtn) refreshBtn.onclick = () => wikiTab.click();
+    }
+
+    function _startWikiEdit(container, pageData, path) {
+        fetch('/wiki/page/' + encodeURIComponent(path) + '/raw', { credentials: 'include' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { showToast('无法加载编辑内容', 'error'); return; }
+                const raw = data.data.content || '';
+                const html = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+                    '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回</button>' +
+                    '<button id="wikiEditSaveBtn" style="background:#38a169;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">💾 保存</button>' +
+                    '<button id="wikiEditCancelBtn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">❌ 取消</button>' +
+                    '</div>' +
+                    '<textarea id="wikiEditArea" style="width:100%;min-height:60vh;font-size:.78rem;padding:12px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text-color);font-family:monospace;resize:vertical;">' +
+                    escapeHtml(raw) + '</textarea>';
+                container.innerHTML = html;
+                container.querySelector('.wiki-back-btn').onclick = () => { wikiTab.click(); };
+                container.querySelector('#wikiEditCancelBtn').onclick = () => { wikiTab.click(); };
+                container.querySelector('#wikiEditSaveBtn').onclick = async () => {
+                    const newContent = container.querySelector('#wikiEditArea').value;
+                    try {
+                        const res = await fetch('/wiki/page/' + encodeURIComponent(path), {
+                            method: 'PUT', headers: {'Content-Type': 'application/json'},
+                            credentials: 'include',
+                            body: JSON.stringify({content: newContent})
+                        });
+                        const d = await res.json();
+                        showToast(d.message, d.success ? 'success' : 'error');
+                        if (d.success) wikiTab.click();
+                    } catch(e) { showToast('保存失败', 'error'); }
+                };
+            }).catch(() => showToast('加载失败', 'error'));
+    }
+
+    // ── Wiki sidebar: page tree navigation ──
+    function loadSidebarWiki(indexData, statsData) {
+        const statsEl = document.getElementById('sidebarWikiStats');
+        const treeEl = document.getElementById('sidebarWikiTree');
+        if (!statsEl || !treeEl) return;
+        if (statsData?.success) {
+            const s = statsData.stats || {};
+            statsEl.textContent = `${s.total_pages||0}页 · ${s.total_sources||0}来源` + (s.orphan_count ? ` · \ud83d\udd78\ufe0f${s.orphan_count}孤立` : '');
+        }
+        var tabsEl = document.getElementById('sidebarWikiTabs');
+        if (tabsEl) {
+            var WIKI_TABS = [
+                { prefix: '', label: '全部', icon: '📖' },
+                { prefix: 'legal', label: '法律', icon: '📜' },
+                { prefix: 'projects', label: '项目', icon: '📊' },
+                { prefix: 'audit', label: '审计', icon: '📋' },
+                { prefix: 'sources', label: '来源', icon: '📄' },
+                { prefix: 'entities', label: '实体', icon: '🏢' },
+                { prefix: 'concepts', label: '概念', icon: '📖' },
+                { prefix: 'regulations', label: '法规', icon: '📋' },
+                { prefix: 'templates', label: '模板', icon: '📄' },
+                { prefix: 'experts', label: '专家', icon: '💡' },
+                { prefix: 'comparisons', label: '对比', icon: '🔗' },
+            ];
+            tabsEl.innerHTML = '';
+            WIKI_TABS.forEach(function(t) {
+                var tabBtn = document.createElement('span');
+                tabBtn.textContent = t.icon + ' ' + t.label;
+                tabBtn.style.cssText = 'display:inline-block;padding:2px 5px;font-size:0.62rem;border-radius:3px;cursor:pointer;white-space:nowrap;border:1px solid var(--card-border);';
+                if (t.prefix === _currentWikiPrefix) {
+                    tabBtn.style.background = 'var(--accent-color)';
+                    tabBtn.style.color = 'white';
+                }
+                tabBtn.onmouseenter = function() {
+                    if (t.prefix !== _currentWikiPrefix) tabBtn.style.background = 'var(--card-border)';
+                };
+                tabBtn.onmouseleave = function() {
+                    if (t.prefix !== _currentWikiPrefix) tabBtn.style.background = '';
+                };
+                tabBtn.onclick = function() { _loadWiki(t.prefix); };
+                tabsEl.appendChild(tabBtn);
+            });
+        }
+        const tree = indexData?.tree;
+        if (!tree || !tree.children?.length) {
+            treeEl.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">暂无Wiki页面</p>';
+            return;
+        }
+        function renderTree(node, depth) {
+            if (node.type === 'file') {
+                const displayName = node.name.replace(/\.md$/i, '');
+                const div = document.createElement('div');
+                div.style.cssText = `padding:3px 6px 3px ${12 + depth * 16}px;cursor:pointer;border-radius:3px;font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
+                div.className = 'wiki-sidebar-page';
+                div.dataset.path = node.path;
+                div.textContent = '📄 ' + displayName;
+                div.onmouseenter = () => div.style.background = 'var(--card-border)';
+                div.onmouseleave = () => div.style.background = '';
+                div.onclick = async () => {
+                    const content = document.getElementById('wikiContent');
+                    if (!content) return;
+                    content.innerHTML = '<p style="color:var(--card-muted);">加载中...</p>';
+                    try {
+                        const res = await fetch('/wiki/page/' + encodeURIComponent(node.path.replace(/\.md$/i, '')), { credentials: 'include' });
+                        const data = await res.json();
+                        if (data.success) {
+                            const d = data;
+                            let html = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+                            html += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
+                            if (sessionStorage.getItem('isAdmin') === 'true') {
+                                html += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(node.path.replace(/\.md$/i, '')) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
+                                html += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(node.path.replace(/\.md$/i, '')) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
+                            }
+                            html += '</div>';
+                            html += '<div style="background:var(--card-bg);border-radius:8px;padding:16px;">';
+                            if (d.frontmatter?.tags) {
+                                html += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(t => `<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#${escapeHtml(t)}</span>`).join('') + '</div>';
+                            }
+                            html += d.html;
+                            html += '</div>';
+                            content.innerHTML = html;
+                            content.querySelector('.wiki-back-btn').onclick = () => { const wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
+                            content.querySelectorAll('.wiki-page-link').forEach(function(el) {
+                                el.onmouseenter = function() { el.style.borderColor = 'var(--card-border)'; };
+                                el.onmouseleave = function() { el.style.borderColor = 'transparent'; };
+                                el.onclick = async function() {
+                                    try {
+                                        var path = el.dataset.path.replace(/\.md$/i, '');
+                                        var pageRes = await fetch('/wiki/page/' + encodeURIComponent(path), { credentials: 'include' });
+                                        var pageData = await pageRes.json();
+                                        if (pageData.success) {
+                                            var d = pageData;
+                                            var detailHtml = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+                                            detailHtml += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
+                                            if (sessionStorage.getItem('isAdmin') === 'true') {
+                                                detailHtml += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(path) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
+                                                detailHtml += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(path) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
+                                            }
+                                            detailHtml += '</div>';
+                                            detailHtml += '<div id="wikiPageContent" style="background:var(--card-bg);border-radius:8px;padding:16px;">';
+                                            if (d.frontmatter?.tags) {
+                                                detailHtml += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(function(t) { return '<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#' + escapeHtml(t) + '</span>'; }).join('') + '</div>';
+                                            }
+                                            detailHtml += d.html;
+                                            detailHtml += '</div>';
+                                            content.innerHTML = detailHtml;
+                                            content.querySelector('.wiki-back-btn').onclick = function() { var wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
+                                        } else {
+                                            console.warn('Wiki page load fail:', path, pageData);
+                                        }
+                                    } catch(e) {
+                                        console.error('Wiki page click error:', e);
+                                    }
+                                };
+                            });
+                        } else {
+                            content.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+                        }
+                    } catch(e) {
+                        content.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+                    }
+                };
+                return div;
+            }
+            // Directory node
+            const wrapper = document.createElement('div');
+            const header = document.createElement('div');
+            header.style.cssText = `padding:3px 6px 3px ${12 + depth * 16}px;cursor:pointer;border-radius:3px;font-size:0.76rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
+            header.className = 'wiki-sidebar-folder';
+            let folderIcon = '📁';
+            const p = node.path || '';
+            if (p.startsWith('sources')) folderIcon = '📄';
+            else if (p.startsWith('entities')) folderIcon = '🏢';
+            else if (p.startsWith('concepts')) folderIcon = '📖';
+            else if (p.startsWith('regulations')) folderIcon = '📋';
+            else if (p.startsWith('templates')) folderIcon = '📄';
+            else if (p.startsWith('projects')) folderIcon = '📊';
+            else if (p.startsWith('experts')) folderIcon = '💡';
+            else if (p.startsWith('comparisons')) folderIcon = '🔗';
+            header.textContent = folderIcon + ' ' + (node.name || 'Wiki');
+            header.onmouseenter = () => header.style.background = 'var(--card-border)';
+            header.onmouseleave = () => header.style.background = '';
+            header.onclick = () => {
+                childrenDiv.style.display = childrenDiv.style.display === 'none' ? '' : 'none';
+                header.textContent = (childrenDiv.style.display === 'none' ? '📁 ' : '📂 ') + (node.name || 'Wiki');
+            };
+            wrapper.appendChild(header);
+            const childrenDiv = document.createElement('div');
+            childrenDiv.style.display = '';
+            (node.children || []).forEach(child => {
+                const childEl = renderTree(child, depth + 1);
+                if (childEl) childrenDiv.appendChild(childEl);
+            });
+            wrapper.appendChild(childrenDiv);
+            return wrapper;
+        }
+        treeEl.innerHTML = '';
+        (tree.children || []).forEach(child => {
+            const el = renderTree(child, 0);
+            if (el) treeEl.appendChild(el);
+        });
+    }
+
+    // ======================== Timeline Tab ========================
+    const timelineTabBtn = document.getElementById('timelineTabBtn');
+    const timelinePanel = document.getElementById('timelinePanel');
+    if (timelineTabBtn && timelinePanel) {
+        timelineTabBtn.onclick = async () => {
+            saveActiveTab('timeline');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            timelineTabBtn.classList.add('active');
+            switchToPanel('timelinePanel');
+            loadTimelinePanel();
+        };
+    }
+
+    async function loadTimelinePanel() {
+        if (!currentProjectId) {
+            const content = document.getElementById('timelineContent');
+            if (content) content.innerHTML = '<p style="color:var(--card-muted);">请先在"项目"标签页中选择一个项目。</p>';
+            return;
+        }
+        const setup = document.getElementById('timelineSetup');
+        const content = document.getElementById('timelineContent');
+        content.innerHTML = '<p style="color:var(--card-muted);">加载时间线...</p>';
+
+        try {
+            const [catRes, tRes] = await Promise.all([
+                fetch('/timeline/legal/categories', { credentials: 'include' }),
+                fetch('/timeline/' + currentProjectId, { credentials: 'include' })
+            ]);
+            const catData = await catRes.json();
+            const tData = await tRes.json();
+
+            if (tData.success && tData.id) {
+                setup.style.display = 'none';
+                content.innerHTML = _renderTimelineView(tData);
+            } else {
+                setup.style.display = 'block';
+                content.innerHTML = '';
+                if (catData.success && catData.categories) {
+                    const catSel = document.getElementById('timelineCategorySelect');
+                    const mSel = document.getElementById('timelineMethodSelect');
+                    catSel.innerHTML = '<option value="">选择类别...</option>';
+                    catData.categories.forEach(c => {
+                        catSel.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
+                    });
+                    catSel.onchange = () => {
+                        mSel.innerHTML = '<option value="">选择方式...</option>';
+                        const sel = catData.categories.find(c => c.code === catSel.value);
+                        if (sel && sel.methods) {
+                            sel.methods.forEach(m => {
+                                mSel.innerHTML += '<option value="' + m.code + '">' + m.name + '</option>';
+                            });
+                        }
+                    };
+                    document.getElementById('timelineCreateBtn').onclick = async () => {
+                        const cat = catSel.value;
+                        const meth = mSel.value;
+                        const start = document.getElementById('timelineStartDate').value;
+                        if (!cat || !meth || !start) { alert('请填写所有必填项'); return; }
+                        try {
+                            const cr = await fetch('/timeline/' + currentProjectId, {
+                                method: 'POST', headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({category_code: cat, method_code: meth, planned_start_date: start}),
+                                credentials: 'include'
+                            });
+                            const cd = await cr.json();
+                            if (cd.success) { loadTimelinePanel(); } else { alert(cd.error || '创建失败'); }
+                        } catch(e) { alert('创建失败: ' + e.message); }
+                    };
+                }
+            }
+        } catch (e) {
+            content.innerHTML = '<p style="color:var(--card-muted);">加载失败: ' + e.message + '</p>';
+        }
+    }
+
+    function _renderTimelineView(tl) {
+        var ms = tl.milestones || [];
+        var html = '<div style="margin-bottom:12px;">';
+        html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">';
+        html += '<span style="font-size:0.75rem;"><b>类别:</b> ' + (tl.category_code || '') + '</span>';
+        html += '<span style="font-size:0.75rem;"><b>方式:</b> ' + (tl.method_code || '') + '</span>';
+        html += '<span style="font-size:0.75rem;"><b>计划开始:</b> ' + (tl.planned_start_date || '') + '</span>';
+        html += '<span style="font-size:0.75rem;"><b>状态:</b> ' + _statusBadge(tl.status || '') + '</span>';
+        html += '</div>';
+
+        if (tl.diff_summary) {
+            var ds = tl.diff_summary;
+            html += '<div style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">';
+            html += '总节点: ' + ds.total_milestones + ' | 已完成: ' + ds.completed;
+            html += ' | 延期: ' + ds.delayed + ' | 准点: ' + ds.on_time;
+            if (ds.total_delay_days > 0) html += ' | 累计延期: ' + ds.total_delay_days + '天';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        html += '<div style="max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px;">';
+        ms.forEach(function(m, i) {
+            var bg = m.status === 'completed' ? '#f0fff4' : (m.diff_days && m.diff_days > 0 ? '#fff5f5' : 'transparent');
+            html += '<div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid var(--card-border);background:' + bg + ';font-size:0.72rem;">';
+            html += '<span style="width:24px;font-weight:700;color:var(--card-muted);">' + (i+1) + '</span>';
+            html += '<span style="flex:1;font-weight:600;">' + (m.name || m.code) + '</span>';
+            html += '<span style="width:90px;text-align:center;color:var(--card-muted);">' + (m.planned_date || '待定') + '</span>';
+            html += '<span style="width:90px;text-align:center;' + (m.diff_days && m.diff_days > 0 ? 'color:#e53e3e;' : '') + '">' + (m.actual_date || '未完成') + '</span>';
+            if (m.diff_days && m.diff_days > 0) {
+                html += '<span style="width:60px;text-align:center;color:#e53e3e;">+' + m.diff_days + '天</span>';
+            } else if (m.diff_days && m.diff_days < 0) {
+                html += '<span style="width:60px;text-align:center;color:#38a169;">' + m.diff_days + '天</span>';
+            } else {
+                html += '<span style="width:60px;text-align:center;">-</span>';
+            }
+            html += _statusBadge(m.status || 'pending');
+            html += '</div>';
+        });
+        html += '</div>';
+
+        html += '<div style="margin-top:12px;display:flex;gap:6px;">';
+        html += '<button onclick="loadTimelinePanel()" class="file-btn" style="font-size:0.7rem;">🔄 刷新</button>';
+        html += '<button onclick="fetch(\'/timeline/' + tl.project_id + '/suggestions\',{credentials:\'include\'}).then(r=>r.json()).then(d=>{if(d.success)alert(\'规则建议已刷新\')}).catch(e=>alert(e.message))" class="file-btn" style="font-size:0.7rem;">💡 查看建议</button>';
+        html += '<button onclick="fetch(\'/timeline/' + tl.project_id + '/diff\',{credentials:\'include\'}).then(r=>r.json()).then(d=>{if(d.success){var s=JSON.stringify(d.summary,2);alert(s.substring(0,500))}}).catch(e=>alert(e.message))" class="file-btn" style="font-size:0.7rem;">📊 差异报告</button>';
+        html += '</div>';
+
+        return html;
+    }
+
+    function _statusBadge(status) {
+        var colors = {completed:'#38a169',pending:'#a0aec0',active:'#3182ce',overdue:'#e53e3e',delayed:'#e53e3e'};
+        var labels = {completed:'已完成',pending:'待处理',active:'进行中',overdue:'已超期',delayed:'延期',running:'运行中',failed:'失败',PASS:'通过',FAIL:'不通过'};
+        var c = colors[status] || '#a0aec0';
+        var l = labels[status] || status;
+        return '<span style="display:inline-block;background:' + c + ';color:#fff;padding:1px 6px;border-radius:4px;font-size:0.6rem;margin-left:4px;">' + l + '</span>';
+    }
+
     // ======================== Usage Tab (Admin only) ========================
     const analyticsTabBtn = document.getElementById('analyticsTabBtn');
     const analyticsPanel = document.getElementById('analyticsPanel');
     if (analyticsTabBtn && analyticsPanel) {
-        let _usageLoaded = { rc: false, assets: false, archives: false, styles: false };
+        let _usageLoaded = { rc: false, assets: false, archives: false, styles: false, auditConfig: false, skillAudit: false };
         analyticsTabBtn.onclick = async function() {
             saveActiveTab('stats');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             analyticsTabBtn.classList.add('active');
             switchToPanel('analyticsPanel');
             switchSidebarPane('stats');
-            _usageLoaded = { rc: false, assets: false, archives: false, styles: false };
+            _usageLoaded = { rc: false, assets: false, archives: false, styles: false, auditConfig: false, skillAudit: false };
             const content = document.getElementById('analyticsContent');
             content.innerHTML = '<span style="font-size:0.72rem;color:var(--card-muted);">Loading...</span>';
             const adminSections = document.getElementById('analyticsAdminSections');
@@ -9310,21 +10071,21 @@
                 const isAdmin = stats.is_admin_view;
                 const items = [];
                 if (isAdmin) {
-                    items.push(`👥<b>${stats.total_users}</b>`, `🟢<b>${stats.active_users_24h}</b>`, `💬<b>${stats.total_sessions}</b>`,
-                        `✉️<b>${stats.total_messages}</b>`, `💾<b>${stats.storage_mb}MB</b>`, `🔍<b>${stats.credit_checks}</b>`,
-                        `📂<b>${stats.active_projects}</b>`);
-                    if (stats.rag_stats?.total > 0) items.push(`🧠<b>${stats.rag_stats.total}</b>`);
+                    items.push(`<span title="用户总数">👥<b>${stats.total_users}</b></span>`, `<span title="24h活跃用户">🟢<b>${stats.active_users_24h}</b></span>`, `<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`,
+                        `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`, `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`,
+                        `<span title="活跃项目数">📂<b>${stats.active_projects}</b></span>`);
+                    if (stats.rag_stats?.total > 0) items.push(`<span title="RAG索引数">🧠<b>${stats.rag_stats.total}</b></span>`);
                 } else {
-                    items.push(`💬<b>${stats.total_sessions}</b>`, `✉️<b>${stats.total_messages}</b>`,
-                        `📁<b>${stats.total_files||0}</b>`, `💾<b>${stats.storage_mb}MB</b>`, `🔍<b>${stats.credit_checks}</b>`);
+                    items.push(`<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`,
+                        `<span title="文件总数">📁<b>${stats.total_files||0}</b></span>`, `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`);
                 }
                 let sparkline = '';
                 if (stats.messages_per_day?.length) {
                     const counts = stats.messages_per_day.map(d=>d.count);
                     const bars = ['\u2581','\u2582','\u2583','\u2584','\u2585','\u2586','\u2587','\u2588'];
-                    sparkline = ' <span style="opacity:0.5;font-size:0.65rem;">'+counts.map(c=>bars[Math.min(Math.round(c/Math.max(...counts,1)*7),7)]).join('')+'</span>';
+                    sparkline = ' <span title="近30天消息量趋势" style="opacity:0.5;font-size:0.65rem;">'+counts.map(c=>bars[Math.min(Math.round(c/Math.max(...counts,1)*7),7)]).join('')+'</span>';
                 }
-                content.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.7rem;color:var(--card-muted);">${items.map(s=>`<span>${s}</span>`).join(' \u00b7 ')}${sparkline}</div>`;
+                content.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.7rem;color:var(--card-muted);">${items.join(' \u00b7 ')}${sparkline}</div>`;
                 if (adminSections && isAdmin) { adminSections.style.display = 'block'; _setupUsageLazySections(); }
             } catch (e) { console.error('Usage stats load error:', e); content.innerHTML = '<span style="color:#e74c3c;font-size:0.72rem;">加载失败</span>'; }
         };
@@ -9335,6 +10096,8 @@
                 ['assetDetails', 'assets', loadAssetManager],
                 ['archiveDetails', 'archives', loadArchivedSessionsAdmin],
                 ['stylesDetails', 'styles', loadStyleManager],
+                ['auditConfigDetails', 'auditConfig', loadAuditConfig],
+                ['skillAuditDetails', 'skillAudit', loadSkillAuditWorkspace],
             ];
             for (const [id, key, fn] of map) {
                 const el = document.getElementById(id);
@@ -9350,14 +10113,15 @@
     const reviewTabBtn = document.getElementById('reviewTabBtn');
     const reviewPanel = document.getElementById('reviewPanel');
     if (reviewTabBtn && reviewPanel) {
-        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, docReview: false };
+        console.log('Audit: reviewTab block entered');
+        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
         reviewTabBtn.onclick = async function() {
             saveActiveTab('review');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             reviewTabBtn.classList.add('active');
             switchToPanel('reviewPanel');
             switchSidebarPane('review');
-            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, docReview: false };
+            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
             const content = document.getElementById('reviewContent');
             const sections = document.getElementById('reviewSections');
             try {
@@ -9365,11 +10129,15 @@
                 if (res.status === 403) { content.innerHTML = '<span>需要登录</span>'; return; }
                 if (!res.ok) { content.innerHTML = `<span style="color:#e74c3c;">服务器错误 (${res.status})</span>`; return; }
                 const stats = await res.json();
-                const items = [`👥<b>${stats.total_users}</b>`, `💬<b>${stats.total_sessions}</b>`, `✉️<b>${stats.total_messages}</b>`];
-                content.innerHTML = `<div style="font-size:0.7rem;color:var(--card-muted);">${items.join(' \u00b7 ')}</div>`;
-                if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); }
+                const items = [`<span title="用户总数">👥<b>${stats.total_users}</b></span>`, `<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`];
+                content.innerHTML = `<div style="font-size:0.7rem;color:var(--card-muted);">${items.join(' \u00b7 ')}</div>
+                    <div style="margin:10px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px;">
+                        <span id="auditRunningBadge" style="display:none;font-size:0.72rem;color:#f59e0b;">\u23f3 \u5ba1\u8ba1\u8fdb\u884c\u4e2d...</span>
+                    </div>`;
+                if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); _checkRunningAudit(); }
                 _checkStaleReviews();
                 _updateReviewSidebarStatus();
+                _checkRunningAudit();
             } catch(e) { console.error('Review stats load error:', e); content.innerHTML = '<span style="color:#e74c3c;">加载失败</span>'; }
         };
 
@@ -9441,6 +10209,28 @@
             }
         }, 200);
 
+        // ── Full Audit button uses inline onclick → window._showAuditModal ──
+
+        async function _checkRunningAudit() {
+            const badge = document.getElementById('auditRunningBadge');
+            if (!badge) return;
+            const pid = window._currentProjectId || currentProjectId;
+            if (!pid) { badge.style.display = 'none'; return; }
+            try {
+                const r = await fetch(`/audit/running/${pid}`, {credentials:'include'});
+                const d = await r.json();
+                if (r.ok && d && d.run_id) {
+                    badge.style.display = 'inline';
+                    const chatBtn = document.getElementById('chatFullAuditBtn');
+                    if (chatBtn) chatBtn.disabled = true;
+                } else {
+                    badge.style.display = 'none';
+                    const chatBtn = document.getElementById('chatFullAuditBtn');
+                    if (chatBtn) chatBtn.disabled = false;
+                }
+            } catch(_) { badge.style.display = 'none'; }
+        }
+
         function _setupReviewLazySections() {
             const map = [
                 ['ingestDetails', 'ingest', loadIngestPanel],
@@ -9448,7 +10238,7 @@
                 ['ingestHistoryDetails', 'history', loadIngestHistory],
                 ['structuredDocsDetails', 'structured', loadStructuredDocsPanel],
                 ['workloadDetails', 'workload', loadWorkloadPanel],
-                ['docReviewDetails', 'docReview', loadDocReviewPanel],
+                ['auditHistoryDetails', 'auditHistory', loadAuditHistory],
             ];
             for (const [id, key, fn] of map) {
                 const el = document.getElementById(id);
@@ -9542,7 +10332,7 @@
                         runBtn.disabled = false;
                         return;
                     }
-                    const r = data.data;
+                    const r = data;
                     if (status) status.textContent = '✅ 审查完成';
 
                     let html = '';
@@ -9587,6 +10377,17 @@
             };
         }
     }
+
+    // ── Doc Review toggle listener (moved to chat's docAnalysisTools) ──
+    (function initDocReviewToggle() {
+        const el = document.getElementById('docReviewDetails');
+        if (el) {
+            let loaded = false;
+            el.addEventListener('toggle', () => { if (el.open && !loaded) { loaded = true; loadDocReviewPanel(); } });
+            // Also load eagerly if already open
+            if (el.open) { loaded = true; loadDocReviewPanel(); }
+        }
+    })();
 
     async function loadStructuredDocsPanel() {
         const panel = document.getElementById('structuredDocsPanel'); if (!panel) return;
@@ -9702,7 +10503,11 @@
                                 const poll = setInterval(async () => {
                                     const sr = await fetch(`/admin/ingest/status/${d.task_id}`, {credentials:'include'});
                                     const sd = await sr.json();
-                                    if (sd.status === 'done') { progressEl.innerHTML += '<br>✅ 处理完成'; clearInterval(poll); }
+                                    if (sd.status === 'done') {
+                                        progressEl.innerHTML += '<br>✅ 处理完成';
+                                        clearInterval(poll);
+                                        progressEl.innerHTML += '<div style="margin-top:6px;display:flex;gap:6px;"><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',5,this)">👍 满意</button><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',1,this)">👎 不满意</button></div>';
+                                    }
                                     else if (sd.status === 'failed') { progressEl.innerHTML += '<br>❌ 处理失败'; clearInterval(poll); }
                                     else { progressEl.innerHTML = `<span>任务ID: ${d.task_id} — ${sd.status||'processing'} ${sd.progress||''}</span>`; }
                                 }, 3000);
@@ -10157,12 +10962,13 @@
         _rcDirty = {};
         const dot = document.getElementById('rcModifiedDot');
         if (dot) dot.style.display = 'none';
-        let hasFactory = false, factoryData = null, nonFactoryKeys = [], llmInfo = null;
+        let hasFactory = false, factoryData = null, nonFactoryKeys = [], llmInfo = null, vlInfo = null;
         try {
-            const [cr, sr, lr] = await Promise.all([
+            const [cr, sr, lr, vr] = await Promise.all([
                 fetch('/admin/runtime_config', { credentials: 'include' }),
                 fetch('/admin/runtime_config_schema', { credentials: 'include' }),
-                fetch('/admin/llm_providers', { credentials: 'include' })
+                fetch('/admin/llm_providers', { credentials: 'include' }),
+                fetch('/admin/vl_status', { credentials: 'include' })
             ]);
             const cd = await cr.json();
             const sd = await sr.json();
@@ -10172,6 +10978,7 @@
             factoryData = sd.factory_presets || null;
             nonFactoryKeys = sd.non_factory_keys || [];
             try { const ld = await lr.json(); if (ld.status === 'ok') llmInfo = ld; } catch (_) {}
+            try { const vd = await vr.json(); if (vd.status === 'ok') vlInfo = vd; } catch (_) {}
         } catch (_) { panel.innerHTML = '<p style="color:#ef4444;">Load failed</p>'; return; }
 
         // Update factory status in summary
@@ -10201,11 +11008,29 @@
             </div>`;
         }
 
-        let html = llmBanner;
+        // VL status banner
+        let vlBanner = '';
+        if (vlInfo) {
+            const availDot = vlInfo.available
+                ? '<span style="color:#22c55e;">●</span>'
+                : vlInfo.has_api_key
+                    ? '<span style="color:#f59e0b;">●</span>'
+                    : '<span style="color:#ef4444;">●</span>';
+            const availText = vlInfo.available ? '可用' : (vlInfo.has_api_key ? '初始化失败' : '未配置API Key');
+            vlBanner = `<div style="background:linear-gradient(135deg,#1a2a3a,#2d4a5a);color:#e2e8f0;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.7rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span>👁️ <b>当前VL模型:</b> ${escapeHtml(vlInfo.model||'未设置')} (<b>${escapeHtml(vlInfo.provider||'')}</b>)</span>
+                <span style="display:inline-flex;align-items:center;gap:3px;">${availDot} ${availText}</span>
+                ${!vlInfo.has_api_key ? '<span style="color:#f87171;">请设置 NVIDIA_API_KEY</span>' : ''}
+                <span style="color:#94a3b8;font-size:.65rem;">${vlInfo.config.max_image_size}px / ${vlInfo.config.max_tokens}tok / t=${vlInfo.config.temperature}</span>
+            </div>`;
+        }
 
-        const groupOrder = ['LLM/AI Model', 'Search & Cache', 'RAG Engine', 'File Processing', 'Session & Messages', 'Auto Cleanup', 'Rate Limits', 'Anonymous Limits', 'Training Data', 'Auto Reports', 'Other'];
+        let html = llmBanner + vlBanner;
+
+        const groupOrder = ['LLM/AI Model', 'VL Model', 'Search & Cache', 'RAG Engine', 'File Processing', 'Session & Messages', 'Auto Cleanup', 'Rate Limits', 'Anonymous Limits', 'Training Data', 'Auto Reports', 'Other'];
         const groupLabels = {
             'LLM/AI Model': '🤖 LLM/AI 模型',
+            'VL Model': '👁️ VL 视觉模型',
             'Search & Cache': '🔍 搜索与缓存',
             'RAG Engine': '🧠 RAG 引擎',
             'File Processing': '📄 文件处理',
@@ -10225,7 +11050,28 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px;margin-top:8px;">`;
             for (const item of groups[gn]) {
                 const labelStyle = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
-                if (item.type === 'select') {
+                if (item.type === 'ordered-list') {
+                    const chain = Array.isArray(item.value) ? item.value : [['zhipu','glm-4.5-air'],['nvidia','nemotron-3-ultra-550b-a55b'],['deepseek','deepseek-v4-flash'],['deepseek','deepseek-v4-pro']];
+                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
+                    const provLabels = {auto:'自动检测',deepseek:'DeepSeek',zhipu:'智谱AI',qwen:'Qwen',siliconflow:'硅基流动',nvidia:'NVIDIA'};
+                    let chainHtml = `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;margin-bottom:4px;" title="${escapeHtml(item.label)}">
+                        <label style="${labelStyle}">${item.label}${nfMark}</label>
+                    </div>
+                    <div data-key="${item.key}" data-type="ordered-list" style="margin-left:4px;">`;
+                    for (let i = 0; i < chain.length; i++) {
+                        const [cp, cm] = chain[i];
+                        const provOpts = Object.entries(provLabels).map(([v,l]) => `<option value="${v}"${cp===v?' selected':''}>${l}</option>`).join('');
+                        chainHtml += `<div class="chain-row" data-index="${i}" draggable="true" style="display:flex;align-items:center;gap:3px;margin-bottom:3px;padding:3px 4px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);font-size:.68rem;">
+                            <span class="chain-drag" style="cursor:grab;color:var(--card-muted);user-select:none;">☰</span>
+                            <select class="chain-provider" style="width:90px;padding:2px 3px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">${provOpts}</select>
+                            <select class="chain-model" style="flex:1;min-width:80px;padding:2px 3px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;"></select>
+                            <button class="chain-remove" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:0 2px;" title="移除此服务商">×</button>
+                        </div>`;
+                    }
+                    chainHtml += `<button class="chain-add" style="width:100%;padding:4px;border:1px dashed var(--card-border);border-radius:4px;background:transparent;color:var(--card-muted);cursor:pointer;font-size:.65rem;margin-top:2px;">+ 添加服务商</button>`;
+                    chainHtml += '</div>';
+                    html += chainHtml;
+                } else if (item.type === 'select') {
                     const options = item.options || [];
                     const labels = item.option_labels || {};
                     const selOpts = options.map(o => `<option value="${o}"${String(item.value)===o?' selected':''}>${labels[o]||o}</option>`).join('');
@@ -10311,6 +11157,174 @@
             });
         }
 
+        // VL provider change → reload VL model options from schema
+        const vlProvSelect = panel.querySelector('select[data-key="active_vl_provider"]');
+        const vlModelSelect = panel.querySelector('select[data-key="active_vl_model"]');
+        if (vlProvSelect && vlModelSelect) {
+            vlProvSelect.addEventListener('change', () => {
+                const pid = vlProvSelect.value;
+                // Fetch updated schema to get provider-specific VL models
+                fetch('/admin/runtime_config_schema')
+                    .then(r => r.json())
+                    .then(schema => {
+                        if (schema.success && schema.schema && schema.schema.active_vl_model) {
+                            const vlSchema = schema.schema.active_vl_model;
+                            const models = vlSchema.options || ['auto'];
+                            const labels = vlSchema.option_labels || {};
+                            const currentModel = _rcData['active_vl_model'] || '';
+                            vlModelSelect.innerHTML = models.map(m => {
+                                const label = labels[m] || m;
+                                const sel = m === currentModel ? ' selected' : '';
+                                return `<option value="${m}"${sel}>${label}</option>`;
+                            }).join('');
+                        }
+                    }).catch(() => {}); // Silent fail — keep current options
+                _rcDirty['active_vl_provider'] = vlProvSelect.value !== (_rcData['active_vl_provider']||'') ? vlProvSelect.value : undefined;
+                if (_rcDirty['active_vl_provider'] === undefined) delete _rcDirty['active_vl_provider'];
+                const modDot = document.getElementById('rcModifiedDot');
+                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+            });
+            vlModelSelect.addEventListener('change', () => {
+                _rcDirty['active_vl_model'] = vlModelSelect.value !== (_rcData['active_vl_model']||'') ? vlModelSelect.value : undefined;
+                if (_rcDirty['active_vl_model'] === undefined) delete _rcDirty['active_vl_model'];
+                const modDot = document.getElementById('rcModifiedDot');
+                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+            });
+        }
+
+        // Chain list widget — drag-reorder, add/remove entries
+        function populateChainModels(row) {
+            const provSel = row.querySelector('.chain-provider');
+            const modSel = row.querySelector('.chain-model');
+            if (!provSel || !modSel) return;
+            const pid = provSel.value;
+            const currentModel = modSel.dataset.current || modSel.value || '';
+            const models = llmInfo?.providers?.[pid]?.models ? ['auto', ...llmInfo.providers[pid].models] : ['auto'];
+            if (currentModel && !models.includes(currentModel)) models.push(currentModel);
+            const labels = llmInfo?.providers?.[pid]?.labels || {};
+            modSel.innerHTML = models.map(m => `<option value="${m}"${m===currentModel?' selected':''}>${labels[m]||m}</option>`).join('');
+            modSel.dataset.current = currentModel;
+        }
+        function chainMarkDirty() {
+            const container = document.querySelector('[data-key="llm_fallback_chain"][data-type="ordered-list"]');
+            if (!container) return;
+            const rows = container.querySelectorAll('.chain-row');
+            const now = Array.from(rows).map(r => [r.querySelector('.chain-provider')?.value || 'zhipu', r.querySelector('.chain-model')?.value || 'glm-4.5-air']);
+            const orig = _rcData['llm_fallback_chain'];
+            const nowStr = JSON.stringify(now);
+            _rcDirty['llm_fallback_chain'] = (nowStr !== JSON.stringify(orig ?? [['zhipu','glm-4.5-air']])) ? now : undefined;
+            if (_rcDirty['llm_fallback_chain'] === undefined) delete _rcDirty['llm_fallback_chain'];
+            const modDot = document.getElementById('rcModifiedDot');
+            if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+        }
+        const chainContainer = document.querySelector('[data-key="llm_fallback_chain"][data-type="ordered-list"]');
+        if (chainContainer) {
+            // Populate model dropdowns for each row
+            chainContainer.querySelectorAll('.chain-row').forEach(r => populateChainModels(r));
+            // Provider change → update models
+            chainContainer.addEventListener('change', e => {
+                const row = e.target.closest('.chain-row');
+                if (!row) return;
+                if (e.target.classList.contains('chain-provider')) {
+                    const modSel = row.querySelector('.chain-model');
+                    if (modSel) modSel.dataset.current = ''; // reset
+                    populateChainModels(row);
+                }
+                chainMarkDirty();
+            });
+            // Remove
+            chainContainer.addEventListener('click', e => {
+                if (e.target.classList.contains('chain-remove')) {
+                    const row = e.target.closest('.chain-row');
+                    if (row && chainContainer.querySelectorAll('.chain-row').length > 1) {
+                        row.remove();
+                        chainMarkDirty();
+                    }
+                }
+            });
+            // Add
+            const addBtn = chainContainer.querySelector('.chain-add');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    const firstRow = chainContainer.querySelector('.chain-row');
+                    const clone = firstRow.cloneNode(true);
+                    clone.dataset.index = chainContainer.querySelectorAll('.chain-row').length;
+                    const provSel = clone.querySelector('.chain-provider');
+                    const modSel = clone.querySelector('.chain-model');
+                    if (provSel) provSel.value = 'zhipu';
+                    if (modSel) { modSel.dataset.current = ''; modSel.value = ''; }
+                    populateChainModels(clone);
+                    chainContainer.insertBefore(clone, addBtn);
+                    chainMarkDirty();
+                });
+            }
+            // Drag & drop
+            let dragSrcRow = null;
+            chainContainer.addEventListener('dragstart', e => {
+                const row = e.target.closest('.chain-row');
+                if (row) { dragSrcRow = row; row.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); }
+            });
+            chainContainer.addEventListener('dragend', e => {
+                const row = e.target.closest('.chain-row');
+                if (row) row.style.opacity = '';
+                chainMarkDirty();
+            });
+            chainContainer.addEventListener('dragover', e => {
+                e.preventDefault();
+                const row = e.target.closest('.chain-row');
+                if (row && dragSrcRow && row !== dragSrcRow) {
+                    const rect = row.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    if (e.clientY < midY) row.parentNode.insertBefore(dragSrcRow, row);
+                    else row.parentNode.insertBefore(dragSrcRow, row.nextSibling);
+                }
+            });
+            chainContainer.addEventListener('drop', e => { e.preventDefault(); });
+        }
+
+        // VL test widget — drag-drop image analysis
+        const vlGroup = document.querySelector('details summary');
+        const vlTestHtml = `<div style="margin-top:10px;border:1px dashed var(--card-border);border-radius:8px;padding:12px;text-align:center;">
+            <div id="vlDropZone" style="border:2px dashed #4a5a6a;border-radius:8px;padding:20px;cursor:pointer;transition:border-color .2s;">
+                <p style="margin:0;font-size:.75rem;color:var(--card-muted);">📸 拖拽图片到此处或点击上传，测试VL模型</p>
+                <input type="file" id="vlTestInput" accept="image/*" style="display:none;">
+            </div>
+            <div id="vlTestResult" style="margin-top:8px;font-size:.7rem;text-align:left;display:none;background:#1e293b;border-radius:6px;padding:10px;max-height:300px;overflow-y:auto;white-space:pre-wrap;color:#e2e8f0;"></div>
+        </div>`;
+        panel.insertAdjacentHTML('beforeend', vlTestHtml);
+
+        // Wire VL test widget
+        const vlDropZone = document.getElementById('vlDropZone');
+        const vlTestInput = document.getElementById('vlTestInput');
+        const vlTestResult = document.getElementById('vlTestResult');
+        if (vlDropZone && vlTestInput) {
+            vlDropZone.onclick = () => vlTestInput.click();
+            vlDropZone.addEventListener('dragover', e => { e.preventDefault(); vlDropZone.style.borderColor = '#22c55e'; });
+            vlDropZone.addEventListener('dragleave', () => { vlDropZone.style.borderColor = '#4a5a6a'; });
+            vlDropZone.addEventListener('drop', e => { e.preventDefault(); vlDropZone.style.borderColor = '#4a5a6a'; if (e.dataTransfer.files.length) handleVLTest(e.dataTransfer.files[0]); });
+            vlTestInput.onchange = () => { if (vlTestInput.files.length) handleVLTest(vlTestInput.files[0]); };
+        }
+        async function handleVLTest(file) {
+            if (!file) return;
+            vlTestResult.style.display = 'block';
+            vlTestResult.innerHTML = '⏳ 分析中...';
+            const fd = new FormData();
+            fd.append('image', file);
+            try {
+                const r = await fetch('/admin/vl_test', { method:'POST', credentials:'include', body:fd });
+                const d = await r.json();
+                if (d.status === 'ok') {
+                    const txt = escapeHtml(d.data?.description || '');
+                    const reasoning = d.data?.reasoning ? escapeHtml(d.data.reasoning) : '';
+                    vlTestResult.innerHTML = (reasoning ? `<div style="color:#94a3b8;font-size:.65rem;margin-bottom:6px;border-left:2px solid #4a5a6a;padding-left:8px;"><b>推理:</b> ${reasoning}</div>` : '') + `<div>${txt}</div>`;
+                } else {
+                    vlTestResult.innerHTML = `<span style="color:#ef4444;">${escapeHtml(d.error||'分析失败')}</span>`;
+                }
+            } catch(e) {
+                vlTestResult.innerHTML = `<span style="color:#ef4444;">网络错误: ${escapeHtml(e.message)}</span>`;
+            }
+        }
+
         // Track dirty changes for number inputs
         panel.querySelectorAll('input[data-key]').forEach(inp => {
             const eventType = inp.type === 'checkbox' ? 'change' : 'input';
@@ -10370,6 +11384,10 @@
             const sch = _rcSchema[k];
             if (sch?.type === 'select') { payload[k] = v; }
             else if (sch?.type === 'bool') { payload[k] = v === true || v === 'true'; }
+            else if (sch?.type === 'ordered-list') {
+                const parsed = typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch(_) { return v; } })() : v;
+                payload[k] = parsed;
+            }
             else if (sch?.type === 'float') { payload[k] = parseFloat(v); }
             else { payload[k] = parseInt(v); }
         }
@@ -10467,7 +11485,7 @@
             <table style="width:100%;font-size:.7rem;border-collapse:collapse;">
             <tr style="text-align:left;border-bottom:2px solid var(--card-border);background:var(--card-bg);position:sticky;top:0;">
                 <th style="padding:4px 6px;"><input type="checkbox" id="userSelectAll"></th>
-                <th>用户</th><th>会话</th><th>聊天文件</th><th>知识库</th><th>征信</th><th>批量对比</th><th>项目</th><th>合计</th>
+                <th>用户</th><th>会话</th><th>聊天文件</th><th>知识库</th><th>批量对比</th><th>项目</th><th>合计</th>
             </tr>`;
             for (const u of filtered) {
                 const checked = selectedSrc.has(u.user_id);
@@ -10475,7 +11493,7 @@
                     <td style="padding:2px 4px;"><input type="checkbox" class="user-cb" data-uid="${u.user_id}" ${checked?'checked':''}></td>
                     <td style="white-space:nowrap;"><b>${escapeHtml(u.username)}</b></td>
                     <td>${u.sessions}</td><td>${u.chat_files}${u.chat_mb>0?`<small> ${u.chat_mb}MB</small>`:''}</td>
-                    <td>${u.kb_files}</td><td>${u.credit_reports}</td><td>${u.batch_results}</td><td>${u.projects}</td>
+                    <td>${u.kb_files}</td><td>${u.batch_results}</td><td>${u.projects}</td>
                     <td><b>${u.total}</b></td></tr>`;
             }
             html += '</table></div>';
@@ -10632,12 +11650,13 @@
 
     // Single click handler: menu actions + auto-dismiss
     document.addEventListener('click', function(e) {
-        console.log('CTXMENU CLICK', e.target.tagName, e.target.className, e.target.dataset?.action);
         const item = e.target.closest('.ctx-item');
-        if (!item) { console.log('  -> not a ctx-item, ignoring'); return; }
-        if (!_ctxMenuTarget) { console.log('  -> no _ctxMenuTarget'); return; }
-        e.preventDefault();
-        e.stopPropagation();
+        if (!item) {
+            ctxMenu.style.display = 'none';
+            _ctxMenuTarget = null;
+            return;
+        }
+        if (!_ctxMenuTarget) { return; }
         ctxMenu.style.display = 'none';
 
         const action = item.dataset.action;
@@ -10864,7 +11883,10 @@
                 const statusIcon = t.status === 'running' ? '🔄' : t.status === 'completed' ? '✅' : t.status === 'failed' ? '❌' : '⏳';
                 const barWidth = t.progress || 0;
                 const barColor = t.status === 'failed' ? '#ef4444' : t.status === 'completed' ? '#22c55e' : '#5a7c9b';
-                return `<li style="padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);">
+                const taskId = t.task_id || '';
+                const clickable = (t.status === 'completed' || t.status === 'failed');
+                const style = clickable ? 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);cursor:pointer;' : 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);';
+                return `<li data-task-id="${taskId}" data-task-status="${t.status || ''}" style="${style}">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span>${statusIcon} ${escapeHtml(t.label || t.type || '任务')}</span>
                         <span style="font-size:0.65rem;color:var(--card-muted);">${t.progress || 0}%</span>
@@ -10875,6 +11897,46 @@
             }).join('');
         } catch(e) { /* silent */ }
     }
+
+    function _handleTaskClick(e) {
+        const li = e.target.closest('li[data-task-id]');
+        if (!li) return;
+        const tid = li.getAttribute('data-task-id');
+        const status = li.getAttribute('data-task-status');
+        if (!tid || (status !== 'completed' && status !== 'failed')) return;
+        e.stopPropagation();
+        let tc = document.getElementById('toast-container');
+        if (!tc) {
+            tc = document.createElement('div');
+            tc.id = 'toast-container';
+            tc.setAttribute('class', 'toast-container');
+            document.body.appendChild(tc);
+        }
+        const toast = document.createElement('div');
+        toast.setAttribute('class', 'toast info');
+        toast.textContent = 'Loading task ' + tid + '...';
+        tc.appendChild(toast);
+        fetch('/tasks/' + tid, { credentials: 'include' })
+            .then(r => r.json())
+            .then(d => {
+                toast.remove();
+                if (!d.success) return;
+                const result = d.result || '';
+                const shortResult = result.length > 80 ? result.substring(0, 80) + '...' : result;
+                const info = (d.label || d.type || '') + ' — ' + d.status +
+                    (d.message ? ' | ' + d.message : '') +
+                    (shortResult ? ' | ' + shortResult : '');
+                const t2 = document.createElement('div');
+                t2.setAttribute('class', 'toast ' + (d.status === 'failed' ? 'error' : 'info'));
+                t2.textContent = info;
+                t2.style.cursor = 'pointer';
+                t2.onclick = () => t2.remove();
+                tc.appendChild(t2);
+                setTimeout(() => { if (t2.parentNode) t2.remove(); }, 8000);
+            }).catch(() => { toast.textContent = 'Error loading task'; });
+    }
+    document.addEventListener('click', _handleTaskClick);
+    console.log('[TASK] click handler registered on document');
 
     function startBgTasksPolling() {
         loadBgTasks();
@@ -11114,300 +12176,6 @@
         handle.addEventListener('mouseleave', () => { if (!dragging) handle.style.background = 'transparent'; });
     }
 
-    // ── Compliance Checker ──
-    function initComplianceChecker() {
-        const bidDocInput = document.getElementById('complianceBidDocInput');
-        const checkFileInput = document.getElementById('complianceCheckFileInput');
-        const selectBidDocBtn = document.getElementById('selectComplianceBidDocBtn');
-        const selectCheckFileBtn = document.getElementById('selectComplianceCheckFileBtn');
-        const bidDocName = document.getElementById('complianceBidDocName');
-        const checkFileNames = document.getElementById('complianceCheckFileNames');
-        const extractBtn = document.getElementById('complianceExtractBtn');
-        const checkBtn = document.getElementById('complianceCheckBtn');
-        const useAIChk = document.getElementById('complianceUseAI');
-        const statusSpan = document.getElementById('complianceStatus');
-        const rulesPreview = document.getElementById('complianceRulesPreview');
-        const rulesList = document.getElementById('complianceRulesList');
-        const ruleCount = document.getElementById('complianceRuleCount');
-        const resultsPanel = document.getElementById('complianceResultsPanel');
-
-        let selectedBidDoc = null;
-        let selectedCheckFiles = [];
-        let extractedRulesTaskId = null;
-
-        if (!bidDocInput || !checkFileInput) return;
-
-        selectBidDocBtn.onclick = () => bidDocInput.click();
-        selectCheckFileBtn.onclick = () => checkFileInput.click();
-
-        bidDocInput.onchange = () => {
-            if (bidDocInput.files.length) {
-                selectedBidDoc = bidDocInput.files[0];
-                bidDocName.textContent = selectedBidDoc.name;
-                extractBtn.disabled = false;
-            }
-        };
-
-        checkFileInput.onchange = () => {
-            selectedCheckFiles = Array.from(checkFileInput.files);
-            checkFileNames.textContent = selectedCheckFiles.length
-                ? `${selectedCheckFiles.length} 个文件: ${selectedCheckFiles.map(f => f.name).join(', ')}`
-                : '';
-        };
-
-        extractBtn.onclick = async () => {
-            if (!selectedBidDoc) return;
-            extractBtn.disabled = true;
-            statusSpan.textContent = '正在提取规则...';
-            statusSpan.style.color = '#f39c12';
-
-            const formData = new FormData();
-            formData.append('file', selectedBidDoc);
-            formData.append('use_ai', useAIChk.checked ? 'true' : 'false');
-
-            try {
-                const resp = await fetch('/compliance/extract_rules', { method: 'POST', body: formData });
-                const data = await resp.json();
-                if (data.success) {
-                    extractedRulesTaskId = data.task_id;
-                    statusSpan.textContent = `✅ 提取完成: ${data.total} 条规则 (AI:${data.ai_count} + 正则:${data.regex_count})`;
-                    statusSpan.style.color = '#27ae60';
-                    renderExtractedRules(data.rules);
-                    checkBtn.disabled = false;
-                } else {
-                    statusSpan.textContent = '❌ ' + (data.error || '提取失败');
-                    statusSpan.style.color = '#e74c3c';
-                }
-            } catch (e) {
-                statusSpan.textContent = '❌ 请求失败: ' + e.message;
-                statusSpan.style.color = '#e74c3c';
-            } finally {
-                extractBtn.disabled = false;
-            }
-        };
-
-        checkBtn.onclick = async () => {
-            if (!extractedRulesTaskId || !selectedCheckFiles.length) return;
-            checkBtn.disabled = true;
-            statusSpan.textContent = '⏳ 正在审查...';
-            statusSpan.style.color = '#f39c12';
-
-            // Process files one by one
-            resultsPanel.style.display = 'block';
-            resultsPanel.innerHTML = '<p style="font-size:0.75rem;color:var(--card-muted);">⏳ 正在进行合规审查，请稍候...</p>';
-
-            let allResults = [];
-            window._complianceTaskIds = {};  // file name → task_id map
-            for (const file of selectedCheckFiles) {
-                const formData = new FormData();
-                formData.append('bid_file', file);
-                formData.append('rules_task_id', extractedRulesTaskId);
-                formData.append('use_ai', useAIChk.checked ? 'true' : 'false');
-                formData.append('include_laws', 'true');
-
-                try {
-                    const resp = await fetch('/compliance/check', { method: 'POST', body: formData });
-                    const data = await resp.json();
-                    if (data.status === 'completed' || data.success) {
-                        allResults.push({ filename: file.name, ...data });
-                        if (data.task_id) window._complianceTaskIds[file.name] = data.task_id;
-                    } else if (data.task_id) {
-                        window._complianceTaskIds[file.name] = data.task_id;
-                        // Async: poll for result
-                        const r = await pollComplianceResult(data.task_id, file.name);
-                        if (r) allResults.push(r);
-                    }
-                } catch (e) {
-                    allResults.push({ filename: file.name, error: e.message });
-                }
-            }
-
-            renderComplianceResults(allResults);
-            checkBtn.disabled = false;
-            statusSpan.textContent = `✅ 审查完成: ${allResults.length} 个文件`;
-            statusSpan.style.color = '#27ae60';
-        };
-
-        async function pollComplianceResult(taskId, filename) {
-            for (let i = 0; i < 60; i++) {
-                await new Promise(r => setTimeout(r, 2000));
-                try {
-                    const resp = await fetch(`/compliance/result/${taskId}`);
-                    const data = await resp.json();
-                    if (data.status === 'completed') {
-                        return { filename, ...data };
-                    }
-                    if (data.status === 'failed') {
-                        return { filename, error: data.error || '审查失败' };
-                    }
-                    statusSpan.textContent = `⏳ 审查中... (${(i+1)*2}s)`;
-                } catch (e) { /* retry */ }
-            }
-            return { filename, error: '审查超时' };
-        }
-
-        function renderExtractedRules(rules) {
-            rulesPreview.style.display = 'block';
-            ruleCount.textContent = rules.length;
-
-            const catColors = {
-                qualification: '#3498db', technical: '#2ecc71',
-                commercial: '#9b59b6', rejection: '#e74c3c', prohibition: '#c0392b'
-            };
-            const catLabels = {
-                qualification: '资质', technical: '技术', commercial: '商务',
-                rejection: '废标', prohibition: '禁止'
-            };
-
-            rulesList.innerHTML = rules.map((r, i) => {
-                const color = catColors[r.category] || '#95a5a6';
-                const label = catLabels[r.category] || r.category;
-                const sev = r.severity_if_violated || 'violation';
-                const sevColors = { critical: '#e74c3c', violation: '#e67e22', warning: '#f39c12', pass: '#27ae60' };
-                return `<div style="display:flex;align-items:flex-start;gap:6px;padding:3px 0;border-bottom:1px solid #eee;font-size:0.7rem;">
-                    <span style="background:${color};color:#fff;padding:0 4px;border-radius:3px;font-size:0.65rem;flex-shrink:0;">${label}</span>
-                    <span style="flex:1;">${r.description ? r.description.replace(/</g,'&lt;') : r.original_text ? r.original_text.substr(0,120).replace(/</g,'&lt;') : ''}</span>
-                    <span style="color:${sevColors[sev]||'#888'};font-size:0.65rem;flex-shrink:0;">${sev}</span>
-                    <button onclick="this.parentElement.remove();updateRuleCount();" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.7rem;" title="删除此规则">✕</button>
-                </div>`;
-            }).join('');
-        }
-
-        function renderComplianceResults(allResults) {
-            resultsPanel.style.display = 'block';
-            let html = '';
-            for (const r of allResults) {
-                if (r.error) {
-                    html += `<div style="margin:4px 0;padding:8px;background:#fdf2f2;border-radius:6px;font-size:0.72rem;">
-                        <strong style="color:#e74c3c;">❌ ${r.filename}</strong>: ${r.error}</div>`;
-                    continue;
-                }
-                const s = r.summary || {};
-                const vStyle = s.critical > 0 ? '#e74c3c' : s.violation > 0 ? '#e67e22' : '#27ae60';
-                const vText = s.critical > 0 ? '⚠️ 严重违规' : s.violation > 0 ? '⚠️ 存在违规' : '✅ 通过';
-                const fileIdx = allResults.indexOf(r);
-                html += `<div class="compliance-result-card" style="margin:4px 0;padding:8px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;font-size:0.72rem;" data-filename="${r.bid_name || r.filename}">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <strong>${r.bid_name || r.filename}</strong>
-                        <span style="color:${vStyle};">${vText}</span>
-                    </div>
-                    <div style="margin:4px 0;display:flex;gap:10px;font-size:0.68rem;color:var(--card-muted);">
-                        <span>规则: ${r.rule_count || 0}条</span>
-                        <span style="color:#27ae60;">✅ ${s.pass||0}</span>
-                        <span style="color:#f39c12;">⚠️ ${s.warning||0}</span>
-                        <span style="color:#e67e22;">❌ ${s.violation||0}</span>
-                        <span style="color:#e74c3c;">🚫 ${s.critical||0}</span>
-                    </div>`;
-                if (r.report_html) {
-                    html += `<details style="margin-top:4px;"><summary style="cursor:pointer;font-size:0.68rem;color:#2980b9;">📋 查看详细报告</summary>
-                        <div style="margin-top:4px;padding:6px;background:var(--bg-color);border-radius:4px;">${r.report_html}</div></details>`;
-                }
-                // ── Forced feedback field ──
-                html += `<div class="compliance-feedback-row" style="margin-top:6px;padding:6px;background:var(--bg-color);border-radius:4px;border:1px dashed var(--card-border);">
-                    <div style="font-size:0.65rem;color:var(--card-muted);margin-bottom:4px;">📝 <strong>强制反馈</strong> — 此检查结果是否正确？</div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                        <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
-                            <input type="radio" name="feedback-${fileIdx}" value="true_violation" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#e74c3c;">✅ 确实违规</span>
-                        </label>
-                        <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
-                            <input type="radio" name="feedback-${fileIdx}" value="false_positive" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#f39c12;">❌ AI误判</span>
-                        </label>
-                        <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
-                            <input type="radio" name="feedback-${fileIdx}" value="not_matter" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#7f8c8d;">➖ 无关紧要</span>
-                        </label>
-                    </div>
-                    <input type="text" class="feedback-explain" data-filename="${r.bid_name || r.filename}"
-                        placeholder="简要说明原因（必填）" style="display:none;width:100%;margin-top:4px;font-size:0.65rem;padding:3px 6px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);">
-                    <button class="feedback-submit-btn" data-filename="${r.bid_name || r.filename}"
-                        style="display:none;margin-top:4px;font-size:0.62rem;padding:2px 8px;background:#2980b9;color:#fff;border:none;border-radius:4px;cursor:pointer;">提交反馈</button>
-                    <span class="feedback-saved" style="display:none;margin-left:8px;font-size:0.62rem;color:#27ae60;">✅ 已保存</span>
-                </div>`;
-                html += '</div>';
-            }
-            resultsPanel.innerHTML = html;
-
-            // Attach feedback submit handlers
-            document.querySelectorAll('.feedback-submit-btn').forEach(btn => {
-                btn.onclick = async function() {
-                    const fn = this.dataset.filename;
-                    const card = this.closest('.compliance-result-card');
-                    const radio = card.querySelector(`input[type="radio"]:checked`);
-                    const explainInput = card.querySelector('.feedback-explain');
-                    const savedSpan = card.querySelector('.feedback-saved');
-
-                    if (!radio) { alert('请选择一个判定'); return; }
-                    const explain = explainInput.value.trim();
-                    if (!explain) { alert('请填写判断原因'); return; }
-
-                    this.disabled = true;
-                    this.textContent = '保存中...';
-                    try {
-                        const taskId = (window._complianceTaskIds && window._complianceTaskIds[fn]) || '';
-                        const resp = await fetch('/compliance/feedback', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                task_id: taskId,
-                                check_file_name: fn,
-                                user_verdict: radio.value,
-                                user_explain: explain,
-                            }),
-                        });
-                        const data = await resp.json();
-                        if (data.success) {
-                            savedSpan.style.display = 'inline';
-                            this.textContent = '已提交';
-                            this.style.background = '#27ae60';
-                            radio.disabled = true;
-                            // Disable other radios in this group
-                            card.querySelectorAll(`input[type="radio"]`).forEach(r => r.disabled = true);
-                            explainInput.disabled = true;
-                        } else {
-                            alert('保存失败: ' + (data.error || '未知错误'));
-                            this.disabled = false;
-                            this.textContent = '提交反馈';
-                        }
-                    } catch (e) {
-                        alert('请求失败: ' + e.message);
-                        this.disabled = false;
-                        this.textContent = '提交反馈';
-                    }
-                };
-            });
-        }
-
-        // Global function for radio onchange to show/hide explain + submit
-        window.markFeedback = function(radio, filename) {
-            const card = radio.closest('.compliance-result-card');
-            const explainInput = card.querySelector('.feedback-explain');
-            const submitBtn = card.querySelector('.feedback-submit-btn');
-            if (radio.checked) {
-                explainInput.style.display = 'block';
-                submitBtn.style.display = 'inline-block';
-                explainInput.focus();
-            }
-        };
-
-        // Expose updateRuleCount for delete buttons
-        window.updateRuleCount = function() {
-            const count = rulesList.children.length;
-            ruleCount.textContent = count;
-            const rules = [];
-            for (const el of rulesList.children) {
-                const spans = el.querySelectorAll('span');
-                if (spans.length >= 2) {
-                    rules.push({
-                        description: spans[1].textContent,
-                        category: spans[0].textContent,
-                    });
-                }
-            }
-        };
-    }
-
     // ══════════════════════════════════════════════════════════════════
     // Quote Anomaly standalone tool
     // ══════════════════════════════════════════════════════════════════
@@ -11517,6 +12285,12 @@
             });
             html += '</table>';
         }
+        const docName = (data.per_bidder && data.per_bidder.length) ? data.per_bidder.map(function(p){return p.filename||''}).join(';').substring(0,80) : data.doc_name || '未知';
+        html += '<div style="margin-top:8px;display:flex;gap:6px;font-size:0.7rem;align-items:center;">';
+        html += '<span style="color:var(--card-muted);">分析结果有帮助吗？</span>';
+        html += '<button class="fb-btn" onclick="window.submitQuoteFeedback(\''+escapeHtml(docName)+'\',5,this)">👍 有帮助</button>';
+        html += '<button class="fb-btn" onclick="window.submitQuoteFeedback(\''+escapeHtml(docName)+'\',1,this)">👎 无帮助</button>';
+        html += '</div>';
         panel.innerHTML = html;
     }
 
@@ -11836,4 +12610,853 @@
         });
         html += '</table>';
         container.innerHTML = html;
+    }
+
+    // ======================== Unified Bid Audit ========================
+    const _auditFunctionLabels = {
+        rule_extraction: '规则提取',
+        compliance_check: '合规审查',
+        typo_detection: '错别字检测',
+        quote_anomaly: '报价异常',
+        relationship_extraction: '关系分析',
+        ai_doc_review: 'AI文档审查',
+        style_analysis: '文风分析',
+    };
+
+    // Severity threshold definitions per function: [{key, label, type, default}]
+    const _auditThresholdDefs = {
+        rule_extraction: [
+            {key: 'min_extracted_rules', label: '最少提取规则数', type: 'int', default: 5}
+        ],
+        compliance_check: [
+            {key: 'critical', label: '严重违规≥', type: 'int', default: 1},
+            {key: 'violation', label: '一般违规≥', type: 'int', default: 3}
+        ],
+        typo_detection: [
+            {key: 'penalty_per_10k', label: '每万字扣分', type: 'int', default: 5}
+        ],
+        quote_anomaly: [
+            {key: 'same_rate', label: '雷同报价阈值', type: 'float', default: 0.05},
+            {key: 'drop', label: '异常降价阈值', type: 'float', default: 0.15}
+        ],
+        relationship_extraction: [
+            {key: 'risk_signal_weight', label: '风险信号权重', type: 'int', default: 15}
+        ],
+        ai_doc_review: [
+            {key: 'min_chars', label: '最少字符数', type: 'int', default: 500}
+        ],
+        style_analysis: []
+    };
+
+    // ── Audit Config Panel (analytics admin) ──
+    async function loadAuditConfig() {
+        const tbody = document.getElementById('auditConfigTbody');
+        const msgEl = document.getElementById('auditConfigMsg');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--card-muted);padding:8px;">加载中...</td></tr>';
+        let cfg = [];
+        try {
+            const r = await fetch('/audit/config', { credentials: 'include' });
+            if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;padding:8px;">加载失败</td></tr>'; return; }
+            const raw = await r.json();
+            cfg = Array.isArray(raw) ? raw : (raw.configs || raw.data || []);
+        } catch (_) {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;padding:8px;">网络错误</td></tr>';
+            return;
+        }
+        if (!Array.isArray(cfg) || !cfg.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--card-muted);padding:8px;">暂无审计配置</td></tr>';
+            return;
+        }
+        let html = '';
+        const _origCfg = {};
+        for (const c of cfg) {
+            _origCfg[c.function_name] = { ...c };
+            const fn = c.function_name;
+            const label = _auditFunctionLabels[fn] || fn;
+            const defs = _auditThresholdDefs[fn] || [];
+            const sev = (typeof c.severity_thresholds === 'object' && c.severity_thresholds)
+                ? c.severity_thresholds
+                : (typeof c.severity_thresholds === 'string' ? JSON.parse(c.severity_thresholds || '{}') : {});
+
+            // Build severity threshold inputs
+            let sevHtml = '';
+            if (defs.length === 0) {
+                sevHtml = '<span style="font-size:0.6rem;color:var(--card-muted);">-</span>';
+            } else {
+                for (const d of defs) {
+                    const val = sev[d.key] !== undefined ? sev[d.key] : d.default;
+                    sevHtml += '<span style="white-space:nowrap;margin-right:6px;">' +
+                        '<span style="font-size:0.58rem;color:var(--card-muted);">' + escapeHtml(d.label) + '</span> ' +
+                        '<input type="number" class="audit-cfg-thr" data-fn="' + fn + '" data-key="' + d.key +
+                        '" value="' + val + '" step="' + (d.type === 'float' ? '0.01' : '1') +
+                        '" style="width:' + (d.type === 'float' ? '55px' : '45px') +
+                        ';font-size:0.62rem;padding:1px 3px;border-radius:3px;border:1px solid var(--card-border);">' +
+                        '</span>';
+                }
+            }
+
+            html += '<tr>' +
+                '<td style="padding:4px;font-weight:600;">' + escapeHtml(label) + '</td>' +
+                '<td style="text-align:center;"><input type="checkbox" class="audit-cfg-cb" data-fn="' + fn + '" ' + (c.enabled_by_default ? 'checked' : '') + '></td>' +
+                '<td style="text-align:center;">' +
+                    '<input type="range" class="audit-cfg-range" data-fn="' + fn + '" data-field="fail_threshold" min="0" max="100" value="' + c.fail_threshold + '" style="width:60px;vertical-align:middle;">' +
+                    '<span class="audit-cfg-val" style="margin-left:2px;font-size:0.65rem;">' + c.fail_threshold + '</span>' +
+                '</td>' +
+                '<td style="text-align:center;">' +
+                    '<input type="range" class="audit-cfg-range" data-fn="' + fn + '" data-field="weight" min="0" max="100" value="' + c.weight + '" style="width:60px;vertical-align:middle;">' +
+                    '<span class="audit-cfg-val" style="margin-left:2px;font-size:0.65rem;">' + c.weight + '</span>' +
+                '</td>' +
+                '<td style="font-size:0.62rem;">' + sevHtml + '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = html;
+
+        const dot = document.getElementById('auditConfigModifiedDot');
+        const _dirty = {};
+        function _updateDot() {
+            if (dot) dot.style.display = Object.keys(_dirty).length ? 'inline' : 'none';
+        }
+
+        tbody.querySelectorAll('.audit-cfg-range').forEach(inp => {
+            inp.addEventListener('input', () => {
+                const fn = inp.dataset.fn;
+                const field = inp.dataset.field;
+                const valEl = inp.parentElement.querySelector('.audit-cfg-val');
+                if (valEl) valEl.textContent = inp.value;
+                if (!_dirty[fn]) _dirty[fn] = {};
+                _dirty[fn][field] = parseInt(inp.value);
+                _updateDot();
+            });
+        });
+        tbody.querySelectorAll('.audit-cfg-cb').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const fn = cb.dataset.fn;
+                if (!_dirty[fn]) _dirty[fn] = {};
+                _dirty[fn].enabled_by_default = cb.checked;
+                _updateDot();
+            });
+        });
+        tbody.querySelectorAll('.audit-cfg-thr').forEach(inp => {
+            inp.addEventListener('input', () => {
+                const fn = inp.dataset.fn;
+                if (!_dirty[fn]) _dirty[fn] = {};
+                if (!_dirty[fn].severity_thresholds) {
+                    _dirty[fn].severity_thresholds = {};
+                    const origSev = _origCfg[fn] && _origCfg[fn].severity_thresholds;
+                    if (typeof origSev === 'object' && origSev) {
+                        Object.assign(_dirty[fn].severity_thresholds, origSev);
+                    }
+                }
+                const defs = _auditThresholdDefs[fn] || [];
+                const d = defs.find(dd => dd.key === inp.dataset.key);
+                const val = d && d.type === 'float' ? parseFloat(inp.value) : parseInt(inp.value);
+                _dirty[fn].severity_thresholds[inp.dataset.key] = isNaN(val) ? 0 : val;
+                _updateDot();
+            });
+        });
+
+        document.getElementById('auditConfigSaveBtn').onclick = async () => {
+            const dirtyKeys = Object.keys(_dirty);
+            if (!dirtyKeys.length) { msgEl.innerHTML = '<span style="color:var(--card-muted);">无修改</span>'; return; }
+            const configs = dirtyKeys.map(fn => {
+                const d = _dirty[fn];
+                const orig = _origCfg[fn] || {};
+                return {
+                    function_name: fn,
+                    enabled_by_default: d.enabled_by_default !== undefined ? d.enabled_by_default : orig.enabled_by_default,
+                    fail_threshold: d.fail_threshold !== undefined ? d.fail_threshold : orig.fail_threshold,
+                    weight: d.weight !== undefined ? d.weight : orig.weight,
+                    severity_thresholds: d.severity_thresholds !== undefined ? d.severity_thresholds : orig.severity_thresholds,
+                };
+            });
+            const btn = document.getElementById('auditConfigSaveBtn');
+            btn.disabled = true; btn.textContent = '⏳ 保存中...';
+            try {
+                const r = await fetch('/audit/config', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ configs })
+                });
+                const d = await r.json();
+                if (r.ok) {
+                    msgEl.innerHTML = '<span style="color:#22c55e;">✅ ' + (d.message || '保存成功') + '</span>';
+                    Object.keys(_dirty).forEach(k => delete _dirty[k]);
+                    _updateDot();
+                    loadAuditConfig();
+                } else {
+                    msgEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (d.error || '保存失败') + '</span>';
+                }
+            } catch (_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
+            btn.disabled = false; btn.textContent = '💾 保存审计配置';
+        };
+    }
+
+    // ── Audit History (review tab) ──
+    async function loadAuditHistory() {
+        const panel = document.getElementById('auditHistoryPanel');
+        if (!panel) return;
+        const pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            panel.innerHTML = '<span style="color:var(--card-muted);">请先打开一个项目查看审计历史。</span>';
+            return;
+        }
+        // Migration notice: audit history is now per-project in the project view
+        panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);padding:8px;background:#f0f9ff;border-radius:6px;margin-bottom:8px;">📋 审计历史现已移至<strong>项目视图</strong>。请在项目管理中打开具体项目，即可在项目页面的底部查看该项目的审计记录和下载报告。</div>' +
+            '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
+        return;
+        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
+        let runs = [];
+        try {
+            const r = await fetch('/audit/history/' + pid, { credentials: 'include' });
+            if (!r.ok) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; return; }
+            const rawRuns = await r.json();
+            runs = Array.isArray(rawRuns) ? rawRuns : (rawRuns.data || []);
+        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; return; }
+        if (!Array.isArray(runs) || !runs.length) {
+            panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">暂无审计记录。</div>';
+            return;
+        }
+        runs.sort((a, b) => new Date(b.started_at || b.created_at || 0) - new Date(a.started_at || a.created_at || 0));
+        let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
+            '<span style="font-size:0.7rem;color:var(--card-muted);">共 ' + runs.length + ' 次审计</span>' +
+            '<button id="auditHistoryRefreshBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 刷新</button>' +
+            '</div>';
+        for (const run of runs) {
+            const isPass = run.overall_status === 'PASS';
+            const score = run.overall_score != null ? parseFloat(run.overall_score).toFixed(1) : '-';
+            const date = (run.started_at || run.created_at) ? new Date(run.started_at || run.created_at).toLocaleString() : '?';
+            const fileCount = run.file_count ?? run.total_files ?? 0;
+            const bidderCount = run.bidder_count ?? run.total_bidders ?? '?';
+            const runId = run.id;
+
+            html += '<div class="audit-history-card" data-run-id="' + runId + '" style="border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);cursor:pointer;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
+                '<span style="font-size:0.72rem;">' + date + '</span>' +
+                '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
+                '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
+                '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
+                '<span style="font-size:0.6rem;color:var(--card-muted);">▶ 展开</span>' +
+                '</div>' +
+                '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
+                '</div>';
+        }
+        panel.innerHTML = html;
+
+        const refreshBtn = document.getElementById('auditHistoryRefreshBtn');
+        if (refreshBtn) refreshBtn.onclick = loadAuditHistory;
+
+        panel.querySelectorAll('.audit-history-card').forEach(card => {
+            card.onclick = async () => {
+                const detailEl = card.querySelector('.audit-history-detail');
+                if (!detailEl) return;
+                if (detailEl.style.display !== 'none') {
+                    detailEl.style.display = 'none';
+                    card.querySelector('span:last-child').textContent = '▶ 展开';
+                    return;
+                }
+                const runId = card.dataset.runId;
+                detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
+                detailEl.style.display = 'block';
+                card.querySelector('span:last-child').textContent = '▼ 收起';
+                try {
+                    const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
+                    if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
+                    const result = await r.json();
+                    detailEl.innerHTML = _renderAuditResultDetail(result);
+                } catch (_) {
+                    detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">网络错误</span>';
+                }
+            };
+        });
+    }
+
+    async function loadProjectAuditHistory() {
+        const panel = document.getElementById('projectAuditHistoryPanel');
+        if (!panel) return;
+        const pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            panel.innerHTML = '<span style="color:var(--card-muted);">请先打开一个项目。</span>';
+            return;
+        }
+        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
+        let runs = [];
+        try {
+            const r = await fetch('/audit/history/' + pid, { credentials: 'include' });
+            if (!r.ok) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; return; }
+            const rawRuns = await r.json();
+            runs = Array.isArray(rawRuns) ? rawRuns : (rawRuns.data || []);
+        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; return; }
+        if (!Array.isArray(runs) || !runs.length) {
+            panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">暂无审计记录。</div>';
+            const countEl = document.getElementById('projectAuditCount');
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+        runs.sort((a, b) => new Date(b.started_at || b.created_at || 0) - new Date(a.started_at || a.created_at || 0));
+        const countEl = document.getElementById('projectAuditCount');
+        if (countEl) countEl.textContent = `(${runs.length} 条记录)`;
+        let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
+            '<span style="font-size:0.7rem;color:var(--card-muted);font-weight:600;">审计记录</span>' +
+            '<button id="projectAuditHistoryRefreshBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 刷新</button>' +
+            '</div>';
+        for (const run of runs) {
+            const isPass = run.overall_status === 'PASS';
+            const score = run.overall_score != null ? parseFloat(run.overall_score).toFixed(1) : '-';
+            const date = (run.started_at || run.created_at) ? new Date(run.started_at || run.created_at).toLocaleString() : '?';
+            const fileCount = run.file_count ?? run.total_files ?? 0;
+            const bidderCount = run.bidder_count ?? run.total_bidders ?? '?';
+            const runId = run.id;
+            html += '<div class="audit-history-card" data-run-id="' + runId + '" style="border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);cursor:pointer;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
+                '<span style="font-size:0.72rem;">' + date + '</span>' +
+                '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
+                '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
+                '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
+                '<span style="font-size:0.6rem;color:var(--card-muted);">▶ 展开</span>' +
+                '</div>' +
+                '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
+                '</div>';
+        }
+        panel.innerHTML = html;
+        const refreshBtn = document.getElementById('projectAuditHistoryRefreshBtn');
+        if (refreshBtn) refreshBtn.onclick = loadProjectAuditHistory;
+        panel.querySelectorAll('.audit-history-card').forEach(card => {
+            card.onclick = async () => {
+                const detailEl = card.querySelector('.audit-history-detail');
+                if (!detailEl) return;
+                if (detailEl.style.display !== 'none') {
+                    detailEl.style.display = 'none';
+                    card.querySelector('span:last-child').textContent = '▶ 展开';
+                    return;
+                }
+                const runId = card.dataset.runId;
+                detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
+                detailEl.style.display = 'block';
+                card.querySelector('span:last-child').textContent = '▼ 收起';
+                try {
+                    const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
+                    if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
+                    const result = await r.json();
+                    detailEl.innerHTML = _renderAuditResultDetail(result);
+                } catch (_) {
+                    detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">网络错误</span>';
+                }
+            };
+        });
+    }
+
+    function _renderAuditResultDetail(result) {
+        let html = '';
+
+        // Download buttons
+        if (result.docx_path || result.xlsx_path) {
+            html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+            if (result.docx_path) html += '<button onclick="window.open(\'/audit/download/' + result.id + '/docx\', \'_blank\')" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">📄 下载DOCX</button>';
+            if (result.xlsx_path) html += '<button onclick="window.open(\'/audit/download/' + result.id + '/xlsx\', \'_blank\')" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">📊 下载XLSX</button>';
+            html += '</div>';
+        }
+
+        // Score summary
+        const score = result.overall_score != null ? parseFloat(result.overall_score).toFixed(1) : '-';
+        const isPass = result.overall_status === 'PASS';
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:4px 8px;border-radius:6px;background:' + (isPass ? '#dcfce7' : '#fef2f2') + ';">' +
+            '<span style="font-size:0.7rem;font-weight:600;">综合得分: ' + score + '</span>' +
+            '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
+            '<span style="font-size:0.65rem;color:var(--card-muted);">' + (result.file_count || 0) + ' 文件 · ' + (result.bidder_count || 0) + ' 投标人</span>' +
+            '</div>';
+
+        const fileResults = result.file_results || [];
+        if (!fileResults.length) {
+            html += '<span style="font-size:0.65rem;color:var(--card-muted);">无详细结果</span>';
+            return html;
+        }
+
+        // Group flat file_results by bidder -> file -> function
+        const bidders = {};
+        for (const fr of fileResults) {
+            const bName = fr.bidder_label || '未知';
+            const fName = fr.filename || '?';
+            if (!bidders[bName]) bidders[bName] = {};
+            if (!bidders[bName][fName]) bidders[bName][fName] = [];
+            bidders[bName][fName].push(fr);
+        }
+
+        // Compute bidder-level aggregate score
+        for (const [bName, files] of Object.entries(bidders)) {
+            let allScores = [];
+            let bFail = false;
+            for (const [fName, funcs] of Object.entries(files)) {
+                for (const fn of funcs) {
+                    if (fn.score != null) allScores.push(fn.score);
+                    if (fn.status === 'error' || fn.status === 'skipped') bFail = true;
+                }
+            }
+            const bScore = allScores.length ? (allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
+            const bPass = !bFail && allScores.length > 0;
+
+            html += '<div style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;background:#f8fafc;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">' +
+                '<strong style="font-size:0.7rem;">' + escapeHtml(bName) + '</strong>' +
+                '<span style="font-size:0.65rem;">得分: <b>' + bScore.toFixed(1) + '</b></span>' +
+                '<span class="audit-status-badge ' + (bPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.6rem;padding:0 6px;border-radius:8px;">' + (bPass ? 'PASS' : 'FAIL') + '</span>' +
+                '</div>';
+
+            for (const [fName, funcs] of Object.entries(files)) {
+                html += '<div style="font-size:0.62rem;padding:4px 0;border-top:1px solid var(--card-border);">' +
+                    '<div style="font-weight:600;">📄 ' + escapeHtml(fName) + '</div>' +
+                    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">';
+                for (const fn of funcs) {
+                    const fnLabel = _auditFunctionLabels[fn.function_name] || fn.function_name;
+                    const fnScore = fn.score != null ? parseFloat(fn.score).toFixed(1) : '-';
+                    const fnOk = fn.status === 'success';
+                    html += '<span style="background:' + (fnOk ? '#dcfce7' : (fn.status === 'error' ? '#fef2f2' : '#fef3c7')) + ';border-radius:4px;padding:1px 6px;font-size:0.6rem;">' +
+                        escapeHtml(fnLabel) + ': <b>' + fnScore + '</b> ' + (fnOk ? '✅' : (fn.status === 'skipped' ? '⏭' : '❌')) +
+                        '</span>';
+                }
+                html += '</div></div>';
+            }
+            html += '</div>';
+        }
+        return html;
+    }
+
+    // ── Audit Modal (preflight + progress) ──
+    let _auditSSE = null;
+    let _auditModalActive = false;
+
+    async function showAuditModal() {
+        const pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            alert('请先在"项目管理"中打开一个项目，然后再使用全量审计功能。');
+            return;
+        }
+        if (_auditModalActive) return;
+        _auditModalActive = true;
+        console.log('Audit: showAuditModal starting for project', pid);
+
+        let folders = [], config = [];
+        try {
+            const [fRes, cRes] = await Promise.all([
+                fetch('/admin/projects/' + pid + '/folders', { credentials: 'include' }),
+                fetch('/audit/config', { credentials: 'include' })
+            ]);
+            if (fRes.ok) folders = (await fRes.json()).folders || [];
+            if (cRes.ok) { const cRaw = await cRes.json(); config = Array.isArray(cRaw) ? cRaw : (cRaw.data || cRaw.configs || []); }
+        } catch (_) { showToast('加载项目数据失败', 'error'); _auditModalActive = false; return; }
+
+        if (!folders.length) {
+            showToast('该项目没有文件夹', 'error');
+            _auditModalActive = false;
+            return;
+        }
+
+        const defaultFuncs = {};
+        if (Array.isArray(config)) {
+            for (const c of config) {
+                defaultFuncs[c.function_name] = c.enabled_by_default !== false;
+            }
+        }
+        if (!Object.keys(defaultFuncs).length) {
+            for (const k of Object.keys(_auditFunctionLabels)) {
+                defaultFuncs[k] = true;
+            }
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'custom-modal-overlay';
+        overlay.id = 'auditModalOverlay';
+        overlay.style.zIndex = '10000';
+
+        const folderCheckboxes = folders.map((f, i) => {
+            const fid = f.id || f.folder_id || i;
+            const fname = f.name || f.folder_name || '文件夹 ' + fid;
+            return '<label style="display:block;font-size:0.72rem;margin:2px 0;"><input type="checkbox" class="audit-folder-cb" value="' + fid + '" checked> ' + escapeHtml(fname) + '</label>';
+        }).join('');
+
+        const funcToggles = Object.entries(defaultFuncs).map(([fn, enabled]) => {
+            const label = _auditFunctionLabels[fn] || fn;
+            return '<label style="font-size:0.72rem;margin:2px 6px;"><input type="checkbox" class="audit-func-cb" data-fn="' + fn + '" ' + (enabled ? 'checked' : '') + '> ' + escapeHtml(label) + '</label>';
+        }).join('');
+
+        overlay.innerHTML =
+            '<div class="custom-modal" style="max-width:650px;max-height:90vh;overflow-y:auto;">' +
+            '<h3 style="margin-bottom:8px;">📋 全量审计</h3>' +
+            '<div id="auditModalBody">' +
+            // Preflight phase
+            '<div id="auditPreflightPhase">' +
+            '<div style="margin-bottom:10px;">' +
+            '<strong style="font-size:0.75rem;">选择文件夹:</strong>' +
+            '<div style="margin-top:4px;max-height:150px;overflow-y:auto;border:1px solid var(--card-border);border-radius:4px;padding:6px;">' +
+            folderCheckboxes +
+            '</div>' +
+            '<label style="font-size:0.68rem;margin-top:2px;display:block;"><input type="checkbox" id="auditFolderToggleAll" checked> 全选/取消</label>' +
+            '</div>' +
+            '<div style="margin-bottom:10px;">' +
+            '<strong style="font-size:0.75rem;">审计功能:</strong>' +
+            '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;">' + funcToggles + '</div>' +
+            '</div>' +
+            '<div style="margin-bottom:10px;">' +
+            '<label style="font-size:0.72rem;"><input type="checkbox" id="auditExtractOnDemand" checked> 按需提取结构化数据</label>' +
+            '</div>' +
+            '<div id="auditPreflightStatus" style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">点击"预检文件"查看可审计的文档...</div>' +
+            '<div style="display:flex;gap:8px;">' +
+            '<button id="auditStartBtn" class="file-btn" style="background:#7c3aed;color:#fff;border-color:#6d28d9;flex:1;padding:8px;">🔍 预检文件</button>' +
+            '<button id="auditCancelBtn" class="file-btn" style="padding:8px;">取消</button>' +
+            '</div>' +
+            '</div>' +
+            // File selection phase (shown after preflight)
+            '<div id="auditFileSelectPhase" style="display:none;">' +
+            '<div style="margin-bottom:8px;font-size:0.72rem;">' +
+            '<span id="auditFileSelectSummary"></span>' +
+            '<label style="margin-left:12px;font-size:0.68rem;"><input type="checkbox" id="auditFileToggleAll" checked> 全选文档</label>' +
+            '</div>' +
+            '<div id="auditFileSelectList" style="max-height:200px;overflow-y:auto;border:1px solid var(--card-border);border-radius:4px;padding:6px;margin-bottom:8px;font-size:0.68rem;"></div>' +
+            '<div id="auditFileSkipped" style="font-size:0.62rem;color:var(--card-muted);margin-bottom:8px;"></div>' +
+            '<div style="display:flex;gap:8px;">' +
+            '<button id="auditConfirmStartBtn" class="file-btn" style="background:#22c55e;color:#fff;border-color:#16a34a;flex:1;padding:8px;">✅ 确认开始审计</button>' +
+            '<button id="auditBackBtn" class="file-btn" style="padding:8px;">← 返回</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            // Progress phase
+            '<div id="auditProgressPhase" style="display:none;">' +
+            '<div style="margin-bottom:8px;">' +
+            '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px;">' +
+            '<span id="auditPhaseLabel">准备中...</span>' +
+            '<span id="auditProgressPct">0%</span>' +
+            '</div>' +
+            '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">' +
+            '<div id="auditProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#3b82f6);transition:width .3s;"></div>' +
+            '</div>' +
+            '</div>' +
+            '<div id="auditProgressFiles" style="max-height:350px;overflow-y:auto;font-size:0.68rem;border:1px solid var(--card-border);border-radius:4px;padding:6px;margin-bottom:8px;">' +
+            '<span style="color:var(--card-muted);">等待开始...</span>' +
+            '</div>' +
+            '<button id="auditProgressCloseBtn" class="file-btn" style="width:100%;padding:6px;">隐藏 (完成后会通知您)</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        overlay.onclick = (e) => { if (e.target === overlay) _closeAuditModal(); };
+
+        const toggleAll = overlay.querySelector('#auditFolderToggleAll');
+        if (toggleAll) {
+            toggleAll.onclick = function() {
+                overlay.querySelectorAll('.audit-folder-cb').forEach(function(cb) { cb.checked = toggleAll.checked; });
+            };
+        }
+
+        overlay.querySelector('#auditCancelBtn').onclick = _closeAuditModal;
+
+        overlay.querySelector('#auditProgressCloseBtn').onclick = function() {
+            overlay.style.display = 'none';
+            showToast('审计正在后台运行，完成后将通知您', 'info', 4000);
+        };
+
+        // Store state for the two-phase flow
+        let _auditSelectedFolders = [];
+        let _auditEnabledFuncs = [];
+        let _auditPreflightData = null;
+
+        overlay.querySelector('#auditStartBtn').onclick = async function() {
+            const btn = overlay.querySelector('#auditStartBtn');
+            const statusEl = overlay.querySelector('#auditPreflightStatus');
+            btn.disabled = true; btn.textContent = '⏳ 预检中...';
+
+            const selectedFolders = [];
+            overlay.querySelectorAll('.audit-folder-cb:checked').forEach(function(cb) { selectedFolders.push(parseInt(cb.value)); });
+
+            const enabledFunctions = [];
+            overlay.querySelectorAll('.audit-func-cb:checked').forEach(function(cb) { enabledFunctions.push(cb.dataset.fn); });
+
+            if (!selectedFolders.length) {
+                statusEl.innerHTML = '<span style="color:#ef4444;">请至少选择一个文件夹</span>';
+                btn.disabled = false; btn.textContent = '🔍 预检文件';
+                return;
+            }
+            if (!enabledFunctions.length) {
+                statusEl.innerHTML = '<span style="color:#ef4444;">请至少选择一个审计功能</span>';
+                btn.disabled = false; btn.textContent = '🔍 预检文件';
+                return;
+            }
+
+            _auditSelectedFolders = selectedFolders;
+            _auditEnabledFuncs = enabledFunctions;
+
+            try {
+                const pfRes = await fetch('/audit/preflight', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ folder_ids: selectedFolders })
+                });
+                const pfData = await pfRes.json();
+                if (!pfRes.ok) {
+                    statusEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (pfData.error || '预检失败') + '</span>';
+                    btn.disabled = false; btn.textContent = '🔍 预检文件';
+                    return;
+                }
+                _auditPreflightData = pfData;
+
+                // Group files by folder
+                const files = pfData.files || [];
+                const byFolder = {};
+                for (const f of files) {
+                    if (!byFolder[f.folder_id]) byFolder[f.folder_id] = [];
+                    byFolder[f.folder_id].push(f);
+                }
+
+                // Render file selection
+                const listEl = overlay.querySelector('#auditFileSelectList');
+                let listHtml = '';
+                for (const fid of selectedFolders) {
+                    const folderFiles = byFolder[fid] || [];
+                    if (!folderFiles.length) continue;
+                    listHtml += '<div style="font-weight:600;margin-top:4px;font-size:0.7rem;color:var(--card-muted);">📁 ' + escapeHtml(folderFiles[0].folder_name || ('文件夹 ' + fid)) + '</div>';
+                    for (const f of folderFiles) {
+                        if (f.status === 'skipped') continue; // non-doc files shown separately
+                        const disabled = f.status === 'missing' ? ' disabled' : '';
+                        const checked = f.status === 'ready' ? ' checked' : '';
+                        const label = f.status === 'missing' ? ' ⚠️未提取' : '';
+                        listHtml += '<label style="display:block;font-size:0.65rem;margin:1px 0;' + (f.status === 'missing' ? 'color:var(--card-muted);' : '') + '">' +
+                            '<input type="checkbox" class="audit-file-cb" data-file-id="' + f.file_id + '" data-folder="' + fid + '"' + checked + disabled + '> ' +
+                            escapeHtml(f.filename) + label + '</label>';
+                    }
+                }
+                listEl.innerHTML = listHtml || '<span style="color:var(--card-muted);">没有可审计的文档文件</span>';
+
+                // Show skipped (non-doc) files
+                const skipped = files.filter(f => f.status === 'skipped');
+                const skippedEl = overlay.querySelector('#auditFileSkipped');
+                if (skipped.length) {
+                    skippedEl.innerHTML = '已排除非文档文件: ' + skipped.map(f => '<span title="' + escapeHtml(f.reason || '') + '">' + escapeHtml(f.filename) + '</span>').join(', ');
+                } else {
+                    skippedEl.innerHTML = '';
+                }
+
+                // Summary
+                const summaryEl = overlay.querySelector('#auditFileSelectSummary');
+                summaryEl.innerHTML = '已找到 <b>' + (pfData.ready_count || 0) + '</b> 个就绪文档' +
+                    (pfData.missing_count ? ', <span style="color:#f59e0b;">' + pfData.missing_count + ' 个未提取</span>' : '') +
+                    (pfData.skipped_count ? ', <span style="color:var(--card-muted);">' + pfData.skipped_count + ' 个非文档已排除</span>' : '');
+
+                // Toggle all
+                const toggleAll = overlay.querySelector('#auditFileToggleAll');
+                if (toggleAll) {
+                    toggleAll.checked = true;
+                    toggleAll.onclick = function() {
+                        overlay.querySelectorAll('.audit-file-cb:not([disabled])').forEach(function(cb) { cb.checked = toggleAll.checked; });
+                    };
+                }
+
+                // Hide preflight, show file selection
+                overlay.querySelector('#auditPreflightPhase').style.display = 'none';
+                overlay.querySelector('#auditFileSelectPhase').style.display = 'block';
+
+                // Back button
+                overlay.querySelector('#auditBackBtn').onclick = function() {
+                    overlay.querySelector('#auditFileSelectPhase').style.display = 'none';
+                    overlay.querySelector('#auditPreflightPhase').style.display = 'block';
+                    btn.disabled = false; btn.textContent = '🔍 预检文件';
+                    statusEl.innerHTML = '点击"预检文件"查看可审计的文档...';
+                };
+
+                // Confirm start button
+                overlay.querySelector('#auditConfirmStartBtn').onclick = async function() {
+                    const confirmBtn = overlay.querySelector('#auditConfirmStartBtn');
+                    confirmBtn.disabled = true; confirmBtn.textContent = '⏳ 启动中...';
+
+                    const selectedFileIds = [];
+                    overlay.querySelectorAll('.audit-file-cb:checked').forEach(function(cb) {
+                        selectedFileIds.push(parseInt(cb.dataset.fileId));
+                    });
+
+                    if (!selectedFileIds.length) {
+                        alert('请至少选择一个文件');
+                        confirmBtn.disabled = false; confirmBtn.textContent = '✅ 确认开始审计';
+                        return;
+                    }
+
+                    const extractOnDemand = overlay.querySelector('#auditExtractOnDemand').checked;
+                    const startRes = await fetch('/audit/start', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                        body: JSON.stringify({
+                            folder_ids: _auditSelectedFolders,
+                            file_ids: selectedFileIds,
+                            enabled_functions: _auditEnabledFuncs,
+                            extract_on_demand: extractOnDemand,
+                            project_id: pid,
+                        })
+                    });
+                    const startData = await startRes.json();
+                    if (!startRes.ok) {
+                        alert((startData.error || '启动失败'));
+                        confirmBtn.disabled = false; confirmBtn.textContent = '✅ 确认开始审计';
+                        return;
+                    }
+
+                    const fullBtn = document.getElementById('chatFullAuditBtn');
+                    if (fullBtn) fullBtn.disabled = true;
+                    const badge = document.getElementById('auditRunningBadge');
+                    if (badge) badge.style.display = 'inline';
+
+                    overlay.querySelector('#auditFileSelectPhase').style.display = 'none';
+                    overlay.querySelector('#auditProgressPhase').style.display = 'block';
+                    _startAuditSSE(startData.run_id, overlay);
+                };
+
+            } catch (_) {
+                statusEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>';
+                btn.disabled = false; btn.textContent = '🔍 预检文件';
+            }
+        };
+    }
+
+    // Expose to global scope for inline onclick
+    window._showAuditModal = showAuditModal;
+    console.log('Audit: window._showAuditModal set to', typeof showAuditModal);
+
+    function _closeAuditModal() {
+        const overlay = document.getElementById('auditModalOverlay');
+        if (overlay) overlay.remove();
+        _auditModalActive = false;
+        if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
+    }
+
+    function _startAuditSSE(runId, overlay) {
+        if (_auditSSE) _auditSSE.close();
+        const es = new EventSource('/audit/progress/' + runId);
+        _auditSSE = es;
+
+        const filesContainer = overlay.querySelector('#auditProgressFiles');
+        const phaseLabel = overlay.querySelector('#auditPhaseLabel');
+        const progressBar = overlay.querySelector('#auditProgressBar');
+        const progressPct = overlay.querySelector('#auditProgressPct');
+
+        let fileRows = {};
+        let completedFiles = 0;
+        let totalFiles = 0;
+
+        function updateProgress() {
+            const pct = totalFiles > 0 ? Math.round((completedFiles / totalFiles) * 100) : 0;
+            if (progressBar) progressBar.style.width = pct + '%';
+            if (progressPct) progressPct.textContent = pct + '%';
+        }
+
+        es.onmessage = function(event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch (_) { return; }
+
+            switch (data.type) {
+                case 'connected':
+                    if (phaseLabel) phaseLabel.textContent = '已连接，准备审计...';
+                    break;
+
+                case 'phase':
+                    var phaseMap = { auditing: '审计中...', extracting: '提取数据中...', reporting: '生成报告中...' };
+                    if (phaseLabel) phaseLabel.textContent = phaseMap[data.phase] || data.phase || '';
+                    break;
+
+                case 'file_start':
+                    totalFiles = data.total_files || 0;
+                    var key = (data.bidder || '') + '||' + (data.filename || '');
+                    if (filesContainer) {
+                        var rowDiv = document.createElement('div');
+                        rowDiv.className = 'audit-file-row';
+                        rowDiv.style.cssText = 'border:1px solid var(--card-border);border-radius:4px;padding:4px 6px;margin-bottom:4px;';
+                        rowDiv.innerHTML = '<div style="font-weight:600;font-size:0.65rem;">📁 ' + escapeHtml(data.bidder || '?') + ' / ' + escapeHtml(data.filename || '?') + '</div>' +
+                            '<div class="audit-file-dots" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;"></div>';
+                        filesContainer.prepend(rowDiv);
+                        fileRows[key] = { div: rowDiv, dots: {} };
+                    }
+                    updateProgress();
+                    break;
+
+                case 'function_start':
+                    if (phaseLabel) phaseLabel.textContent = '审计: ' + (_auditFunctionLabels[data.function] || data.function) + '...';
+                    var fk = (data.bidder || '') + '||' + (data.filename || '');
+                    var fr = fileRows[fk];
+                    if (fr && fr.dots) {
+                        var dotEl = document.createElement('span');
+                        dotEl.className = 'audit-func-dot spinning';
+                        dotEl.title = (_auditFunctionLabels[data.function] || data.function) + ' ...';
+                        dotEl.textContent = '⏳';
+                        dotEl.style.cssText = 'font-size:0.6rem;padding:1px 4px;border-radius:3px;background:#fef3c7;';
+                        fr.dots[data.function] = dotEl;
+                        fr.div.querySelector('.audit-file-dots').appendChild(dotEl);
+                    }
+                    break;
+
+                case 'function_done':
+                    var fdk = (data.bidder || '') + '||' + (data.filename || '');
+                    var fdr = fileRows[fdk];
+                    if (fdr && fdr.dots && fdr.dots[data.function]) {
+                        var el = fdr.dots[data.function];
+                        var isSuccess = data.status === 'success';
+                        el.textContent = isSuccess ? '✅' : '❌';
+                        el.className = 'audit-func-dot';
+                        el.title = (_auditFunctionLabels[data.function] || data.function) + ': ' + (data.score != null ? parseFloat(data.score).toFixed(1) : '?');
+                        el.style.background = isSuccess ? '#dcfce7' : '#fef2f2';
+                    }
+                    break;
+
+                case 'file_error':
+                    var fek = (data.bidder || '') + '||' + (data.filename || '');
+                    var fer = fileRows[fek];
+                    if (fer && fer.div) {
+                        fer.div.style.borderLeft = '3px solid #ef4444';
+                        var errSpan = document.createElement('div');
+                        errSpan.style.cssText = 'font-size:0.6rem;color:#ef4444;margin-top:2px;';
+                        errSpan.textContent = '❌ ' + (data.error || '错误');
+                        fer.div.appendChild(errSpan);
+                    }
+                    completedFiles++;
+                    updateProgress();
+                    break;
+
+                case 'complete':
+                    if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
+                    if (phaseLabel) phaseLabel.textContent = '✅ 审计完成';
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressPct) progressPct.textContent = '100%';
+
+                    var badge = document.getElementById('auditRunningBadge');
+                    if (badge) badge.style.display = 'none';
+                    var fullBtn = document.getElementById('chatFullAuditBtn');
+                    if (fullBtn) fullBtn.disabled = false;
+
+                    // Show download links if reports were generated
+                    var downloadHtml = '';
+                    if (data.docx_path) downloadHtml += '<a href="/audit/download/' + runId + '/docx" class="file-btn" style="display:inline-block;margin:4px;">📄 下载DOCX报告</a>';
+                    if (data.xlsx_path) downloadHtml += '<a href="/audit/download/' + runId + '/xlsx" class="file-btn" style="display:inline-block;margin:4px;">📊 下载XLSX数据</a>';
+                    if (downloadHtml) {
+                        var dlDiv = document.createElement('div');
+                        dlDiv.style.cssText = 'margin-top:8px;text-align:center;';
+                        dlDiv.innerHTML = downloadHtml;
+                        if (filesContainer) filesContainer.appendChild(dlDiv);
+                    }
+
+                    var overallScore = data.overall_score != null ? parseFloat(data.overall_score).toFixed(1) : '?';
+                    var overallStatus = data.overall_status || 'PASS';
+                    showToast('审计完成 — 得分 ' + overallScore + ' — ' + (overallStatus === 'PASS' ? '✅ PASS' : '❌ FAIL'), overallStatus === 'PASS' ? 'success' : 'error', 8000);
+                    break;
+
+                case 'error':
+                    if (phaseLabel) phaseLabel.textContent = '❌ ' + (data.message || '错误');
+                    if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
+                    showToast('审计出错: ' + (data.message || ''), 'error', 6000);
+                    var badge2 = document.getElementById('auditRunningBadge');
+                    if (badge2) badge2.style.display = 'none';
+                    var fullBtn2 = document.getElementById('chatFullAuditBtn');
+                    if (fullBtn2) fullBtn2.disabled = false;
+                    break;
+
+                case 'heartbeat':
+                    break;
+            }
+        };
+
+        es.onerror = function(e) {
+            console.error('Audit SSE error:', e);
+            if (phaseLabel) phaseLabel.textContent = '❌ 连接中断，请检查审计状态';
+            if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
+        };
     }
