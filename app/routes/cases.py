@@ -2,6 +2,7 @@
 
 Endpoints:
     GET  /cases                    — Paginated case list
+    POST /cases                    — Create new case
     GET  /cases/stats              — Case library statistics
     GET  /cases/<id>               — Case detail
     PUT  /cases/<id>               — Update case
@@ -63,6 +64,34 @@ def list_cases():
         return ok(result)
     except Exception as e:
         logger.error(f"list_cases error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
+@cases_bp.route('', methods=['POST'])
+@_login_required
+def create_case():
+    """Create a new audit case."""
+    try:
+        if not request.is_json:
+            return err("\u8bf7\u6c42\u4f53\u9700\u4e3a JSON", "VALIDATION_ERROR", 400)
+        data = request.get_json() or {}
+        title = data.get('title', '').strip()
+        if not title:
+            return err("\u7f3a\u5c11 title", "VALIDATION_ERROR", 400)
+        from app.services.case_service import create_case
+        result = create_case(
+            title=title,
+            severity=data.get('severity', 'violation'),
+            category=data.get('category', ''),
+            tags=data.get('tags', []),
+            description=data.get('description', ''),
+            resolution=data.get('resolution', ''),
+            project_id=data.get('project_id'),
+            user_id=session.get('user_id'),
+        )
+        return ok(result, message="\u6848\u4f8b\u5df2\u521b\u5efa", status=201)
+    except Exception as e:
+        logger.error(f"create_case error: {e}", exc_info=True)
         return err(str(e), "SERVER_ERROR", 500)
 
 

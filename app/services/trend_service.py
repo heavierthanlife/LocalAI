@@ -80,6 +80,33 @@ def get_violation_distribution(days: int = 90) -> dict:
             """, (since,))
             rows = cur.fetchall()
 
+            # Per-category breakdown
+            cur.execute("""
+                SELECT afr.function_name,
+                       SUM(CASE WHEN afr.status = 'critical' THEN 1 ELSE 0 END) AS critical_count,
+                       SUM(CASE WHEN afr.status = 'violation' THEN 1 ELSE 0 END) AS violation_count,
+                       SUM(CASE WHEN afr.status = 'warning' THEN 1 ELSE 0 END) AS warning_count,
+                       SUM(CASE WHEN afr.status = 'pass' THEN 1 ELSE 0 END) AS pass_count,
+                       COUNT(*) AS total
+                FROM audit_file_results afr
+                JOIN audit_runs ar ON ar.id = afr.run_id
+                WHERE ar.started_at >= %s
+                GROUP BY afr.function_name
+                ORDER BY total DESC
+            """, (since,))
+            cat_rows = cur.fetchall()
+
+            cur.execute("""
+                SELECT COUNT(*) AS total_checks,
+                       COUNT(CASE WHEN status = 'pass' THEN 1 END) AS passed,
+                       COUNT(CASE WHEN status = 'violation' THEN 1 END) AS violations,
+                       COUNT(CASE WHEN status = 'critical' THEN 1 END) AS criticals
+                FROM audit_file_results afr
+                JOIN audit_runs ar ON ar.id = afr.run_id
+                WHERE ar.started_at >= %s
+            """, (since,))
+            summary = cur.fetchone()
+
     distribution = []
     for r in rows:
         distribution.append({
@@ -88,22 +115,6 @@ def get_violation_distribution(days: int = 90) -> dict:
             'count': r[2],
             'avg_score': float(r[3]) if r[3] else 0,
         })
-
-    # Per-category breakdown
-    cur.execute("""
-        SELECT afr.function_name,
-               SUM(CASE WHEN afr.status = 'critical' THEN 1 ELSE 0 END) AS critical_count,
-               SUM(CASE WHEN afr.status = 'violation' THEN 1 ELSE 0 END) AS violation_count,
-               SUM(CASE WHEN afr.status = 'warning' THEN 1 ELSE 0 END) AS warning_count,
-               SUM(CASE WHEN afr.status = 'pass' THEN 1 ELSE 0 END) AS pass_count,
-               COUNT(*) AS total
-        FROM audit_file_results afr
-        JOIN audit_runs ar ON ar.id = afr.run_id
-        WHERE ar.started_at >= %s
-        GROUP BY afr.function_name
-        ORDER BY total DESC
-    """, (since,))
-    cat_rows = cur.fetchall()
 
     category_breakdown = []
     for r in cat_rows:
@@ -115,17 +126,6 @@ def get_violation_distribution(days: int = 90) -> dict:
             'pass': r[4] or 0,
             'total': r[5],
         })
-
-    cur.execute("""
-        SELECT COUNT(*) AS total_checks,
-               COUNT(CASE WHEN status = 'pass' THEN 1 END) AS passed,
-               COUNT(CASE WHEN status = 'violation' THEN 1 END) AS violations,
-               COUNT(CASE WHEN status = 'critical' THEN 1 END) AS criticals
-        FROM audit_file_results afr
-        JOIN audit_runs ar ON ar.id = afr.run_id
-        WHERE ar.started_at >= %s
-    """, (since,))
-    summary = cur.fetchone()
 
     return {
         'period_days': days,

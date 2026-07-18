@@ -1,8 +1,9 @@
 """Incremental compliance check service (U9a).
 
 Only checks modified sections of a bid document.
-300ms debounce + caching layer (Redis with memory fallback).
+Caching layer: Redis with memory dict fallback.
 Reuses compliance_checker.py for actual checking logic.
+Debounce (300ms) is handled on the frontend side.
 """
 
 import hashlib

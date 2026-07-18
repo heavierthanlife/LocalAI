@@ -13,6 +13,41 @@ logger = logging.getLogger(__name__)
 SEVERITY_LEVELS = ('warning', 'violation', 'critical')
 
 
+def create_case(title: str, severity: str = 'violation', category: str = '',
+                tags: list[str] = None, description: str = '',
+                resolution: str = '', project_id: int = None,
+                user_id: str = None) -> dict:
+    """Create a new audit case."""
+    if severity not in SEVERITY_LEVELS:
+        severity = 'violation'
+    tags = tags or []
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO audit_cases (title, description, category, severity,
+                    resolution, project_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                title[:200], description[:2000], category, severity,
+                resolution, project_id, user_id,
+            ))
+            case_id = cur.fetchone()[0]
+
+            for tag in tags:
+                tag = tag.strip()
+                if tag:
+                    cur.execute("""
+                        INSERT INTO case_tags (case_id, tag) VALUES (%s, %s)
+                        ON CONFLICT (case_id, tag) DO NOTHING
+                    """, (case_id, tag))
+
+            conn.commit()
+
+    return get_case(case_id)
+
+
 def auto_generate_from_run(run_id: int) -> list[int]:
     """Scan audit_file_results for VIOLATION/CRITICAL findings and create cases.
 

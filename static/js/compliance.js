@@ -579,4 +579,78 @@ window.Compliance = {
 
     function hlVerse(s) { return (s || '').replace(/</g, '&lt;'); }
 
+    // ── Incremental Check (U9a) ──
+    // 300ms debounce for compliance editor text changes.
+    // TODO: U9b Tiptap integration — changed_sections should be per-chapter, not full text
+
+    const _incrCheckState = {
+        timer: null,
+        rulesTaskId: null,
+        bidDocName: '',
+        DEBOUNCE_MS: 300,
+    };
+
+    Compliance.startIncrementalCheck = function (text, bidDocName, rulesTaskId) {
+        _incrCheckState.rulesTaskId = rulesTaskId;
+        _incrCheckState.bidDocName = bidDocName;
+
+        clearTimeout(_incrCheckState.timer);
+        _incrCheckState.timer = setTimeout(() => {
+            fetch('/compliance/incremental_check', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rules_task_id: _incrCheckState.rulesTaskId,
+                    bid_doc_name: _incrCheckState.bidDocName,
+                    changed_sections: [
+                        { id: 'main', title: '文本编辑', content: text },
+                    ],
+                    use_ai: true,
+                }),
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.summary) {
+                        const events = data.results || [];
+                        const findings = [];
+                        events.forEach(ev => {
+                            (ev.results || []).forEach(f => {
+                                findings.push({ ...f, section_id: ev.section_id, section_title: ev.section_title });
+                            });
+                        });
+                        if (typeof window.Compliance.renderIncrementalResults === 'function') {
+                            window.Compliance.renderIncrementalResults(findings, data.summary);
+                        }
+                    }
+                })
+                .catch(e => console.error('Incremental check error:', e));
+        }, _incrCheckState.DEBOUNCE_MS);
+    };
+
+    // Default incremental results renderer (can be overridden)
+    Compliance.renderIncrementalResults = function (findings, summary) {
+        const container = document.getElementById('complianceResultsPanel');
+        if (!container || !findings.length) return;
+        const existing = container.querySelector('#incrementalResults');
+        if (existing) existing.remove();
+        let html = '<div id="incrementalResults" style="margin-top:8px;padding:8px;background:var(--bg-color);border-radius:6px;font-size:0.65rem;">';
+        html += '<div style="display:flex;gap:16px;margin-bottom:6px;">';
+        html += '<span style="color:#27ae60;">✅ 通过: ' + (summary.pass || 0) + '</span>';
+        html += '<span style="color:#f39c12;">⚠️ 警告: ' + (summary.warning || 0) + '</span>';
+        html += '<span style="color:#e67e22;">❌ 违规: ' + (summary.violation || 0) + '</span>';
+        html += '<span style="color:#e74c3c;">🚫 严重: ' + (summary.critical || 0) + '</span>';
+        html += '</div>';
+        findings.slice(0, 10).forEach(f => {
+            const sc = f.status === 'critical' ? '#e74c3c' : f.status === 'violation' ? '#e67e22' : '#f39c12';
+            html += '<div style="display:flex;justify-content:space-between;padding:2px 4px;border-bottom:1px solid var(--card-border);">';
+            html += '<span>' + hlVerse(f.section_title || f.function_name || '') + ': ' + hlVerse(f.description || f.message || '') + '</span>';
+            html += '<span style="color:' + sc + ';">' + f.status + '</span>';
+            html += '</div>';
+        });
+        if (findings.length > 10) html += '<div style="text-align:center;color:var(--card-muted);">... 还有 ' + (findings.length - 10) + ' 条结果</div>';
+        html += '</div>';
+        container.insertAdjacentHTML('beforeend', html);
+    };
+
 })();
