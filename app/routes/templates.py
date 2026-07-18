@@ -246,6 +246,37 @@ def get_template_diff_route(template_id: int):
         return err(str(e), "SERVER_ERROR", 500)
 
 
+@templates_bp.route('/recommend', methods=['POST'])
+@_login_required
+def recommend():
+    """AI recommend templates for a bid project (U8)."""
+    try:
+        if not request.is_json:
+            return err("\u8bf7\u6c42\u4f53\u9700\u4e3a JSON", "VALIDATION_ERROR", 400)
+        data = request.get_json() or {}
+
+        if data.get('log_usage'):
+            template_id = data.get('template_id')
+            if template_id:
+                from app.services.template_recommend import log_template_usage
+                log_template_usage(int(template_id), session.get('user_id'))
+            return ok(message="\u4f7f\u7528\u5df2\u8bb0\u5f55")
+
+        project_type = data.get('project_type')
+        bid_text = data.get('bid_text')
+        category = data.get('category')
+        top_k = data.get('top_k', 5, type=int)
+        from app.services.template_recommend import recommend_templates
+        result = recommend_templates(
+            project_type=project_type, bid_text=bid_text,
+            category=category, top_k=top_k,
+        )
+        return ok({'recommendations': result, 'total': len(result)})
+    except Exception as e:
+        logger.error(f"template_recommend error: {e}", exc_info=True)
+        return err(str(e), "SERVER_ERROR", 500)
+
+
 def _sections_to_markdown(title: str, sections: list[dict]) -> str:
     lines = [f"# {title}", ""]
     for sec in sections:

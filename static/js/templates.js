@@ -29,6 +29,7 @@ window.Templates = {};
                     <div style="display:flex;gap:4px;">
                         <button id="tplCreateBtn" style="font-size:0.62rem;padding:2px 8px;background:#27ae60;color:#fff;border:none;border-radius:3px;cursor:pointer;">+ 新建</button>
                         <button id="tplImportBtn" style="font-size:0.62rem;padding:2px 8px;background:#2980b9;color:#fff;border:none;border-radius:3px;cursor:pointer;">📥 导入</button>
+                        <button id="tplRecommendBtn" style="font-size:0.62rem;padding:2px 8px;background:#8e44ad;color:#fff;border:none;border-radius:3px;cursor:pointer;">🤖 推荐</button>
                     </div>
                 </div>
                 <div style="margin-bottom:8px;">
@@ -56,6 +57,7 @@ window.Templates = {};
 
         document.getElementById('tplCreateBtn').onclick = showCreate;
         document.getElementById('tplImportBtn').onclick = showImport;
+        document.getElementById('tplRecommendBtn').onclick = showRecommend;
 
         document.getElementById('tplSearchInput').addEventListener('keydown', function (e) {
             if (e.key === 'Enter') loadList(currentCategory, 1, this.value);
@@ -504,5 +506,100 @@ window.Templates = {};
     });
     const panel = document.getElementById('templatesPanel');
     if (panel) observer.observe(panel, { attributes: true, attributeFilter: ['style'] });
+
+    // ── AI Template Recommendation (U8) ──
+
+    function showRecommend() {
+        const detail = document.getElementById('templatesDetail');
+        detail.innerHTML = `
+            <h4 style="margin:0 0 10px;">🤖 AI 模板推荐</h4>
+            <div style="margin-bottom:8px;">
+                <label style="font-size:0.7rem;">项目类型</label>
+                <select id="recProjectType" style="width:100%;padding:6px;border:1px solid var(--card-border);border-radius:4px;font-size:0.7rem;margin-bottom:4px;">
+                    <option value="">自动检测</option>
+                    <option value="工程">🏗️ 工程</option>
+                    <option value="货物">📦 货物</option>
+                    <option value="服务">💼 服务</option>
+                </select>
+            </div>
+            <div style="margin-bottom:8px;">
+                <label style="font-size:0.7rem;">投标文件描述（可选，提升匹配精度）</label>
+                <textarea id="recBidText" rows="3" placeholder="输入投标项目描述或粘贴招标文件摘要..." style="width:100%;padding:6px;border:1px solid var(--card-border);border-radius:4px;font-size:0.68rem;resize:vertical;"></textarea>
+            </div>
+            <div style="margin-bottom:8px;">
+                <label style="font-size:0.7rem;">推荐数量</label>
+                <input id="recTopK" type="number" value="5" min="1" max="20" style="width:100%;padding:6px;border:1px solid var(--card-border);border-radius:4px;font-size:0.7rem;">
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+                <button id="recSubmitBtn" style="padding:6px 16px;background:#8e44ad;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.7rem;">获取推荐</button>
+                <span id="recStatus" style="font-size:0.65rem;color:var(--card-muted);align-self:center;"></span>
+            </div>
+            <div id="recResults"></div>
+        `;
+
+        document.getElementById('recSubmitBtn').onclick = () => {
+            const statusEl = document.getElementById('recStatus');
+            const resultsEl = document.getElementById('recResults');
+            statusEl.textContent = '分析中...';
+            resultsEl.innerHTML = '';
+
+            const bidText = document.getElementById('recBidText').value.trim();
+            const projectType = document.getElementById('recProjectType').value;
+            const topK = parseInt(document.getElementById('recTopK').value) || 5;
+
+            fetch('/templates/recommend', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_type: projectType || null,
+                    bid_text: bidText || null,
+                    top_k: topK,
+                }),
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) throw new Error(data.error || 'failed');
+                    const recs = (data.data || data).recommendations || [];
+                    if (!recs.length) {
+                        statusEl.textContent = '未找到匹配的模板';
+                        return;
+                    }
+                    statusEl.textContent = '找到 ' + recs.length + ' 个推荐';
+                    let html = '';
+                    recs.forEach((r, i) => {
+                        const barPct = Math.round(r.final_score * 100);
+                        const barColor = barPct >= 70 ? '#27ae60' : barPct >= 40 ? '#f39c12' : '#e74c3c';
+                        html += '<div style="margin-bottom:8px;padding:8px;background:var(--bg-color);border-radius:6px;cursor:pointer;" class="rec-item" data-id="' + r.id + '">';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+                        html += '<span style="font-weight:600;font-size:0.72rem;">' + (i + 1) + '. ' + _h(r.name) + '</span>';
+                        html += '<span style="font-size:0.62rem;color:var(--card-muted);">' + _h(r.category || '') + '</span>';
+                        html += '</div>';
+                        html += '<div style="margin-top:4px;height:4px;background:var(--card-border);border-radius:2px;">';
+                        html += '<div style="height:100%;width:' + barPct + '%;background:' + barColor + ';border-radius:2px;"></div></div>';
+                        html += '<div style="display:flex;justify-content:space-between;font-size:0.58rem;color:var(--card-muted);margin-top:2px;">';
+                        html += '<span>匹配度 ' + barPct + '%</span>';
+                        if (r.reasons && r.reasons.length) {
+                            html += '<span>' + r.reasons.join(' · ') + '</span>';
+                        }
+                        html += '</div></div>';
+                    });
+                    resultsEl.innerHTML = html;
+                    resultsEl.querySelectorAll('.rec-item').forEach(el => {
+                        el.onclick = () => {
+                            const tid = parseInt(el.dataset.id);
+                            T.showDetail(tid);
+                            // Log usage
+                            fetch('/templates/recommend', { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({template_id: tid, log_usage: true}) });
+                            if (typeof showToast === 'function') showToast('已记录模板使用', 'info');
+                        };
+                    });
+                })
+                .catch(e => {
+                    statusEl.textContent = '推荐失败: ' + e.message;
+                    statusEl.style.color = '#e74c3c';
+                });
+        };
+    }
 
 })();

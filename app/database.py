@@ -1100,6 +1100,19 @@ def _run_table_creation(cur: "PgCursor"):
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_btv_template ON bid_template_versions(template_id)")
 
+    # ── template usage log (U8) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS template_usage_log (
+            id              SERIAL PRIMARY KEY,
+            template_id     INTEGER REFERENCES bid_templates(id),
+            user_id         TEXT REFERENCES users(user_id),
+            project_id      INTEGER,
+            used_at         TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tul_template ON template_usage_log(template_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tul_used_at ON template_usage_log(used_at)")
+
     # ── audit cases (U13) ──
     cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_cases (
