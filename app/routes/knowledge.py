@@ -3,12 +3,13 @@ import os, json, uuid, time, logging, hashlib, io, threading
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, session, send_file, render_template, url_for, Response
 
-from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, logger
+from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, to_rel_path, resolve_path, logger
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
 import app.globals as g
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 from app.services.file_processing import extract_text_from_file
+from app.services.document_classifier import classify_and_categorize
 
 from psycopg2.extras import RealDictCursor
 
@@ -27,6 +28,44 @@ def _try_index_file(file_id, content, source, metadata=None, skill_summary=None)
             index_file(file_id, content, source, metadata, skill_summary=skill_summary)
         except Exception as e:
             logger.warning(f"Background index failed for {source}.{file_id}: {e}")
+    t = threading.Thread(target=_do, daemon=True)
+    t.start()
+
+
+def _try_wiki_ingest(file_id, content, filename, source_type, metadata=None):
+    """Dispatch wiki ingest Celery task (fire-and-forget).
+    
+    LLM-based wiki page generation from uploaded documents. Uses the existing
+    wiki_ingest_task Celery task which calls ingest_file() with max_retries=2.
+    Failures are logged but do not affect the upload flow.
+    """
+    if not content:
+        return
+    try:
+        from celery_app import celery as celery_app
+        celery_app.send_task('wiki_ingest_task', args=[file_id, content, filename, source_type, metadata or {}])
+    except Exception as e:
+        logger.warning(f"Wiki ingest dispatch failed for {source_type}.{file_id}: {e}")
+
+
+def _try_entity_extract(file_id, content, filename, source_type, doc_type="general", wiki_category="general", metadata=None):
+    """Fire-and-forget entity extraction in background thread.
+    
+    Runs LLM-based entity extraction, resolves against existing entity index,
+    and creates/updates entity wiki pages. Failures are logged but do not affect
+    the upload flow.
+    """
+    if not content or len(content) < 50:
+        return
+    def _do():
+        try:
+            from app.services.wiki_entity_service import process_upload_entity_extraction
+            process_upload_entity_extraction(
+                file_id, content, filename, source_type,
+                doc_type, wiki_category, metadata or {}
+            )
+        except Exception as e:
+            logger.warning(f"Entity extraction failed for {source_type}.{file_id}: {e}")
     t = threading.Thread(target=_do, daemon=True)
     t.start()
 
@@ -60,11 +99,15 @@ def upload_knowledge_lab_file():
     if not text_content or text_content.startswith("["):
         text_content = ""
 
+    doc_type, wiki_category = classify_and_categorize(text_content, file.filename, file_hash)
+    category = wiki_category
+
     # Save file permanently
     KNOWLEDGE_LAB_DIR = str(BASE_DIR / 'knowledge_lab_files')
     os.makedirs(KNOWLEDGE_LAB_DIR, exist_ok=True)
     unique_name = f"{file_hash}_{int(time.time())}_{file.filename}"
     stored_path = os.path.join(KNOWLEDGE_LAB_DIR, unique_name)
+    stored_rel = to_rel_path(stored_path)
     with open(stored_path, 'wb') as f:
         f.write(file_bytes)
 
@@ -80,22 +123,28 @@ def upload_knowledge_lab_file():
                 return jsonify({"error": "File already exists in knowledge lab", "file_id": existing[0]}), 409
             cur.execute("""
                         INSERT INTO knowledge_lab_files (user_id, filename, original_name, file_size, content,
-                                                         file_hash, stored_path, skill_summary, skill_generated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                                                         file_hash, stored_path, skill_summary, skill_generated_at, category)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
                         RETURNING id
                         """,
-                        (user_id, file.filename, file.filename, len(file_bytes), text_content, file_hash, stored_path, skill_summary))
+                        (user_id, file.filename, file.filename, len(file_bytes), text_content, file_hash, stored_rel, skill_summary, category))
             new_id = cur.fetchone()[0]
             conn.commit()
             # Background: index for RAG (with skill summary as priority chunks)
             _try_index_file(new_id, text_content, 'knowledge_lab',
                            {'original_name': file.filename, 'owner': user_id},
                            skill_summary=skill_summary)
+            _try_wiki_ingest(new_id, text_content, file.filename, 'knowledge_lab',
+                           {'original_name': file.filename, 'owner': user_id})
+            _try_entity_extract(new_id, text_content, file.filename, 'knowledge_lab',
+                               doc_type, wiki_category,
+                               {'original_name': file.filename, 'owner': user_id})
             return jsonify({
                 "success": True,
                 "file_id": new_id,
                 "filename": file.filename,
                 "file_size": len(file_bytes),
+                "category": category,
                 "skill_generated": bool(skill_summary),
                 "uploaded_at": datetime.now(timezone.utc).isoformat()
             })
@@ -331,6 +380,7 @@ def get_skill_audit():
                 'promote_candidates': usage['promote_candidates'],
                 'duplicate_pairs': 0,
                 'duplicates': [],
+                'audit_run_id': str(uuid.uuid4()),
             }
             # Try full analysis (may take time for model download)
             try:
@@ -399,6 +449,87 @@ def archive_skill(skill_id):
                     old_value='present', new_value='archived')
     invalidate_audit_cache()
     return jsonify({"status": "ok"})
+
+@knowledge_bp.route('/feedback', methods=['POST'])
+def submit_knowledge_lab_feedback():
+    """Submit feedback on a knowledge-lab skill extraction result."""
+    data = request.get_json(silent=True) or {}
+    file_id = data.get('file_id', '')
+    source = data.get('source', '')
+    rating = data.get('rating')
+
+    if not file_id or rating is None:
+        return jsonify({"success": False, "error": "缺少必填参数"}), 400
+    if rating not in (-1, 1):
+        return jsonify({"success": False, "error": "rating 必须为 -1 或 1"}), 400
+
+    user_id = session.get('user_id', '')
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_feedback (user_id, source, target_id, rating)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id, 'knowledge_lab', file_id, rating))
+                conn.commit()
+
+        try:
+            from app.services.training_logger import log_interaction
+            _rating_map = {1: 5, -1: 1}
+            log_interaction(
+                thread_id=f"knowledge_lab_{file_id[:40]}",
+                user_msg=f"知识库技能反馈: file_id={file_id} source={source}",
+                assistant_response=f"用户评分: {rating}",
+                rating=_rating_map.get(rating, 3),
+                source='knowledge_lab',
+            )
+        except Exception:
+            logger.warning("Failed to log knowledge_lab feedback to training", exc_info=True)
+
+        return jsonify({"success": True, "message": "感谢反馈!"})
+    except Exception as e:
+        logger.error(f"Knowledge lab feedback error: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@knowledge_bp.route('/admin/skill_audit/feedback', methods=['POST'])
+def submit_skill_audit_feedback():
+    """Submit feedback on a skill audit result."""
+    data = request.get_json(silent=True) or {}
+    audit_run_id = data.get('audit_run_id', '')
+    rating = data.get('rating')
+
+    if rating is None:
+        return jsonify({"success": False, "error": "缺少 rating"}), 400
+    if rating not in (-1, 1):
+        return jsonify({"success": False, "error": "rating 必须为 -1 或 1"}), 400
+
+    user_id = session.get('user_id', '')
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_feedback (user_id, source, target_id, rating)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id, 'skill_audit', audit_run_id or '', rating))
+                conn.commit()
+
+        try:
+            from app.services.training_logger import log_interaction
+            _rating_map = {1: 5, -1: 1}
+            log_interaction(
+                thread_id=f"skill_audit_{audit_run_id[:40] or 'unknown'}",
+                user_msg=f"技能审计反馈: audit_run={audit_run_id}",
+                assistant_response=f"用户评分: {rating}",
+                rating=_rating_map.get(rating, 3),
+                source='skill_audit',
+            )
+        except Exception:
+            logger.warning("Failed to log skill_audit feedback to training", exc_info=True)
+
+        return jsonify({"success": True, "message": "感谢反馈!"})
+    except Exception as e:
+        logger.error(f"Skill audit feedback error: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @knowledge_bp.route('/admin/role', methods=['POST'])
 def set_user_role():
@@ -1359,11 +1490,11 @@ def admin_generate_work_report():
             cur.execute("""INSERT INTO user_files (user_id, thread_id, filename, size_bytes, original_stored_path,
                 file_hash, original_expires_at, original_name) VALUES (%s, %s, %s, %s, %s, %s, NOW() + INTERVAL '90 days', %s)""",
                 (user_id, session.get('thread_id', str(uuid.uuid4())), filename,
-                 len(report.encode('utf-8')), report_path, file_hash, filename))
+                 len(report.encode('utf-8')), to_rel_path(report_path), file_hash, filename))
             cur.execute("""INSERT INTO user_files (user_id, thread_id, filename, size_bytes, original_stored_path,
                 file_hash, original_expires_at, original_name) VALUES (%s, %s, %s, %s, %s, %s, NOW() + INTERVAL '90 days', %s)""",
                 (user_id, session.get('thread_id', str(uuid.uuid4())), zip_name,
-                 os.path.getsize(zip_path), zip_path, hashlib.sha256(open(zip_path,'rb').read()).hexdigest(), zip_name))
+                 os.path.getsize(zip_path), to_rel_path(zip_path), hashlib.sha256(open(zip_path,'rb').read()).hexdigest(), zip_name))
             conn.commit()
 
     return jsonify({
@@ -1461,7 +1592,7 @@ def my_daily_report():
             cur.execute("""INSERT INTO user_files (user_id, thread_id, filename, size_bytes, original_stored_path,
                 file_hash, original_expires_at, original_name) VALUES (%s, %s, %s, %s, %s, %s, NOW() + INTERVAL '90 days', %s)""",
                 (user_id, session.get('thread_id', str(uuid.uuid4())), filename,
-                 len(report.encode('utf-8')), report_path, file_hash, filename))
+                 len(report.encode('utf-8')), to_rel_path(report_path), file_hash, filename))
             conn.commit()
 
     return jsonify({
@@ -1622,6 +1753,7 @@ def upload_company_kb_file():
     os.makedirs(COMPANY_KB_DIR, exist_ok=True)
     unique_name = f"{file_hash}_{int(time.time())}_{file.filename}"
     stored_path = os.path.join(COMPANY_KB_DIR, unique_name)
+    stored_rel = to_rel_path(stored_path)
     with open(stored_path, 'wb') as f:
         f.write(file_bytes)
 
@@ -1635,7 +1767,7 @@ def upload_company_kb_file():
             existing = cur.fetchone()
             if existing:
                 # Overwrite: delete old physical file, update record
-                old_path = existing[1]
+                old_path = resolve_path(existing[1])
                 if old_path and os.path.exists(old_path):
                     try:
                         os.remove(old_path)
@@ -1648,12 +1780,18 @@ def upload_company_kb_file():
                         stored_path = %s, category = %s, uploaded_by = %s, updated_at = NOW(),
                         skill_summary = %s, skill_generated_at = NOW(), skill_summary_hash = %s
                     WHERE id = %s
-                """, (file.filename, file.filename, len(file_bytes), text_content, stored_path, category, user_id,
+                """, (file.filename, file.filename, len(file_bytes), text_content, stored_rel, category, user_id,
                       co_skill_summary, co_skill_hash, existing[0]))
                 conn.commit()
                 _try_index_file(existing[0], text_content, 'company_kb',
                                {'original_name': file.filename, 'owner': user_id},
                                skill_summary=co_skill_summary)
+                _try_wiki_ingest(existing[0], text_content, file.filename, 'company_kb',
+                               {'original_name': file.filename, 'owner': user_id})
+                co_doc_type, co_wiki_category = classify_and_categorize(text_content, file.filename, file_hash)
+                _try_entity_extract(existing[0], text_content, file.filename, 'company_kb',
+                                   co_doc_type, co_wiki_category,
+                                   {'original_name': file.filename, 'owner': user_id})
                 return jsonify({"success": True, "file_id": existing[0], "filename": file.filename, "category": category, "skill_generated": bool(co_skill_summary), "updated": True})
             else:
                 # New file
@@ -1661,13 +1799,19 @@ def upload_company_kb_file():
                     INSERT INTO company_knowledge_base (filename, original_name, file_size, content, file_hash, stored_path, category, uploaded_by, skill_summary, skill_generated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     RETURNING id
-                """, (file.filename, file.filename, len(file_bytes), text_content, file_hash, stored_path, category, user_id, co_skill_summary))
+                """, (file.filename, file.filename, len(file_bytes), text_content, file_hash, stored_rel, category, user_id, co_skill_summary))
                 new_id = cur.fetchone()[0]
                 conn.commit()
                 # Background: index for RAG (with skill summary as priority chunks)
                 _try_index_file(new_id, text_content, 'company_kb',
                                {'original_name': file.filename, 'owner': user_id},
                                skill_summary=co_skill_summary)
+                _try_wiki_ingest(new_id, text_content, file.filename, 'company_kb',
+                               {'original_name': file.filename, 'owner': user_id})
+                co_doc_type, co_wiki_category = classify_and_categorize(text_content, file.filename, file_hash)
+                _try_entity_extract(new_id, text_content, file.filename, 'company_kb',
+                                   co_doc_type, co_wiki_category,
+                                   {'original_name': file.filename, 'owner': user_id})
                 return jsonify({"success": True, "file_id": new_id, "filename": file.filename, "category": category})
 
 @knowledge_bp.route('/company_kb/list', methods=['GET'])

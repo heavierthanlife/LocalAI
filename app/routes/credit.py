@@ -3,7 +3,7 @@ import os, json, uuid, time, logging, hashlib, io, threading
 from functools import wraps
 from flask import Blueprint, request, jsonify, session, send_file, render_template, url_for, current_app
 
-from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, CREDIT_REPORTS_DIR, PROJECT_FILES_ROOT
+from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, CREDIT_REPORTS_DIR, PROJECT_FILES_ROOT, to_rel_path, resolve_path
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
 import app.globals as g
@@ -226,7 +226,7 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO credit_check_reports (user_id, task_id, file_path, companies_count) VALUES (%s, %s, %s, %s)",
-                    (user_id, task_id, file_path, len(companies))
+                    (user_id, task_id, to_rel_path(file_path), len(companies))
                 )
                 conn.commit()
 
@@ -346,7 +346,7 @@ def delete_credit_report(report_id):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Report not found"}), 404
-            file_path = row[0]
+            file_path = resolve_path(row[0])
             if os.path.exists(file_path):
                 os.remove(file_path)
             cur.execute("DELETE FROM credit_check_reports WHERE id = %s", (report_id,))

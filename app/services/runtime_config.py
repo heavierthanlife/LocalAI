@@ -29,6 +29,10 @@ DEFAULTS = {
     "active_llm_provider":      "",
     "active_llm_model":         "",
 
+    # Active VL provider & model (NOT factory — admin selects, "" = auto-detect)
+    "active_vl_provider":       "",
+    "active_vl_model":          "",
+
     # Bocha search cache
     "search_cache_ttl_hours":   72,
     "headroom_enabled":         True,  # compress RAG/file/history before LLM
@@ -134,7 +138,7 @@ DEFAULTS = {
 }
 
 # Keys that are NOT part of factory presets (admin-only runtime choices)
-NON_FACTORY_KEYS = {"active_llm_provider", "active_llm_model"}
+NON_FACTORY_KEYS = {"active_llm_provider", "active_llm_model", "active_vl_provider", "active_vl_model"}
 
 
 def _load():

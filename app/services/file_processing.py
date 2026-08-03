@@ -657,6 +657,85 @@ def extract_text_advanced(file_bytes: bytes, filename: str, file_size: int) -> s
     return None
 
 
+def _extract_docx_paragraphs(file_bytes: bytes) -> list:
+    """Extract structured paragraphs from DOCX using python-docx.
+
+    Returns list of {text, level, style} dicts:
+    - text: paragraph text
+    - level: heading level (0 for body, 1-6 for headings)
+    - style: 'heading' or 'body'
+    """
+    paragraphs = []
+    try:
+        doc = docx.Document(BytesIO(file_bytes))
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                continue
+            style_name = (para.style.name or '').lower() if para.style else ''
+            if 'heading' in style_name:
+                try:
+                    level = int(''.join(c for c in style_name if c.isdigit()) or '1')
+                except ValueError:
+                    level = 1
+                paragraphs.append({'text': text, 'level': level, 'style': 'heading'})
+            else:
+                paragraphs.append({'text': text, 'level': 0, 'style': 'body'})
+    except Exception as e:
+        logger.warning(f"DOCX structured extraction failed: {e}")
+    return paragraphs
+
+
+def _extract_pdf_paragraphs(file_bytes: bytes) -> list:
+    """Extract structured paragraphs from PDF.
+
+    Returns list of {text, level, style} dicts. PDF doesn't have native heading
+    styles, so all paragraphs are returned with level 0 (body).
+    """
+    paragraphs = []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype='pdf')
+        for page in doc:
+            text = page.get_text()
+            for line in text.split('\n'):
+                line = line.strip()
+                if line and len(line) > 2:
+                    paragraphs.append({'text': line, 'level': 0, 'style': 'body'})
+    except Exception as e:
+        logger.warning(f"PDF structured extraction failed: {e}")
+    return paragraphs
+
+
+def extract_structured_text(file_storage) -> list:
+    """Extract structured paragraphs from a file.
+
+    Returns list of {text, level, style} dicts for use by document_parser.
+    Supports .docx (with heading levels), .pdf (plain text), .doc (plain text).
+    """
+    filename = file_storage.filename
+    if not filename:
+        return []
+
+    file_bytes = file_storage.read()
+    file_storage.seek(0)
+    ext = os.path.splitext(filename)[1].lower()
+
+    # WPS aliases
+    wps_map = {'.wps': '.doc', '.et': '.xls', '.dps': '.ppt'}
+    if ext in wps_map:
+        ext = wps_map[ext]
+
+    if ext == '.docx':
+        return _extract_docx_paragraphs(file_bytes)
+    elif ext == '.pdf':
+        return _extract_pdf_paragraphs(file_bytes)
+    elif ext == '.doc':
+        text = extract_text_from_doc_crossplatform(file_bytes) or extract_text_from_doc(file_bytes) or ''
+        return [{'text': line, 'level': 0, 'style': 'body'} for line in text.split('\n') if line.strip()]
+    else:
+        return []
+
+
 def extract_text_from_file(file_storage):
     filename = file_storage.filename
     if not filename:

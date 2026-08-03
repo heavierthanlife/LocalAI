@@ -128,6 +128,24 @@ def register_all(flask_app):
     flask_app.register_blueprint(cases_bp)
     logger.info(f"  OK cases_bp ({time.time()-t0:.0f}s)")
 
+    # ── Document Analysis: eager (deep analysis of bidding documents) ──
+    t0 = time.time()
+    from app.routes.document_analysis import document_analysis_bp
+    flask_app.register_blueprint(document_analysis_bp)
+    logger.info(f"  OK document_analysis_bp ({time.time()-t0:.0f}s)")
+
+    # ── Graph: eager (spider-web knowledge graphs) ──
+    t0 = time.time()
+    from app.routes.graph import graph_bp
+    flask_app.register_blueprint(graph_bp)
+    logger.info(f"  OK graph_bp ({time.time()-t0:.0f}s)")
+
+    # ── Credit Check: eager (enterprise credit checking) ──
+    t0 = time.time()
+    from app.routes.credit import credit_bp
+    flask_app.register_blueprint(credit_bp)
+    logger.info(f"  OK credit_bp ({time.time()-t0:.0f}s)")
+
     # ── All blueprints loaded eagerly — no lazy-load needed ──
 
     logger.info("App ready (all blueprints eager).")

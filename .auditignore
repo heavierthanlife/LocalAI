@@ -1,0 +1,11 @@
+# .auditignore — files excluded from incremental-audit scanning
+# Audit metadata is never self-audited.
+.audit/**
+.remember/**
+.auditignore
+.git/**
+__pycache__/**
+*.pyc
+node_modules/**
+.venv/**
+venv/**

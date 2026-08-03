@@ -6,12 +6,13 @@ from io import BytesIO
 from flask import Blueprint, request, jsonify, session, send_file, render_template, url_for, current_app
 from werkzeug.datastructures import FileStorage
 
-from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, PROJECT_FILES_ROOT, logger
+from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, PROJECT_FILES_ROOT, to_rel_path, resolve_path, logger
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer, ok, err
 import app.globals as g
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 from app.services.file_processing import extract_text_from_file
+from app.services.document_classifier import classify_and_categorize
 
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
@@ -185,6 +186,8 @@ def create_project():
     description = data.get('description', '').strip()
     industry = data.get('industry', 'general').strip()
     manager_id = data.get('manager_id', '').strip()
+    bidding_category = data.get('bidding_category', 'general').strip()
+    bid_method = data.get('bid_method', 'open').strip()
     if industry not in ('bidding_agency', 'engineering_cost', 'engineering_audit', 'general'):
         industry = 'general'
     if not name:
@@ -196,8 +199,8 @@ def create_project():
         with db_transaction(conn):
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO projects (name, description, created_by, status, industry) VALUES (%s, %s, %s, 'active', %s) RETURNING id",
-                    (name, description, user_id, industry))
+                    "INSERT INTO projects (name, description, created_by, status, industry, bidding_category, bid_method) VALUES (%s, %s, %s, 'active', %s, %s, %s) RETURNING id",
+                    (name, description, user_id, industry, bidding_category, bid_method))
                 project_id = cur.fetchone()[0]
                 cur.execute(
                     "INSERT INTO project_members (project_id, user_id, role, added_by) VALUES (%s, %s, 'admin', %s)",
@@ -215,7 +218,23 @@ def create_project():
                     "INSERT INTO chat_sessions (user_id, thread_id, title, project_id) VALUES (%s, %s, %s, %s)",
                     (user_id, chat_thread_id, name, project_id))
                 conn.commit()
-                return ok({"id": project_id, "chat_thread_id": chat_thread_id})
+
+        # Auto-create a default project timeline (after commit, uses its own connection)
+        try:
+            from datetime import date as _dt
+            from app.services.project_timeline_service import create_timeline as svc_create_tl
+            tl_name_map = {'工程': '施工招标', '货物': '货物采购', '服务': '服务采购'}
+            tl_name = tl_name_map.get(bidding_category, '主招标流程')
+            svc_create_tl(
+                project_id=project_id, name=f"{name} - {tl_name}",
+                category_code=bidding_category, method_code=bid_method,
+                planned_start_date=_dt.today(),
+                created_by=user_id,
+            )
+        except Exception:
+            logger.warning("Failed to auto-create project timeline", exc_info=True)
+
+        return ok({"id": project_id, "chat_thread_id": chat_thread_id})
 
 @admin_bp.route('/admin/projects/<int:project_id>/backfill_chat', methods=['POST'])
 def backfill_project_chat(project_id):
@@ -371,7 +390,7 @@ def delete_project(project_id):
 
             cur.execute("SELECT stored_path FROM project_files WHERE project_id = %s", (project_id,))
             for (stored_path,) in cur.fetchall():
-                _safe_delete_file(stored_path, f'project_{project_id}_file')
+                _safe_delete_file(resolve_path(stored_path), f'project_{project_id}_file')
 
             cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
             conn.commit()
@@ -389,13 +408,17 @@ def delete_project_file(project_id, file_id):
         with db_transaction(conn):
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT id, original_name, file_size, stored_path, uploaded_by, folder_id, filename, version, file_hash, project_id
+                    SELECT id, original_name, file_size, stored_path, uploaded_by, folder_id, filename, version, file_hash, project_id, status
                     FROM project_files
                     WHERE id = %s AND project_id = %s
                 """, (file_id, project_id))
                 file_record = cur.fetchone()
                 if not file_record:
                     return err("File not found", "NOT_FOUND", 404)
+
+                if file_record.get('status') == 'final':
+                    from app.services.project_wiki_publisher import unpublish_project_file
+                    unpublish_project_file(file_id)
 
                 cur.execute("""
                     INSERT INTO project_recycle_bin 
@@ -450,7 +473,7 @@ def finish_project(project_id):
             zip_path = os.path.join(zip_dir, zip_filename)
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for stored_path, original_name in files:
-                    zipf.write(stored_path, original_name)
+                    zipf.write(resolve_path(stored_path), original_name)
             cur.execute("UPDATE projects SET status = 'archived', archived_at = NOW(), archive_filename = %s WHERE id = %s",
                         (zip_filename, project_id))
             conn.commit()
@@ -962,6 +985,7 @@ def upload_project_file(project_id, folder_id):
     ext = os.path.splitext(original_name)[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     stored_path = get_project_file_path(project_id, unique_name)
+    stored_rel = to_rel_path(stored_path)
     # Save the binary file
     file.save(stored_path)
     file_size = os.path.getsize(stored_path)
@@ -972,17 +996,28 @@ def upload_project_file(project_id, folder_id):
     if not text_content or text_content.startswith("["):
         text_content = ""  # fallback
 
+    # Auto-categorize file content
+    doc_type, category = classify_and_categorize(text_content, original_name, file_hash)
+
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
-                                               stored_path, uploaded_by, file_hash, content)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                               stored_path, uploaded_by, file_hash, content, category)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
-                """, (project_id, folder_id, unique_name, original_name, file_size, stored_path, user_id, file_hash, text_content))
+                """, (project_id, folder_id, unique_name, original_name, file_size, stored_rel, user_id, file_hash, text_content, category))
                 file_id = cur.fetchone()[0]
                 conn.commit()
+                from app.routes.knowledge import _try_index_file, _try_wiki_ingest, _try_entity_extract
+                _try_index_file(file_id, text_content, 'project_files',
+                               {'original_name': original_name, 'owner': user_id})
+                _try_wiki_ingest(file_id, text_content, original_name, 'project_files',
+                                {'original_name': original_name, 'owner': user_id})
+                _try_entity_extract(file_id, text_content, original_name, 'project_files',
+                                   doc_type, category,
+                                   {'original_name': original_name, 'owner': user_id})
                 return ok({"file_id": file_id, "original_name": original_name, "version": 1})
 
 @admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/content', methods=['GET'])
@@ -1008,9 +1043,9 @@ def get_file_content(project_id, file_id):
             text = (f.get('content') or '').strip()
             if not text:
                 stored = f.get('stored_path')
-                if stored and os.path.exists(stored):
+                if stored and os.path.exists(resolve_path(stored)):
                     try:
-                        with open(stored, 'rb') as fh:
+                        with open(resolve_path(stored), 'rb') as fh:
                             fake = FileStorage(fh, filename=f['original_name'])
                             text, _ = extract_text_from_file(fake)
                             text = text or ''
@@ -1075,6 +1110,7 @@ def new_file_version(project_id, file_id):
             ext = os.path.splitext(original_name)[1]
             unique_name = f"{uuid.uuid4().hex}{ext}"
             stored_path = get_project_file_path(project_id, unique_name)
+            stored_rel = to_rel_path(stored_path)
             file.save(stored_path)
             file_size = os.path.getsize(stored_path)
             new_version = existing['version'] + 1
@@ -1096,7 +1132,7 @@ def new_file_version(project_id, file_id):
                             content       = %s
                         WHERE id = %s
                         """,
-                        (new_version, stored_path, file_size, user_id, file_hash, original_name, file_content, file_id))
+                        (new_version, stored_rel, file_size, user_id, file_hash, original_name, file_content, file_id))
 
             cur.execute("""
                         INSERT INTO project_file_usage (file_id, user_id, action, details)
@@ -1105,6 +1141,24 @@ def new_file_version(project_id, file_id):
 
             conn.commit()
             return ok({"file_id": file_id, "original_name": original_name, "version": new_version})
+
+@admin_bp.route('/admin/projects/<int:project_id>/files/<int:file_id>/status', methods=['POST'])
+@admin_required
+def set_project_file_status(project_id, file_id):
+    data = request.get_json()
+    status = data.get('status')
+    if status not in ('draft', 'final'):
+        return err("Invalid status, must be 'draft' or 'final'", "VALIDATION_ERROR", 400)
+    from app.services.project_wiki_publisher import set_status_and_publish
+    set_status_and_publish(file_id, status)
+    return ok({"status": status})
+
+@admin_bp.route('/admin/projects/<int:project_id>/wiki-tree', methods=['GET'])
+@admin_required
+def project_wiki_tree(project_id):
+    from app.services.wiki_tree_service import get_merged_tree
+    tree = get_merged_tree(project_id)
+    return ok({"tree": tree})
 
 @admin_bp.route('/admin/projects/<int:project_id>/folders/<int:folder_id>/files', methods=['GET'])
 def list_project_files(project_id, folder_id):
@@ -1238,6 +1292,7 @@ def download_project_file(project_id, file_id):
             if not row:
                 return err("File not found", "NOT_FOUND", 404)
             stored_path, original_name = row
+            stored_path = resolve_path(stored_path)
     if not os.path.exists(stored_path):
         return err("文件已被清理，无法下载", "SERVER_ERROR", 410)
     return send_file(stored_path, as_attachment=True, download_name=original_name)
@@ -1365,7 +1420,7 @@ def batch_download_files(project_id):
             zip_buffer = BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for stored_path, original_name in files:
-                    zipf.write(stored_path, original_name)
+                    zipf.write(resolve_path(stored_path), original_name)
             zip_buffer.seek(0)
             return send_file(zip_buffer, as_attachment=True, download_name=f"project_{project_id}_files.zip",
                              mimetype='application/zip')
@@ -1467,6 +1522,28 @@ def admin_db_tables():
                         """)
             tables = [row['tablename'] for row in cur.fetchall()]
             return ok({"tables": tables})
+
+@admin_bp.route('/admin/db_tables_overview', methods=['GET'])
+@admin_required
+def admin_db_tables_overview():
+    with get_db_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                        SELECT tablename
+                        FROM pg_tables
+                        WHERE schemaname = 'public'
+                        ORDER BY tablename
+                        """)
+            tables = [row['tablename'] for row in cur.fetchall()]
+            result = []
+            for t in tables:
+                try:
+                    cur.execute(f"SELECT count(*) AS cnt FROM {t}")
+                    row = cur.fetchone()
+                    result.append({"table_name": t, "row_count": row['cnt']})
+                except Exception:
+                    result.append({"table_name": t, "row_count": 0})
+            return ok({"tables": result})
 
 def _query_db_table(table, page, per_page, search, search_column):
     """Shared helper: run a paginated, searchable SELECT against any public table."""
@@ -1794,7 +1871,7 @@ def admin_archived_sessions():
         # If DB row is gone (project deleted), read title from disk JSON
         if not entry.get('title') and entry.get('archive_path'):
             try:
-                json_path = os.path.join(os.path.dirname(__file__), '..', '..', entry['archive_path'])
+                json_path = resolve_path(entry['archive_path'])
                 msgs_path = json_path.replace('_session.json', '_messages.json')
                 if os.path.exists(json_path):
                     with open(json_path, 'r', encoding='utf-8') as f:
@@ -3461,8 +3538,12 @@ def admin_analytics():
                 stats['total_files'] = cur.fetchone()['cnt']
                 cur.execute("SELECT COALESCE(SUM(size_bytes), 0) as total FROM user_files")
                 stats['storage_mb'] = round(cur.fetchone()['total'] / (1024 * 1024), 1)
-                cur.execute("SELECT COUNT(*) as cnt FROM credit_check_reports")
-                stats['credit_checks'] = cur.fetchone()['cnt']
+                try:
+                    cur.execute("SELECT COUNT(*) as cnt FROM credit_check_reports")
+                    stats['credit_checks'] = cur.fetchone()['cnt']
+                except Exception:
+                    conn.rollback()
+                    stats['credit_checks'] = 0
                 cur.execute("""
                     SELECT DATE(cm.timestamp) as day, COUNT(*) as cnt
                     FROM chat_messages cm JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
@@ -3483,8 +3564,12 @@ def admin_analytics():
                 stats['total_files'] = cur.fetchone()['cnt']
                 cur.execute("SELECT COALESCE(SUM(size_bytes), 0) as total FROM user_files WHERE user_id = %s", (user_id,))
                 stats['storage_mb'] = round(cur.fetchone()['total'] / (1024 * 1024), 1)
-                cur.execute("SELECT COUNT(*) as cnt FROM credit_check_reports WHERE user_id = %s", (user_id,))
-                stats['credit_checks'] = cur.fetchone()['cnt']
+                try:
+                    cur.execute("SELECT COUNT(*) as cnt FROM credit_check_reports WHERE user_id = %s", (user_id,))
+                    stats['credit_checks'] = cur.fetchone()['cnt']
+                except Exception:
+                    conn.rollback()
+                    stats['credit_checks'] = 0
                 cur.execute("""
                     SELECT DATE(cm.timestamp) as day, COUNT(*) as cnt
                     FROM chat_messages cm JOIN chat_sessions cs ON cm.thread_id = cs.thread_id
@@ -3497,17 +3582,21 @@ def admin_analytics():
 
             # Admin-only: storage breakdown + top users
             if admin_view:
-                breakdown = {}
-                for label, query in [
-                    ('聊天文件', "SELECT COALESCE(SUM(size_bytes),0)::float FROM user_files"),
-                    ('知识库', "SELECT COALESCE(SUM(file_size),0)::float FROM knowledge_lab_files"),
-                    ('公司库', "SELECT COALESCE(SUM(file_size),0)::float FROM company_knowledge_base"),
-                    ('项目文件', "SELECT COALESCE(SUM(file_size),0)::float FROM project_files"),
-                ]:
-                    cur.execute(query)
-                    val = cur.fetchone()
-                    breakdown[label] = round(float(list(val.values())[0]) / (1024 * 1024), 1) if val else 0
-                stats['storage_breakdown'] = breakdown
+                try:
+                    breakdown = {}
+                    for label, query in [
+                        ('聊天文件', "SELECT COALESCE(SUM(size_bytes),0)::float FROM user_files"),
+                        ('知识库', "SELECT COALESCE(SUM(file_size),0)::float FROM knowledge_lab_files"),
+                        ('公司库', "SELECT COALESCE(SUM(file_size),0)::float FROM company_knowledge_base"),
+                        ('项目文件', "SELECT COALESCE(SUM(file_size),0)::float FROM project_files"),
+                    ]:
+                        cur.execute(query)
+                        val = cur.fetchone()
+                        breakdown[label] = round(float(list(val.values())[0]) / (1024 * 1024), 1) if val else 0
+                    stats['storage_breakdown'] = breakdown
+                except Exception:
+                    conn.rollback()
+                    stats['storage_breakdown'] = {}
 
                 cur.execute("""
                     SELECT u.username, COUNT(uf.id) as file_count,
@@ -3849,6 +3938,11 @@ def update_runtime_config():
             g._current_max_tokens = None
         logger.info("Agent cache invalidated due to LLM config change")
 
+    if 'active_vl_provider' in sanitized or 'active_vl_model' in sanitized:
+        from app.services.vl_model import vl_model
+        vl_model.reload()
+        logger.info("VL model reloaded due to config change")
+
     return ok({"message": f"Updated {len(sanitized)} config keys", "config": cfg}, "ok")
 
 
@@ -3976,8 +4070,8 @@ def get_runtime_config_schema():
     schema = {
         # ── LLM ──
         "active_llm_provider":        {"label": "LLM 服务商", "unit": "", "type": "select", "group": "LLM/AI Model", "is_llm": True, "is_not_factory": True,
-                                         "options": ["auto", "deepseek", "zhipu", "qwen", "siliconflow"],
-                                         "option_labels": {"auto": "自动检测", "deepseek": "DeepSeek", "zhipu": "智谱AI", "qwen": "Qwen", "siliconflow": "硅基流动"}},
+                                         "options": ["auto", "deepseek", "zhipu", "qwen", "siliconflow", "mimo"],
+                                         "option_labels": {"auto": "自动检测", "deepseek": "DeepSeek", "zhipu": "智谱AI", "qwen": "Qwen", "siliconflow": "硅基流动", "mimo": "Mimo"}},
         "active_llm_model":           {"label": "LLM 模型", "unit": "", "type": "select", "group": "LLM/AI Model", "is_llm": True, "is_not_factory": True,
                                          "options": all_models,
                                          "option_labels": model_labels},
@@ -3992,10 +4086,18 @@ def get_runtime_config_schema():
         "headroom_enabled":           {"label": "Headroom 压缩", "unit": "", "type": "bool", "group": "Search & Cache"},
         "judge_review_enabled":       {"label": "Judge 审查模型", "unit": "", "type": "bool", "group": "LLM/AI Model"},
         # ── VL model ──
-        "vl_max_image_size":          {"label": "VL 最大图片尺寸", "unit": "px", "type": "int", "group": "LLM/AI Model", "min": 128, "max": 4096},
-        "vl_jpeg_quality":            {"label": "JPEG 质量", "unit": "%", "type": "int", "group": "LLM/AI Model", "min": 10, "max": 100},
-        "vl_max_tokens":              {"label": "VL 最大Token", "unit": "tokens", "type": "int", "group": "LLM/AI Model", "min": 50, "max": 4096},
-        "vl_temperature":             {"label": "VL 温度", "unit": "", "type": "float", "group": "LLM/AI Model", "min": 0, "max": 2, "step": 0.05},
+        "active_vl_provider":         {"label": "VL 服务商", "unit": "", "type": "select", "group": "VL Model", "is_not_factory": True,
+                                         "options": ["auto", "nvidia", "mimo", "dashscope"],
+                                         "option_labels": {"auto": "自动检测", "nvidia": "NVIDIA", "mimo": "Mimo", "dashscope": "阿里云DashScope"}},
+        "active_vl_model":            {"label": "VL 模型", "unit": "", "type": "select", "group": "VL Model", "is_not_factory": True,
+                                         "options": ["auto", "nvidia/nvlm-d-72b", "nvidia/llama-3.2-nv-vision-34b",
+                                                     "mimo-v2.5-pro", "mimo-v2.5",
+                                                     "qwen3-vl-plus-2025-12-19", "qwen-vl-max", "qwen-vl-plus"],
+                                         "option_labels": {"auto": "自动(服务商默认)", "nvidia/nvlm-d-72b": "NVLM-D-72B (NVIDIA)", "nvidia/llama-3.2-nv-vision-34b": "Llama-3.2-NV (NVIDIA)", "mimo-v2.5-pro": "mimo-v2.5-pro (Mimo)", "mimo-v2.5": "mimo-v2.5 (Mimo)", "qwen3-vl-plus-2025-12-19": "qwen3-vl-plus (DashScope)", "qwen-vl-max": "qwen-vl-max (DashScope)", "qwen-vl-plus": "qwen-vl-plus (DashScope)"}},
+        "vl_max_image_size":          {"label": "VL 最大图片尺寸", "unit": "px", "type": "int", "group": "VL Model", "min": 128, "max": 4096},
+        "vl_jpeg_quality":            {"label": "JPEG 质量", "unit": "%", "type": "int", "group": "VL Model", "min": 10, "max": 100},
+        "vl_max_tokens":              {"label": "VL 最大Token", "unit": "tokens", "type": "int", "group": "VL Model", "min": 50, "max": 4096},
+        "vl_temperature":             {"label": "VL 温度", "unit": "", "type": "float", "group": "VL Model", "min": 0, "max": 2, "step": 0.05},
         # ── RAG ──
         "rag_chunk_size":             {"label": "RAG 分块大小", "unit": "字符", "type": "int", "group": "RAG Engine", "min": 50, "max": 5000},
         "rag_chunk_overlap":          {"label": "RAG 分块重叠", "unit": "字符", "type": "int", "group": "RAG Engine", "min": 0, "max": 1000},
@@ -4102,6 +4204,27 @@ def admin_llm_providers():
     })
 
 
+@admin_bp.route('/admin/vl_status', methods=['GET'])
+@admin_required
+def admin_vl_status():
+    from app.services.vl_model import vl_model, VL_PROVIDER_CONFIG
+    cfg = vl_model.provider_id
+    provider_name = VL_PROVIDER_CONFIG.get(cfg, {}).get('name', cfg) if cfg != 'auto' else 'auto'
+    return ok({
+        "status": "ok",
+        "available": vl_model.is_available(),
+        "has_api_key": bool(vl_model.api_key),
+        "model": vl_model.model_name,
+        "provider": provider_name,
+        "provider_id": vl_model.provider_id,
+        "config": {
+            "max_image_size": vl_model.max_image_size,
+            "max_tokens": 800,
+            "temperature": 0.7,
+        }
+    })
+
+
 # ── Mail: admin compose and send email ──
 @admin_bp.route('/admin/send_mail', methods=['POST'])
 @admin_required
@@ -4192,91 +4315,6 @@ def restore_folder_path_for_file(file_item, conn, cur):
           folder['name'], folder['created_at'], folder['created_by']))
     cur.execute("DELETE FROM project_folders_recycle_bin WHERE id = %s", (folder['id'],))
 
-# ---------- Scheduled jobs ----------
-def delete_expired_original_files():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, original_stored_path
-                FROM user_files
-                WHERE original_expires_at IS NOT NULL AND original_expires_at <= NOW()
-                  AND original_stored_path IS NOT NULL
-            """)
-            expired = cur.fetchall()
-            for file_id, original_path in expired:
-                if original_path and os.path.exists(original_path):
-                    try:
-                        os.remove(original_path)
-                        logger.info(f"Deleted expired original file: {original_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete expired file {original_path}: {e}")
-                cur.execute("UPDATE user_files SET original_stored_path = NULL WHERE id = %s", (file_id,))
-            conn.commit()
-
-def cleanup_old_anon_temp_files(days=1):
-    now = time.time()
-    for item in os.listdir(TEMP_ROOT):
-        item_path = os.path.join(TEMP_ROOT, item)
-        if os.path.isdir(item_path):
-            if (now - os.path.getctime(item_path)) > days * 86400:
-                shutil.rmtree(item_path)
-                logger.info(f"Removed old anonymous temp dir: {item_path}")
-
-def schedule_project_deletion_cleanup():
-    cutoff = utc_now() - timedelta(days=3)
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM projects WHERE status = 'archived' AND archived_at < %s", (cutoff,))
-            to_delete = cur.fetchall()
-            for (project_id,) in to_delete:
-                logger.info(f"Auto-deleting archived project {project_id} after 3 days")
-                # Delete physical files first (same as manual delete_project)
-                cur.execute("SELECT stored_path FROM project_files WHERE project_id = %s", (project_id,))
-                for (stored_path,) in cur.fetchall():
-                    _safe_delete_file(stored_path, f'project_{project_id}_file')
-                # Archive chat sessions before cascade delete
-                cur.execute("SELECT thread_id, user_id FROM chat_sessions WHERE project_id = %s", (project_id,))
-                for thread_id, uid in cur.fetchall():
-                    cur.execute(
-                        "INSERT INTO archived_sessions (thread_id, user_id, archive_path) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                        (thread_id, uid, f"data/dump/{thread_id}_session.json")
-                    )
-                cur.execute("DELETE FROM projects WHERE id = %s", (project_id,))
-            conn.commit()
-
-def cleanup_expired_recycle_bin():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT original_stored_path FROM recycle_bin WHERE expires_at <= NOW()")
-            paths = cur.fetchall()
-            for row in paths:
-                if row[0] and os.path.exists(row[0]):
-                    try:
-                        os.remove(row[0])
-                        logger.info(f"Deleted expired recycle file: {row[0]}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete expired file {row[0]}: {e}")
-            cur.execute("DELETE FROM recycle_bin WHERE expires_at <= NOW()")
-            cur.execute("SELECT stored_path FROM project_recycle_bin WHERE expires_at <= NOW()")
-            paths = cur.fetchall()
-            for row in paths:
-                if row[0] and os.path.exists(row[0]):
-                    try:
-                        os.remove(row[0])
-                        logger.info(f"Deleted expired project recycle file: {row[0]}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete expired file {row[0]}: {e}")
-            cur.execute("DELETE FROM project_recycle_bin WHERE expires_at <= NOW()")
-            # Also clean expired kb_recycle_bin (skills + KB files)
-            cur.execute("SELECT stored_path FROM kb_recycle_bin WHERE expires_at <= NOW()")
-            for row in cur.fetchall():
-                if row[0] and os.path.exists(row[0]):
-                    try: os.remove(row[0])
-                    except: pass
-            cur.execute("DELETE FROM kb_recycle_bin WHERE expires_at <= NOW()")
-            conn.commit()
-            logger.info("Cleaned up expired recycle bin items (all 3 bins)")
-
 @admin_bp.route('/admin/system_cleanup', methods=['POST'])
 @admin_required
 def admin_system_cleanup():
@@ -4326,15 +4364,18 @@ def admin_clear_all_data():
         with conn.cursor() as cur:
             # 1. Clear skill data from all file tables
             for table in ('knowledge_lab_files', 'company_knowledge_base', 'project_files'):
-                cur.execute(f"UPDATE {table} SET skill_summary=NULL, skill_generated_at=NULL, skill_summary_hash=NULL")
+                tbl = sql.Identifier(table)
+                cur.execute(sql.SQL("UPDATE {} SET skill_summary=NULL, skill_generated_at=NULL, skill_summary_hash=NULL").format(tbl))
                 results[f'{table}_skills_cleared'] = cur.rowcount
             # 2. Clear file content
             for table in ('knowledge_lab_files', 'company_knowledge_base', 'project_files', 'user_files'):
-                cur.execute(f"UPDATE {table} SET content=NULL")
+                tbl = sql.Identifier(table)
+                cur.execute(sql.SQL("UPDATE {} SET content=NULL").format(tbl))
                 results[f'{table}_content_cleared'] = cur.rowcount
             # 3. Delete file records
             for table in ('knowledge_lab_files', 'company_knowledge_base', 'user_files'):
-                cur.execute(f"DELETE FROM {table}")
+                tbl = sql.Identifier(table)
+                cur.execute(sql.SQL("DELETE FROM {}").format(tbl))
                 results[f'{table}_deleted'] = cur.rowcount
             # 4. Clear AI memory
             cur.execute("DELETE FROM project_ai_memory")
@@ -4371,16 +4412,16 @@ def admin_clear_all_data():
             for root, dirs, files in os.walk(full, topdown=False):
                 for f in files:
                     try: os.remove(os.path.join(root, f)); count += 1
-                    except: pass
+                    except Exception: pass
                 for d in dirs:
                     try: _shutil.rmtree(os.path.join(root, d), ignore_errors=True)
-                    except: pass
+                    except Exception: pass
         else:
             for f in os.listdir(full):
                 fp = os.path.join(full, f)
                 if os.path.isfile(fp):
                     try: os.remove(fp); count += 1
-                    except: pass
+                    except Exception: pass
         results[f'disk_{rel_dir}'] = count
 
     # 9. Delete skill audit cache file
@@ -4388,7 +4429,7 @@ def admin_clear_all_data():
         cache_file = os.path.join(base, 'data', 'skill_audit_cache.json')
         if os.path.exists(cache_file):
             os.remove(cache_file)
-    except: pass
+    except Exception: pass
 
     return ok({"results": results}, "ok")
 
@@ -4397,6 +4438,7 @@ def _safe_delete_file(filepath, label=''):
     """Delete a file and log failure. Returns True if deleted or didn't exist."""
     if not filepath:
         return True
+    filepath = resolve_path(filepath)
     if not os.path.exists(filepath):
         return True
     try:
@@ -4428,10 +4470,12 @@ def admin_file_audit():
         with conn.cursor() as cur:
             for table, col in tables_to_check:
                 try:
-                    cur.execute(f"SELECT {col} FROM {table} WHERE {col} IS NOT NULL AND {col} != ''")
+                    tbl = sql.Identifier(table)
+                    col_id = sql.Identifier(col)
+                    cur.execute(sql.SQL("SELECT {} FROM {} WHERE {} IS NOT NULL AND {} != ''").format(col_id, tbl, col_id, col_id))
                     for (path,) in cur.fetchall():
                         total_checked += 1
-                        if path and not os.path.exists(path):
+                        if path and not os.path.exists(resolve_path(path)):
                             orphans.append({'table': table, 'column': col, 'path': path})
                 except Exception as e:
                     logger.warning(f"Audit skip {table}.{col}: {e}")
@@ -4446,15 +4490,27 @@ def admin_file_audit():
         for root, _, files in os.walk(abs_dir):
             for fname in files:
                 full_path = os.path.join(root, fname)
-                # Quick check: is this path referenced anywhere in DB?
                 found = False
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
                         for table, col in tables_to_check:
-                            cur.execute(f"SELECT 1 FROM {table} WHERE {col} = %s LIMIT 1", (full_path,))
+                            tbl = sql.Identifier(table)
+                            col_id = sql.Identifier(col)
+                            cur.execute(sql.SQL("SELECT 1 FROM {} WHERE {} = %s LIMIT 1").format(tbl, col_id), (full_path,))
                             if cur.fetchone():
                                 found = True
                                 break
+                        if not found:
+                            for table, col in tables_to_check:
+                                tbl = sql.Identifier(table)
+                                col_id = sql.Identifier(col)
+                                cur.execute(sql.SQL("SELECT {} FROM {} WHERE {} IS NOT NULL AND {} != ''").format(col_id, tbl, col_id, col_id))
+                                for (db_path,) in cur.fetchall():
+                                    if db_path and os.path.normpath(resolve_path(db_path)) == os.path.normpath(full_path):
+                                        found = True
+                                        break
+                                if found:
+                                    break
                 if not found:
                     leaks.append({'path': full_path, 'size': os.path.getsize(full_path)})
 
@@ -4666,7 +4722,6 @@ def admin_review_document():
         return err("文件名为空", "EMPTY_FILENAME", 400)
 
     try:
-        from app.services.file_processing import extract_text_from_file
         text, _ = extract_text_from_file(file)
     except Exception as e:
         logger.error(f"Text extraction failed for review: {e}")
@@ -4717,6 +4772,47 @@ def admin_review_document():
         result = {"raw_analysis": raw, "parse_error": True}
 
     return ok(result, "审查完成")
+
+
+@admin_bp.route('/admin/ingest/feedback', methods=['POST'])
+def submit_ingest_feedback():
+    """Submit feedback on an ingest/batch processing result."""
+    data = request.get_json(silent=True) or {}
+    task_id = data.get('task_id', '')
+    rating = data.get('rating')
+
+    if not task_id or rating is None:
+        return jsonify({"success": False, "error": "缺少必填参数"}), 400
+    if rating not in (-1, 1):
+        return jsonify({"success": False, "error": "rating 必须为 -1 或 1"}), 400
+
+    user_id = session.get('user_id', '')
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_feedback (user_id, source, target_id, rating)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id or '', 'ingest', task_id, rating))
+                conn.commit()
+
+        try:
+            from app.services.training_logger import log_interaction
+            _rating_map = {1: 5, -1: 1}
+            log_interaction(
+                thread_id=f"ingest_{task_id[:40]}",
+                user_msg=f"文件处理反馈: task_id={task_id}",
+                assistant_response=f"用户评分: {rating}",
+                rating=_rating_map.get(rating, 3),
+                source='ingest',
+            )
+        except Exception:
+            logger.warning("Failed to log ingest feedback to training", exc_info=True)
+
+        return jsonify({"success": True, "message": "感谢反馈!"})
+    except Exception as e:
+        logger.error(f"Ingest feedback error: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ======================== Credit Check Routes ========================

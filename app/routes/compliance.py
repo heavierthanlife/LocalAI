@@ -305,7 +305,7 @@ def start_check():
         # Try Celery async
         task_id = str(uuid.uuid4())
         try:
-            from celery_app import compliance_check_task
+            from app.services.compliance_checker import compliance_check_task
             compliance_check_task.apply_async(
                 args=[task_id, bid_text, rules, bid_name, use_ai, include_laws, region_code],
                 task_id=task_id,
@@ -420,7 +420,7 @@ def get_result(task_id):
         # Check Celery
         try:
             from celery.result import AsyncResult
-            from celery_app import celery_app
+            from celery_app import celery as celery_app
             task = AsyncResult(task_id, app=celery_app)
             if task.state == 'PENDING':
                 return ok({"status": "pending", "message": "检查进行中..."})

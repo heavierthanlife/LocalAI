@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiptap/ProseMirror — 中国招标文件编辑器 PoC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f1f5f9; padding: 20px; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 1.2rem; margin-bottom: 8px; color: #1e293b; }
+.toolbar { display: flex; gap: 4px; padding: 8px; background: #fff; border: 1px solid #cbd5e1; border-bottom: none; border-radius: 8px 8px 0 0; flex-wrap: wrap; align-items: center; }
+.toolbar button { padding: 4px 10px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.toolbar button:hover { background: #e2e8f0; }
+.toolbar button.on { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.toolbar .sep { width: 1px; background: #cbd5e1; margin: 0 4px; align-self: stretch; }
+.editor { padding: 16px; background: #fff; border: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; min-height: 500px; outline: none; line-height: 1.8; }
+.editor h2 { font-size: 1.1rem; margin: 16px 0 8px; color: #1e293b; }
+.editor h3 { font-size: 1rem; margin: 12px 0 6px; }
+.editor p { margin: 6px 0; }
+.compliance-ok { background: #dcfce7; border-bottom: 2px solid #22c55e; }
+.compliance-warn { background: #fef9c3; border-bottom: 2px solid #eab308; }
+.compliance-violation { background: #fee2e2; border-bottom: 2px solid #ef4444; }
+.compliance-critical { background: #fecaca; border-bottom: 3px solid #dc2626; font-weight: bold; }
+.sidebar { position: fixed; right: 16px; top: 16px; width: 260px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 0.8rem; max-height: 80vh; overflow-y: auto; }
+.sidebar h4 { margin-bottom: 8px; color: #64748b; }
+.issue { padding: 6px 8px; margin-bottom: 4px; border-radius: 4px; cursor: pointer; }
+.issue:hover { opacity: 0.85; }
+.issue.critical { background: #fee2e2; border-left: 3px solid #dc2626; }
+.issue.warning { background: #fef9c3; border-left: 3px solid #eab308; }
+.metrics { margin-top: 16px; padding: 10px; background: #f8fafc; border-radius: 6px; font-size: 0.75rem; color: #64748b; }
+.metrics div { margin: 2px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Tiptap/ProseMirror PoC — 招标文件编辑 + 合规标注</h1>
+<div class="toolbar" id="toolbar"></div>
+<div class="editor" id="editor"></div>
+</div>
+
+<div class="sidebar" id="sidebar">
+<h4>合规问题面板</h4>
+<div id="issues"></div>
+<div class="metrics" id="metrics">
+<div>⏱ 编辑器就绪: <span id="metric-ready">—</span></div>
+<div>📦 内存: <span id="metric-memory">—</span></div>
+<div>📄 字符数: <span id="metric-chars">—</span></div>
+<div>✏️ 标注数量: <span id="metric-annotations">—</span></div>
+</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "@tiptap/core": "https://esm.sh/@tiptap/core@2.10.3",
+    "@tiptap/starter-kit": "https://esm.sh/@tiptap/starter-kit@2.10.3",
+    "@tiptap/extension-highlight": "https://esm.sh/@tiptap/extension-highlight@2.10.3",
+    "@tiptap/extension-placeholder": "https://esm.sh/@tiptap/extension-placeholder@2.10.3"
+  }
+}
+</script>
+
+<script type="module">
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import Highlight from '@tiptap/extension-highlight';
+import Placeholder from '@tiptap/extension-placeholder';
+import { Mark } from '@tiptap/core';
+
+const startTime = performance.now();
+
+// Custom compliance annotation marks
+const ComplianceOk = Mark.create({
+  name: 'complianceOk',
+  parseHTML: () => [{ tag: 'span.compliance-ok' }],
+  renderHTML: () => ['span', { class: 'compliance-ok' }, 0],
+});
+
+const ComplianceWarn = Mark.create({
+  name: 'complianceWarn',
+  parseHTML: () => [{ tag: 'span.compliance-warn' }],
+  renderHTML: () => ['span', { class: 'compliance-warn' }, 0],
+});
+
+const ComplianceViolation = Mark.create({
+  name: 'complianceViolation',
+  parseHTML: () => [{ tag: 'span.compliance-violation' }],
+  renderHTML: () => ['span', { class: 'compliance-violation' }, 0],
+});
+
+const ComplianceCritical = Mark.create({
+  name: 'complianceCritical',
+  parseHTML: () => [{ tag: 'span.compliance-critical' }],
+  renderHTML: () => ['span', { class: 'compliance-critical' }, 0],
+});
+
+const editor = new Editor({
+  element: document.querySelector('#editor'),
+  extensions: [
+    StarterKit.configure({ heading: { levels: [2, 3] } }),
+    Highlight,
+    Placeholder.configure({ placeholder: '请输入招标文件内容...' }),
+    ComplianceOk, ComplianceWarn, ComplianceViolation, ComplianceCritical,
+  ],
+  content: sampleContent(),
+  editable: true,
+  onUpdate: () => {
+    document.getElementById('metric-chars').textContent = editor.getText().length;
+  },
+});
+
+// Toolbar
+const toolbar = document.getElementById('toolbar');
+function btn(label, action, title) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = title || '';
+  b.onclick = () => { action(editor); b.classList.toggle('on', editor.isActive(action.name === 'bold' ? 'bold' : action.name === 'italic' ? 'italic' : label === 'H2' ? 'heading' : label === 'H3' ? 'heading' : '')); };
+  return b;
+}
+const btns = [
+  ['B', (e) => e.chain().focus().toggleBold().run(), '加粗'],
+  ['I', (e) => e.chain().focus().toggleItalic().run(), '斜体'],
+  ['H2', (e) => e.chain().focus().toggleHeading({ level: 2 }).run(), '二级标题'],
+  ['H3', (e) => e.chain().focus().toggleHeading({ level: 3 }).run(), '三级标题'],
+  ['—', null],
+  ['✅ 合规', (e) => highlightRange(e, 'complianceOk')],
+  ['⚠️ 警告', (e) => highlightRange(e, 'complianceWarn')],
+  ['❌ 违规', (e) => highlightRange(e, 'complianceViolation')],
+  ['🚫 严重', (e) => highlightRange(e, 'complianceCritical')],
+  ['清除', (e) => clearHighlight(e)],
+];
+btns.forEach(([label, action, title]) => {
+  if (label === '—') { const s = document.createElement('span'); s.className = 'sep'; toolbar.appendChild(s); return; }
+  toolbar.appendChild(btn(label, action, title));
+});
+
+function highlightRange(ed, markName) {
+  const { from, to } = ed.state.selection;
+  if (from === to) return;
+  ed.chain().focus().setMark(markName).run();
+  updateSidebar();
+}
+
+function clearHighlight(ed) {
+  ed.chain().focus().unsetMark('complianceOk').unsetMark('complianceWarn').unsetMark('complianceViolation').unsetMark('complianceCritical').run();
+  updateSidebar();
+}
+
+function updateSidebar() {
+  const doc = editor.state.doc;
+  const issues = [];
+  doc.descendants((node, pos) => {
+    if (!node.marks) return;
+    for (const mark of node.marks) {
+      const name = mark.type.name;
+      if (name.startsWith('compliance')) {
+        const severity = name.replace('compliance', '').toLowerCase();
+        issues.push({ severity: severity === 'ok' ? 'ok' : severity === 'warn' ? 'warning' : severity === 'violation' ? 'violation' : 'critical', text: node.text.slice(0, 60) });
+      }
+    }
+  });
+  document.getElementById('issues').innerHTML = issues.map((i, idx) => `<div class="issue ${i.severity}" onclick="document.querySelector('.compliance-${i.severity==='warning'?'warn':i.severity}').scrollIntoView({block:'center'})">${idx+1}. ${i.text}...</div>`).join('');
+  document.getElementById('metric-annotations').textContent = issues.length;
+}
+
+editor.on('selectionUpdate', () => {
+  const { from, to } = editor.state.selection;
+  const sel = from !== to;
+  Array.from(toolbar.querySelectorAll('button')).forEach(b => {
+    const t = b.textContent;
+    if (t === '✅ 合规' || t === '⚠️ 警告' || t === '❌ 违规' || t === '🚫 严重' || t === '清除') b.disabled = !sel;
+  });
+});
+
+editor.on('update', updateSidebar);
+
+// Metrics
+const loadTime = (performance.now() - startTime).toFixed(0);
+document.getElementById('metric-ready').textContent = loadTime + ' ms';
+document.getElementById('metric-chars').textContent = editor.getText().length;
+setTimeout(() => {
+  if (performance.memory) {
+    document.getElementById('metric-memory').textContent = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB';
+  } else {
+    document.getElementById('metric-memory').textContent = 'N/A (非 Chrome)';
+  }
+}, 1000);
+
+// Bidding document sample
+function sampleContent() {
+  return `<h2>第一章 招标公告</h2>
+<p>1. 招标条件：本招标项目<strong>中联招标智能助手开发项目</strong>已由上级部门批准建设，项目业主为中联招标有限公司，建设资金来自企业自筹，项目出资比例为<strong>100%</strong>。</p>
+<p>2. 项目概况与招标范围：项目位于广东省深圳市南山区，总建筑面积约<strong>50,000平方米</strong>，包括AI研发中心、数据中心、培训中心及相关配套设施。本项目划分为<strong>2个标段</strong>。</p>
+
+<h2>第二章 投标人须知</h2>
+<h3>2.1 资质要求</h3>
+<p>投标人须具备<strong>建筑工程施工总承包壹级及以上资质</strong>，并在人员、设备、资金等方面具有相应的施工能力。项目经理须具备<strong>一级注册建造师（建筑工程专业）</strong>资格。</p>
+<p>投标人注册资本不低于<strong>人民币5000万元</strong>，近三年平均年营业额不低于<strong>人民币2亿元</strong>。</p>
+
+<h3>2.2 业绩要求</h3>
+<p>投标人近五年（2021年1月1日至今）至少完成过<strong>2个单项合同金额不低于人民币1亿元</strong>的同类公共建筑工程施工业绩。</p>
+
+<h3>2.3 投标保证金</h3>
+<p>投标保证金金额：<strong>人民币80万元</strong>。投标保证金必须从投标人基本账户以银行转账方式在投标截止时间前汇入指定账户。</p>
+
+<h2>第三章 评标办法</h2>
+<h3>3.1 评标方法</h3>
+<p>本项目采用<strong>综合评估法</strong>，满分100分。其中：商务标（投标报价）占<strong>50分</strong>，技术标占<strong>40分</strong>，综合实力占<strong>10分</strong>。</p>
+
+<h3>3.2 废标条件</h3>
+<p>有下列情形之一的，其投标将被否决：（1）投标文件未经投标单位盖章和单位负责人签字；（2）投标联合体没有提交共同投标协议；（3）投标人不符合国家或者招标文件规定的资格条件；<strong>（4）同一投标人提交两个以上不同的投标文件或者投标报价</strong>，但招标文件要求提交备选投标的除外。</p>
+
+<h2>第四章 合同条款</h2>
+<h3>4.1 工期要求</h3>
+<p>计划工期：<strong>540日历天</strong>。计划开工日期：<strong>2026年9月1日</strong>，计划竣工日期：<strong>2028年2月21日</strong>。</p>
+
+<h3>4.2 质量标准</h3>
+<p>工程质量符合<strong>《建筑工程施工质量验收统一标准》（GB50300-2013）</strong>及国家、行业现行相关标准，确保获得<strong>"广东省建设工程优质奖"</strong>。</p>
+
+<h3>4.3 付款方式</h3>
+<p>合同签订后支付10%预付款，每月按工程进度支付75%进度款，竣工验收合格后支付至合同价的85%，结算完成后支付至结算价的97%，剩余3%作为质保金在缺陷责任期满后支付。</p>`;
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-"""Vision-Language model for image description (Qwen VL / DashScope)."""
+"""Vision-Language model for image description — multi-provider (NVIDIA, Mimo, DashScope)."""
 import os
 import io
 import base64
@@ -7,34 +7,127 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+VL_PROVIDER_CONFIG = {
+    'nvidia': {
+        'name': 'NVIDIA',
+        'env_key': 'NVIDIA_API_KEY',
+        'base_url': 'https://integrate.api.nvidia.com/v1',
+        'default_model': 'nvidia/nvlm-d-72b',
+        'models': ['nvidia/nvlm-d-72b', 'nvidia/llama-3.2-nv-vision-34b'],
+    },
+    'mimo': {
+        'name': 'Mimo',
+        'env_key': 'MIMO_API_KEY',
+        'base_url': 'https://token-plan-cn.xiaomimimo.com/v1',
+        'default_model': 'mimo-v2.5-pro',
+        'models': ['mimo-v2.5-pro', 'mimo-v2.5'],
+    },
+    'dashscope': {
+        'name': '阿里云DashScope',
+        'env_key': 'DASHSCOPE_API_KEY',
+        'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'default_model': 'qwen3-vl-plus-2025-12-19',
+        'models': ['qwen3-vl-plus-2025-12-19', 'qwen-vl-max', 'qwen-vl-plus'],
+    },
+}
+
+
+def _get_active_vl_config():
+    cfg = {'provider_id': 'nvidia', 'model': 'nvidia/nvlm-d-72b',
+           'api_key': '', 'base_url': '', 'api_key_valid': False}
+    try:
+        from app.services.runtime_config import get as rc_get
+        provider_id = rc_get('active_vl_provider', '') or 'auto'
+        model_id = rc_get('active_vl_model', '') or 'auto'
+    except Exception:
+        provider_id = 'auto'
+        model_id = 'auto'
+
+    if provider_id == 'auto':
+        for pid in ['nvidia', 'dashscope', 'mimo']:
+            pcfg = VL_PROVIDER_CONFIG.get(pid, {})
+            key = os.getenv(pcfg.get('env_key', ''), '').strip()
+            if key:
+                provider_id = pid
+                break
+        if provider_id == 'auto':
+            provider_id = 'nvidia'
+
+    if provider_id not in VL_PROVIDER_CONFIG:
+        provider_id = 'nvidia'
+
+    pcfg = VL_PROVIDER_CONFIG[provider_id]
+    api_key = os.getenv(pcfg['env_key'], '').strip()
+    if not api_key:
+        api_key = os.getenv('DASHSCOPE_API_KEY', '').strip() or os.getenv('QWEN_API_KEY', '').strip() or os.getenv('DEEPSEEK_API_KEY', '').strip()
+
+    if model_id == 'auto' or model_id not in pcfg['models']:
+        model_id = pcfg['default_model']
+
+    return {
+        'provider_id': provider_id,
+        'model': model_id,
+        'api_key': api_key,
+        'base_url': pcfg['base_url'],
+        'api_key_valid': bool(api_key),
+    }
+
 
 class VLModel:
     """Singleton vision-language model client for image/page description."""
 
     def __init__(self):
-        self.api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("QWEN_API_KEY")
-        if not self.api_key:
-            self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        self.model_name = "qwen3-vl-plus-2025-12-19"
-        self.client = None
+        self._client = None
+        self._model_name = ''
+        self._provider_id = ''
         self.max_image_size = 1024
         self._init_client()
 
+    @property
+    def api_key(self):
+        return _get_active_vl_config().get('api_key', '')
+
+    @property
+    def model_name(self):
+        return self._model_name
+
+    @property
+    def provider_id(self):
+        return self._provider_id
+
     def _init_client(self):
+        cfg = _get_active_vl_config()
+        self._provider_id = cfg['provider_id']
+        self._model_name = cfg['model']
+        api_key = cfg['api_key']
+        base_url = cfg['base_url']
+
+        if not api_key:
+            self._client = None
+            logger.warning("VL model: no API key configured")
+            return
+
         try:
             from openai import OpenAI
-            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
-            logger.info(f"VL client initialized with model {self.model_name}")
+            self._client = OpenAI(api_key=api_key, base_url=base_url)
+            logger.info(f"VL client initialized: provider={cfg['provider_id']}, model={self._model_name}")
         except ImportError:
             logger.error("OpenAI package not installed. VL model disabled.")
-            self.client = None
+            self._client = None
         except Exception as e:
             logger.error(f"VL client init failed: {e}")
-            self.client = None
+            self._client = None
 
     def is_available(self):
-        return self.client is not None and self.api_key is not None
+        if self._client is None:
+            return False
+        cfg = _get_active_vl_config()
+        return cfg['api_key_valid']
+
+    def reload(self):
+        """Re-initialize client (e.g. after runtime config change)."""
+        logger.info("VL model reload triggered")
+        self._init_client()
 
     def _preprocess_image(self, image_bytes):
         try:
@@ -61,8 +154,8 @@ class VLModel:
             return "⚠️ VL模型不可用，请检查API密钥。"
         try:
             base64_image = self.encode_image_to_base64(image_bytes)
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            response = self._client.chat.completions.create(
+                model=self._model_name,
                 messages=[{
                     "role": "user",
                     "content": [

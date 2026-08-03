@@ -516,3 +516,39 @@ def auto_cleanup_memory():
             pass
     except Exception as e:
         logger.error(f"Memory cleanup failed: {e}")
+
+
+# ── Celery task wrappers (for Docker/Beat scheduling) ──
+try:
+    from celery_app import celery as celery_app
+
+    auto_cleanup_stale_sessions = celery_app.task(
+        name='app.cleanup_tasks.auto_cleanup_stale_sessions'
+    )(auto_cleanup_stale_sessions)
+
+    cleanup_old_anon_temp_files = celery_app.task(
+        name='app.cleanup_tasks.cleanup_old_anon_temp_files'
+    )(cleanup_old_anon_temp_files)
+
+    auto_generate_weekly_report = celery_app.task(
+        name='app.cleanup_tasks.auto_generate_weekly_report'
+    )(auto_generate_weekly_report)
+
+    @celery_app.task(name='app.cleanup_tasks.auto_skill_audit_weekly')
+    def auto_skill_audit_weekly():
+        """Weekly: analyze all skill fingerprints across KB files."""
+        from app.services.skill_auditor import analyze_all_skills
+        from app.database import get_db_connection
+        with get_db_connection() as conn:
+            return analyze_all_skills(conn)
+
+    @celery_app.task(name='app.cleanup_tasks.auto_skill_compile')
+    def auto_skill_compile():
+        """Weekly: compile composite skills by clustering skill summaries."""
+        from app.services.skill_compiler import compile_skills
+        from app.database import get_db_connection
+        with get_db_connection() as conn:
+            return compile_skills(conn)
+
+except Exception:
+    pass

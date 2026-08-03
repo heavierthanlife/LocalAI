@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+"""Pre-commit hook: warn when reference docs drift from code.
+
+Install: git config core.hooksPath .githooks
+Bypass:  SKIP_REPAIR_KIT_CHECK=1 git commit ...
+"""
+import os
+import re
+import sys
+import subprocess
+
+PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..')
+ENV_EXAMPLE = os.path.join(PROJECT_ROOT, '.env.example')
+CHECKLIST = os.path.join(PROJECT_ROOT, 'repair_kit', 'SYSTEM_CHECKLIST.md')
+CHECK_INTEGRITY = os.path.join(PROJECT_ROOT, 'repair_kit', 'check_integrity.py')
+AGENTS_MD = os.path.join(PROJECT_ROOT, 'AGENTS.md')
+CONFIG_PY = os.path.join(PROJECT_ROOT, 'app', 'config.py')
+DATABASE_PY = os.path.join(PROJECT_ROOT, 'app', 'database.py')
+ROUTES_DIR = os.path.join(PROJECT_ROOT, 'app', 'routes')
+REPAIR_KIT_DIR = os.path.join(PROJECT_ROOT, 'repair_kit')
+
+# Internal toggles in config.py that don't need .env.example entries
+_CONFIG_SKIP_LIST = {'EDGEDRIVER_PATH'}
+
+
+def _get_changed_files():
+    result = subprocess.run(
+        ['git', 'diff', '--cached', '--name-only'],
+        capture_output=True, text=True, cwd=PROJECT_ROOT
+    )
+    if result.returncode != 0:
+        return set()
+    return set(f for f in result.stdout.strip().split('\n') if f)
+
+
+def _get_config_env_vars():
+    """Extract os.getenv('VARIABLE_NAME') calls from config.py."""
+    if not os.path.exists(CONFIG_PY):
+        return set()
+    with open(CONFIG_PY, 'r', encoding='utf-8') as f:
+        content = f.read()
+    return set(re.findall(r"os\.getenv\('([^']+)'\)", content)) - _CONFIG_SKIP_LIST
+
+
+def _get_env_example_vars():
+    """Extract variable names defined in .env.example (non-commented lines with =)."""
+    if not os.path.exists(ENV_EXAMPLE):
+        return set()
+    with open(ENV_EXAMPLE, 'r', encoding='utf-8') as f:
+        content = f.read()
+    vars_in_example = set()
+    for line in content.split('\n'):
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        if '=' in stripped:
+            name = stripped.split('=')[0].strip()
+            if name:
+                vars_in_example.add(name)
+    return vars_in_example
+
+
+def check_integrity():
+    """Run check_integrity.py and warn if fails."""
+    result = subprocess.run(
+        [sys.executable, CHECK_INTEGRITY],
+        capture_output=True, text=True, cwd=PROJECT_ROOT
+    )
+    if result.returncode != 0:
+        print('[repair_kit] WARNING: Integrity check failed:')
+        for line in result.stdout.strip().split('\n'):
+            print(f'  {line}')
+        print('  Fix the gap or commit with SKIP_REPAIR_KIT_CHECK=1')
+        return False
+    return True
+
+
+VERIFY_FIXES = os.path.join(PROJECT_ROOT, 'scripts', 'verify_fixes.py')
+
+
+def check_fix_registry():
+    """Run verify_fixes.py and reject if any fix has regressed."""
+    if os.getenv('SKIP_FIX_CHECK'):
+        return True
+    result = subprocess.run(
+        [sys.executable, VERIFY_FIXES],
+        capture_output=True, text=True, cwd=PROJECT_ROOT
+    )
+    if result.returncode != 0:
+        print('[fix_registry] ERROR: Fix regression detected:')
+        for line in result.stdout.strip().split('\n'):
+            print(f'  {line}')
+        print('  Fix the regression or commit with SKIP_FIX_CHECK=1')
+        return False
+    return True
+
+
+def warn_route_changes(changed):
+    """Warn if routes changed but checklist not updated."""
+    routes_changed = any(f.startswith('app/routes/') for f in changed)
+    checklist_changed = 'repair_kit/SYSTEM_CHECKLIST.md' in changed
+    if routes_changed and not checklist_changed:
+        print('[repair_kit] WARNING: Routes changed but SYSTEM_CHECKLIST.md not updated.')
+        print('  If system behavior changed, add checklist items.')
+        return False
+    return True
+
+
+def warn_env_example_drift(changed):
+    """Warn if config.py has new os.getenv vars not in .env.example."""
+    config_changed = 'app/config.py' in changed
+    example_changed = '.env.example' in changed
+    if config_changed and not example_changed:
+        code_vars = _get_config_env_vars()
+        example_vars = _get_env_example_vars()
+        missing = code_vars - example_vars
+        if missing:
+            print(f'[repair_kit] WARNING: os.getenv vars in config.py not documented in .env.example:')
+            for var in sorted(missing):
+                print(f'  - {var}')
+            print('  Add entries to .env.example or mark as internal in .githooks/pre-commit _CONFIG_SKIP_LIST')
+            return False
+    return True
+
+
+def warn_db_schema_drift(changed):
+    """Warn if database.py schema changed but reference docs untouched."""
+    db_changed = 'app/database.py' in changed
+    repair_changed = any(f.startswith('repair_kit/') for f in changed)
+    agents_changed = 'AGENTS.md' in changed
+    if db_changed and not (repair_changed or agents_changed):
+        print('[repair_kit] WARNING: Database schema changed (app/database.py).')
+        print('  Update AGENTS.md and/or repair_kit/ if schema info changed.')
+        return False
+    return True
+
+
+def check_skills():
+    """Validate SKILL.md files in .codebuddy/skills/."""
+    try:
+        sys.path.insert(0, PROJECT_ROOT)
+        from app.services.skill_validator import validate_all
+        report = validate_all()
+        if report.get('errors', 0) > 0:
+            print(f'[skills] WARNING: {report["errors"]} SKILL.md files have errors')
+            for detail in report.get('details', []):
+                if detail.get('issues'):
+                    print(f'  - {detail["skill"]}: {"; ".join(detail["issues"])}')
+            return False
+        if report.get('warnings', 0) > 0:
+            print(f'[skills] INFO: {report["warnings"]} SKILL.md files have warnings (non-blocking)')
+        return True
+    except Exception as e:
+        print(f'[skills] SKIP: skill validation unavailable ({e})')
+        return True
+
+
+def main():
+    if os.environ.get('SKIP_REPAIR_KIT_CHECK'):
+        return 0
+
+    changed = _get_changed_files()
+
+    ok = True
+    if not check_integrity():
+        ok = False
+    if not check_fix_registry():
+        ok = False
+    if not check_skills():
+        ok = False
+    if not warn_route_changes(changed):
+        ok = False
+    if not warn_env_example_drift(changed):
+        ok = False
+    if not warn_db_schema_drift(changed):
+        ok = False
+
+    return 0 if ok else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

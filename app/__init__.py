@@ -23,6 +23,15 @@ from . import config
 from . import globals as g
 from . import database as db
 
+# Rate limiter — module-level so blueprints can `from app import limiter`
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=os.getenv("REDIS_URL", "memory://"),
+    default_limits=["120/minute"],
+)
+
 # ============================================================
 # Environment Validation
 # ============================================================
@@ -81,6 +90,9 @@ def create_app():
     csrf = CSRFProtect()
     csrf.init_app(app)
 
+    # Rate limiting — init with Flask app
+    limiter.init_app(app)
+
     # Admin password — auto-generate from ADMIN_PIN if not explicitly set
     ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
     if not ADMIN_PASSWORD_HASH:
@@ -97,6 +109,15 @@ def create_app():
     app.config['BASE_DIR'] = config.BASE_DIR
     app.config['DATA_DIR'] = config.DATA_DIR
     app.config['ALLOWED_EXTENSIONS'] = config.ALLOWED_EXTENSIONS
+
+    # Cache buster — based on app.js mtime so stale SW-cached JS is dropped on edit
+    @app.context_processor
+    def inject_cache_buster():
+        try:
+            mt = os.path.getmtime(config.BASE_DIR / 'static' / 'js' / 'app.js')
+            return {'cache_buster': str(int(mt))}
+        except OSError:
+            return {'cache_buster': '1'}
 
     # ── Swagger/OpenAPI docs (available at /apidocs) ──
     try:
@@ -206,6 +227,23 @@ def _setup_scheduler(app):
         scheduler.add_job(func=run_skill_audit, trigger="interval", days=7)
     except ImportError:
         pass
+
+    try:
+        from app.services.skill_compiler import compile_skills as weekly_skill_compile
+        def run_skill_compile():
+            import logging
+            log = logging.getLogger(__name__)
+            try:
+                from app.database import get_db_connection
+                with get_db_connection() as conn:
+                    result = weekly_skill_compile(conn)
+                log.info(f"Weekly skill compile: {result} composites created/updated")
+            except Exception as e:
+                log.warning(f"Weekly skill compile skipped: {e}")
+        scheduler.add_job(func=run_skill_compile, trigger="interval", days=7)
+    except ImportError:
+        pass
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
 
@@ -219,7 +257,9 @@ def _cleanup():
         _agent = None
 
     # Close DB pool
-    if db.db_pool:
+    if hasattr(db, '_db_pool') and db._db_pool:
+        db._db_pool.closeall()
+    elif hasattr(db, 'db_pool') and db.db_pool:
         db.db_pool.closeall()
 
     logging.getLogger(__name__).info("Application shutdown complete.")

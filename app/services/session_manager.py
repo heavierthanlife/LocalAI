@@ -3,7 +3,7 @@ import os, json, uuid, logging
 from datetime import datetime, timezone, timedelta
 from psycopg2.extras import RealDictCursor
 from flask import session
-from app.config import DUMP_DIR, logger
+from app.config import DUMP_DIR, to_rel_path, resolve_path, logger
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import utc_now, beijing_now
 from app.services.file_cache import file_cache_manager
@@ -242,7 +242,7 @@ def archive_session(thread_id, user_id, reason="manual"):
             except Exception as e:
                 logger.error(f"Failed to write archive files for thread {thread_id}: {e}")
                 return None
-            archive_path = os.path.join(dump_dir, f"{thread_id}_session.json")
+            archive_path = to_rel_path(os.path.join(dump_dir, f"{thread_id}_session.json"))
             cur.execute("INSERT INTO archived_sessions (thread_id, user_id, archive_path) VALUES (%s, %s, %s)", (thread_id, user_id, archive_path))
             conn.commit()
             logger.info(f"Archived session {thread_id} for user {user_id} to {dump_dir}")

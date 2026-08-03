@@ -1,3 +1,43 @@
 .venv
 .idea
 .env
+.cursor
+.vscode
+*.code-workspace
+
+# Local MCP/tool configs with DB credentials — never commit
+.mcp.json
+opencode.json
+
+# Node deps
+node_modules/
+
+# Runtime data / logs / caches
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+data/chromadb/
+data/flask_session/
+data/dump/
+data/search_cache/
+data/training/
+data/ingest/
+data/batch_results/
+data/compliance_results/
+data/audit_reports/
+data/user_files/
+data/wiki/
+data/legal_schedules/
+company_kb_files/
+knowledge_lab_files/
+local_cache/
+.audit/
+
+# Opencode junctioned subdirs (point to shared dir)
+.opencode/skills/
+.opencode/commands/
+.opencode/plugins/
+.opencode/node_modules/
+.opencode/plans/
+.opencode/settings.local.json

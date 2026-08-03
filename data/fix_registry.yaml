@@ -1,0 +1,226 @@
+# Fix Registry — invariant checks for every permanent bug fix.
+# Each entry records WHAT must hold, WHY, and how to verify it.
+#
+# Add an entry here after fixing any bug that could silently regress.
+# The pre-commit hook runs scripts/verify_fixes.py to check all entries.
+#
+# Bypass: SKIP_FIX_CHECK=1 git commit ...
+# Check types: grep | grep_not | function_order
+
+fixes:
+  - id: FIX-2026-07-15-001
+    title: "NVIDIA nemotron model requires nvidia/ prefix in all locations"
+    severity: critical
+    status: superseded
+    status_note: >
+      NVIDIA provider removed from llm_provider.py and llm_fallback.py.
+      No nemotron references remain in the codebase. Fix no longer applicable.
+    rationale: >
+      The langchain_nvidia_ai_endpoints library's MODEL_TABLE uses full IDs
+      like "nvidia/nemotron-3-ultra-550b-a55b". Without the prefix, the
+      library cannot look up model capabilities and sends the raw name to
+      the NVIDIA API, which returns 404 Not Found.
+    checks:
+      - type: grep_not
+        file: app/services/llm_provider.py
+        pattern: "nvidia/nemotron"
+      - type: grep_not
+        file: app/services/llm_fallback.py
+        pattern: "nvidia/nemotron"
+
+  - id: FIX-2026-07-15-002
+    title: "Wiki frontend: ok() dict-spread means no .data wrapper — use .stats, .pages, .tree"
+    severity: high
+    status: superseded
+    status_note: >
+      Wiki frontend code refactored — statsData references no longer exist
+      in app.js. The wiki now uses a different data access pattern. Fix
+      no longer applicable in its original form.
+    rationale: >
+      ok() helper spreads dict keys to top-level JSON when data is a dict.
+      The wiki endpoints return {success:true, pages:[], tree:{}} and
+      {success:true, stats:{}} — no "data" envelope key exists. Frontend
+      code referencing .data produces undefined, causing silent TypeError
+      caught by empty catch block.
+    checks:
+      - type: grep_not
+        file: static/js/app.js
+        pattern: "statsData\\.data"
+
+  - id: FIX-2026-07-15-003
+    title: "_score_timeline_compliance must be defined BEFORE SCORING_FUNCTIONS dict"
+    severity: critical
+    rationale: >
+      SCORING_FUNCTIONS is a module-level dict that references function
+      objects at import time. _score_timeline_compliance was defined ~340
+      lines below the dict, causing NameError on import. All audit
+      endpoints returned 500. Must remain before line ~128.
+    checks:
+      - type: function_order
+        file: app/services/audit_engine.py
+        before: "_score_timeline_compliance"
+        after: "SCORING_FUNCTIONS"
+
+  - id: FIX-2026-07-15-004
+    title: "NVIDIA nemotron model prefix in runtime_config.json"
+    severity: critical
+    rationale: >
+      Active model and fallback chain entries in runtime_config.json must
+      use the full "nvidia/nemotron-3-ultra-550b-a55b" ID. Without prefix,
+      the model selection sends the wrong name to the NVIDIA API.
+    checks:
+      - type: grep_not
+        file: data/runtime_config.json
+        pattern: '"nemotron-3-ultra-550b-a55b"'
+
+  - id: FIX-2026-07-15-005
+    title: "project_recycle_bin table uses uploaded_by column, not user_id"
+    severity: high
+    rationale: >
+      The recycle_bin_service permanently_delete_item() had hardcoded
+      user_id column in queries. But project_recycle_bin has column
+      "uploaded_by" instead. Queries failed with column-not-found error,
+      silently swallowed by empty catch blocks in frontend.
+    checks:
+      - type: grep
+        file: app/services/recycle_bin_service.py
+        pattern: "'uploaded_by'"
+      - type: grep
+        file: app/services/recycle_bin_service.py
+        pattern: "user_col"
+
+  - id: FIX-2026-07-15-006
+    title: "Recycle bin section data-attribute uses project_files not project"
+    severity: high
+    rationale: >
+      Frontend empty/restore buttons sent source:"project" but backend
+      empty_recycle_bin expects "project_files". Zero rows were deleted
+      while the API returned success — user saw success toast but nothing
+      happened. Individual delete had same column mismatch (FIX-005).
+    checks:
+      - type: grep
+        file: templates/index.html
+        pattern: 'data-section="project_files"'
+
+  - id: FIX-2026-07-15-007
+    title: "Duplicate conversation: SSE done event carries DB msg IDs, frontend updates poll cursor"
+    severity: high
+    rationale: >
+      After streaming completes, _pollLastId was stale. The next poll cycle
+      re-fetched and re-rendered the same messages, producing duplicates.
+      Fix tracks msg IDs in the /send JSON response (user_message_id /
+      assistant_message_id) and in chat.js via _lastKnownMessageId /
+      _pollLastId cursor to skip already-rendered messages.
+    checks:
+      - type: grep
+        file: app/routes/chat.py
+        pattern: "user_message_id"
+      - type: grep
+        file: app/routes/chat.py
+        pattern: "assistant_message_id"
+      - type: grep
+        file: static/js/chat.js
+        pattern: "_pollLastId"
+      - type: grep
+        file: static/js/chat.js
+        pattern: "_lastKnownMessageId"
+
+  - id: FIX-2026-07-15-008
+    title: "Admin sidebar extras visibility must not rely on sessionStorage race condition"
+    severity: medium
+    rationale: >
+      verifyAuth() sets sessionStorage.isAdmin asynchronously, but
+      DOMContentLoaded handler checks it synchronously — admins never
+      saw the "清空全部数据" button on first page load. Fixed by
+      setting sidebarAdminExtras.style.display directly inside
+      verifyAuth() after isAdmin is confirmed.
+    checks:
+      - type: grep
+        file: static/js/app.js
+        pattern: "adminExtras\\.style\\.display.*is_admin"
+
+  - id: FIX-2026-07-19-001
+    title: "Verdict case mismatch: AI returns uppercase, comparison uses lowercase"
+    severity: critical
+    rationale: >
+      _score_compliance_check compared verdict == 'pass' (lowercase) but AI
+      returned "PASS" (uppercase). Pass count was always 0, scoring always 100%.
+      Fix normalizes verdict to lowercase at the AI boundary and defines
+      VERDICT_PASS/WARNING/VIOLATION/CRITICAL constants as single source of truth.
+    checks:
+      - type: grep
+        file: app/services/compliance_prompts.py
+        pattern: 'VERDICT_PASS = "PASS"'
+      - type: grep
+        file: app/services/compliance_checker.py
+        pattern: '.get\("verdict".*\.lower\(\)'
+
+  - id: FIX-2026-07-19-002
+    title: "XSS via unsanitized report_html and diff_html in compliance.js"
+    severity: critical
+    rationale: >
+      report_html (AI-generated) and diff_html (difflib HtmlDiff) were
+      injected directly via innerHTML and += without sanitization. User
+      document names in reports could contain XSS payloads. Fix adds
+      DOMPurify CDN with onerror fallback and sanitizes before injection.
+    checks:
+      - type: grep
+        file: templates/index.html
+        pattern: "cdnjs\\.cloudflare\\.com/ajax/libs/dompurify"
+      - type: grep
+        file: static/js/compliance.js
+        pattern: "_safeHTML"
+
+  - id: FIX-2026-07-19-003
+    title: "Tiptap Mark import from Editor static property unreliable in v2"
+    severity: high
+    status: superseded
+    status_note: >
+      tiptap-editor.js fully rewritten to use ESM dynamic imports
+      (import() from esm.sh CDN). Editor and StarterKit are destructured
+      from dynamic module imports. No Mark class needed in current code.
+      The old static-import-based fix no longer applies.
+    rationale: >
+      Editor.Mark returned undefined in Tiptap v2 — Mark is a named export,
+      not a static property of Editor. Fallback {} was truthy so if(!Mark)
+      didn't trigger. Mark.create() would crash at runtime. Fix destructures
+      Mark directly from the @tiptap/core import.
+    checks:
+      - type: grep
+        file: static/js/tiptap-editor.js
+        pattern: "import\\(.*@tiptap"
+
+  - id: FIX-2026-07-19-004
+    title: "Compliance._taskIds.extracted cleared on check, breaking editor"
+    severity: high
+    status: superseded
+    status_note: >
+      Code refactored to use a closure variable extractedRulesTaskId
+      instead of reading _taskIds.extracted. The Tiptap editor now
+      reads _taskIds[fn] (per-file IDs), not .extracted. The original
+      bug path no longer exists.
+    rationale: >
+      The check button handler cleared Compliance._taskIds = {} destroying
+      the .extracted key set by the extract-rules handler. The Tiptap editor
+      reads _taskIds.extracted to get the rules task ID. Fix clears only
+      per-file entries while preserving .extracted.
+    checks:
+      - type: grep
+        file: static/js/compliance.js
+        pattern: "_taskIds\\.extracted"
+
+  - id: FIX-2026-07-19-005
+    title: "Closed cursor passed to _compute_impact in law_monitor.py"
+    severity: high
+    rationale: >
+      create_change_event called _compute_impact(cur if 'cur' in dir() else None)
+      after the with conn.cursor() context exited. The dir() check always passed
+      but the cursor was closed, causing InterfaceError. Fix moves _compute_impact
+      call inside the with block while cursor is alive.
+    checks:
+      - type: grep
+        file: app/services/law_monitor.py
+        pattern: "_compute_impact[(]cur"
+      - type: grep_not
+        file: app/services/law_monitor.py
+        pattern: "cur if .cur. in dir"

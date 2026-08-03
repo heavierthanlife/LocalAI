@@ -3,9 +3,36 @@ import re
 import logging
 from datetime import datetime, timezone, timedelta
 
+from flask import jsonify
+
 logger = logging.getLogger(__name__)
 
 BEIJING_TZ = timezone(timedelta(hours=8))
+
+
+def ok(data=None, message=None, status=200):
+    """Return a standardized success JSON response.
+
+    ok(data, message, status) → {success:true, message, ...data}
+    If data is a dict, its keys are flat-merged into the response.
+    """
+    response = {"success": True}
+    if message:
+        response["message"] = message
+    if data is not None:
+        if isinstance(data, dict):
+            response.update(data)
+        else:
+            response["data"] = data
+    return jsonify(response), status
+
+
+def err(error, code="ERROR", status=400):
+    """Return a standardized error JSON response.
+
+    err(error, code, status) → {success:false, error, code}
+    """
+    return jsonify({"success": False, "error": error, "code": code}), status
 
 
 def beijing_now() -> str:

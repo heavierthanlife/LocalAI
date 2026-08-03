@@ -1,0 +1,230 @@
+# Unresolved Issues Tracker
+# Structured record of pending, deferred, blocked, and abandoned items.
+# Updated: 2026-07-29
+
+unresolved:
+
+  - id: UNRESOLVED-001
+    title: "npm prefix orphaned packages (pi, agentmemory)"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-29
+    context: >
+      npm prefix changed from C:\Users\nana-\AppData\Roaming\npm to
+      D:\AI_Tools\npm-global. pi@0.81.1 and @agentmemory/agentmemory
+      shims remain at old prefix only. npm ls at old prefix lists them;
+      new prefix only has lm and opencode.
+    blocked_by: ~
+    resolution_plan: >
+      Resolved 2026-07-30: old npm prefix at C:\Users\nana-\AppData\Roaming\npm
+      cleaned up (empty dir deleted). @agentmemory/agentmemory reinstalled at
+      new prefix. pi installed at D:\AI_Tools\npm-global (v0.82.1).
+
+  - id: UNRESOLVED-002
+    title: "Hermes migration to D:\AI_Tools\hermes"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-29
+    context: >
+      Hermes v0.19.0 installed at C:\Users\nana-\AppData\Local\hermes.
+      Python-venv based, independent of npm. Backup taken at
+      D:\Hermes\hermes-backup-full.zip (129 MB). Planned migration via
+      Robocopy + HERMES_HOME env var.
+    blocked_by: "User decision on timing"
+    resolution_plan: >
+      Resolved 2026-07-30: Hermes migrated to D:\AI_Tools\hermes via
+      Robocopy + HERMES_HOME env var. config.yaml configured with
+      shared-agent-infra external_dirs. C:\...\Local\hermes left intact
+      (contains gateway.lock/pid, state.db, auth.json — runtime data).
+
+  - id: UNRESOLVED-003
+    title: "@earendil-works/codex-cli does not exist on npm"
+    status: abandoned
+    severity: info
+    discovered: 2026-07-29
+    context: >
+      Attempted npm install @earendil-works/codex-cli — package 404 on
+      npm registry. No alternative source found. May be internal/private
+      package or renamed.
+    blocked_by: "Validation gap — human confirmation needed"
+    resolution_plan: "If still needed, check internal package registry or contact maintainer"
+
+  - id: UNRESOLVED-004
+    title: "@liumir/lm-code does not exist; correct name is @liumir/lmcode"
+    status: resolved
+    severity: info
+    discovered: 2026-07-29
+    context: >
+      User mentioned npm install @liumir/lm-code. That package 404s.
+      Correct package name is @liumir/lmcode v0.9.21, already installed
+      at both old and new npm prefixes.
+    blocked_by: ~
+    resolution_plan: "Use @liumir/lmcode (no dash)"
+
+  - id: UNRESOLVED-005
+    title: "Flask dev server stdout/stderr encoding issues"
+    status: deferred
+    severity: low
+    discovered: 2026-07-29
+    context: >
+      run.py applies UTF-8 encoding fixes for emoji/log compatibility on
+      Windows. The fix_registry check output showed mojibake characters
+      (e.g., \ud83d\uded1 instead of ✅) when verify_fixes.py was run
+      via subprocess in pre-commit hook. Non-critical but cosmetically ugly.
+    blocked_by: ~
+    resolution_plan: >
+      Apply same sys.stdout.reconfigure(encoding='utf-8') to verify_fixes.py
+      and pre-commit hook scripts. Mark as low priority.
+
+  - id: UNRESOLVED-006
+    title: "Pre-commit hook was advisory-only; all checks printed but never blocked"
+    status: resolved
+    severity: high
+    discovered: 2026-07-29
+    context: >
+      .githooks/pre-commit main() called check_integrity(), check_fix_registry(),
+      and warn_*() but returned 0 regardless. Fix failures accumulated for
+      months unnoticed. Fixed by propagating return values.
+    blocked_by: ~
+    resolution_plan: >
+      Fixed in Phase 0. main() now returns 1 if any check fails.
+
+  - id: UNRESOLVED-007
+    title: "Fix registry contained ORPHAN entries (never-applied fixes)"
+    status: resolved
+    severity: critical
+    discovered: 2026-07-29
+    context: >
+      3 fixes recorded in registry but never applied to code:
+      FIX-019-002 (XSS/DOMPurify), FIX-019-005 (law_monitor closed cursor),
+      FIX-007 (SSE done event msg IDs — patterns pointed to wrong file).
+      Additionally, 4 entries were superseded by code refactoring.
+      All fixed in Phase 1.
+    blocked_by: ~
+    resolution_plan: >
+      Applied missing fixes (XSS sanitization, cursor fix, pattern realignment).
+      Marked superseded entries. verify_fixes.py now 21/21 passing.
+
+  - id: UNRESOLVED-008
+    title: "System health checklist (80 items) now auto-generated — 3 items need psycopg2 env"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-29
+    context: >
+      repair_kit/SYSTEM_CHECKLIST.md was 80 items, all unchecked.
+      Created scripts/check_system.py that auto-verifies 108 items
+      (98/108 pass, 90% coverage). 3 failures due to psycopg2 not
+      installed in current Python env. 7 items marked [?] for runtime.
+      Run `python scripts/check_system.py` to regenerate.
+    blocked_by: ~
+    resolution_plan: "Install psycopg2 in this env to eliminate last 3 failures"
+
+  - id: UNRESOLVED-011
+    title: "AGENTS.md MAX_CONTENT_LENGTH documented 500 MB, actual code is 50 MB"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-29
+    context: >
+      AGENTS.md line 73 said 500 MB, but app/__init__.py line 85
+      is `50 * 1024 * 1024` = 50 MB. Fixed in AGENTS.md.
+    blocked_by: ~
+    resolution_plan: "Fixed — AGENTS.md now says 50 MB"
+
+  - id: UNRESOLVED-012
+    title: "IMPROVEMENTS_SKIPPED.md deprecated in favor of unresolved.yaml"
+    status: acknowledged
+    severity: low
+    discovered: 2026-07-29
+    context: >
+      IMPROVEMENTS_SKIPPED.md contains 9 entries from 2026-07-03/04.
+      Marked as historical record. All future skipped/deferred items
+      go into unresolved.yaml.
+    blocked_by: ~
+    resolution_plan: "Keep IMPROVEMENTS_SKIPPED.md as archive; unresolved.yaml is active tracker"
+
+  - id: UNRESOLVED-009
+    title: "Session continuity — no persistent handoff files on disk"
+    status: resolved
+    severity: low
+    discovered: 2026-07-29
+    context: >
+      Session-continuity skill exists in .opencode/skills/ but no .remember/
+      directory or handoff files found. Cross-session state relies on
+      agentmemory MCP server (port 3111) rather than local files.
+    blocked_by: ~
+    resolution_plan: >
+      Resolved 2026-07-30: .remember/handoff.md created. SQLite sync
+      working (28 documents/5 sessions in remember_sqlite.db). Session
+      handoff now persisted both locally and via agentmemory MCP.
+
+  - id: UNRESOLVED-010
+    title: "IMPROVEMENTS_SKIPPED.md only covers 2026-07-03/04 session"
+    status: acknowledged
+    severity: low
+    discovered: 2026-07-29
+    context: >
+      9 skipped improvements documented from one session. No entries from
+      subsequent sessions despite ongoing decisions. Missing entries
+      would include npm prefix decisions, hermes migration plan, etc.
+    blocked_by: ~
+    resolution_plan: >
+      This unresolved.yaml serves as the ongoing tracker. IMPROVEMENTS_SKIPPED.md
+      is treated as a historical record.
+
+  - id: UNRESOLVED-013
+    title: "law_change_events.law_id FK references nonexistent table `laws`"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-30
+    context: >
+      app/database.py:1120 declares `law_id INTEGER REFERENCES laws(id)` but no
+      `laws` table exists in the schema. The real table is `law_masters` (line 997).
+      Existing Docker volumes may have a legacy `laws` table so they work fine,
+      but a fresh deployment will crash on CREATE TABLE law_change_events.
+    blocked_by: ~
+    resolution_plan: "Fixed 2026-07-30: FK target changed to REFERENCES law_masters(id)"
+
+  - id: UNRESOLVED-014
+    title: "project_timelines INSERT references nonexistent column `name`"
+    status: resolved
+    severity: medium
+    discovered: 2026-07-30
+    context: >
+      CREATE TABLE project_timelines (app/database.py:650-663) has no `name`
+      column, but project_timeline_service.py:48 INSERTs into `(project_id, name, ...)`.
+      Existing timeline rows have no `name` data so they work fine, but creating
+      a new timeline will trigger PostgreSQL column-not-found error.
+    blocked_by: ~
+    resolution_plan: "Fixed 2026-07-30: added `name TEXT NOT NULL DEFAULT '主招标流程'` to CREATE TABLE"
+
+  - id: UNRESOLVED-015
+    title: "AGENTS.md docs/code drifts (Blueprint count, app.js size, Session strategy)"
+    status: resolved
+    severity: low
+    discovered: 2026-07-30
+    context: >
+      Three documented drifts found:
+      1. "11 Blueprints" → actual 15 (missing audit/wiki/timeline/cases/document_analysis/graph)
+      2. "~4k lines vanilla JS" → actual ~10k lines in app.js
+      3. "Redis by default, falls back to filesystem" → code uses SESSION_TYPE='filesystem' directly
+      All three fixed in AGENTS.md 2026-07-30.
+    blocked_by: ~
+    resolution_plan: >
+      Fixed 2026-07-30 (AGENTS.md updated). Monitor for future drifts —
+      pre-commit hook has env_example_drift and db_schema_drift warnings but
+      no generic doc-drift check. Consider adding to pre-commit if this recurs.
+
+  - id: UNRESOLVED-016
+    title: "agent_middleware.py — 导入不存在的 langchain.agents.middleware，未被项目引用"
+    status: pending
+    severity: low
+    discovered: 2026-07-30
+    tags: ["待定"]
+    context: >
+      app/services/agent_middleware.py 实现了 InvalidToolGuard 工具调用循环保护，
+      但导入不存在的 langchain.agents.middleware。全项目零引用。
+      文件风格与现有代码不一致，似乎是从外部 LangChain 项目复制而来。
+    blocked_by: "需要评估是否需要 LangChain agent 集成"
+    resolution_plan: >
+      保留不删除。如果后续引入 LangChain agent 框架，可以激活此模块。
+      如果决定不使用 LangChain agent，则删除此文件。

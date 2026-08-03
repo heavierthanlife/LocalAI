@@ -458,7 +458,7 @@
 | 路由 | 方法 | 功能 |
 |---|---|---|
 | `/compare_batch` | POST | 批量对比 (TF-IDF+语义+图片+属性) |
-| `/export_batch_excel_download/<token>` | GET | 导出Excel |
+| `/export_batch_docx_download/<token>` | GET | 导出DOCX |
 | `/batch_result/<task_id>` | GET | 查看对比结果 |
 | `/list_batch_results` | GET | 对比结果列表 |
 | `/delete_batch_result/<id>` | POST | 删除结果 |

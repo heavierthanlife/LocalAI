@@ -379,3 +379,15 @@ def _update_adapter_registry(adapter_dir: str, training_result: dict):
         _json.dump(registry, f, ensure_ascii=False, indent=2)
 
     logger.info(f"Adapter registry updated: {adapter_key}")
+
+
+# ── Celery task wrapper (for Docker/Beat scheduling) ──
+try:
+    from celery_app import celery as celery_app
+
+    run_nightly_training = celery_app.task(
+        name='app.services.nightly_trainer.run_nightly_training'
+    )(run_nightly_training)
+
+except Exception:
+    pass

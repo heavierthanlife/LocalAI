@@ -1,0 +1,2 @@
+FROM local-ai:latest
+COPY --chown=localai:localai celery_app.py /app/celery_app.py

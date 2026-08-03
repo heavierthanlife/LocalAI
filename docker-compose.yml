@@ -70,7 +70,8 @@ services:
       POSTGRES_DB: localai
     volumes:
       - pg_data:/var/lib/postgresql/data
-    # No port mapping — containers communicate via Docker internal network
+    ports:
+      - "5433:5432"
     networks:
       - localai-net
     healthcheck:
@@ -87,6 +88,8 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
+    ports:
+      - "6380:6379"
     networks:
       - localai-net
     healthcheck:

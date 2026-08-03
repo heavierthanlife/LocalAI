@@ -7,6 +7,8 @@ Provides structured LLM prompts for:
 """
 from app.services.prompt_safety import build_safe_system_guard
 
+VERDICT_PASS = "PASS"
+
 _SAFETY = build_safe_system_guard()
 
 # ── Rule Extraction Prompt ──

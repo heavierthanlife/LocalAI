@@ -11,6 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.config import (
     BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT,
+    to_rel_path, resolve_path,
     is_valid_extracted_text, ALLOWED_EXTENSIONS, allowed_file, logger as config_logger,
 )
 from app.database import get_db_connection, db_transaction
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 BEIJING_TZ = timezone(timedelta(hours=8))
 
 chat_bp = Blueprint('chat', __name__, template_folder=str(BASE_DIR / 'templates'), static_folder=str(BASE_DIR / 'static'))
+
+# No-op poll endpoint — silences legacy frontend polling 404s
+@chat_bp.route('/chat/poll/<thread_id>', methods=['GET'])
+def chat_poll_noop(thread_id):
+    return '', 204
 
 @chat_bp.route('/')
 def index():
@@ -1568,6 +1574,7 @@ def upload_file():
     original_dir = os.path.join(USER_FILES_ORIGINAL_ROOT, user_id)
     os.makedirs(original_dir, exist_ok=True)
     original_path = os.path.join(original_dir, unique_name)
+    original_rel = to_rel_path(original_path)
     # Save original binary file
     with open(original_path, 'wb') as f:
         f.write(file_bytes)
@@ -1579,7 +1586,7 @@ def upload_file():
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             if existing and request.form.get('force') == 'true':
-                old_path = existing[2]
+                old_path = resolve_path(existing[2])
                 if old_path and os.path.exists(old_path):
                     try:
                         os.remove(old_path)
@@ -1596,7 +1603,7 @@ def upload_file():
                         original_name = %s,
                         content = %s
                     WHERE id = %s
-                """, (file.filename, len(file_bytes), original_path, file_hash, file.filename, extracted_text, existing[0]))
+                """, (file.filename, len(file_bytes), original_rel, file_hash, file.filename, extracted_text, existing[0]))
             else:
                 ensure_user_exists(user_id)
                 cur.execute("""
@@ -1610,7 +1617,7 @@ def upload_file():
                         original_expires_at = EXCLUDED.original_expires_at,
                         original_name = EXCLUDED.original_name,
                         content = EXCLUDED.content
-                """, (user_id, thread_id, file.filename, len(file_bytes), original_path, file_hash, file.filename, extracted_text))
+                """, (user_id, thread_id, file.filename, len(file_bytes), original_rel, file_hash, file.filename, extracted_text))
             conn.commit()
 
     return jsonify({"success": True, "filename": file.filename})
@@ -1647,7 +1654,7 @@ def download_original_file():
             row = cur.fetchone()
             if not row or not row[0]:
                 return jsonify({"error": "Original file not found or expired"}), 404
-            original_path = row[0]
+            original_path = resolve_path(row[0])
             if not os.path.exists(original_path):
                 return jsonify({"error": "File missing on server"}), 404
             return send_file(original_path, as_attachment=True, download_name=filename)
@@ -1848,6 +1855,7 @@ def load_project_file():
             if not row:
                 return jsonify({"error": "File not found"}), 404
             stored_path, original_name = row
+            stored_path = resolve_path(stored_path)
             if not os.path.exists(stored_path):
                 return jsonify({"error": "File missing on server"}), 404
 
@@ -1862,36 +1870,6 @@ def load_project_file():
             return jsonify({"content": text, "filename": original_name})
 
 # ---------- Batch compare endpoints ----------
-
-def _restore_kb_item(item, conn, cur):
-    """Restore a single KB file from kb_recycle_bin back to its original table."""
-    orig_table = item['original_table']
-    if orig_table == 'knowledge_lab_files':
-        cur.execute("""
-            INSERT INTO knowledge_lab_files (id, user_id, filename, original_name, file_size, content,
-                                             file_hash, stored_path)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                filename = EXCLUDED.filename, original_name = EXCLUDED.original_name,
-                file_size = EXCLUDED.file_size, content = EXCLUDED.content,
-                file_hash = EXCLUDED.file_hash, stored_path = EXCLUDED.stored_path,
-                updated_at = NOW()
-        """, (item['original_id'], item['user_id'], item['filename'], item['original_name'],
-              item['file_size'], item['content'], item['file_hash'], item['stored_path']))
-    elif orig_table == 'company_knowledge_base':
-        cur.execute("""
-            INSERT INTO company_knowledge_base (id, filename, original_name, file_size, content,
-                                                file_hash, stored_path, category, uploaded_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET
-                filename = EXCLUDED.filename, original_name = EXCLUDED.original_name,
-                file_size = EXCLUDED.file_size, content = EXCLUDED.content,
-                file_hash = EXCLUDED.file_hash, stored_path = EXCLUDED.stored_path,
-                category = EXCLUDED.category, updated_at = NOW()
-        """, (item['original_id'], item['filename'], item['original_name'],
-              item['file_size'], item['content'], item['file_hash'], item['stored_path'],
-              item.get('category', ''), item.get('uploaded_by')))
-    cur.execute("DELETE FROM kb_recycle_bin WHERE id = %s", (item['id'],))
 
 @chat_bp.route('/get_recycle_bin', methods=['GET'])
 def get_recycle_bin():
@@ -1915,82 +1893,9 @@ def get_recycle_bin():
             conn.commit()
 
     with get_db_connection() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                        SELECT rb.id,
-                               rb.original_table,
-                               rb.original_id,
-                               rb.file_name,
-                               rb.file_size,
-                               rb.deleted_at,
-                               rb.expires_at,
-                               rb.deletion_reason,
-                               'chat'              as source,
-                               u_uploader.username as uploaded_by_name,
-                               u_deleter.username  as deleted_by_name
-                        FROM recycle_bin rb
-                                 LEFT JOIN users u_uploader ON rb.uploaded_by = u_uploader.user_id
-                                 LEFT JOIN users u_deleter ON rb.deleted_by = u_deleter.user_id
-                        WHERE rb.user_id = %s
-                          AND rb.expires_at > NOW()
-                        ORDER BY rb.deleted_at DESC
-                        """, (user_id,))
-            chat_items = cur.fetchall()
-
-            cur.execute("""
-                        SELECT prb.id,
-                               prb.original_table,
-                               prb.original_id,
-                               prb.file_name,
-                               prb.file_size,
-                               prb.deleted_at,
-                               prb.expires_at,
-                               p.name              as project_name,
-                               'project'           as source,
-                               u_uploader.username as uploaded_by_name,
-                               u_deleter.username  as deleted_by_name
-                        FROM project_recycle_bin prb
-                                 JOIN projects p ON prb.project_id = p.id
-                                 LEFT JOIN users u_uploader ON prb.uploaded_by = u_uploader.user_id
-                                 LEFT JOIN users u_deleter ON prb.deleted_by = u_deleter.user_id
-                        WHERE prb.expires_at > NOW()
-                        ORDER BY prb.deleted_at DESC
-                        """)
-            project_items = cur.fetchall()
-
-            cur.execute("""
-                SELECT pfrb.id, pfrb.original_id, pfrb.name, pfrb.original_parent_id, pfrb.deleted_at, pfrb.expires_at, 
-                       p.name as project_name, 'folder' as source
-                FROM project_folders_recycle_bin pfrb
-                JOIN projects p ON pfrb.project_id = p.id
-                WHERE pfrb.expires_at > NOW()
-                ORDER BY pfrb.deleted_at DESC
-            """)
-            folder_items = cur.fetchall()
-
-            # KB items (knowledge_lab_files + company_knowledge_base)
-            cur.execute("""
-                SELECT kbr.id, kbr.original_table, kbr.original_id, kbr.filename, kbr.original_name,
-                       kbr.file_size, kbr.deleted_at, kbr.expires_at, kbr.category,
-                       kbr.skill_summary,
-                       CASE WHEN kbr.original_table = 'knowledge_lab_files' THEN 'knowledge_lab'
-                            ELSE 'company_kb' END as source,
-                       u_uploader.username as uploaded_by_name,
-                       u_deleter.username as deleted_by_name
-                FROM kb_recycle_bin kbr
-                         LEFT JOIN users u_uploader ON kbr.uploaded_by = u_uploader.user_id
-                         LEFT JOIN users u_deleter ON kbr.deleted_by = u_deleter.user_id
-                WHERE kbr.expires_at > NOW()
-                ORDER BY kbr.deleted_at DESC
-            """)
-            kb_items = cur.fetchall()
-
-            return jsonify({
-                "chat_items": chat_items,
-                "project_items": project_items,
-                "folder_items": folder_items,
-                "kb_items": kb_items
-            })
+        with conn.cursor() as cur:
+            from app.services.recycle_bin_service import get_recycle_items
+            return jsonify(get_recycle_items(user_id, cur))
 
 @chat_bp.route('/restore_from_recycle_bin', methods=['POST'])
 def restore_from_recycle_bin():
@@ -2010,110 +1915,12 @@ def restore_from_recycle_bin():
         with db_transaction(conn):
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 if restore_all:
-                    restored_count = 0
-                    if section == 'knowledge_lab':
-                        cur.execute("SELECT * FROM kb_recycle_bin WHERE expires_at > NOW()")
-                        items = cur.fetchall()
-                        for item in items:
-                            _restore_kb_item(item, conn, cur)
-                            restored_count += 1
-                    if section == 'chat':
-                        cur.execute("SELECT * FROM recycle_bin WHERE user_id = %s AND expires_at > NOW()", (user_id,))
-                        items = cur.fetchall()
-                        for item in items:
-                            meta_data = {}
-                            if item.get('deletion_reason') == 'chat_deleted':
-                                meta_data['restored_from'] = 'chat_deletion'
-                                meta_data['original_thread_id'] = item.get('original_thread_id')
-                            meta_data_json = json.dumps(meta_data)
-                            cur.execute("""
-                                INSERT INTO user_files (user_id, thread_id, filename, content, size_bytes, expires_at,
-                                                        original_stored_path, file_hash, meta_data, original_name)
-                                VALUES (%s, %s, %s, %s, %s, NOW() + INTERVAL '3 days', %s, %s, %s::jsonb, %s)
-                            """, (user_id, None, item['file_name'], item['file_content'], item['file_size'],
-                                  item['original_stored_path'], item['file_hash'], meta_data_json, item['file_name']))
-                            cur.execute("DELETE FROM recycle_bin WHERE id = %s", (item['id'],))
-                            restored_count += 1
-                    elif section == 'project_files':
-                        cur.execute("SELECT * FROM project_recycle_bin WHERE expires_at > NOW()")
-                        items = cur.fetchall()
-                        for item in items:
-                            folder_id = item['folder_id']
-                            if folder_id:
-                                cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s",
-                                            (folder_id, item['project_id']))
-                                if not cur.fetchone():
-                                    restore_folder_path_for_file(item, conn, cur)
-                            cur.execute("""
-                                INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
-                                                           stored_path, version, uploaded_by, file_hash)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """, (item['project_id'], item['folder_id'], item['file_name'], item['original_name'],
-                                  item['file_size'], item['stored_path'], item['version'],
-                                  item['uploaded_by'], item['file_hash']))
-                            cur.execute("DELETE FROM project_recycle_bin WHERE id = %s", (item['id'],))
-                            restored_count += 1
-                    elif section == 'project_folders':
-                        cur.execute("SELECT * FROM project_folders_recycle_bin WHERE expires_at > NOW()")
-                        folders = cur.fetchall()
-                        for folder in folders:
-                            restore_folder_recursive(folder, conn, cur)
-                            restored_count += 1
-                    else:
-                        return jsonify({"error": "Invalid section"}), 400
+                    from app.services.recycle_bin_service import bulk_restore_all
+                    restored_count = bulk_restore_all(section, user_id, conn, cur)
                     return jsonify({"success": True, "restored_count": restored_count})
 
-                if source == 'chat':
-                    cur.execute("SELECT * FROM recycle_bin WHERE id = %s AND user_id = %s AND expires_at > NOW()",
-                                (item_id, user_id))
-                    item = cur.fetchone()
-                    if not item:
-                        return jsonify({"error": "Item not found or expired"}), 404
-                    meta_data = {}
-                    if item.get('deletion_reason') == 'chat_deleted':
-                        meta_data['restored_from'] = 'chat_deletion'
-                        meta_data['original_thread_id'] = item.get('original_thread_id')
-                    meta_data_json = json.dumps(meta_data)
-                    cur.execute("""
-                        INSERT INTO user_files (user_id, thread_id, filename, content, size_bytes, expires_at,
-                                                original_stored_path, file_hash, meta_data, original_name)
-                        VALUES (%s, %s, %s, %s, %s, NOW() + INTERVAL '3 days', %s, %s, %s::jsonb, %s)
-                    """, (user_id, None, item['file_name'], item['file_content'], item['file_size'],
-                          item['original_stored_path'], item['file_hash'], meta_data_json, item['file_name']))
-                    cur.execute("DELETE FROM recycle_bin WHERE id = %s", (item_id,))
-                elif source == 'knowledge_lab':
-                    cur.execute("SELECT * FROM kb_recycle_bin WHERE id = %s AND expires_at > NOW()", (item_id,))
-                    item = cur.fetchone()
-                    if not item:
-                        return jsonify({"error": "Item not found or expired"}), 404
-                    _restore_kb_item(item, conn, cur)
-                elif source == 'project':
-                    cur.execute("SELECT * FROM project_recycle_bin WHERE id = %s", (item_id,))
-                    item = cur.fetchone()
-                    if not item:
-                        return jsonify({"error": "Item not found"}), 404
-                    folder_id = item['folder_id']
-                    if folder_id:
-                        cur.execute("SELECT id FROM project_folders WHERE id = %s AND project_id = %s",
-                                    (folder_id, item['project_id']))
-                        if not cur.fetchone():
-                            restore_folder_path_for_file(item, conn, cur)
-                    cur.execute("""
-                        INSERT INTO project_files (project_id, folder_id, filename, original_name, file_size,
-                                                   stored_path, version, uploaded_by, file_hash)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (item['project_id'], item['folder_id'], item['file_name'], item['original_name'],
-                          item['file_size'], item['stored_path'], item['version'],
-                          item['uploaded_by'], item['file_hash']))
-                    cur.execute("DELETE FROM project_recycle_bin WHERE id = %s", (item_id,))
-                elif source == 'folder':
-                    cur.execute("SELECT * FROM project_folders_recycle_bin WHERE id = %s", (item_id,))
-                    folder = cur.fetchone()
-                    if not folder:
-                        return jsonify({"error": "Folder not found"}), 404
-                    restore_folder_recursive(folder, conn, cur)
-                else:
-                    return jsonify({"error": "Invalid source"}), 400
+                from app.services.recycle_bin_service import restore_recycle_item
+                restore_recycle_item(item_id, source, conn, cur, user_id)
                 conn.commit()
                 return jsonify({"success": True})
 
@@ -2135,74 +1942,8 @@ def delete_recycle_item():
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
-                if source == 'chat':
-                    cur.execute("SELECT original_stored_path FROM recycle_bin WHERE id = %s AND user_id = %s", (item_id, user_id))
-                    row = cur.fetchone()
-                    if row and row[0] and os.path.exists(row[0]):
-                        try:
-                            os.remove(row[0])
-                        except Exception as e:
-                            logger.warning(f"Failed to delete physical file {row[0]}: {e}")
-                    cur.execute("DELETE FROM recycle_bin WHERE id = %s AND user_id = %s", (item_id, user_id))
-                elif source == 'knowledge_lab':
-                    cur.execute("SELECT stored_path FROM kb_recycle_bin WHERE id = %s", (item_id,))
-                    row = cur.fetchone()
-                    if row and row[0] and os.path.exists(row[0]):
-                        try:
-                            os.remove(row[0])
-                        except Exception as e:
-                            logger.warning(f"Failed to delete KB physical file {row[0]}: {e}")
-                    cur.execute("DELETE FROM kb_recycle_bin WHERE id = %s", (item_id,))
-                elif source == 'project':
-                    cur.execute("SELECT stored_path FROM project_recycle_bin WHERE id = %s", (item_id,))
-                    row = cur.fetchone()
-                    if row and row[0] and os.path.exists(row[0]):
-                        try:
-                            os.remove(row[0])
-                        except Exception as e:
-                            logger.warning(f"Failed to delete project file {row[0]}: {e}")
-                    cur.execute("DELETE FROM project_recycle_bin WHERE id = %s", (item_id,))
-                elif source == 'folder':
-                    cur.execute("SELECT project_id, original_id FROM project_folders_recycle_bin WHERE id = %s", (item_id,))
-                    folder = cur.fetchone()
-                    if folder:
-                        project_id = folder[0]
-                        original_folder_id = folder[1]
-                        cur.execute("SELECT stored_path FROM project_recycle_bin WHERE project_id = %s AND folder_id = %s", (project_id, original_folder_id))
-                        for (stored_path,) in cur.fetchall():
-                            if stored_path and os.path.exists(stored_path):
-                                try:
-                                    os.remove(stored_path)
-                                except Exception as e:
-                                    logger.warning(f"Failed to delete file {stored_path}: {e}")
-                        cur.execute("DELETE FROM project_recycle_bin WHERE project_id = %s AND folder_id = %s", (project_id, original_folder_id))
-                        cur.execute("""
-                            WITH RECURSIVE folder_tree AS (
-                                SELECT id, original_id, project_id, original_parent_id
-                                FROM project_folders_recycle_bin
-                                WHERE id = %s
-                                UNION ALL
-                                SELECT pf.id, pf.original_id, pf.project_id, pf.original_parent_id
-                                FROM project_folders_recycle_bin pf
-                                INNER JOIN folder_tree ft ON pf.original_parent_id = ft.original_id AND pf.project_id = ft.project_id
-                            )
-                            SELECT id, original_id FROM folder_tree
-                        """, (item_id,))
-                        subfolders = cur.fetchall()
-                        for (sf_id, sf_orig_id) in subfolders:
-                            cur.execute("SELECT stored_path FROM project_recycle_bin WHERE project_id = %s AND folder_id = %s", (project_id, sf_orig_id))
-                            for (sp,) in cur.fetchall():
-                                if sp and os.path.exists(sp):
-                                    try:
-                                        os.remove(sp)
-                                    except OSError:
-                                        pass
-                            cur.execute("DELETE FROM project_recycle_bin WHERE project_id = %s AND folder_id = %s", (project_id, sf_orig_id))
-                            cur.execute("DELETE FROM project_folders_recycle_bin WHERE id = %s", (sf_id,))
-                    else:
-                        cur.execute("DELETE FROM project_folders_recycle_bin WHERE id = %s", (item_id,))
-                else:
-                    return jsonify({"error": "Invalid source"}), 400
+                from app.services.recycle_bin_service import permanently_delete_item
+                permanently_delete_item(item_id, source, cur, user_id)
                 conn.commit()
                 return jsonify({"success": True})
 
@@ -2220,38 +1961,8 @@ def empty_recycle_bin():
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
-                if source == 'chat' or source == 'all':
-                    cur.execute("SELECT original_stored_path FROM recycle_bin WHERE user_id = %s", (user_id,))
-                    paths = cur.fetchall()
-                    for row in paths:
-                        if row[0] and os.path.exists(row[0]):
-                            try:
-                                os.remove(row[0])
-                            except OSError:
-                                pass
-                    cur.execute("DELETE FROM recycle_bin WHERE user_id = %s", (user_id,))
-                if source == 'project_files' or source == 'all':
-                    cur.execute("SELECT stored_path FROM project_recycle_bin")
-                    paths = cur.fetchall()
-                    for row in paths:
-                        if row[0] and os.path.exists(row[0]):
-                            try:
-                                os.remove(row[0])
-                            except OSError:
-                                pass
-                    cur.execute("DELETE FROM project_recycle_bin")
-                if source == 'project_folders' or source == 'all':
-                    cur.execute("DELETE FROM project_folders_recycle_bin")
-                if source == 'knowledge_lab' or source == 'all':
-                    cur.execute("SELECT stored_path FROM kb_recycle_bin")
-                    paths = cur.fetchall()
-                    for row in paths:
-                        if row[0] and os.path.exists(row[0]):
-                            try:
-                                os.remove(row[0])
-                            except OSError:
-                                pass
-                    cur.execute("DELETE FROM kb_recycle_bin")
+                from app.services.recycle_bin_service import empty_recycle_bin
+                empty_recycle_bin(source, user_id, cur)
                 conn.commit()
                 return jsonify({"success": True})
 

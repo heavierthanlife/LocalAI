@@ -1,0 +1,10 @@
+[
+  {"region_code": "000000", "region_name": "全国", "parent_code": null, "level": "national"},
+  {"region_code": "110000", "region_name": "北京市", "parent_code": "000000", "level": "provincial"},
+  {"region_code": "310000", "region_name": "上海市", "parent_code": "000000", "level": "provincial"},
+  {"region_code": "440000", "region_name": "广东省", "parent_code": "000000", "level": "provincial"},
+  {"region_code": "440300", "region_name": "深圳市", "parent_code": "440000", "level": "municipal"},
+  {"region_code": "330000", "region_name": "浙江省", "parent_code": "000000", "level": "provincial"},
+  {"region_code": "320000", "region_name": "江苏省", "parent_code": "000000", "level": "provincial"},
+  {"region_code": "510000", "region_name": "四川省", "parent_code": "000000", "level": "provincial"}
+]

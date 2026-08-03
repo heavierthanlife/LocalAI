@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quill — 中国招标文件编辑器 PoC</title>
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f1f5f9; padding: 20px; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 1.2rem; margin-bottom: 8px; color: #1e293b; }
+.toolbar-ext { display: flex; gap: 4px; padding: 8px; background: #fff; border: 1px solid #cbd5e1; border-bottom: none; border-radius: 8px 8px 0 0; flex-wrap: wrap; }
+.toolbar-ext button { padding: 4px 10px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.toolbar-ext button:hover { background: #e2e8f0; }
+#editor { height: 500px; border: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; font-size: 0.9rem; }
+.ql-editor h2 { font-size: 1.1rem; margin: 16px 0 8px; }
+.ql-editor h3 { font-size: 1rem; margin: 12px 0 6px; }
+.ql-editor p { margin: 6px 0; }
+.compliance-ok { background: #dcfce7; border-bottom: 2px solid #22c55e; padding: 1px 0; }
+.compliance-warn { background: #fef9c3; border-bottom: 2px solid #eab308; padding: 1px 0; }
+.compliance-violation { background: #fee2e2; border-bottom: 2px solid #ef4444; padding: 1px 0; }
+.compliance-critical { background: #fecaca; border-bottom: 3px solid #dc2626; font-weight: bold; padding: 1px 0; }
+.sidebar { position: fixed; right: 16px; top: 16px; width: 260px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-size: 0.8rem; max-height: 80vh; overflow-y: auto; }
+.sidebar h4 { margin-bottom: 8px; color: #64748b; }
+.issue { padding: 6px 8px; margin-bottom: 4px; border-radius: 4px; }
+.issue.critical { background: #fee2e2; border-left: 3px solid #dc2626; }
+.issue.warning { background: #fef9c3; border-left: 3px solid #eab308; }
+.metrics { margin-top: 16px; padding: 10px; background: #f8fafc; border-radius: 6px; font-size: 0.75rem; color: #64748b; }
+.metrics div { margin: 2px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Quill PoC — 招标文件编辑 + 合规标注</h1>
+<div class="toolbar-ext" id="toolbar-ext">
+<button onclick="highlight('compliance-ok')">✅ 合规</button>
+<button onclick="highlight('compliance-warn')">⚠️ 警告</button>
+<button onclick="highlight('compliance-violation')">❌ 违规</button>
+<button onclick="highlight('compliance-critical')">🚫 严重</button>
+<button onclick="clearAll()">清除标注</button>
+<button onclick="resetContent()">🔄 重置内容</button>
+</div>
+<div id="editor"></div>
+</div>
+
+<div class="sidebar" id="sidebar">
+<h4>合规问题面板</h4>
+<div id="issues"></div>
+<div class="metrics" id="metrics">
+<div>⏱ 编辑器就绪: <span id="metric-ready">—</span></div>
+<div>📦 内存: <span id="metric-memory">—</span></div>
+<div>📄 字符数: <span id="metric-chars">—</span></div>
+<div>✏️ 标注数量: <span id="metric-annotations">—</span></div>
+</div>
+</div>
+
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+const startTime = performance.now();
+
+const quill = new Quill('#editor', {
+  theme: 'snow',
+  modules: {
+    toolbar: [
+      ['bold', 'italic'],
+      [{ header: 2 }, { header: 3 }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+    ],
+    clipboard: { matchVisual: false }
+  },
+  placeholder: '请输入招标文件内容...',
+});
+
+quill.setContents(quill.clipboard.convert({ html: sampleContent() }));
+
+function highlight(className) {
+  const range = quill.getSelection();
+  if (!range || range.length === 0) {
+    alert('请先选中一段文字');
+    return;
+  }
+  // Remove existing compliance classes
+  const existing = quill.getFormat(range);
+  ['compliance-ok', 'compliance-warn', 'compliance-violation', 'compliance-critical'].forEach(c => {
+    if (existing[c]) quill.format(c, false);
+  });
+  quill.format(className, true);
+  updateSidebar();
+}
+
+function clearAll() {
+  const range = quill.getSelection();
+  if (range) {
+    ['compliance-ok', 'compliance-warn', 'compliance-violation', 'compliance-critical'].forEach(c => {
+      quill.formatText(range.index, range.length, c, false);
+    });
+  }
+  updateSidebar();
+}
+
+function resetContent() {
+  quill.setContents(quill.clipboard.convert({ html: sampleContent() }));
+  updateSidebar();
+}
+
+// Quill class-based formats need registration
+const Parchment = Quill.import('parchment');
+['compliance-ok', 'compliance-warn', 'compliance-violation', 'compliance-critical'].forEach(name => {
+  class ComplianceAttributor extends Parchment.Attributor.Class { }
+  ComplianceAttributor.prototype.attrName = name;
+  ComplianceAttributor.prototype.keyName = name;
+  Quill.register(new ComplianceAttributor(), true);
+});
+
+function updateSidebar() {
+  const delta = quill.getContents();
+  const issues = [];
+  let pos = 0;
+  delta.ops.forEach(op => {
+    if (op.attributes) {
+      for (const [key, val] of Object.entries(op.attributes)) {
+        if (val && key.startsWith('compliance-')) {
+          const sev = key.replace('compliance-', '');
+          issues.push({
+            severity: sev === 'warn' ? 'warning' : sev === 'violation' ? 'violation' : sev === 'critical' ? 'critical' : 'ok',
+            text: (op.insert || '').toString().slice(0, 60)
+          });
+        }
+      }
+    }
+    pos += (op.insert || '').length;
+  });
+  document.getElementById('issues').innerHTML = issues.map((i, idx) => `<div class="issue ${i.severity}">${idx+1}. ${i.text}...</div>`).join('');
+  document.getElementById('metric-annotations').textContent = issues.length;
+}
+
+const loadTime = (performance.now() - startTime).toFixed(0);
+document.getElementById('metric-ready').textContent = loadTime + ' ms';
+document.getElementById('metric-chars').textContent = quill.getText().length;
+setTimeout(() => {
+  if (performance.memory) {
+    document.getElementById('metric-memory').textContent = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1) + ' MB';
+  } else {
+    document.getElementById('metric-memory').textContent = 'N/A (非 Chrome)';
+  }
+}, 1000);
+
+function sampleContent() {
+  return `<h2>第一章 招标公告</h2>
+<p>1. 招标条件：本招标项目<strong>中联招标智能助手开发项目</strong>已由上级部门批准建设，项目业主为中联招标有限公司，建设资金来自企业自筹，项目出资比例为<strong>100%</strong>。</p>
+<p>2. 项目概况与招标范围：项目位于广东省深圳市南山区，总建筑面积约<strong>50,000平方米</strong>，包括AI研发中心、数据中心、培训中心及相关配套设施。本项目划分为<strong>2个标段</strong>。</p>
+
+<h2>第二章 投标人须知</h2>
+<h3>2.1 资质要求</h3>
+<p>投标人须具备<strong>建筑工程施工总承包壹级及以上资质</strong>，并在人员、设备、资金等方面具有相应的施工能力。项目经理须具备<strong>一级注册建造师（建筑工程专业）</strong>资格。</p>
+<p>投标人注册资本不低于<strong>人民币5000万元</strong>，近三年平均年营业额不低于<strong>人民币2亿元</strong>。</p>
+
+<h3>2.2 业绩要求</h3>
+<p>投标人近五年（2021年1月1日至今）至少完成过<strong>2个单项合同金额不低于人民币1亿元</strong>的同类公共建筑工程施工业绩。</p>
+
+<h3>2.3 投标保证金</h3>
+<p>投标保证金金额：<strong>人民币80万元</strong>。投标保证金必须从投标人基本账户以银行转账方式在投标截止时间前汇入指定账户。</p>
+
+<h2>第三章 评标办法</h2>
+<h3>3.1 评标方法</h3>
+<p>本项目采用<strong>综合评估法</strong>，满分100分。其中：商务标（投标报价）占<strong>50分</strong>，技术标占<strong>40分</strong>，综合实力占<strong>10分</strong>。</p>
+
+<h3>3.2 废标条件</h3>
+<p>有下列情形之一的，其投标将被否决：（1）投标文件未经投标单位盖章和单位负责人签字；（2）投标联合体没有提交共同投标协议；（3）投标人不符合国家或者招标文件规定的资格条件；<strong>（4）同一投标人提交两个以上不同的投标文件或者投标报价</strong>，但招标文件要求提交备选投标的除外。</p>
+
+<h2>第四章 合同条款</h2>
+<h3>4.1 工期要求</h3>
+<p>计划工期：<strong>540日历天</strong>。计划开工日期：<strong>2026年9月1日</strong>，计划竣工日期：<strong>2028年2月21日</strong>。</p>
+
+<h3>4.2 质量标准</h3>
+<p>工程质量符合<strong>《建筑工程施工质量验收统一标准》（GB50300-2013）</strong>及国家、行业现行相关标准，确保获得<strong>"广东省建设工程优质奖"</strong>。</p>
+
+<h3>4.3 付款方式</h3>
+<p>合同签订后支付10%预付款，每月按工程进度支付75%进度款，竣工验收合格后支付至合同价的85%，结算完成后支付至结算价的97%，剩余3%作为质保金在缺陷责任期满后支付。</p>`;
+}
+</script>
+</body>
+</html>

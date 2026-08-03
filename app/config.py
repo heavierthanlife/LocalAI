@@ -27,6 +27,35 @@ USER_FILES_ORIGINAL_ROOT = str(USER_FILES_DIR)
 PROJECT_FILES_ROOT = str(PROJECT_FILES_DIR)
 CREDIT_REPORTS_DIR_STR = str(CREDIT_REPORTS_DIR)
 
+
+def to_rel_path(path: str) -> str:
+    """Convert an absolute path under BASE_DIR to a portable forward-slash relative path.
+
+    Used at DB write sites so stored paths survive moving the project to another
+    directory/machine. Paths outside BASE_DIR are returned unchanged (absolute).
+    """
+    if not path:
+        return path
+    p = os.path.abspath(str(path)).replace('\\', '/')
+    base = str(BASE_DIR).replace('\\', '/')
+    if p.startswith(base):
+        return p[len(base):].lstrip('/')
+    return str(path)
+
+
+def resolve_path(path: str) -> str:
+    """Resolve a DB-stored path to a real filesystem path.
+
+    Legacy absolute paths pass through unchanged; relative paths (stored with
+    forward slashes) are joined onto BASE_DIR. Used at all DB read sites.
+    """
+    if not path:
+        return path
+    p = str(path)
+    if os.path.isabs(p):
+        return p
+    return os.path.join(str(BASE_DIR), p.replace('\\', '/'))
+
 # ---------------- Logging ----------------
 LOGGING_CONFIG = {
     'version': 1,

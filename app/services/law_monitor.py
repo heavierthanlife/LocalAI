@@ -31,16 +31,16 @@ def create_change_event(law_id: int, from_version_id: int, to_version_id: int,
             event_id, created_at = cur.fetchone()
             conn.commit()
 
-    impact = _compute_impact(cur if 'cur' in dir() else None, law_id)
-    return {
-        'event_id': event_id,
-        'law_id': law_id,
-        'from_version': from_version_id,
-        'to_version': to_version_id,
-        'description': description,
-        'created_at': str(created_at) if created_at else None,
-        'impact': impact,
-    }
+            impact = _compute_impact(cur, law_id)
+            return {
+                'event_id': event_id,
+                'law_id': law_id,
+                'from_version': from_version_id,
+                'to_version': to_version_id,
+                'description': description,
+                'created_at': str(created_at) if created_at else None,
+                'impact': impact,
+            }
 
 
 def compute_impact(law_id: int) -> dict:

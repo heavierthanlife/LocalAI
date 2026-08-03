@@ -518,6 +518,7 @@ def save_quote_anomaly_results(
     task_id: str,
     per_bidder: list[dict],
     cross_result: dict,
+    project_id: int = None,
 ) -> int:
     """Persist quote anomaly results to the database. Returns count of rows saved."""
     saved = 0
@@ -528,14 +529,14 @@ def save_quote_anomaly_results(
                 for pb in per_bidder:
                     cur.execute("""
                         INSERT INTO quote_anomaly_results
-                            (user_id, task_id, doc_name, prices, percentages,
+                            (user_id, task_id, project_id, doc_name, prices, percentages,
                              cv, same_rate_flag, abnormal_drop_flag, clustering_flag,
                              benford_deviation, risk_score, details, matched_prices,
                              cross_same_rate, cross_clustering,
                              max_cross_risk, avg_cross_cv)
-                        VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s)
+                        VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s)
                     """, (
-                        user_id, task_id, pb['filename'],
+                        user_id, task_id, project_id, pb['filename'],
                         _json.dumps(pb.get('prices', [])),
                         _json.dumps(pb.get('percentages', [])),
                         pb.get('cv', 0), pb.get('same_rate_flag', False),

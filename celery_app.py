@@ -23,7 +23,10 @@ celery = Celery(
         'app.services.ingest_pipeline',
         'app.services.skill_auditor',
         'app.services.nightly_trainer',
-        'cleanup_tasks',
+        'app.services.document_analysis_svc',
+        'app.cleanup_tasks',
+        'app.services.wiki_ingest',
+        'app.services.compliance_checker',
     ]
 )
 
@@ -48,20 +51,24 @@ celery.conf.update(
     # Beat schedule — replaces APScheduler time triggers
     beat_schedule={
         'cleanup-stale-sessions': {
-            'task': 'cleanup_tasks.cleanup_stale_sessions',
-            'schedule': 3600.0,  # every hour
+            'task': 'app.cleanup_tasks.auto_cleanup_stale_sessions',
+            'schedule': 3600.0,
         },
         'cleanup-temp-files': {
-            'task': 'cleanup_tasks.cleanup_temp_files',
+            'task': 'app.cleanup_tasks.cleanup_old_anon_temp_files',
             'schedule': 3600.0,
         },
         'skill-audit-weekly': {
-            'task': 'app.services.skill_auditor.run_skill_audit',
-            'schedule': 604800.0,  # weekly (7 days)
+            'task': 'app.cleanup_tasks.auto_skill_audit_weekly',
+            'schedule': 604800.0,
+        },
+        'skill-compile-weekly': {
+            'task': 'app.cleanup_tasks.auto_skill_compile',
+            'schedule': 604800.0,
         },
         'generate-weekly-report': {
-            'task': 'cleanup_tasks.generate_weekly_report',
-            'schedule': 604800.0,  # weekly
+            'task': 'app.cleanup_tasks.auto_generate_weekly_report',
+            'schedule': 604800.0,
             'kwargs': {'period': 'weekly'},
         },
         'nightly-lora-training': {

@@ -55,13 +55,17 @@
             <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📚 知识库</h3>
             <button id="sidebarUploadKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;">📤 上传文件</button>
             <button id="sidebarRefreshKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;">🔄 刷新</button>
-            <hr style="margin: 12px 0;">
-            <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;">📁 我的知识库 (仅自己可见)</h4>
-            <ul id="sidebarKnowledgeFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:200px; overflow-y:auto;"></ul>
-            <hr style="margin: 12px 0;">
-            <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;">🏢 公司知识库 (全员可见)</h4>
+            <div id="knowledgeSidebarStats" style="display:flex;gap:6px;margin-bottom:8px;"></div>
+            <hr style="margin: 10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">📁 我的知识库 (仅自己可见)</h4>
+            <ul id="sidebarKnowledgeFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:120px; overflow-y:auto;"></ul>
+            <hr style="margin: 10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🏢 公司知识库 (全员可见)</h4>
             <button id="sidebarUploadCompanyBtn" class="file-btn" style="width:100%; margin-bottom:6px;">📤 上传公司文件</button>
-            <ul id="sidebarCompanyFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:150px; overflow-y:auto;"></ul>
+            <ul id="sidebarCompanyFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:100px; overflow-y:auto;"></ul>
+            <hr style="margin: 10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:4px;">⏱️ 近期活动</h4>
+            <div id="knowledgeSidebarActivity" style="font-size:0.65rem;"></div>
         </div>
 
         <!-- ===== RECYCLE SECTION ===== -->
@@ -118,10 +122,49 @@
 
         <!-- ===== WIKI SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-wiki-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📖 Wiki 目录</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📖 法规参考</h3>
             <div id="sidebarWikiStats" style="font-size:0.65rem;color:var(--card-muted);margin-bottom:6px;"></div>
+            <div id="sidebarWikiBookmarks" style="margin-bottom:6px;"></div>
+            <div id="sidebarWikiRecentViews" style="margin-bottom:6px;"></div>
             <div id="sidebarWikiTabs" style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:2px;"></div>
-            <div id="sidebarWikiTree" style="font-size:0.78rem;overflow-y:auto;max-height:calc(100vh - 240px);"></div>
+            <div id="sidebarWikiTree" style="font-size:0.78rem;overflow-y:auto;max-height:calc(100vh - 320px);"></div>
+        </div>
+
+        <!-- ===== TEMPLATES SECTION ===== -->
+        <div class="sidebar-tab-pane" id="sidebar-templates-pane" style="display:none;">
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📋 模板管理</h3>
+            <button id="sidebarTplCreateBtn" class="file-btn" style="width:100%;margin-bottom:6px;background:#27ae60;color:#fff;border-color:#16a34a;">+ 新建模板</button>
+            <button id="sidebarTplImportBtn" class="file-btn" style="width:100%;margin-bottom:6px;">📥 导入 .docx</button>
+            <button id="sidebarTplRefreshBtn" class="file-btn" style="width:100%;margin-bottom:6px;">🔄 刷新</button>
+            <hr style="margin: 10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🏷️ 按类别筛选</h4>
+            <div id="templatesSidebarCategories" style="margin-bottom:8px;display:flex;flex-wrap:wrap;"></div>
+            <hr style="margin: 10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">⭐ 最近使用</h4>
+            <ul id="templatesSidebarRecent" style="list-style:none;padding:0;font-size:0.75rem;"></ul>
+        </div>
+
+        <!-- ===== CASES SECTION ===== -->
+        <div class="sidebar-tab-pane" id="sidebar-cases-pane" style="display:none;">
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📊 案例概况</h3>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <div style="flex:1;text-align:center;padding:4px;background:var(--bg-color);border-radius:6px;">
+                    <div id="caseSidebarOpen" style="font-size:1rem;font-weight:700;color:#e67e22;">-</div>
+                    <div style="font-size:0.55rem;color:var(--card-muted);">未解决</div>
+                </div>
+                <div style="flex:1;text-align:center;padding:4px;background:var(--bg-color);border-radius:6px;">
+                    <div id="caseSidebarTotal" style="font-size:1rem;font-weight:700;">-</div>
+                    <div style="font-size:0.55rem;color:var(--card-muted);">总计</div>
+                </div>
+            </div>
+            <hr style="margin: 8px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🚨 待处理</h4>
+            <div id="casesSidebarPending" style="font-size:0.7rem;"></div>
+            <hr style="margin: 10px 0;">
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button id="sidebarCasesExportBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;">📥 导出报告</button>
+                <button id="sidebarCasesBatchResolveBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;background:#27ae60;color:#fff;border-color:#16a34a;">✅ 批量解决</button>
+            </div>
         </div>
 
         <!-- ===== REVIEW SECTION (Review & Ingestion tab) ===== -->
@@ -189,23 +232,21 @@
             </div>
         </div>
 
-        <!-- Admin/User Tab Bar — user tabs first, admin tabs separated -->
+        <!-- Main Tab Bar — 5 tabs + sub-tabs rendered dynamically -->
         <div id="tabBar" style="padding: 0 1rem; display:flex; align-items:center; gap:2px; position:relative;">
-            <button id="chatTabBtn" class="tab-btn active">💬 对话</button>
-            <button id="adminTabBtn" class="tab-btn">📂 项目</button>
-            <button id="knowledgeLabTabBtn" class="tab-btn">📚 知识库</button>
-            <button id="templatesTabBtn" class="tab-btn" style="font-size:0.7rem;">📋 模板库</button>
-            <button id="casesTabBtn" class="tab-btn" style="font-size:0.7rem;">📊 案例库</button>
-            <button id="wikiTabBtn" class="tab-btn" style="font-size:0.7rem;">📖 法规参考</button>
-            <button id="timelineTabBtn" class="tab-btn" style="font-size:0.7rem;">⏱️ 时间线</button>
+            <button id="chatTabBtn" class="tab-btn active">💬 智能对话</button>
+            <button id="adminTabBtn" class="tab-btn">📂 项目管理</button>
+            <button id="knowledgeLabTabBtn" class="tab-btn">📚 知识中心</button>
             <button id="recycleBinTabBtn" class="tab-btn">🗑️ 回收站</button>
-            <span class="tab-separator" style="color:var(--card-border);margin:0 4px;font-size:0.7rem;user-select:none;">│</span>
-            <button id="reviewTabBtn" class="tab-btn admin-tab" style="display:none;font-size:0.7rem;">🔍 审核</button>
-            <button id="databaseTabBtn" class="tab-btn admin-tab" style="font-size:0.7rem;">🗄️ 数据</button>
-            <button id="analyticsTabBtn" class="tab-btn admin-tab" style="font-size:0.7rem;">⚙️ 配置</button>
-            <button id="mobileMoreTabsBtn" class="tab-btn" style="display:none;font-size:0.7rem;flex-shrink:0;">更多 ▾</button>
-            <div id="mobileMoreDropdown"></div>
+            <button id="analyticsTabBtn" class="tab-btn" style="font-size:0.7rem;">⚙️ 系统管理</button>
         </div>
+        <!-- Hidden placeholders for module compatibility -->
+        <div id="wikiTabBtn" style="display:none"></div>
+        <div id="reviewTabBtn" style="display:none"></div>
+        <div id="templatesTabBtn" style="display:none"></div>
+        <div id="casesTabBtn" style="display:none"></div>
+        <div id="mobileMoreTabsBtn" style="display:none"></div>
+        <div id="mobileMoreDropdown" style="display:none"></div>
 
         <!-- Chat Interface -->
         <div id="chatInterface" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
@@ -276,82 +317,63 @@
                 </div>
             </div>
 
-            <!-- Row 2: Batch Compare + File Station -->
-            <div class="action-buttons-row">
-                <div class="risk-row">
-                    <span>🔬 对比因子：</span>
-                    <label><input type="checkbox" id="checkTextSim" checked> 文本</label>
-                    <label><input type="checkbox" id="checkKeyInfo" checked> 关键信息</label>
-                    <label><input type="checkbox" id="checkFileAttr" checked> 属性</label>
-                    <label><input type="checkbox" id="checkImageSim" checked> 图片</label>
-                    <label title="使用深度学习模型分析语义相似度（准确但稍慢）"><input type="checkbox" id="checkSemantic"> 🧠 智能语义分析</label>
+            <!-- Row 2: Smart Compare (System A) -->
+            <details id="compareTools" open style="margin-top:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.78rem;">🔀 智能对比分析</summary>
+                <div style="padding:6px 0;">
+                    <div style="display:flex;gap:4px;margin-bottom:6px;">
+                        <button id="compareModeSingle" class="file-btn" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;">📄 单文件对比</button>
+                        <button id="compareModeBatch" class="file-btn">📚 批量对比</button>
+                    </div>
+                    <div id="compareSinglePanel">
+                        <input type="file" id="compareSingleInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" multiple style="display:none">
+                        <button id="selectCompareSingleBtn" class="file-btn">📄 选择2个投标文件</button>
+                        <button id="runCompareSingleBtn" class="file-btn" style="background:#16a34a;color:white;" disabled>🔍 对比</button>
+                        <span id="compareSingleFileNames" class="template-info"></span>
+                    </div>
+                    <div id="compareBatchPanel" style="display:none;">
+                        <div class="risk-row" style="margin-bottom:6px;">
+                            <span>🔬 对比因子：</span>
+                            <label><input type="checkbox" id="checkTextSim" checked> 文本</label>
+                            <label><input type="checkbox" id="checkKeyInfo" checked> 关键信息</label>
+                            <label><input type="checkbox" id="checkFileAttr" checked> 属性</label>
+                            <label><input type="checkbox" id="checkImageSim" checked> 图片</label>
+                            <label title="使用深度学习模型分析语义相似度"><input type="checkbox" id="checkSemantic"> 🧠 语义</label>
+                        </div>
+                        <div class="action-group">
+                            <div id="batchFileInputContainer"></div>
+                            <button id="batchCompareBtn">📚 批量对比</button>
+                            <button id="clearBatchFilesBtn" class="file-btn" style="display:none;">🗑️ 清空</button>
+                            <span id="batchFileNames" class="template-info"></span>
+                            <input type="file" id="templateFileInput" accept="*/*" style="display:none">
+                            <button id="selectTemplateBtn">📄 模板文件</button>
+                            <button id="clearTemplateBtn">✖️ 清除模板</button>
+                            <span id="templateFileName" class="template-info"></span>
+                        </div>
+                    </div>
+                    <div style="margin-top:6px;">
+                        <button id="fileStationBtn" class="file-btn">🗂️ 文件站</button>
+                        <span id="storageWarning" class="storage-warning"></span>
+                    </div>
+                    <div id="compareResults" style="display:none;margin-top:6px;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);max-height:400px;overflow-y:auto;"></div>
                 </div>
-                <div class="action-group">
-                    <div id="batchFileInputContainer"></div>
-                    <button id="batchCompareBtn">🔀 批量对比</button>
-                    <button id="clearBatchFilesBtn" class="file-btn" style="display:none;">🗑️ 清空已选</button>
-                    <span id="batchFileNames" class="template-info"></span>
-                    <input type="file" id="templateFileInput" accept="*/*" style="display:none">
-                    <button id="selectTemplateBtn">📄 模板文件</button>
-                    <button id="clearTemplateBtn">✖️ 清除模板</button>
-                    <span id="templateFileName" class="template-info"></span>
-                </div>
-                <div class="action-group">
-                    <button id="fileStationBtn" class="file-btn">🗂️ 文件站</button>
-                    <span id="storageWarning" class="storage-warning"></span>
-                </div>
-            </div>
+            </details>
 
-            <!-- Row 3: Document analysis tools (nested collapsible, folded by default) -->
+            <!-- Row 3: Document Analysis (System B) -->
             <details id="docAnalysisTools" style="margin-top:2px;border:1px dashed var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.75rem;">📊 文档分析工具</summary>
-                <div style="padding:4px 0;">
-
-            <!-- Quote Anomaly -->
-            <details id="quoteAnomalyToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">💰 报价异常检测</summary>
-                <div style="margin-top:6px;font-size:0.72rem;">
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <input type="file" id="quoteAnomalyFileInput" accept=".pdf,.docx,.doc,.txt,.xlsx,.xls" multiple style="display:none">
-                        <button id="selectQuoteAnomalyFilesBtn" class="file-btn">📄 选择投标文件</button>
-                        <button id="runQuoteAnomalyBtn" class="file-btn" style="background:#e67e22;color:#fff;border-color:#d35400;" disabled>🔍 检测报价异常</button>
-                        <span id="quoteAnomalyFileNames" class="template-info"></span>
+                <summary style="font-weight:600;font-size:0.75rem;">📊 投标文档深度分析</summary>
+                <div style="padding:6px 0;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+                        <input type="file" id="docAnalysisFileInput" accept=".pdf,.docx,.doc,.txt,.xlsx,.xls" multiple style="display:none">
+                        <button id="selectDocAnalysisFilesBtn" class="file-btn">📄 选择投标文件</button>
+                        <button id="runDocAnalysisBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 开始深度分析</button>
+                        <span id="docAnalysisFileNames" class="template-info"></span>
                     </div>
-                    <div id="quoteAnomalyStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="quoteAnomalyResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
-                </div>
-            </details>
-
-            <!-- Relationship Extraction -->
-            <details id="relationshipToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">🔗 关联关系分析</summary>
-                <div style="margin-top:6px;font-size:0.72rem;">
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <input type="file" id="relationshipFileInput" accept=".pdf,.docx,.doc,.txt" multiple style="display:none">
-                        <button id="selectRelationshipFilesBtn" class="file-btn">📄 选择投标文件</button>
-                        <button id="runRelationshipBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 提取关联关系</button>
-                        <span id="relationshipFileNames" class="template-info"></span>
+                    <div id="docAnalysisProgress" style="display:none;margin-bottom:6px;">
+                        <div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:2px;"><span id="docAnalysisProgressText">初始化...</span></div>
+                        <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;"><div id="docAnalysisProgressBar" style="width:0%;height:100%;background:#8e44ad;border-radius:4px;transition:width 0.3s;"></div></div>
                     </div>
-                    <div id="relationshipStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="relationshipResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
-                </div>
-            </details>
-
-            <!-- Typo Detection -->
-            <details id="typoDetectionToggle" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">📝 错别字检测</summary>
-                <div style="margin-top:6px;font-size:0.72rem;">
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <input type="file" id="typoFileInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
-                        <button id="selectTypoFileBtn" class="file-btn">📄 选择文档</button>
-                        <button id="runTypoBtn" class="file-btn" style="background:#16a085;color:#fff;border-color:#138d75;" disabled>🔍 检测错别字</button>
-                        <label style="font-size:0.68rem;display:flex;align-items:center;gap:4px;">
-                            <input type="checkbox" id="typoDiffMode"> 差异审查模式
-                        </label>
-                        <span id="typoFileName" class="template-info"></span>
-                    </div>
-                    <div id="typoStatus" style="font-size:0.68rem;color:var(--card-muted);margin-top:4px;"></div>
-                    <div id="typoResultsPanel" style="display:none;margin-top:6px;max-height:400px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
+                    <div id="docAnalysisResults" style="display:none;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
                 </div>
             </details>
 
@@ -432,10 +454,6 @@
                     <span id="docReviewStatus" style="font-size:0.68rem;color:var(--card-muted);margin-left:8px;"></span>
                     <div id="docReviewResults" style="display:none;margin-top:10px;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:10px;background:var(--card-bg);"></div>
                 </div>
-            </details>
-
-                </div>
-            </details>
             </details>
         </div>
 
@@ -878,6 +896,13 @@
 <script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/cases.js') }}?v={{ cache_buster }}"></script>
-<script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/accounts.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/chat.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/wiki.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/review.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/knowledge-lab.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/bid-audit.js') }}?v={{ cache_buster }}"></script>
+    <script defer src="{{ url_for('static', filename='js/file-station.js') }}?v={{ cache_buster }}"></script>
 </body>
 </html>

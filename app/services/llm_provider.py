@@ -39,6 +39,13 @@ PROVIDER_CONFIG = {
         'default_model': 'Qwen/Qwen2.5-7B-Instruct',
         'models': ['Qwen/Qwen2.5-7B-Instruct', 'deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
     },
+    'mimo': {
+        'name': 'Mimo',
+        'env_key': 'MIMO_API_KEY',
+        'base_url': 'https://token-plan-cn.xiaomimimo.com/v1',
+        'default_model': 'mimo-v2.5-pro',
+        'models': ['mimo-v2.5-pro', 'mimo-v2.5'],
+    },
 }
 
 

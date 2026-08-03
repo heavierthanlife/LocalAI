@@ -650,6 +650,7 @@ def _run_table_creation(cur: "PgCursor"):
         CREATE TABLE IF NOT EXISTS project_timelines (
             id SERIAL PRIMARY KEY,
             project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL DEFAULT '主招标流程',
             category_code TEXT NOT NULL,
             method_code TEXT NOT NULL,
             planned_start_date DATE NOT NULL,
@@ -1117,7 +1118,7 @@ def _run_table_creation(cur: "PgCursor"):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS law_change_events (
             id              SERIAL PRIMARY KEY,
-            law_id          INTEGER REFERENCES laws(id),
+            law_id          INTEGER REFERENCES law_masters(id),
             from_version_id INTEGER,
             to_version_id   INTEGER,
             description     TEXT,
@@ -1186,3 +1187,17 @@ def _run_table_creation(cur: "PgCursor"):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_case_tpl_case ON case_template_links(case_id)")
+
+    # ── credit check reports ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS credit_check_reports (
+            id              SERIAL PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            task_id         TEXT,
+            file_path       TEXT,
+            companies_count INTEGER DEFAULT 0,
+            created_at      TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ccr_user ON credit_check_reports(user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ccr_created ON credit_check_reports(created_at)")

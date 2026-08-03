@@ -627,6 +627,7 @@ def save_relationship_results(
     user_id: str,
     task_id: str,
     report: RelationshipReport,
+    project_id: int = None,
 ) -> int:
     """Persist relationship extraction results to DB. Returns count of rows saved."""
     saved = 0
@@ -634,16 +635,15 @@ def save_relationship_results(
         from app.database import get_db_connection
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Save individual relationships
                 for rel in report.relationships:
                     cur.execute("""
                         INSERT INTO entity_relationships
-                            (user_id, task_id, source_entity, target_entity,
+                            (user_id, task_id, project_id, source_entity, target_entity,
                              relation_type, relation_subtype, confidence,
                              evidence_text, risk_flag, risk_reason, module)
-                        VALUES (%s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s)
+                        VALUES (%s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s)
                     """, (
-                        user_id, task_id,
+                        user_id, task_id, project_id,
                         rel.source_entity, rel.target_entity,
                         rel.relation_type, rel.relation_subtype,
                         rel.confidence, rel.evidence[:1000],

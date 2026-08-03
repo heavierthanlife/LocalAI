@@ -1,0 +1,13 @@
+data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"【思考】"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"这是思考过程"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"【回答】"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"这是最终回答"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{}},"finish_reason":"stop","usage":{"prompt_tokens":50,"completion_tokens":15,"total_tokens":65}}]}
+
+data: [DONE]
