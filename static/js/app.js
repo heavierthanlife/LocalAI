@@ -39,7 +39,6 @@
     const wikiPanel = document.getElementById('wikiPanel');
     const wikiTab = document.getElementById('wikiTabBtn');
     const templatesTab = document.getElementById('templatesTabBtn');
-    const casesTab = document.getElementById('casesTabBtn');
 
     // Get CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -373,8 +372,8 @@
                 ${preview}${hasMore ? '<span style="color:var(--accent);font-size:.65rem;"> 点击展开</span>' : ''}
             </div>
             <div style="margin-top:6px;display:flex;gap:6px;">
-                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',5,this)">👍 满意</button>
-                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',1,this)">👎 不满意</button>
+                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',1,this)">👍 满意</button>
+                <button class="fb-btn" onclick="window.submitSkillFeedback(${fileId},'${source}',-1,this)">👎 不满意</button>
             </div>
         </div>`;
     };
@@ -409,10 +408,11 @@
 
     window.submitAuditFeedback = function(rating, btn) {
         const container = btn.parentElement;
+        const auditRunId = container.closest('[data-audit-run]')?.getAttribute('data-audit-run') || '';
         fetch('/admin/skill_audit/feedback', {
             method: 'POST', credentials: 'include',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({rating: rating})
+            body: JSON.stringify({audit_run_id: auditRunId, rating: rating})
         }).then(r => r.json()).then(function(d) {
             if (d.success) {
                 container.innerHTML = '<div style="margin-top:8px;font-size:0.7rem;color:#22c55e;">✅ 已反馈</div>';
@@ -421,19 +421,6 @@
         }).catch(function(){});
     };
 
-    window.submitQuoteFeedback = function(docName, rating, btn) {
-        const container = btn.parentElement.parentElement;
-        fetch('/check_quote_anomaly/feedback', {
-            method: 'POST', credentials: 'include',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({doc_name: docName, rating: rating})
-        }).then(r => r.json()).then(function(d) {
-            if (d.success) {
-                container.innerHTML = '<div style="margin-top:8px;font-size:0.7rem;color:#22c55e;">✅ 已反馈</div>';
-                showToast('感谢反馈!', 'success');
-            }
-        }).catch(function(){});
-    };
 
     function fallbackCopy(text) {
         const ta = document.createElement('textarea');
@@ -856,9 +843,9 @@
         }
     }
 
-    const accountModal = document.getElementById('accountModal');
-    const closeAccountModal = document.getElementById('closeAccountModal');
-    const accountContent = document.getElementById('accountContent');
+    var accountModal = document.getElementById('accountModal');
+    var closeAccountModal = document.getElementById('closeAccountModal');
+    var accountContent = document.getElementById('accountContent');
 
     async function loadAccountModal() {
         // Fetch current auth status from server (consent_given now comes from API)
@@ -1040,7 +1027,7 @@
         }
     }
 
-    let _csrfToken = '';
+    var _csrfToken = '';
     async function getCsrfToken() {
         if (_csrfToken) return _csrfToken;
         try {
@@ -1380,7 +1367,7 @@
         };
     }
 
-    const accountSettingsBtn = document.getElementById('accountSettingsBtn');
+    var accountSettingsBtn = document.getElementById('accountSettingsBtn');
     if (accountSettingsBtn) {
         accountSettingsBtn.onclick = () => {
             console.log("Account settings button clicked");
@@ -1392,1249 +1379,13 @@
         closeAccountModal.onclick = () => { accountModal.style.display = 'none'; };
     }
 
-    // ======================== STREAMING SEND FUNCTION ========================
-    async function sendMessageStreaming(userMsg, messageId, files, userGroup = null, retryCount = 0) {
-        const formData = new FormData();
-        formData.append('message_id', messageId);
-        if (userMsg) formData.append('message', userMsg);
-        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-        if (selectedKnowledgeFiles.length) {
-            formData.append('knowledge_files', JSON.stringify(selectedKnowledgeFiles));
-        }
-        if (window._selectedRagCategory) {
-            formData.append('rag_category', window._selectedRagCategory);
-        }
-        if (retryCount > 0) {
-            formData.append('fallback_retry', String(retryCount));
-        }
-        // Quote context is already inlined in userMsg above — don't duplicate to backend
-
-        const startTime = Date.now();
-        const controller = new AbortController();
-        activeStreamController = controller;
-
-        // Create temp message group
-        const tempGroup = document.createElement('div');
-        tempGroup.className = 'message-group';
-        tempGroup.dataset.msgId = 'temp-' + Date.now();
-
-        // AI name tag for project chats
-        if (_isCurrentSessionProjectChat) {
-            const aiTag = document.createElement('div');
-            aiTag.className = 'ai-name-tag';
-            aiTag.textContent = '@中联招标AI';
-            tempGroup.appendChild(aiTag);
-        }
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'assistant-wrapper';
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'temp-timer';
-        loadingDiv.innerHTML = '<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> <small>0.0s</small>';
-        wrapper.appendChild(loadingDiv);
-
-        // Answer container (populated incrementally)
-        const answerDiv = document.createElement('div');
-        answerDiv.className = 'assistant-answer';
-        answerDiv.style.display = 'none';
-        wrapper.appendChild(answerDiv);
-
-        // Stop button
-        const stopBtn = document.createElement('button');
-        stopBtn.className = 'stop-stream-btn';
-        stopBtn.textContent = '⏹ 停止';
-        stopBtn.onclick = () => { controller.abort(); stopBtn.remove(); };
-        wrapper.appendChild(stopBtn);
-
-        tempGroup.appendChild(wrapper);
-        messagesDiv.appendChild(tempGroup);
-        scrollToBottom();
-
-        let timerInterval = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            const dots = loadingDiv.querySelector('.typing-dots');
-            if (dots) {
-                loadingDiv.querySelector('small').textContent = `${elapsed.toFixed(1)}s`;
-            }
-        }, 100);
-
-        let fullResponse = '';
-        let thinkingDone = false;  // true once thinking→answer split detected
-        let thinkingHtml = '';     // cached thinking block HTML
-        let noThinkingMarker = false; // true if AI is NOT using 【思考】/【回答】 markers
-        const THINKING_END = /【回答】|回答：|<\/思考>/;
-        const THINKING_START = /【思考】|思考：|<思考>/;
-
-        try {
-            const response = await fetch('/send_stream', {
-                method: 'POST',
-                credentials: 'include',
-                body: formData,
-                signal: controller.signal
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || 'Stream request failed');
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            loadingDiv.style.display = 'none';
-            answerDiv.style.display = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.type === 'content' && data.text) {
-                                fullResponse += data.text;
-
-                                // Detect: if after 200 chars there's no 【思考】 marker,
-                                // the AI isn't using thinking format — treat everything as direct answer
-                                if (!thinkingDone && !noThinkingMarker && fullResponse.length > 200) {
-                                    if (!fullResponse.match(THINKING_START) && !fullResponse.match(THINKING_END)) {
-                                        noThinkingMarker = true;
-                                        thinkingDone = true; // Skip thinking phase
-                                    }
-                                }
-
-                                // Real-time thinking/answer split detection
-                                if (!thinkingDone) {
-                                    const m = fullResponse.match(THINKING_END);
-                                    if (m) {
-                                        thinkingDone = true;
-                                        const idx = fullResponse.indexOf(m[0]);
-                                        const thinking = fullResponse.substring(0, idx).replace(/^【思考】|^思考：|^<思考>/i, '').trim();
-                                        const answerStart = fullResponse.substring(idx + m[0].length);
-
-                                        // Build collapsed thinking block
-                                        const preview = thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
-                                        thinkingHtml = `<div class="thinking-container">
-                                            <div class="thinking-header" onclick="toggleThinking(this);">
-                                                <span class="arrow">▶</span><span>思考过程</span>
-                                                <span class="thinking-preview">${escapeHtml(preview)}</span>
-                                            </div>
-                                            <div class="thinking-content">${md.render(thinking)}</div>
-                                        </div>`;
-
-                                        // Render thinking block + answer
-                                        answerDiv.innerHTML = thinkingHtml + md.render(answerStart);
-                                        scrollToBottom(true);
-                                        continue;
-                                    }
-                                }
-
-                                if (thinkingDone) {
-                                    if (noThinkingMarker) {
-                                        // Direct answer — no thinking block
-                                        answerDiv.innerHTML = md.render(fullResponse);
-                                    } else {
-                                        const splitIdx = fullResponse.search(THINKING_END);
-                                        const answerText = splitIdx >= 0
-                                            ? fullResponse.substring(splitIdx + fullResponse.match(THINKING_END)[0].length)
-                                            : fullResponse;
-                                        answerDiv.innerHTML = thinkingHtml + md.render(answerText);
-                                    }
-                                } else {
-                                    // Still in thinking phase — show dimmed streaming text
-                                    answerDiv.innerHTML = `<div class="stream-thinking">${escapeHtml(fullResponse)}</div>`;
-                                }
-                                scrollToBottom(true);
-                            } else if (data.type === 'error') {
-                                answerDiv.innerHTML += `<p class="stream-error">[Error: ${escapeHtml(data.text)}]</p>`;
-                            } else if (data.type === 'fallback_retry') {
-                                stopBtn.remove();
-                                if (retryCount >= 3) {
-                                    answerDiv.innerHTML += '<p class="stream-error">[自动重试已达上限，请手动重试]</p>';
-                                    break;
-                                }
-                                clearInterval(timerInterval);
-                                activeStreamController = null;
-                                tempGroup.remove();
-                                return sendMessageStreaming(userMsg, messageId, files, userGroup, retryCount + 1);
-                            } else if (data.type === 'done') {
-                                stopBtn.remove();
-                                // If backend sent pre-split answer/thinking (e.g. JSON format),
-                                // replace raw streaming content with properly formatted version
-                                if (data.answer) {
-                                    const finalThinking = data.thinking || '';
-                                    const finalAnswer = data.answer || '';
-                                    if (finalThinking) {
-                                        const thinkingHtml2 = `<div class="message-thinking" style="font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;" onclick="this.classList.toggle('collapsed');const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none';">
-                                            💭 思考过程 <span style="font-size:0.6rem;">(点击展开)</span></div>
-                                        <div class="thinking-content" style="display:none;font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;">${md.render(finalThinking)}</div>`;
-                                        answerDiv.innerHTML = thinkingHtml2 + md.render(finalAnswer);
-                                    } else {
-                                        answerDiv.innerHTML = md.render(finalAnswer);
-                                    }
-                                    scrollToBottom(true);
-                                }
-                                if (data.user_msg_id || data.assistant_msg_id) {
-                                    _pollLastId = Math.max(_pollLastId || 0, data.user_msg_id || 0, data.assistant_msg_id || 0);
-                                    _lastKnownMessageId = Math.max(_lastKnownMessageId || 0, _pollLastId);
-                                }
-                                addBranchButton(wrapper, tempGroup);
-                                if (data.assistant_msg_id) {
-                                    addFeedbackButtons(tempGroup, data.assistant_msg_id);
-                                    addActionButtons(tempGroup, userMsg, fullResponse, '', data.assistant_msg_id);
-                                }
-                            }
-                        } catch (e) {
-                            // Partial JSON — accumulate
-                        }
-                    }
-                }
-            }
-        } catch (err) {
-            if (err.name === 'AbortError') {
-                answerDiv.innerHTML += '<p class="stream-cancelled">[已停止生成]</p>';
-            } else {
-                answerDiv.innerHTML += '<p class="stream-error">[回答生成失败，请重试]</p>';
-            }
-        } finally {
-            clearInterval(timerInterval);
-            activeStreamController = null;
-            stopBtn.remove();
-            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-            if (!answerDiv.querySelector('.response-time')) {
-                const timeTag = document.createElement('small');
-                timeTag.className = 'response-time';
-                timeTag.textContent = `⏱ ${totalTime}s`;
-                answerDiv.appendChild(timeTag);
-            }
-            // Token count estimate (~4 chars per token for Chinese)
-            const estTokens = Math.round(fullResponse.length / 4);
-            if (estTokens > 0) {
-                const tokTag = document.createElement('small');
-                tokTag.className = 'token-count';
-                tokTag.textContent = `~${estTokens} tokens`;
-                answerDiv.appendChild(tokTag);
-            }
-            // Fix links
-            fixLinksInContainer(answerDiv);
-            addCopyButton(wrapper, fullResponse);
-            addShareButton(wrapper);
-        }
-    }
-
-    // ======================== NON-STREAMING SEND FUNCTION ========================
-    async function sendMessageNonStreaming(userMsg, messageId, files, userGroup = null) {
-        const formData = new FormData();
-        formData.append('message_id', messageId);
-        if (userMsg) formData.append('message', userMsg);
-        for (let i = 0; i < files.length; i++) formData.append('files', files[i]);
-
-        const startTime = Date.now();
-        const tempMsgId = 'temp-' + Date.now() + '-' + Math.random();
-
-        const tempGroup = document.createElement('div');
-        tempGroup.className = 'message-group';
-        tempGroup.dataset.msgId = tempMsgId;
-        tempGroup.dataset.userMsg = userMsg;
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'assistant-wrapper';
-
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'temp-timer';
-        loadingDiv.textContent = '⏳ 0.0s';
-        wrapper.appendChild(loadingDiv);
-        tempGroup.appendChild(wrapper);
-        messagesDiv.appendChild(tempGroup);
-        scrollToBottom();
-
-        // Append knowledge files if any (you already have this)
-        if (selectedKnowledgeFiles.length) {
-            formData.append('knowledge_files', JSON.stringify(selectedKnowledgeFiles));
-        }
-
-        let timerInterval = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            loadingDiv.textContent = `⏳ ${elapsed.toFixed(1)}s`;
-        }, 100);
-
-        try {
-            const response = await fetch('/send', {
-                method: 'POST',
-                credentials: 'include',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || '请求失败');
-            }
-
-            const data = await response.json();
-            const totalTime = (Date.now() - startTime) / 1000;
-
-            clearInterval(timerInterval);
-            tempGroup.remove();
-
-            // Assign ID to the user message group if provided and we have a user_message_id
-            if (userGroup && data.user_message_id) {
-                userGroup.id = `msg-${data.user_message_id}`;
-            }
-
-            const finalGroup = document.createElement('div');
-            finalGroup.className = 'message-group';
-            // Use the actual assistant message ID from the server
-            finalGroup.id = `msg-${data.assistant_message_id}`;
-            finalGroup.dataset.msgId = data.assistant_message_id;
-            finalGroup.dataset.userMsg = userMsg;
-
-            const finalWrapper = document.createElement('div');
-            finalWrapper.className = 'assistant-wrapper';
-
-            if (data.thinking && data.thinking.trim()) {
-                const thinkingContainer = document.createElement('div');
-                thinkingContainer.className = 'thinking-container';
-                const header = document.createElement('div');
-                header.className = 'thinking-header';
-                header.onclick = function() { toggleThinking(this); };
-                const arrow = document.createElement('span');
-                arrow.className = 'arrow';
-                arrow.textContent = '▶';
-                const label = document.createElement('span');
-                label.textContent = '思考过程';
-                const preview = document.createElement('span');
-                preview.className = 'thinking-preview';
-                const previewText = data.thinking.length > 80 ? data.thinking.substring(0, 80) + '...' : data.thinking;
-                preview.innerText = previewText;
-                header.appendChild(arrow);
-                header.appendChild(label);
-                header.appendChild(preview);
-                const contentDiv = document.createElement('div');
-                contentDiv.className = 'thinking-content';
-                contentDiv.innerHTML = md.render(data.thinking);
-                thinkingContainer.appendChild(header);
-                thinkingContainer.appendChild(contentDiv);
-                finalWrapper.appendChild(thinkingContainer);
-            }
-
-            const answerDiv = document.createElement('div');
-            answerDiv.className = 'assistant-answer';
-            if (data.is_batch_report) {
-                let htmlContent = data.assistant_message.replace(/^<!--.*?-->/, '').trim();
-                answerDiv.innerHTML = htmlContent;
-                answerDiv.classList.add('comparison-report');
-            } else {
-                let answerText = asciiTableToMarkdown(data.assistant_message);
-                answerDiv.innerHTML = md.render(answerText);
-            }
-            answerDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
-            fixLinksInContainer(answerDiv);
-            finalWrapper.appendChild(answerDiv);
-
-            const timestampSpan = document.createElement('div');
-            timestampSpan.className = 'response-timestamp';
-            timestampSpan.textContent = `⏱️ ${formatElapsedTime(totalTime)}`;
-            finalWrapper.appendChild(timestampSpan);
-
-            finalGroup.appendChild(finalWrapper);
-            messagesDiv.appendChild(finalGroup);
-
-            addCopyButton(finalWrapper, data.assistant_message);
-            addBranchButton(finalWrapper, finalGroup);
-            addShareButton(finalWrapper);
-            const estTok = Math.round((data.assistant_message || '').length / 4);
-            if (estTok > 0) {
-                const tokTag = document.createElement('small');
-                tokTag.className = 'token-count';
-                tokTag.textContent = `~${estTok} tokens`;
-                finalWrapper.appendChild(tokTag);
-            }
-            addFeedbackButtons(finalGroup, data.assistant_message_id);
-            addActionButtons(finalGroup, userMsg, data.assistant_message, data.thinking || '', data.assistant_message_id);
-            scrollToBottom();
-
-            const newHistory = sessionStorage.getItem('chat_history') ? JSON.parse(sessionStorage.getItem('chat_history')) : [];
-            newHistory.push({ role: 'user', content: userMsg });
-            newHistory.push({ role: 'assistant', content: data.assistant_message, thinking: data.thinking });
-            sessionStorage.setItem('chat_history', JSON.stringify(newHistory));
-            if (data.file_processed) await checkStorage();
-            await loadHistoryList();
-            // Cross-tab sync: project chat messages → AI memory
-            _syncProjectChatToAiMemory(userMsg);
-
-        } catch (err) {
-            clearInterval(timerInterval);
-            tempGroup.remove();
-            addSystemMessage('发送失败: ' + err.message);
-            console.error(err);
-        }
-    }
-
-    function addActionButtons(group, userMsg, assistantMsg, thinking, msgId) {
-        const wrapper = group.querySelector('.assistant-wrapper');
-        const actionRow = document.createElement('div');
-        actionRow.className = 'action-row';
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'action-btn';
-        copyBtn.innerHTML = '📋 <span class="btn-text">复制全篇</span>';
-        const regenerateBtn = document.createElement('button');
-        regenerateBtn.className = 'action-btn';
-        regenerateBtn.innerHTML = '🔄 <span class="btn-text">重新生成</span>';
-        actionRow.appendChild(copyBtn);
-        if (!_isCurrentSessionProjectChat) {
-            actionRow.appendChild(regenerateBtn);
-        }
-
-        const feedbackDiv = document.createElement('div');
-        feedbackDiv.className = 'feedback-area';
-        const ratingDiv = document.createElement('div');
-        ratingDiv.className = 'rating-buttons';
-        const upBtn = document.createElement('button');
-        upBtn.className = 'rating-btn';
-        upBtn.innerHTML = '👍 <span class="btn-text">有帮助</span>';
-        const downBtn = document.createElement('button');
-        downBtn.className = 'rating-btn';
-        downBtn.innerHTML = '👎 <span class="btn-text">无帮助</span>';
-        ratingDiv.appendChild(upBtn);
-        ratingDiv.appendChild(downBtn);
-        const commentInput = document.createElement('input');
-        commentInput.type = 'text';
-        commentInput.className = 'feedback-comment';
-        commentInput.placeholder = '补充意见';
-        const submitBtn = document.createElement('button');
-        submitBtn.className = 'feedback-submit';
-        submitBtn.innerHTML = '📨 <span class="btn-text">提交反馈</span>';
-        const statusSpan = document.createElement('span');
-        statusSpan.className = 'feedback-status';
-        feedbackDiv.appendChild(ratingDiv);
-        feedbackDiv.appendChild(commentInput);
-        feedbackDiv.appendChild(submitBtn);
-        feedbackDiv.appendChild(statusSpan);
-        actionRow.appendChild(feedbackDiv);
-        wrapper.appendChild(actionRow);
-
-        copyBtn.onclick = async () => {
-            const answerDiv = wrapper.querySelector('.assistant-answer');
-            const htmlString = answerDiv.innerHTML;
-            const plainText = answerDiv.innerText;
-            try {
-                const blobHtml = new Blob([htmlString], { type: 'text/html' });
-                const blobText = new Blob([plainText], { type: 'text/plain' });
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText })
-                ]);
-                statusSpan.innerText = '已复制到剪贴板';
-                setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-            } catch (err) {
-                try {
-                    await navigator.clipboard.writeText(plainText);
-                    statusSpan.innerText = '已复制纯文本（表格可能丢失）';
-                    setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-                } catch (fallbackErr) {
-                    statusSpan.innerText = '复制失败，请手动选择';
-                    setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-                }
-            }
-        };
-
-        regenerateBtn.onclick = async () => {
-            const confirmed = await confirm('重新生成将覆盖当前回答，确定吗？');
-            if (!confirmed) return;
-            const res = await fetch('/regenerate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ user_message: userMsg })
-            });
-            const data = await res.json();
-            if (res.ok && data.assistant_message) {
-                const answerDiv = wrapper.querySelector('.assistant-answer');
-                answerDiv.innerHTML = md.render(data.assistant_message);
-                fixLinksInContainer(answerDiv);
-                group.dataset.assistantMsg = data.assistant_message;
-                if (data.thinking) {
-                    const thinkingContainer = wrapper.querySelector('.thinking-container');
-                    if (thinkingContainer) {
-                        const contentDiv = thinkingContainer.querySelector('.thinking-content');
-                        contentDiv.innerHTML = md.render(data.thinking);
-                        const previewSpan = thinkingContainer.querySelector('.thinking-preview');
-                        previewSpan.innerText = data.thinking.substring(0, 80) + '...';
-                    }
-                }
-            } else {
-                alert('重新生成失败');
-            }
-        };
-
-        let currentRating = null;
-        upBtn.onclick = () => { currentRating = 'up'; upBtn.classList.add('selected'); downBtn.classList.remove('selected'); };
-        downBtn.onclick = () => { currentRating = 'down'; downBtn.classList.add('selected'); upBtn.classList.remove('selected'); };
-        submitBtn.onclick = async () => {
-            if (!currentRating) { statusSpan.innerText = '请先选择评分'; return; }
-            const comment = commentInput.value.trim();
-            const payload = { rating: currentRating, comment, user_message: userMsg, assistant_response: assistantMsg };
-            const res = await fetch('/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
-            if (res.ok) {
-                statusSpan.innerText = '感谢您的反馈！';
-                submitBtn.disabled = true;
-                upBtn.disabled = true;
-                downBtn.disabled = true;
-                commentInput.disabled = true;
-            } else {
-                statusSpan.innerText = '提交失败';
-            }
-        };
-    }
-
-    // ======================== Chat History & Sessions ========================
-
-    // Cross-tab sync: when chatting in a project chat, sync message to AI memory
-    async function _syncProjectChatToAiMemory(userMsg) {
-        try {
-            const sessions = await (await fetch('/get_sessions', {credentials:'include'})).json();
-            const currentThread = sessionStorage.getItem('currentThreadId');
-            const currentSession = (sessions.sessions||[]).find(s => s.thread_id === currentThread);
-            if (currentSession && currentSession.project_id) {
-                await fetch(`/admin/projects/${currentSession.project_id}/ai_memory`, {
-                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                    body: JSON.stringify({role:'user', content: userMsg})
-                }).catch(()=>{});
-            }
-        } catch(_) {}
-    }
-
-    let _loadingHistory = false;
-    async function loadHistoryList(force = false) {
-        if (_loadingHistory && !force) {
-            console.debug('loadHistoryList skipped: already loading');
-            return;
-        }
-        if (_loadingHistory && force) {
-            // Wait for the pending load to finish, then re-run
-            let waited = 0;
-            const maxWait = 5000; // 5s safety timeout
-            while (_loadingHistory && waited < maxWait) {
-                await new Promise(r => setTimeout(r, 50));
-                waited += 50;
-            }
-            if (_loadingHistory) {
-                console.error('loadHistoryList: force timeout — _loadingHistory stuck, resetting');
-                _loadingHistory = false;
-            }
-        }
-        _loadingHistory = true;
-        try {
-            const res = await fetch('/get_sessions', { credentials: 'include' });
-            if (!res.ok) {
-                console.error('loadHistoryList: /get_sessions returned', res.status);
-                return;
-            }
-            const data = await res.json();
-            let sessions = data.sessions || [];
-            console.debug('loadHistoryList: got', sessions.length, 'sessions,', sessions.filter(s=>s.project_id).length, 'project');
-            const historyList = document.getElementById('historyList');
-            const projectHistoryList = document.getElementById('projectHistoryList');
-            const projChatHeader = document.getElementById('projChatHeader');
-            if (!historyList) return;
-            // Split: common (no project_id) vs project chats
-            const commonSessions = sessions.filter(s => !s.project_id);
-            const projectSessions = sessions.filter(s => s.project_id);
-            // Auto-create one common chat ONLY if user has zero chats total AND not viewing a project
-            if (commonSessions.length === 0 && projectSessions.length === 0 && !currentProjectId) {
-                const newRes = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
-                const newData = await newRes.json();
-                commonSessions.push({ thread_id: newData.data?.thread_id || newData.thread_id, title: '新对话', updated_at: new Date().toISOString() });
-                if (!sessionStorage.getItem('currentThreadId')) {
-                    await loadSession(newData.data?.thread_id || newData.thread_id);
-                }
-            }
-            
-            // Render common chats
-            historyList.innerHTML = '';
-            const currentThreadId = sessionStorage.getItem('currentThreadId');
-            const sorted = sortPinnedFirst(commonSessions);
-            for (const sess of sorted) {
-                const li = document.createElement('li');
-                li.className = 'history-item';
-                if (sess.thread_id === currentThreadId) li.classList.add('active-session');
-                const infoDiv = document.createElement('div');
-                infoDiv.className = 'history-info';
-                const titleSpan = document.createElement('div');
-                titleSpan.className = 'history-title';
-                titleSpan.textContent = (sess.is_grilling ? '🔥 ' : '') + (sess.title || '新对话');
-                titleSpan.title = '双击编辑标题';
-                titleSpan.style.cursor = 'text';
-
-                const makeEditable = (spanEl, sessionObj) => {
-                    spanEl.ondblclick = (e) => {
-                        e.stopPropagation();
-                        const input = document.createElement('input');
-                        input.type = 'text';
-                        input.value = sessionObj.title || '';
-                        input.style.cssText = 'width:100%;padding:2px 4px;border:1px solid #64748b;border-radius:4px;font-size:.82rem;font-weight:500;background:inherit;color:inherit;';
-                        spanEl.replaceWith(input);
-                        input.focus(); input.select();
-                        let doneFired = false;
-                        const done = async () => {
-                            if (doneFired) return;
-                            doneFired = true;
-                            const newTitle = input.value.trim() || '新对话';
-                            const newSpan = document.createElement('div');
-                            newSpan.className = 'history-title';
-                            newSpan.textContent = newTitle;
-                            newSpan.title = '双击编辑标题';
-                            newSpan.style.cursor = 'text';
-                            makeEditable(newSpan, sessionObj);
-                            input.replaceWith(newSpan);
-                            if (newTitle !== (sessionObj.title || '新对话')) {
-                                try {
-                                    const res = await fetch('/update_session_title', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        credentials: 'include',
-                                        body: JSON.stringify({ thread_id: sessionObj.thread_id, title: newTitle })
-                                    });
-                                    if (res.ok) {
-                                        sessionObj.title = newTitle;
-                                        if (typeof showToast === 'function') showToast('标题已更新', 'success', 2000);
-                                    } else {
-                                        const err = await res.json();
-                                        console.error('Rename failed:', err);
-                                        newSpan.textContent = sessionObj.title || '新对话';
-                                        if (typeof showToast === 'function') showToast('保存失败: ' + (err.error || '未知错误'), 'error', 3000);
-                                    }
-                                } catch(e) {
-                                    console.error('Rename network error:', e);
-                                    newSpan.textContent = sessionObj.title || '新对话';
-                                    if (typeof showToast === 'function') showToast('网络错误', 'error', 2000);
-                                }
-                            }
-                        };
-                        input.onblur = done;
-                        input.onkeydown = (ke) => {
-                            if (ke.key === 'Enter') { ke.preventDefault(); done(); }
-                            if (ke.key === 'Escape') { input.blur(); }
-                        };
-                    };
-                };
-                makeEditable(titleSpan, sess);
-                // Unread badge (localStorage per-browser)
-                const unreadSpan = document.createElement('span');
-                unreadSpan.className = 'unread-badge';
-                unreadSpan.style.cssText = 'display:none;background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;margin-left:6px;';
-                const commonUnread = _getUnreadCount(sess.thread_id, sess.last_msg_id || 0);
-                if (commonUnread > 0) {
-                    unreadSpan.textContent = commonUnread > 99 ? '99+' : commonUnread;
-                    unreadSpan.style.display = '';
-                }
-                titleSpan.appendChild(unreadSpan);
-                const timeSpan = document.createElement('div');
-                timeSpan.className = 'history-time';
-                const formatted = sess.updated_at ? new Date(sess.updated_at).toLocaleString() : '刚刚';
-                timeSpan.textContent = formatted;
-                infoDiv.appendChild(titleSpan);
-                infoDiv.appendChild(timeSpan);
-                // Pin + Archive buttons (right side)
-                const pinIsActive = pinnedSessions && pinnedSessions.has(sess.thread_id);
-                const pinBtn = document.createElement('button');
-                pinBtn.className = 'pin-button';
-                pinBtn.textContent = pinIsActive ? '📌' : '📍';
-                pinBtn.title = pinIsActive ? '取消置顶' : '置顶';
-                pinBtn.style.background = 'none';
-                pinBtn.style.border = 'none';
-                pinBtn.style.cursor = 'pointer';
-                pinBtn.style.fontSize = '1rem';
-                pinBtn.style.opacity = pinIsActive ? '1' : '0.4';
-                pinBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    if (!pinnedSessions) return;
-                    if (pinnedSessions.has(sess.thread_id)) {
-                        pinnedSessions.delete(sess.thread_id);
-                        pinBtn.textContent = '📍';
-                        pinBtn.style.opacity = '0.4';
-                    } else {
-                        pinnedSessions.add(sess.thread_id);
-                        pinBtn.textContent = '📌';
-                        pinBtn.style.opacity = '1';
-                    }
-                    persistPins();
-                    loadHistoryList();
-                };
-                // Archive button
-                const archiveBtn = document.createElement('button');
-                archiveBtn.className = 'archive-history';
-                archiveBtn.textContent = '📦';
-                archiveBtn.title = '归档聊天';
-                archiveBtn.style.marginLeft = '8px';
-                archiveBtn.style.background = 'none';
-                archiveBtn.style.border = 'none';
-                archiveBtn.style.cursor = 'pointer';
-                archiveBtn.style.fontSize = '1rem';
-                archiveBtn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const confirmed = await confirm(`将聊天“${sess.title}”归档？归档后将从列表中移除。`);
-                    if (!confirmed) return;
-                    try {
-                        const archiveRes = await fetch(`/archive_session/${sess.thread_id}`, { method: 'POST', credentials: 'include' });
-                        if (archiveRes.ok) {
-                            li.remove();
-                            // If the archived session was the currently active one, load the most recent session
-                            if (sess.thread_id === currentThreadId) {
-                            // Clear knowledge base selection when archiving current session
-                            selectedKnowledgeFiles = [];
-                            localStorage.removeItem('selectedKnowledgeFiles');
-                            const btn = document.getElementById('knowledgeBaseBtn');
-                            if (btn) btn.innerHTML = '📚 知识库';
-                            showCatFilterIfNeeded();
-                            await loadMostRecentSession();
-                            }
-                            showToast('已归档', 'success', 2000);
-                        } else {
-                            const err = await archiveRes.json();
-                            alert('归档失败: ' + (err.error || '未知错误'));
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        alert('网络错误');
-                    }
-                };
-                li.appendChild(pinBtn);
-                li.appendChild(archiveBtn);
-                // Delete button
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-history';
-                deleteBtn.textContent = '🗑️';
-                deleteBtn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const confirmed = await confirm(`确定要删除聊天“${sess.title}”吗？此操作不可恢复。`);
-                    if (!confirmed) return;
-                    li.classList.add('history-item-deleting');
-                    deleteBtn.disabled = true;
-                    try {
-                        const delRes = await fetch(`/delete_session/${sess.thread_id}`, { method: 'POST', credentials: 'include' });
-                        if (delRes.status === 409) {
-                            const errData = await delRes.json();
-                            alert(errData.message);
-                            li.classList.remove('history-item-deleting');
-                            deleteBtn.disabled = false;
-                            return;
-                        }
-                        if (!delRes.ok) throw new Error('删除失败');
-                        const result = await delRes.json();
-                        li.remove();
-                        if (sess.thread_id === currentThreadId) {
-                            if (result.new_thread_id) await loadSession(result.new_thread_id);
-                            else {
-                                await loadHistoryList();
-                                const firstSession = document.querySelector('.history-item');
-                                if (firstSession) {
-                                    const firstThreadId = firstSession.querySelector('.history-info')?.parentElement?.dataset?.threadId;
-                                    if (firstThreadId) await loadSession(firstThreadId);
-                                }
-                            }
-                        }
-                        await checkStorage();
-                    } catch (err) {
-                        console.error(err);
-                        alert('删除失败，请稍后重试');
-                        li.classList.remove('history-item-deleting');
-                        deleteBtn.disabled = false;
-                    }
-                };
-                li.appendChild(infoDiv);
-                li.appendChild(deleteBtn);
-                li.onclick = async () => { switchToPanel('chatInterface'); await loadSession(sess.thread_id); };
-                historyList.appendChild(li);
-            }
-            if (commonSessions.length === 0) {
-                const emptyLi = document.createElement('li');
-                emptyLi.textContent = '暂无普通对话';
-                emptyLi.style.color = '#999';
-                historyList.appendChild(emptyLi);
-            }
-            // Render project chats
-            if (projectHistoryList && projChatHeader) {
-                projectHistoryList.innerHTML = '';
-                if (projectSessions.length > 0) {
-                    projChatHeader.style.display = '';
-                    projectHistoryList.style.display = '';
-                    const projSorted = sortPinnedFirst(projectSessions);
-                    for (const sess of projSorted) {
-                        const li = document.createElement('li');
-                        li.className = 'history-item';
-                        if (sess.thread_id === currentThreadId) li.classList.add('active-session');
-                        const infoDiv = document.createElement('div');
-                        infoDiv.className = 'history-info';
-                        const titleSpan = document.createElement('div');
-                        titleSpan.className = 'history-title';
-                        titleSpan.textContent = (sess.is_grilling ? '🔥 ' : '📂 ') + (sess.title || '项目对话');
-                        // Unread badge (localStorage per-browser)
-                        const unreadSpan = document.createElement('span');
-                        unreadSpan.className = 'unread-badge';
-                        unreadSpan.style.cssText = 'display:none;background:#ef4444;color:white;border-radius:10px;padding:1px 6px;font-size:0.65rem;margin-left:6px;';
-                        titleSpan.appendChild(unreadSpan);
-                        infoDiv.appendChild(titleSpan);
-                        const timeSpan = document.createElement('div');
-                        timeSpan.className = 'history-time';
-                        timeSpan.textContent = sess.updated_at ? new Date(sess.updated_at).toLocaleString() : '';
-                        infoDiv.appendChild(timeSpan);
-                        li.appendChild(infoDiv);
-                        li.style.cursor = 'pointer';
-                        li.onclick = async () => { switchToPanel('chatInterface'); await loadSession(sess.thread_id); };
-                        projectHistoryList.appendChild(li);
-                        // Unread: compare last_msg_id vs per-browser read position
-                        const projectUnread = _getUnreadCount(sess.thread_id, sess.last_msg_id || 0);
-                        if (projectUnread > 0) {
-                            unreadSpan.textContent = projectUnread > 99 ? '99+' : projectUnread;
-                            unreadSpan.style.display = '';
-                        }
-                    }
-                } else {
-                    projChatHeader.style.display = 'none';
-                }
-            }
-        } catch (err) { console.error('加载历史列表失败:', err); }
-        finally { _loadingHistory = false; }
-    }
-
-    async function loadSession(threadId, force = false, targetMessageId = null) {
-        if (!force && isLoadingSession) {
-            showToast('正在加载，请稍候…', 'info', 1500);
-            return;
-        }
-        const currentActive = sessionStorage.getItem('currentThreadId');
-        if (!force && currentActive === threadId && messagesDiv.children.length > 0) {
-            const chatPanel = document.getElementById('chatInterface');
-            if (chatPanel && chatPanel.style.display !== 'none') return;
-        }
-        if (isProcessing && !force) {
-            addSystemMessage('请等待当前请求完成后再切换会话。');
-            return;
-        }
-
-        isLoadingSession = true;
-        const timeoutId = setTimeout(() => { isLoadingSession = false; }, 10000);
-        try {
-            messagesDiv.innerHTML = '';
-            const res = await fetch(`/load_session/${threadId}`, { credentials: 'include' });
-            const data = await res.json();
-            if (res.ok && data.messages) {
-                // Determine if this is a project chat (for quote mode + regen button)
-                let isProjectChat = false;
-                let projId = null;
-                let isGrillSession = false;
-                for (const s of data.sessions || []) {
-                    if (s.thread_id === threadId && s.project_id) {
-                        isProjectChat = true;
-                        projId = s.project_id;
-                    }
-                    if (s.thread_id === threadId && s.is_grilling) {
-                        isGrillSession = true;
-                    }
-                }
-                _isCurrentSessionProjectChat = isProjectChat;
-                _isCurrentSessionGrill = isGrillSession;
-                if (projId) currentProjectId = projId;
-                if (!isProjectChat) {
-                    const todoHeader = document.getElementById('todoHeader');
-                    const todoList = document.getElementById('todoList');
-                    if (todoHeader) todoHeader.style.display = 'none';
-                    if (todoList) todoList.style.display = 'none';
-                }
-                // Show grill mode banner
-                const grillBanner = document.getElementById('grillModeBanner');
-                if (grillBanner) {
-                    grillBanner.style.display = isGrillSession ? '' : 'none';
-                }
-                for (let i = 0; i < data.messages.length; i++) {
-                    const msg = data.messages[i];
-                    if (msg.role === 'user') {
-                        // Use real id if available, otherwise generate a temp one
-                        const msgId = msg.id ? msg.id : `temp-${Date.now()}-${i}`;
-                        addUserMessage(msg.content, msgId);
-                    } else if (msg.role === 'assistant') {
-                        let prevUserMsg = '';
-                        if (isProjectChat) {
-                            for (let j = i-1; j >= 0; j--) {
-                                if (data.messages[j].role === 'user') {
-                                    prevUserMsg = data.messages[j].content;
-                                    break;
-                                }
-                            }
-                        }
-                        const msgId = msg.id ? msg.id : `temp-${Date.now()}-${i}`;
-                        renderAssistantMessageLegacy(msgId, prevUserMsg, msg.content, msg.thinking || null);
-                    }
-                }
-                fixLinksInContainer(messagesDiv);
-                sessionStorage.setItem('currentThreadId', threadId);
-                // Track last message ID for polling
-                _lastKnownMessageId = 0;
-                for (const m of data.messages || []) {
-                    if (m.id && m.id > _lastKnownMessageId) _lastKnownMessageId = m.id;
-                }
-                if (_lastKnownMessageId > 0) { localStorage.setItem('zlai_read_' + threadId, String(_lastKnownMessageId)); }
-                // Mark project chat as read + start polling (common and project)
-                let foundProject = false;
-                for (const s of data.sessions || []) {
-                    if (s.thread_id === threadId && s.project_id) {
-                        foundProject = true;
-                        fetch(`/admin/projects/${s.project_id}/mark_read`, { method: 'POST', credentials: 'include' }).catch(() => {});
-                        startRealtimePoll(s.project_id);  // 3s project poll
-                        loadProjectTodos(s.project_id);
-                        loadProjectVotes(s.project_id);
-                        break;
-                    }
-                }
-                if (!foundProject) {
-                    startRealtimePoll(null);  // 5s common chat poll
-                }
-                await loadHistoryList();
-                await checkStorage();
-                // After all messages are added to DOM
-                if (targetMessageId) {
-                    // Wait for DOM to settle, then scroll to the exact message
-                    setTimeout(() => {
-                        const targetElement = document.getElementById(`msg-${targetMessageId}`);
-                        if (targetElement) {
-                            // Highlight effect
-                            targetElement.style.transition = 'background-color 0.5s';
-                            targetElement.style.backgroundColor = '#fff3cd';
-                            setTimeout(() => {
-                                targetElement.style.backgroundColor = '';
-                            }, 2000);
-                            // Scroll from current position (not from bottom)
-                            targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        } else {
-                            console.warn(`Message element msg-${targetMessageId} not found`);
-                            scrollToBottom(); // fallback
-                        }
-                    }, 200);
-                } else {
-                    // Auto-to-bottom only when chat tab is active
-                    const chatPanel = document.getElementById('chatInterface');
-                    const isChatVisible = chatPanel && chatPanel.style.display !== 'none';
-                    if (isChatVisible) {
-                        setTimeout(() => { _userHasScrolled = false; scrollToBottom(true); }, 150);
-                    }
-                }
-            } else {
-                console.error('Failed to load session: no messages', data);
-            }
-        } catch (err) {
-            console.error('Failed to load session:', err);
-        } finally {
-            clearTimeout(timeoutId);
-            isLoadingSession = false;
-        }
-    }
-
-    // ── Unified real-time polling (common + project chats) ──
-    let _pollTimer = null;
-    let _pollLastId = 0;
-
-    function startRealtimePoll(projectId) {
-        stopRealtimePoll();
-        _pollLastId = _lastKnownMessageId || 0;
-        const interval = projectId ? 3000 : 5000;  // 3s project, 5s common
-        _pollTimer = setInterval(async () => {
-            const currentThread = sessionStorage.getItem('currentThreadId');
-            if (!currentThread || isProcessing) return;
-            if (projectId && currentProjectId != projectId) return;
-            try {
-                const res = await fetch(`/chat/poll/${currentThread}?since_id=${_pollLastId}`, { credentials: 'include' });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (!data.success) return;
-                const newMsgs = data.messages || [];
-                if (projectId) loadProjectVotes(projectId);
-                if (newMsgs.length > 0) {
-                    _pollLastId = data.max_id;
-                    const wasNearBottom = _isUserNearBottom();
-                    for (const msg of newMsgs) {
-                        if (msg.role === 'user') {
-                            addUserMessage(msg.content, msg.id);
-                        } else if (msg.role === 'assistant') {
-                            const thinking = msg.thinking || null;
-                            renderAssistantMessageLegacy(msg.id, '', msg.content, thinking);
-                        }
-                    }
-                    if (wasNearBottom) scrollToBottom();
-                    await loadHistoryList();
-                }
-            } catch(e) { /* silent */ }
-        }, interval);
-    }
-
-    function stopRealtimePoll() {
-        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-    }
-
-    let _lastKnownMessageId = 0;
-    function _isUserNearBottom() {
-        return messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 150;
-    }
-
-    // ── Per-browser read position (localStorage) ──
-    function _getUnreadCount(threadId, lastMsgId) {
-        if (!lastMsgId) return 0;
-        const key = 'zlai_read_' + threadId;
-        const readId = parseInt(localStorage.getItem(key) || '0', 10);
-        return Math.max(0, lastMsgId - readId);
-    }
-
-    function _markThreadRead(threadId) {
-        const key = 'zlai_read_' + threadId;
-        localStorage.setItem(key, String(_lastKnownMessageId));
-        loadHistoryList();  // refresh sidebar unread badges
-    }
-
-    // Mark read on scroll-to-bottom (debounced)
-    let _readMarkTimer = null;
-    messagesDiv.addEventListener('scroll', () => {
-        if (_isUserNearBottom() && _lastKnownMessageId > 0) {
-            const currentThread = sessionStorage.getItem('currentThreadId');
-            if (currentThread) {
-                const key = 'zlai_read_' + currentThread;
-                const prevRead = parseInt(localStorage.getItem(key) || '0', 10);
-                if (_lastKnownMessageId > prevRead) {
-                    localStorage.setItem(key, String(_lastKnownMessageId));
-                    if (_readMarkTimer) clearTimeout(_readMarkTimer);
-                    _readMarkTimer = setTimeout(() => loadHistoryList(), 800);
-                }
-            }
-        }
-    }, { passive: true });
-
-    async function loadMostRecentSession() {
-        try {
-            const res = await fetch('/get_sessions', { credentials: 'include' });
-            const data = await res.json();
-            const sessions = data.sessions || [];
-            if (sessions.length > 0) await loadSession(sessions[0].thread_id);
-            else {
-                const newChatRes = await fetch('/new_chat', { method: 'POST', credentials: 'include' });
-                if (newChatRes.ok) {
-                    const newData = await newChatRes.json();
-                    await loadSession(newData.data?.thread_id || newData.thread_id);
-                }
-            }
-        } catch (err) { console.error('Failed to load most recent session', err); }
-    }
-
-    function renderAssistantMessageLegacy(msgId, userMsg, assistantMsg, thinking = null) {
-        const group = document.createElement('div');
-        group.className = 'message-group';
-        group.id = `msg-${msgId}`;
-        group.dataset.msgId = msgId;
-        group.dataset.userMsg = userMsg;
-        group.dataset.assistantMsg = assistantMsg;
-
-        // AI name tag (left-aligned, different style from user)
-        if (_isCurrentSessionProjectChat) {
-            const aiTag = document.createElement('div');
-            aiTag.className = 'ai-name-tag';
-            aiTag.textContent = '@中联招标AI';
-            group.appendChild(aiTag);
-        }
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'assistant-wrapper';
-
-        if (thinking && thinking.trim()) {
-            const thinkingContainer = document.createElement('div');
-            thinkingContainer.className = 'thinking-container';
-            const header = document.createElement('div');
-            header.className = 'thinking-header';
-            header.onclick = function() { toggleThinking(this); };
-            const arrow = document.createElement('span');
-            arrow.className = 'arrow';
-            arrow.textContent = '▶';
-            const label = document.createElement('span');
-            label.textContent = '思考过程';
-            const preview = document.createElement('span');
-            preview.className = 'thinking-preview';
-            const thinkingPreview = thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
-            preview.innerText = thinkingPreview;
-            header.appendChild(arrow);
-            header.appendChild(label);
-            header.appendChild(preview);
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'thinking-content';
-            contentDiv.innerHTML = md.render(thinking);
-            thinkingContainer.appendChild(header);
-            thinkingContainer.appendChild(contentDiv);
-            wrapper.appendChild(thinkingContainer);
-        }
-
-        // Quote: user's question in small italic above AI response
-        if (userMsg && userMsg.trim()) {
-            const quoteDiv = document.createElement('div');
-            quoteDiv.className = 'assistant-quote';
-            const preview = userMsg.length > 80 ? userMsg.substring(0, 80) + '...' : userMsg;
-            quoteDiv.textContent = '↩ ' + preview;
-            quoteDiv.style.cssText = 'font-size:0.7rem;color:#6b7280;font-style:italic;border-left:3px solid #e5e7eb;padding:2px 0 2px 8px;margin-bottom:6px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-            wrapper.appendChild(quoteDiv);
-        }
-
-        const answerDiv = document.createElement('div');
-        answerDiv.className = 'assistant-answer';
-        if (assistantMsg && assistantMsg.includes('COMPARE_REPORT')) {
-            let htmlContent = assistantMsg.replace(/^<!--.*?-->/, '').trim();
-            answerDiv.innerHTML = htmlContent;
-            answerDiv.classList.add('comparison-report');
-        } else {
-            answerDiv.innerHTML = md.render(asciiTableToMarkdown(assistantMsg));
-        }
-        fixLinksInContainer(answerDiv);
-        wrapper.appendChild(answerDiv);
-        group.appendChild(wrapper);
-
-        const actionRow = document.createElement('div');
-        actionRow.className = 'action-row';
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'action-btn';
-        copyBtn.innerHTML = '📋 <span class="btn-text">复制全篇</span>';
-        const regenerateBtn = document.createElement('button');
-        regenerateBtn.className = 'action-btn';
-        regenerateBtn.innerHTML = '🔄 <span class="btn-text">重新生成</span>';
-        actionRow.appendChild(copyBtn);
-        if (!_isCurrentSessionProjectChat) {
-            actionRow.appendChild(regenerateBtn);
-        }
-        const feedbackDiv = document.createElement('div');
-        feedbackDiv.className = 'feedback-area';
-        const ratingDiv = document.createElement('div');
-        ratingDiv.className = 'rating-buttons';
-        const upBtn = document.createElement('button');
-        upBtn.className = 'rating-btn';
-        upBtn.innerHTML = '👍 <span class="btn-text">有帮助</span>';
-        const downBtn = document.createElement('button');
-        downBtn.className = 'rating-btn';
-        downBtn.innerHTML = '👎 <span class="btn-text">无帮助</span>';
-        ratingDiv.appendChild(upBtn);
-        ratingDiv.appendChild(downBtn);
-        const commentInput = document.createElement('input');
-        commentInput.type = 'text';
-        commentInput.className = 'feedback-comment';
-        commentInput.placeholder = '补充意见';
-        const submitBtn = document.createElement('button');
-        submitBtn.className = 'feedback-submit';
-        submitBtn.innerHTML = '📨 <span class="btn-text">提交反馈</span>';
-        const statusSpan = document.createElement('span');
-        statusSpan.className = 'feedback-status';
-        feedbackDiv.appendChild(ratingDiv);
-        feedbackDiv.appendChild(commentInput);
-        feedbackDiv.appendChild(submitBtn);
-        feedbackDiv.appendChild(statusSpan);
-        actionRow.appendChild(feedbackDiv);
-        wrapper.appendChild(actionRow);
-
-        copyBtn.onclick = async () => {
-            const htmlString = answerDiv.innerHTML;
-            const plainText = answerDiv.innerText;
-            if (!navigator.clipboard) {
-                fallbackCopy(plainText);
-                statusSpan.innerText = '已复制纯文本';
-                setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-                return;
-            }
-            try {
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'text/html': new Blob([htmlString], { type: 'text/html' }), 'text/plain': new Blob([plainText], { type: 'text/plain' }) })
-                ]);
-                statusSpan.innerText = '已复制到剪贴板';
-                setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-            } catch (err) {
-                try { await navigator.clipboard.writeText(plainText); } catch(e) { fallbackCopy(plainText); }
-                statusSpan.innerText = '已复制纯文本';
-                setTimeout(() => { statusSpan.innerText = ''; }, 2000);
-            }
-        };
-        regenerateBtn.onclick = async () => {
-            const confirmed = await confirm('重新生成将覆盖当前回答，确定吗？');
-            if (!confirmed) return;
-            const res = await fetch('/regenerate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ user_message: userMsg })
-            });
-            const data = await res.json();
-            if (res.ok && data.assistant_message) {
-                answerDiv.innerHTML = md.render(data.assistant_message);
-                fixLinksInContainer(answerDiv);
-                group.dataset.assistantMsg = data.assistant_message;
-                if (data.thinking) {
-                    let thinkingContainer = wrapper.querySelector('.thinking-container');
-                    if (!thinkingContainer) {
-                        thinkingContainer = document.createElement('div');
-                        thinkingContainer.className = 'thinking-container';
-                        const header = document.createElement('div');
-                        header.className = 'thinking-header';
-                        header.onclick = function() { toggleThinking(this); };
-                        const arrowSpan = document.createElement('span');
-                        arrowSpan.className = 'arrow';
-                        arrowSpan.textContent = '▶';
-                        const labelSpan = document.createElement('span');
-                        labelSpan.textContent = '思考过程';
-                        const previewSpan = document.createElement('span');
-                        previewSpan.className = 'thinking-preview';
-                        previewSpan.innerText = data.thinking.substring(0, 80) + '...';
-                        header.appendChild(arrowSpan);
-                        header.appendChild(labelSpan);
-                        header.appendChild(previewSpan);
-                        const contentDiv = document.createElement('div');
-                        contentDiv.className = 'thinking-content';
-                        contentDiv.innerHTML = md.render(data.thinking);
-                        thinkingContainer.appendChild(header);
-                        thinkingContainer.appendChild(contentDiv);
-                        wrapper.insertBefore(thinkingContainer, answerDiv);
-                    } else {
-                        const contentDiv = thinkingContainer.querySelector('.thinking-content');
-                        contentDiv.innerHTML = md.render(data.thinking);
-                        const previewSpan = thinkingContainer.querySelector('.thinking-preview');
-                        previewSpan.innerText = data.thinking.substring(0, 80) + '...';
-                    }
-                }
-            } else {
-                alert('重新生成失败');
-            }
-        };
-        let currentRating = null;
-        upBtn.onclick = () => { currentRating = 'up'; upBtn.classList.add('selected'); downBtn.classList.remove('selected'); };
-        downBtn.onclick = () => { currentRating = 'down'; downBtn.classList.add('selected'); upBtn.classList.remove('selected'); };
-        submitBtn.onclick = async () => {
-            if (!currentRating) { statusSpan.innerText = '请先选择评分'; return; }
-            const comment = commentInput.value.trim();
-            const payload = { rating: currentRating, comment, user_message: userMsg, assistant_response: assistantMsg };
-            const res = await fetch('/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
-            if (res.ok) {
-                statusSpan.innerText = '感谢您的反馈！';
-                submitBtn.disabled = true;
-                upBtn.disabled = true;
-                downBtn.disabled = true;
-                commentInput.disabled = true;
-            } else {
-                statusSpan.innerText = '提交失败';
-            }
-        };
-        messagesDiv.appendChild(group);
-        scrollToBottom();
-    }
 
     // ======================== File Station Functions ========================
-    let fileStationData = [];
-    let selectedFileIds = new Set();
-    const fileStationBtn = document.getElementById('fileStationBtn');
-    const fileStationModal = document.getElementById('fileStationModal');
-    const closeFileStationModal = document.getElementById('closeFileStationModal');
+    var fileStationData = [];
+    var selectedFileIds = new Set();
+    var fileStationBtn = document.getElementById('fileStationBtn');
+    var fileStationModal = document.getElementById('fileStationModal');
+    var closeFileStationModal = document.getElementById('closeFileStationModal');
 
     if (fileStationBtn) {
         fileStationBtn.onclick = () => {
@@ -2648,7 +1399,7 @@
     }
 
     // ── Chat toolbar: daily report button ──
-    const dailyReportChatBtn = document.getElementById('dailyReportChatBtn');
+    var dailyReportChatBtn = document.getElementById('dailyReportChatBtn');
     if (dailyReportChatBtn) {
         dailyReportChatBtn.onclick = async () => {
             showToast('⏳ AI正在汇总今日对话并生成日报...', 'info', 10000);
@@ -2676,8 +1427,8 @@
         };
     }
     // File station upload handling
-    const uploadToStationBtn = document.getElementById('uploadToStationBtn');
-    const stationFileInput = document.getElementById('stationFileInput');
+    var uploadToStationBtn = document.getElementById('uploadToStationBtn');
+    var stationFileInput = document.getElementById('stationFileInput');
     if (uploadToStationBtn && stationFileInput) {
         uploadToStationBtn.onclick = () => {
             stationFileInput.click();
@@ -3020,7 +1771,7 @@
     }
 
     // Global variable to store selected knowledge files and IDs
-    let selectedKnowledgeFiles = [];
+    var selectedKnowledgeFiles = [];
     try {
         const stored = localStorage.getItem('selectedKnowledgeFiles');
         if (stored) {
@@ -3031,7 +1782,10 @@
         selectedKnowledgeFiles = [];
     }
     // Initialize category filter bar visibility
-    showCatFilterIfNeeded();
+    (function() {
+        var el = document.getElementById('categoryFilterBar');
+        if (el) el.style.display = selectedKnowledgeFiles.length > 0 ? 'flex' : 'none';
+    })();
     async function loadKnowledgeFiles() {
         const container = document.getElementById('knowledgeFileList');
         if (!container) return;
@@ -3705,14 +2459,11 @@
         templateFileNameSpan.textContent = '';
     };
 
-    // ── Quote Anomaly standalone ──
-    initQuoteAnomalyTool();
+    // ── System A: Smart Compare mode toggle ──
+    initCompareTools();
 
-    // ── Relationship Extraction standalone ──
-    initRelationshipTool();
-
-    // ── Typo Detection standalone ──
-    initTypoDetectionTool();
+    // ── System B: Document Deep Analysis ──
+    initDocAnalysisTool();
 
     // ── Admin sidebar: result history viewers ──
     initAdminResultViewers();
@@ -3722,6 +2473,7 @@
         files.forEach(file => formData.append('files', file));
         if (templateFile) formData.append('template_file', templateFile);
         formData.append('check_items', JSON.stringify(checkItems));
+        formData.append('project_id', currentProjectId || '');
         const tempGroup = document.createElement('div');
         tempGroup.className = 'message-group';
         const tempTimerDiv = document.createElement('div');
@@ -3790,7 +2542,7 @@
                     showToast(`✅ 对比完成！${data.pair_count}对 · <a href="${data.download_url}" download style="color:#16a34a;">📦 下载完整报告</a> · <span id="batchAnalyzeLink" style="color:#7c3aed;cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();this.onclick=async()=>{const q=prompt('输入分析需求(可选):','生成这批对比的综合分析报告');if(!q)return;const r=await fetch('/admin/projects/'+(sessionStorage.getItem('lastProjectId')||1)+'/ai_assist',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({query:'根据以下批量对比结果:\n'+JSON.stringify({pair_count:data.pair_count,groups:data.comparison_groups||[]}).substring(0,3000)+'\n\n'+q})});const d=await r.json();if(d.result)showContentModal('对比分析报告',d.result);}">📊 AI分析报告</span>`, 'success', 12000);
                 } else if (data.token) {
                     // Fallback for old token-based system
-                    showToast('对比完成！<a href="/export_batch_excel_download/'+data.token+'" download>📥 下载Excel报告</a>', 'success', 8000);
+                    showToast('对比完成！<a href="/export_batch_docx_download/'+data.token+'" download>📥 下载DOCX报告</a>', 'success', 8000);
                 }
             } else {
                 addSystemMessage('批量对比失败，请重试');
@@ -3925,7 +2677,8 @@
                             const id = btn.dataset.promote;
                             try {
                                 const res = await fetch('/admin/promote_to_company/' + id, { method: 'POST', credentials: 'include' });
-                                const data = await res.json();
+                const data = await res.json();
+                content.setAttribute('data-audit-run', data.audit_run_id || '');
                                 if (res.ok) { showToast(data.message || '已加入公司知识库', 'success'); loadSidebarKnowledge(); }
                                 else showToast('操作失败，请重试', 'error');
                             } catch(err) { showToast('网络错误', 'error'); }
@@ -4379,8 +3132,64 @@
         return saved || 'chat';
     }
 
+    // ======================== Sub-Tab Navigation ========================
+    const SUB_TAB_GROUPS = { 'projects': 'adminSubTabs', 'knowledge': 'knowledgeSubTabs', 'stats': 'analyticsSubTabs' };
+
+    function showSubTabBar(mainTabName) {
+        document.querySelectorAll('.sub-tab-bar').forEach(b => b.style.display = 'none');
+        const barId = SUB_TAB_GROUPS[mainTabName];
+        if (barId) { const bar = document.getElementById(barId); if (bar) bar.style.display = ''; }
+    }
+
+    function resetSubTabs(barId) {
+        const bar = document.getElementById(barId);
+        if (!bar) return;
+        bar.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+        const firstBtn = bar.querySelector('.sub-tab-btn');
+        if (firstBtn) firstBtn.classList.add('active');
+    }
+
+    function loadSubTabContent(panelId) {
+        switch (panelId) {
+            case 'timelinePanel':
+                if (typeof loadTimelinePanel === 'function') loadTimelinePanel();
+                break;
+            case 'wikiPanel':
+                if (window._loadWiki && typeof window._loadWiki === 'function') window._loadWiki('');
+                break;
+            case 'reviewPanel':
+                if (window._initReviewPanel && typeof window._initReviewPanel === 'function') window._initReviewPanel();
+                break;
+            case 'databasePanel':
+                (async () => {
+                    try {
+                        const res = await fetch('/admin/db_tables', { credentials: 'include' });
+                        const data = await res.json();
+                        if (typeof loadSidebarDb === 'function') loadSidebarDb(data);
+                        if (typeof loadDatabaseData === 'function') loadDatabaseData(data);
+                    } catch(e) { console.warn('Database sub-tab load error:', e); }
+                })();
+                break;
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.sub-tab-btn');
+        if (!btn) return;
+        const panelId = btn.getAttribute('data-panel');
+        const sidebar = btn.getAttribute('data-sidebar');
+        if (!panelId) return;
+        const bar = btn.closest('.sub-tab-bar');
+        if (bar) bar.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        switchToPanel(panelId);
+        if (sidebar) switchSidebarPane(sidebar);
+        loadSubTabContent(panelId);
+    });
+
     if (chatTab && adminTab) {
         chatTab.onclick = () => {
+            showSubTabBar('');
             saveActiveTab('chat');
             switchToPanel('chatInterface');
             switchSidebarPane('chat');
@@ -4388,6 +3197,7 @@
             syncActiveTabWithView();
             loadHistoryList();
             setTimeout(() => scrollToBottom(), 100);
+            startRealtimePoll(currentProjectId || null);
         };
         const quickLinksBtn = document.createElement('button');
         quickLinksBtn.id = 'fixedQuickLinksBtn';
@@ -4405,7 +3215,10 @@
             }
         };
         adminTab.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('projects');
+            showSubTabBar('projects');
+            resetSubTabs('adminSubTabs');
             const res = await fetch('/admin/projects', { credentials: 'include' });
             if (!res.ok) { alert('加载项目失败，请刷新重试'); return; }
             const data = await res.json();
@@ -4424,7 +3237,9 @@
     }
     if (recycleBinTab) {
         recycleBinTab.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('recycle');
+            showSubTabBar('');
             switchToPanel('recycleBinPanel');
             switchSidebarPane('recycle');
             toggleQuickLinksButton(false);
@@ -4439,7 +3254,9 @@
     }
     if (databaseTab) {
         databaseTab.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('db');
+            showSubTabBar('');
             switchToPanel('databasePanel');
             switchSidebarPane('db');
             const tablesRes = await fetch('/admin/db_tables', { credentials: 'include' });
@@ -4545,8 +3362,8 @@
                 }
                 html += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--card-border);display:flex;gap:6px;align-items:center;font-size:0.7rem;">';
                 html += '<span style="color:var(--card-muted);">审计建议有帮助吗？</span>';
-                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(5,this)">👍 有帮助</button>';
-                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(1,this)">👎 无帮助</button>';
+                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(1,this)">👍 有帮助</button>';
+                html += '<button class="fb-btn" onclick="window.submitAuditFeedback(-1,this)">👎 无帮助</button>';
                 html += '</div>';
                 content.innerHTML = html;
 
@@ -4633,7 +3450,10 @@
     // ======================== Knowledge Lab Tab ========================
     if (knowledgeLabTab) {
         knowledgeLabTab.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('knowledge');
+            showSubTabBar('knowledge');
+            resetSubTabs('knowledgeSubTabs');
             switchToPanel('knowledgeLabPanel');
             switchSidebarPane('knowledge');
             toggleQuickLinksButton(false);
@@ -5101,6 +3921,63 @@
         if (srkBtn) srkBtn.onclick = () => { loadKnowledgeLabFiles(); loadCompanyKnowledgeBase(); loadSidebarKnowledge(); };
         if (sucBtn) sucBtn.onclick = () => { document.getElementById('companyFileInput')?.click(); };
 
+        // Knowledge graph sidebar buttons
+        const lawImpactBtn = document.getElementById('sidebarLawImpactGraphBtn');
+        if (lawImpactBtn) lawImpactBtn.onclick = () => _showKnowledgeGraphModal('law-impact');
+        const globalCitBtn = document.getElementById('sidebarGlobalCitationGraphBtn');
+        if (globalCitBtn) globalCitBtn.onclick = () => _showKnowledgeGraphModal('citation');
+
+        function _showKnowledgeGraphModal(graphType) {
+            var overlay = document.getElementById('kgOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'kgOverlay';
+                overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:10000;display:flex;align-items:center;justify-content:center;';
+                overlay.onclick = function(e) { if (e.target === overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; } };
+                document.body.appendChild(overlay);
+            }
+            overlay.style.display = 'flex';
+            overlay.innerHTML = '<div style="background:var(--card-bg);border-radius:12px;padding:20px;max-width:800px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                '<strong>' + (graphType === 'law-impact' ? '🏛️ 法规影响图谱' : '📄 全局引用图谱') + '</strong>' +
+                '<button id="kgCloseBtn" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">&times;</button>' +
+                '</div>' +
+                '<div id="kgGraphContainer" style="width:100%;height:450px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;">' +
+                '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载中...</span>' +
+                '</div>' +
+                '</div>';
+            document.getElementById('kgCloseBtn').onclick = function() { overlay.style.display = 'none'; overlay.innerHTML = ''; };
+
+            _loadKnowledgeGraph(graphType, 'kgGraphContainer');
+        }
+
+        async function _loadKnowledgeGraph(graphType, containerId) {
+            var container = document.getElementById(containerId);
+            if (!container) return;
+            try {
+                var url, desc;
+                if (graphType === 'law-impact') {
+                    url = '/api/graph/law-impact?depth=3';
+                    desc = '当前有效法规的影响传递链';
+                } else {
+                    url = '/api/graph/citation?path=招标投标法&depth=2';
+                    desc = '文档实体引用网络';
+                }
+                var r = await fetch(url, { credentials: 'include' });
+                var data = await r.json();
+                if (!data.success || !data.nodes || !data.nodes.length) {
+                    container.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">暂无数据</span>';
+                    return;
+                }
+                container.style.position = 'relative';
+                container.innerHTML = '';
+                renderGraph(container, data);
+            } catch (e) {
+                console.error('Knowledge graph error:', e);
+                container.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">网络错误</span>';
+            }
+        }
+
         // Recycle sidebar — respect active filter
         const sraBtn = document.getElementById('sidebarRestoreAllBtn');
         const seaBtn = document.getElementById('sidebarEmptyAllBtn');
@@ -5202,6 +4079,8 @@
                                 <p style="margin:8px 0;">${escapeHtml(p.description || '')}</p>
                                 <small>创建于: ${new Date(p.created_at).toLocaleString()}</small>
                                 <small>最后修改: ${p.updated_at ? new Date(p.updated_at).toLocaleString() : '从未'}</small>
+                                ${p.status === 'archived' && p.archived_at ? `<br><small style="color:var(--card-muted);">归档于: ${new Date(p.archived_at).toLocaleString()}</small>` : ''}
+                                ${p.deletion_scheduled_at ? `<br><small style="color:#ea580c;">⏳ 即将删除: ${new Date(p.deletion_scheduled_at).toLocaleString()}</small>` : ''}
                             </div>
                             <div class="project-buttons" style="flex-shrink:0;">${buttonsHtml}</div>
                         </div>
@@ -5379,16 +4258,36 @@
                     <div id="aiAssistResult" style="margin-top:8px;padding:10px;background:white;border-radius:6px;border:1px solid #e5e7eb;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;display:none;"></div>
                 </div>
             </details>` : ''}
-            <div id="folderTreeContainer" style="margin-bottom: 20px;"></div>
-            <div id="fileListContainer"></div>
-            <details id="projectAuditHistoryDetails" style="margin-top:16px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.82rem;cursor:pointer;color:var(--card-muted);">
-                    📋 审计历史 <span id="projectAuditCount" style="font-size:0.7rem;color:var(--card-muted);font-weight:normal;"></span>
-                </summary>
-                <div id="projectAuditHistoryPanel" style="font-size:0.72rem;margin-top:8px;">
-                    <span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>
+            <!-- Sub-tab bar -->
+            <div class="project-sub-tab-bar" style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--card-border);">
+                <button class="project-sub-tab-btn active" data-tab="files" style="padding:8px 20px;font-size:0.82rem;border:2px solid transparent;border-bottom:none;background:transparent;cursor:pointer;color:var(--card-muted);border-radius:8px 8px 0 0;">📁 文件</button>
+                <button class="project-sub-tab-btn" data-tab="graph" style="padding:8px 20px;font-size:0.82rem;border:2px solid transparent;border-bottom:none;background:transparent;cursor:pointer;color:var(--card-muted);border-radius:8px 8px 0 0;">🕸️ 图谱</button>
+            </div>
+            <!-- Files tab -->
+            <div id="projectFilesTab">
+                <div id="folderTreeContainer" style="margin-bottom: 20px;"></div>
+                <div id="fileListContainer"></div>
+                <details id="projectAuditHistoryDetails" style="margin-top:16px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
+                    <summary style="font-weight:600;font-size:0.82rem;cursor:pointer;color:var(--card-muted);">
+                        📋 审计历史 <span id="projectAuditCount" style="font-size:0.7rem;color:var(--card-muted);font-weight:normal;"></span>
+                    </summary>
+                    <div id="projectAuditHistoryPanel" style="font-size:0.72rem;margin-top:8px;">
+                        <span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>
+                    </div>
+                </details>
+            </div>
+            <!-- Graph tab (hidden by default) -->
+            <div id="projectGraphTab" style="display:none;">
+                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                    <button id="projectCollusionGraphBtn" class="graph-type-btn active" style="padding:6px 16px;font-size:0.82rem;border:1px solid var(--card-border);border-radius:6px;background:var(--card-bg);cursor:pointer;transition:all 0.15s;">🕸️ 围串标</button>
+                    <button id="projectComplianceGraphBtn" class="graph-type-btn" style="padding:6px 16px;font-size:0.82rem;border:1px solid var(--card-border);border-radius:6px;background:var(--card-bg);cursor:pointer;transition:all 0.15s;">🏛️ 合规违规</button>
+                    <button id="projectCitationGraphBtn" class="graph-type-btn" style="padding:6px 16px;font-size:0.82rem;border:1px solid var(--card-border);border-radius:6px;background:var(--card-bg);cursor:pointer;transition:all 0.15s;">📄 文档引用</button>
                 </div>
-            </details>
+                <div id="projectGraphStats" style="margin-bottom:6px;min-height:18px;font-size:0.7rem;color:var(--card-muted);"></div>
+                <div id="projectGraphContainer" style="position:relative;width:100%;height:450px;border:1px solid var(--card-border);border-radius:6px;overflow:hidden;">
+                    <span id="projectGraphPlaceholder" style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.78rem;">选择图谱类型查看</span>
+                </div>
+            </div>
         `;
 
         let currentDescription = description || '';
@@ -5445,7 +4344,7 @@
             };
         }
 
-        // Wire audit history lazy-load toggle (inside project view)
+        // Wire project sub-tab switching
         setTimeout(() => {
             const auditDetails = document.getElementById('projectAuditHistoryDetails');
             if (auditDetails && !auditDetails._auditListenerSet) {
@@ -5457,6 +4356,48 @@
                     }
                 });
             }
+
+            // Sub-tab switching
+            document.querySelectorAll('.project-sub-tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.getAttribute('data-tab');
+                    document.querySelectorAll('.project-sub-tab-btn').forEach(b => { b.classList.remove('active'); b.style.cssText = b.style.cssText.replace(/color:[^;]+;/, ''); });
+                    btn.classList.add('active');
+                    document.getElementById('projectFilesTab').style.display = tab === 'files' ? '' : 'none';
+                    document.getElementById('projectGraphTab').style.display = tab === 'graph' ? '' : 'none';
+                });
+            });
+
+            // Graph type button wiring
+            var collusionBtn = document.getElementById('projectCollusionGraphBtn');
+            var complianceBtn = document.getElementById('projectComplianceGraphBtn');
+            var citationBtn = document.getElementById('projectCitationGraphBtn');
+
+            function switchGraphType(activeBtn, graphType) {
+                var container = document.getElementById('projectGraphContainer');
+                var statsEl = document.getElementById('projectGraphStats');
+                var placeholder = document.getElementById('projectGraphPlaceholder');
+                [collusionBtn, complianceBtn, citationBtn].forEach(function(b) {
+                    if (b) { b.classList.remove('active'); b.style.background = 'var(--card-bg)'; b.style.color = ''; b.style.fontWeight = ''; }
+                });
+                if (activeBtn) { activeBtn.classList.add('active'); activeBtn.style.background = '#1e293b'; activeBtn.style.color = 'white'; activeBtn.style.fontWeight = '600'; }
+                if (statsEl) statsEl.textContent = '';
+                if (container) { container.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载中...</span>'; }
+                if (placeholder) placeholder.style.display = 'none';
+            }
+
+            if (collusionBtn) collusionBtn.addEventListener('click', function() {
+                switchGraphType(collusionBtn, 'collusion');
+                loadProjectCollusionGraph();
+            });
+            if (complianceBtn) complianceBtn.addEventListener('click', function() {
+                switchGraphType(complianceBtn, 'compliance');
+                loadProjectComplianceGraph();
+            });
+            if (citationBtn) citationBtn.addEventListener('click', function() {
+                switchGraphType(citationBtn, 'citation');
+                loadProjectCitationGraph();
+            });
         }, 100);
 
         // Wire AI Assist buttons
@@ -6623,7 +5564,7 @@
     }
 
     // Back to projects list button
-    const backToProjectsBtn = document.getElementById('backToProjectsBtn');
+    var backToProjectsBtn = document.getElementById('backToProjectsBtn');
     if (backToProjectsBtn) {
         backToProjectsBtn.onclick = () => {
             const projectsListView = document.getElementById('projectsListView');
@@ -7339,732 +6280,6 @@
         }
     }
 
-    // ======================== Knowledge Lab ========================
-    async function loadKnowledgeLabFiles(cachedData) {
-        const container = document.getElementById('labFileList');
-        container.innerHTML = '<p>加载中...</p>';
-        try {
-            const raw = cachedData || await (await fetch('/knowledge_lab/list', { credentials: 'include' })).json();
-            const data = raw;
-            const files = data.files || [];
-            if (files.length === 0) {
-                container.innerHTML = '<p>暂无文件。点击上方按钮上传。</p>';
-                return;
-            }
-            let html = '<ul style="list-style:none; padding-left:0; margin:0;">';
-            for (const f of files) {
-                const hasSkill = !!f.has_skill;
-                const escapedName = escapeHtml(f.original_name);
-                const sizeKb = ((f.file_size||0)/1024).toFixed(1);
-                const uploadedStr = new Date(f.uploaded_at).toLocaleString();
-                const isAdmin = sessionStorage.getItem('isAdmin') === 'true';
-                const renameBtn = isAdmin ? `<button class="rename-lab-file" data-id="${f.id}" data-type="lab" style="background:none;border:none;cursor:pointer;font-size:0.65rem;padding:0 2px;" title="重命名">✏️</button>` : '';
-                html += `
-                    <li class="file-item" data-id="${f.id}" data-filename="${escapedName}" style="margin-bottom:8px; padding:6px 8px; background: var(--card-bg, #f9f9f9); border-radius:6px; border:1px solid var(--border-color, #e0e0e0);">
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <span style="font-size:0.85rem; font-weight:500;">📄 ${escapedName}</span>${renameBtn}
-                            ${hasSkill ? '<span style="font-size:0.7rem; background:#dcfce7; color:#16a34a; border-radius:8px; padding:1px 6px;">🧠 已提取技能</span>' : ''}
-                            <span style="font-size:0.7rem; color:#888;">(${sizeKb} KB)</span>
-                            <span style="font-size:0.7rem; color:#888;">上传于 ${uploadedStr}</span>
-                            <button class="delete-lab-file" data-id="${f.id}" style="margin-left:auto; background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">删除</button>
-                        </div>
-                        <div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">
-                            <button class="view-lab-content" data-id="${f.id}" data-filename="${escapedName}" style="background:#2c3e50; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">📄 预览源文件</button>
-                            ${hasSkill
-                                ? `<a href="/knowledge_lab/skill/${f.id}" target="_blank" style="background:#16a34a; color:white; text-decoration:none; border-radius:4px; padding:2px 8px; font-size:0.7rem; display:inline-block;">📥 下载技能</a>`
-                                : `<button class="generate-lab-skill" data-id="${f.id}" style="background:#bccfde; color:#1e293b; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">🧠 提取技能</button>`
-                            }
-                        </div>
-                    </li>
-                `;
-            }
-            html += '</ul>';
-            container.innerHTML = html;
-
-            // Attach rename button handlers
-            document.querySelectorAll('.rename-lab-file').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const newName = await prompt('新名称:', btn.closest('.file-item')?.dataset.filename || '');
-                    if (newName && newName.trim()) {
-                        const url = btn.dataset.type === 'lab' ? `/knowledge_lab/rename/${btn.dataset.id}` : `/company_kb/rename/${btn.dataset.id}`;
-                        const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({name:newName.trim()})});
-                        if (r.ok) { loadKnowledgeLabFiles(); loadSidebarKnowledge(); }
-                        else { const d=await r.json().catch(()=>({})); alert(d.error||'重命名失败'); }
-                    }
-                };
-            });
-            // Attach delete button handlers
-            document.querySelectorAll('.delete-lab-file').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const fileId = btn.dataset.id;
-                    if (await confirm('确定永久删除此文件吗？')) {
-                        const res = await fetch(`/knowledge_lab/delete/${fileId}`, { method: 'POST', credentials: 'include' });
-                        if (res.ok) {
-                            showToast('删除成功', 'success', 2000);
-                            loadKnowledgeLabFiles();
-                            loadSidebarKnowledge();
-                        } else alert('删除失败');
-                    }
-                };
-            });
-
-            // View source file content
-            document.querySelectorAll('.view-lab-content').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const fileId = btn.dataset.id;
-                    const filename = btn.dataset.filename;
-                    try {
-                        const res = await fetch(`/knowledge_lab/content/${fileId}`, { credentials: 'include' });
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.content) showContentModal(filename, data.content);
-                            else alert('文件内容为空');
-                        } else alert('加载失败');
-                    } catch(_) { alert('加载失败'); }
-                };
-            });
-
-            // Generate skill on-demand
-            document.querySelectorAll('.generate-lab-skill').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const fileId = btn.dataset.id;
-                    btn.disabled = true;
-                    btn.textContent = '⏳ 分析中...';
-                    try {
-                        const res = await fetch(`/knowledge_lab/generate_skill/${fileId}`, { method: 'POST', credentials: 'include' });
-                        const data = await res.json();
-                        if (res.ok) {
-                            showSkillFeedback(btn, data, 'knowledge_lab', parseInt(fileId));
-                        } else {
-                            const msg = data.error || '生成失败';
-                            const hint = data.hint || '';
-                            alert(msg + (hint ? '\n' + hint : ''));
-                            btn.disabled = false;
-                            btn.textContent = '🧠 提取技能';
-                        }
-                    } catch(_) {
-                        alert('网络错误');
-                        btn.disabled = false;
-                        btn.textContent = '🧠 提取技能';
-                    }
-                };
-            });
-
-            // Initialize selection manager
-            new FileListManager(container, {
-                onDoubleClick: (item) => {
-                    const fileId = item.dataset.id;
-                    const filename = item.dataset.filename;
-                    fetch(`/knowledge_lab/content/${fileId}`).then(r => r.json()).then(data => {
-                        if (data.content) showContentModal(filename, data.content);
-                        else alert('无法加载内容');
-                    }).catch(() => alert('加载失败'));
-                }
-            });
-        } catch (err) {
-            console.error(err);
-            container.innerHTML = '<p>加载失败</p>';
-        }
-    }
-    function updateKnowledgeBaseButton() {
-        const btn = document.getElementById('knowledgeBaseBtn');
-        if (selectedKnowledgeFiles.length) {
-            btn.innerHTML = `📚 知识库(${selectedKnowledgeFiles.length})`;
-        } else {
-            btn.innerHTML = '📚 知识库';
-        }
-    }
-    // Personal KB category handling
-    const labCatSelect = document.getElementById('labCategorySelect');
-    const labCustomCat = document.getElementById('labCustomCategory');
-    if (labCatSelect) {
-        labCatSelect.addEventListener('change', () => {
-            if (labCatSelect.value === '自定义') {
-                labCustomCat.style.display = 'inline-block';
-            } else {
-                labCustomCat.style.display = 'none';
-                labCustomCat.value = '';
-            }
-        });
-    }
-    document.getElementById('uploadLabFileBtn').onclick = () => document.getElementById('labFileInput').click();
-    document.getElementById('labFileInput').addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files);
-        if (!files.length) return;
-
-        const container = document.getElementById('labFileList');
-        if (!container) return;
-
-        // Helper to create a temporary placeholder element
-        function createPlaceholder(filename, fileSize) {
-            const placeholder = document.createElement('div');
-            placeholder.className = 'lab-file-placeholder';
-            placeholder.style.opacity = '0.5';
-            placeholder.style.padding = '8px 0';
-            placeholder.style.borderBottom = '1px solid #ddd';
-            placeholder.style.display = 'flex';
-            placeholder.style.justifyContent = 'space-between';
-            placeholder.style.alignItems = 'center';
-            placeholder.innerHTML = `
-                <span>⏳ 上传中: ${escapeHtml(filename)} (${(fileSize/1024).toFixed(1)} KB) <span class="spinner">⏳</span></span>
-                <span style="color:#888;">处理中...</span>
-            `;
-            return placeholder;
-        }
-
-        // Helper to create the final file entry (replaces placeholder)
-        function createFinalEntry(file) {
-            const fileDiv = document.createElement('div');
-            fileDiv.style.borderBottom = '1px solid #ddd';
-            fileDiv.style.padding = '8px 0';
-            fileDiv.style.display = 'flex';
-            fileDiv.style.justifyContent = 'space-between';
-            fileDiv.style.alignItems = 'center';
-            const skillInfo = file.skill_generated ? 
-                '<span style="font-size:.65rem;color:#22c55e;margin:0 4px;" title="技能已生成">🧠</span>' :
-                '<span class="gen-skill-link" data-fileid="'+file.file_id+'" style="font-size:.65rem;color:var(--card-muted);cursor:pointer;margin:0 4px;text-decoration:underline;text-decoration-style:dotted;" title="从此文件中提取结构化知识框架">🧠提取技能</span>';
-            fileDiv.innerHTML = `
-                <span>📄 ${escapeHtml(file.filename)} (${(file.file_size/1024).toFixed(1)} KB) - 上传于 ${new Date(file.uploaded_at).toLocaleString()}</span>
-                <span style="display:flex;align-items:center;gap:4px;">
-                    ${skillInfo}
-                    <button class="delete-lab-file" data-id="${file.file_id}" style="background:#e74c3c; color:white; border:none; border-radius:4px; padding:4px 8px;">删除</button>
-                </span>
-            `;
-            // Skill extract link handler
-            setTimeout(() => {
-                const genLink = fileDiv.querySelector('.gen-skill-link');
-                if (genLink) genLink.onclick = async () => {
-                    genLink.textContent = '⏳ 提取中...';
-                    genLink.style.cursor = 'default';
-                    try {
-                        const res = await fetch('/knowledge_lab/generate_skill/' + genLink.dataset.fileid, { method: 'POST', credentials: 'include' });
-                        const data = await res.json();
-                        if (res.ok) { showSkillFeedback(genLink, data, 'knowledge_lab', parseInt(genLink.dataset.fileid)); }
-                        else { genLink.textContent = '重试'; genLink.style.cursor = 'pointer'; genLink.style.color = '#ef4444'; showToast(data.error || '提取失败', 'error'); }
-                    } catch(e) { genLink.textContent = '重试'; genLink.style.cursor = 'pointer'; genLink.style.color = '#ef4444'; }
-                };
-            }, 50);
-            // Attach delete handler
-            const delBtn = fileDiv.querySelector('.delete-lab-file');
-            delBtn.onclick = async () => {
-                if (await confirm('确定永久删除此文件吗？')) {
-                    const res = await fetch(`/knowledge_lab/delete/${file.file_id}`, { method: 'POST', credentials: 'include' });
-                    if (res.ok) {
-                        fileDiv.remove();
-                        showToast('删除成功', 'success', 2000);
-                    } else {
-                        alert('删除失败');
-                    }
-                }
-            };
-            return fileDiv;
-        }
-
-        // Insert placeholders at the top of the list
-        const placeholders = [];
-        for (const file of files) {
-            const placeholder = createPlaceholder(file.name, file.size);
-            container.prepend(placeholder);
-            placeholders.push({ file, placeholder });
-        }
-
-        // Upload each file sequentially (to avoid overwhelming the server)
-        let uploaded = 0;
-        let hadErrors = false;
-        showProgress(`上传 ${files.length} 个文件...`, 'bar');
-        for (const item of placeholders) {
-            const { file, placeholder } = item;
-            const formData = new FormData();
-            formData.append('file', file);
-            let labCat = labCatSelect ? labCatSelect.value : '';
-            if (labCat === '自定义') labCat = labCustomCat ? labCustomCat.value.trim() : '';
-            if (labCat) formData.append('category', labCat);
-            try {
-                updateProgress((uploaded / files.length) * 90, `上传中: ${file.name} (${uploaded+1}/${files.length})`);
-                const res = await fetch('/knowledge_lab/upload', { method: 'POST', credentials: 'include', body: formData });
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    // Replace placeholder with final entry
-                    const finalEntry = createFinalEntry({
-                        file_id: data.file_id,
-                        filename: data.filename,
-                        file_size: data.file_size,
-                        uploaded_at: data.uploaded_at
-                    });
-                    placeholder.replaceWith(finalEntry);
-                    showToast(`✅ ${data.filename} 上传成功`, 'success', 2000);
-                } else {
-                    // Show error and remove the placeholder
-                    placeholder.remove();
-                    hadErrors = true;
-                    showToast('上传失败，请检查文件格式', 'error', 3000);
-                }
-            } catch (err) {
-                placeholder.remove();
-                hadErrors = true;
-                showToast('上传失败，请检查网络连接后重试', 'error', 3000);
-            }
-            uploaded++;
-        }
-        finishProgress(!hadErrors, hadErrors ? '部分文件上传失败' : undefined);
-
-        // Clear the input so the same files can be uploaded again
-        e.target.value = '';
-    });
-    document.getElementById('refreshLabListBtn').onclick = loadKnowledgeLabFiles;
-    document.getElementById('refreshSkillOverviewBtn').onclick = loadSkillOverview;
-
-    // ── Notebook ──
-    async function loadNotebook() {
-        const list = document.getElementById('notebookList'); if (!list) return;
-        try {
-            const r = await fetch('/notebook', {credentials:'include'});
-            const d = await r.json();
-            const notes = d.notes || [];
-            if (!notes.length) { list.innerHTML = '<span style="font-size:0.75rem;color:var(--card-muted);">暂无笔记。点击➕新建笔记。</span>'; return; }
-            list.innerHTML = notes.map(n => `<div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;cursor:pointer;" onclick="_openNotebook('${escapeHtml(n.id)}')">
-                <div style="font-weight:600;font-size:0.75rem;">📝 ${escapeHtml(n.id)}</div>
-                <div style="font-size:0.62rem;color:var(--card-muted);margin-top:2px;">${escapeHtml(n.preview||'')}</div>
-                <div style="font-size:0.55rem;color:var(--card-muted);margin-top:4px;display:flex;justify-content:space-between;">
-                    <span>${new Date(n.modified).toLocaleString()}</span>
-                    <button onclick="event.stopPropagation();_deleteNotebook('${escapeHtml(n.id)}')" style="color:#ef4444;background:none;border:none;font-size:0.55rem;cursor:pointer;">🗑</button>
-                </div>
-            </div>`).join('');
-        } catch(_) { list.innerHTML = '<span style="color:#ef4444;font-size:0.75rem;">加载失败</span>'; }
-    }
-
-    window._openNotebook = async function(noteId) {
-        const r = await fetch('/notebook/' + encodeURIComponent(noteId), {credentials:'include'});
-        const d = await r.json();
-        const note = d.note;
-        document.getElementById('notebookEditTitle').value = note.id;
-        document.getElementById('notebookEditContent').value = note.content;
-        document.getElementById('notebookEditor').style.display = 'block';
-        document.getElementById('notebookSummary').innerHTML = '';
-    };
-
-    window._deleteNotebook = async function(noteId) {
-        if (!confirm('删除笔记 "'+noteId+'"？')) return;
-        await fetch('/notebook/' + encodeURIComponent(noteId), {method:'DELETE', credentials:'include'});
-        loadNotebook();
-    };
-
-    document.getElementById('notebookNewBtn').onclick = () => {
-        document.getElementById('notebookEditTitle').value = '';
-        document.getElementById('notebookEditContent').value = '';
-        document.getElementById('notebookEditor').style.display = 'block';
-        document.getElementById('notebookSummary').innerHTML = '';
-    };
-    document.getElementById('notebookRefreshBtn').onclick = loadNotebook;
-    document.getElementById('notebookCancelBtn').onclick = () => {
-        document.getElementById('notebookEditor').style.display = 'none';
-    };
-    document.getElementById('notebookSaveBtn').onclick = async () => {
-        const title = document.getElementById('notebookEditTitle').value.trim();
-        const content = document.getElementById('notebookEditContent').value;
-        if (!title) { alert('标题不能为空'); return; }
-        const r = await fetch('/notebook/' + encodeURIComponent(title), {
-            method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-            body:JSON.stringify({content})
-        });
-        if (r.ok) { document.getElementById('notebookEditor').style.display = 'none'; loadNotebook(); }
-        else alert('保存失败');
-    };
-    document.getElementById('notebookSummarizeBtn').onclick = async () => {
-        const title = document.getElementById('notebookEditTitle').value.trim();
-        if (!title) return;
-        const el = document.getElementById('notebookSummary');
-        el.innerHTML = '⏳ AI摘要生成中...';
-        const r = await fetch('/notebook/' + encodeURIComponent(title) + '/summarize', {method:'POST', credentials:'include'});
-        const d = await r.json();
-        el.innerHTML = d.summary ? '🤖 ' + escapeHtml(d.summary) : '失败';
-    };
-    document.getElementById('notebookSearch').addEventListener('keydown', async (e) => {
-        if (e.key !== 'Enter') return;
-        const q = e.target.value.trim();
-        if (!q) { loadNotebook(); return; }
-        const r = await fetch('/notebook/search', {
-            method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-            body:JSON.stringify({query:q})
-        });
-        const d = await r.json();
-        const results = d.results || [];
-        const list = document.getElementById('notebookList');
-        if (!results.length) { list.innerHTML = '<span style="font-size:0.75rem;color:var(--card-muted);">无匹配结果。</span>'; return; }
-        list.innerHTML = results.map(r => `<div style="background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px;cursor:pointer;" onclick="_openNotebook('${escapeHtml(r.note_id)}')">
-            <div style="font-weight:600;font-size:0.7rem;">📝 ${escapeHtml(r.note_id)} (${(r.score*100).toFixed(0)}%)</div>
-            <div style="font-size:0.6rem;color:var(--card-muted);">${escapeHtml(r.snippet||'')}</div>
-        </div>`).join('');
-    });
-    loadNotebook();
-    function showContentModal(title, content) {
-        const existing = document.getElementById('contentPreviewModal');
-        if (existing) existing.remove();
-
-        const modal = document.createElement('div');
-        modal.id = 'contentPreviewModal';
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content" style="width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto;">
-                <span class="close" style="float: right; cursor: pointer;">&times;</span>
-                <h4>${escapeHtml(title)}</h4>
-                <div style="white-space: pre-wrap; font-family: monospace; font-size: 0.85rem; line-height: 1.5; background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 12px;">
-                    ${escapeHtml(content).replace(/\n/g, '<br>')}
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        modal.querySelector('.close').onclick = () => modal.remove();
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    }
-    function renderCompanyKb(container, data) {
-        const files = data.files || [];
-        if (!files.length) { container.innerHTML = '<p>暂无公司知识库文件。</p>'; return; }
-        const isAdmin = sessionStorage.getItem('isAdmin') === 'true';
-        let html = '<ul style="list-style:none; padding-left:0; margin:0;">';
-        for (const f of files) {
-            const hasSkill = !!f.has_skill;
-            const escapedName = escapeHtml(f.filename);
-            const sizeKb = ((f.file_size||0)/1024).toFixed(1);
-            const uploadedStr = new Date(f.uploaded_at).toLocaleString();
-            html += `<li class="file-item" data-id="${f.id}" data-filename="${escapedName}" style="margin-bottom:8px; padding:6px 8px; background: var(--card-bg, #f9f9f9); border-radius:6px; border:1px solid var(--border-color, #e0e0e0);">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <span style="font-size:0.85rem; font-weight:500;">📄 ${escapedName}</span>${isAdmin ? `<button class="rename-company-file" data-id="${f.id}" style="background:none;border:none;cursor:pointer;font-size:0.65rem;padding:0 2px;" title="重命名">✏️</button>` : ''}
-                    ${hasSkill ? '<span style="font-size:0.7rem; background:#dcfce7; color:#16a34a; border-radius:8px; padding:1px 6px;">🧠 已提取技能</span>' : ''}
-                    <span style="font-size:0.7rem; color:#888;">(${sizeKb} KB)</span>
-                    <span style="font-size:0.7rem; color:#888;">分类: ${escapeHtml(f.category || '无')}</span>
-                    <span style="font-size:0.7rem; color:#888;">${escapeHtml(f.uploaded_by_name || 'admin')}</span>
-                    <span style="font-size:0.7rem; color:#888;">${uploadedStr}</span>
-                    ${isAdmin ? `<button class="delete-company-file" data-id="${f.id}" style="margin-left:auto; background:#e74c3c; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">删除</button>` : ''}
-                </div>
-                <div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">
-                    <button class="view-company-content" data-id="${f.id}" data-filename="${escapedName}" style="background:#2c3e50; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">📄 预览源文件</button>
-                    ${hasSkill
-                        ? `<a href="/company_kb/skill/${f.id}" target="_blank" style="background:#16a34a; color:white; text-decoration:none; border-radius:4px; padding:2px 8px; font-size:0.7rem; display:inline-block;">📥 下载技能</a>`
-                        : (isAdmin ? `<button class="generate-company-skill" data-id="${f.id}" style="background:#bccfde; color:#1e293b; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">🧠 提取技能</button>` : '')
-                    }
-                    ${hasSkill && f.category === '模板'
-                        ? `<button class="generate-template-doc" data-id="${f.id}" data-source="company_knowledge_base" style="background:#f59e0b; color:white; border:none; border-radius:4px; padding:2px 8px; font-size:0.7rem;">📝 生成文档</button>`
-                        : ''
-                    }
-                </div>
-            </li>`;
-        }
-        container.innerHTML = html + '</ul>';
-        wireCompanyKbButtons();
-    }
-
-    async function loadCompanyKnowledgeBase(cachedData) {
-        const container = document.getElementById('companyKbList');
-        if (!container) return;
-        const search = document.getElementById('companyKbSearch')?.value.trim() || '';
-        const category = document.getElementById('companyKbCategoryFilter')?.value || '';
-        if (cachedData && !search && !category) { renderCompanyKb(container, cachedData); return; }
-        container.innerHTML = '<p>加载中...</p>';
-        let url = `/company_kb/list?`;
-        if (search) url += `search=${encodeURIComponent(search)}&`;
-        if (category) url += `category=${encodeURIComponent(category)}&`;
-        try {
-            const res = await fetch(url, { credentials: 'include' });
-            if (!res.ok) throw new Error('Failed to load company KB');
-            renderCompanyKb(container, await res.json());
-        } catch(e) { container.innerHTML = '<p>加载失败</p>'; }
-    }
-
-    function wireCompanyKbButtons() {
-            document.querySelectorAll('.rename-company-file').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const newName = await prompt('新名称:', btn.closest('.file-item')?.dataset.filename || '');
-                    if (newName && newName.trim()) {
-                        const r = await fetch(`/company_kb/rename/${btn.dataset.id}`, {method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({name:newName.trim()})});
-                        if (r.ok) { loadCompanyKnowledgeBase(); loadCompanyCategories(); }
-                        else { const d=await r.json().catch(()=>({})); alert(d.error||'重命名失败'); }
-                    }
-                };
-            });
-            document.querySelectorAll('.delete-company-file').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation(); const fileId = btn.dataset.id;
-                    if (await confirm('确定永久删除此公司知识库文件吗？')) {
-                        const res = await fetch(`/company_kb/delete/${fileId}`, { method: 'POST', credentials: 'include' });
-                        if (res.ok) { showToast('删除成功', 'success', 2000); loadCompanyKnowledgeBase(); loadCompanyCategories(); }
-                        else alert('删除失败');
-                    }
-                };
-            });
-            document.querySelectorAll('.view-company-content').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation(); const fileId = btn.dataset.id; const filename = btn.dataset.filename;
-                    const res = await fetch(`/company_kb/content/${fileId}`, { credentials: 'include' });
-                    const data = await res.json();
-                    if (res.ok && data.content) showContentModal(filename, data.content); else alert('无法加载内容');
-                };
-            });
-            document.querySelectorAll('.generate-company-skill').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation(); const fileId = btn.dataset.id;
-                    btn.disabled = true; btn.textContent = '⏳ 分析中...';
-                    try {
-                        const res = await fetch(`/company_kb/generate_skill/${fileId}`, { method: 'POST', credentials: 'include' });
-                        const d = await res.json();
-                        if (res.ok) { showSkillFeedback(btn, d, 'company_kb', parseInt(fileId)); }
-                        else { alert((d.error||'生成失败')+((d.hint||'')?'\n'+d.hint:'')); btn.disabled = false; btn.textContent = '🧠 提取技能'; }
-                    } catch(_) { alert('网络错误'); btn.disabled = false; btn.textContent = '🧠 提取技能'; }
-                };
-            });
-            document.querySelectorAll('.generate-template-doc').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation(); const fileId = btn.dataset.id; const source = btn.dataset.source || 'company_knowledge_base';
-                    btn.disabled = true; const origText = btn.textContent; btn.textContent = '⏳ 生成中...';
-                    try {
-                        const formData = new FormData(); formData.append('source', source);
-                        const res = await fetch(`/templates/${fileId}/generate_doc`, { method: 'POST', credentials: 'include', body: formData });
-                        if (res.ok) {
-                            const blob = await res.blob(); const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a'); a.href = url; a.download = '文档.docx'; a.click();
-                            URL.revokeObjectURL(url); showToast('✅ 文档已生成', 'success', 2000);
-                        } else { const d = await res.json().catch(()=>({})); alert(d.error || '生成失败'); }
-                    } catch(_) { alert('网络错误'); }
-                    btn.disabled = false; btn.textContent = origText;
-                };
-            });
-        }
-
-    async function loadCompanyCategories() {
-        try {
-            const res = await fetch('/company_kb/categories', { credentials: 'include' });
-            const data = await res.json();
-            const categories = data.categories || [];
-            const select = document.getElementById('companyKbCategoryFilter');
-            select.innerHTML = '<option value="">所有分类</option>';
-            for (const cat of categories) {
-                select.innerHTML += `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`;
-            }
-        } catch (err) {
-            console.error('Failed to load categories', err);
-        }
-    }
-
-    async function loadSkillOverview(labData, coData) {
-        const container = document.getElementById('skillOverviewList');
-        const counter = document.getElementById('skillOverviewCount');
-        if (!container) return;
-        container.innerHTML = '<p style="grid-column:1/-1; color:var(--card-muted);">加载中...</p>';
-
-        if (counter) {
-            try {
-                const ragRes = await fetch('/admin/rag_stats', { credentials: 'include' });
-                if (ragRes.ok) {
-                    const rag = await ragRes.json(); const s = rag.stats || {}; const total = s.total || 0;
-                    const status = total > 0 ? `<span style="font-size:0.7rem; background:#dcfce7; color:#16a34a; border-radius:8px; padding:1px 6px; margin-left:4px;">RAG 🟢</span>` : `<span style="font-size:0.7rem; background:#fef2f2; color:#dc2626; border-radius:8px; padding:1px 6px; margin-left:4px;" title="请管理员点侧边栏重建全部索引">RAG ⚠️</span>`;
-                    counter.innerHTML = status;
-                }
-            } catch(_) {}
-        }
-        try {
-            if (!labData) { const r = await fetch('/knowledge_lab/list', { credentials: 'include' }); labData = await r.json(); }
-            if (!coData) { const r = await fetch('/company_kb/list', { credentials: 'include' }); coData = await r.json(); }
-            const labSkills = (labData.files || []).filter(f => f.has_skill);
-            const coSkills = (coData.files || []).filter(f => f.has_skill);
-            const all = [...labSkills.map(f => ({...f, _src: 'personal', _url: '/knowledge_lab/skill/'})),
-                        ...coSkills.map(f => ({...f, _src: 'company', _url: '/company_kb/skill/', _name: f.filename}))];
-
-            if (counter) counter.innerHTML = `${counter.innerHTML} (${all.length}个技能)`;
-            if (!all.length) {
-                container.innerHTML = '<p style="grid-column:1/-1; color:var(--card-muted);">暂无技能。上传文件后系统会自动提取，或手动点击"提取技能"按钮生成。</p>';
-                return;
-            }
-            container.innerHTML = all.map(f => {
-                const name = f._src === 'company' ? (f._name || f.original_name) : (f.original_name || f.filename);
-                return `<div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:6px;">
-                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:4px;">
-                        <div style="font-size:0.85rem; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(name)}">
-                            ${f._src === 'company' ? '🏢' : '📁'} ${escapeHtml(name)}</div>
-                        <span style="font-size:0.65rem; color:var(--card-muted); flex-shrink:0;">${f._src === 'company' ? '公司' : '个人'} · ${((f.file_size||0)/1024).toFixed(0)}KB</span>
-                    </div>
-                    <div style="display:flex; gap:6px;">
-                        <a href="${f._url}${f.id}" target="_blank" style="background:#16a34a; color:white; text-decoration:none; border-radius:4px; padding:3px 10px; font-size:0.72rem;">📥 下载技能</a>
-                        ${f._src === 'personal' ? `<button class="view-lab-content" data-id="${f.id}" data-filename="${escapeHtml(name)}" style="background:#2c3e50; color:white; border:none; border-radius:4px; padding:3px 10px; font-size:0.72rem;">📄 源文件</button>` : ''}
-                    </div>
-                </div>`;
-            }).join('');
-            // Wire source-file preview buttons
-            document.querySelectorAll('#skillOverviewList .view-lab-content').forEach(btn => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    const fileId = btn.dataset.id;
-                    const filename = btn.dataset.filename;
-                    try {
-                        const res = await fetch(`/knowledge_lab/content/${fileId}`, { credentials: 'include' });
-                        if (res.ok) { const d = await res.json(); if (d.content) showContentModal(filename, d.content); else alert('文件内容为空'); }
-                        else alert('加载失败');
-                    } catch(_) { alert('加载失败'); }
-                };
-            });
-        } catch(e) {
-            container.innerHTML = '<p style="grid-column:1/-1; color:#ef4444;">加载失败</p>';
-        }
-    }
-
-    // Company Knowledge Base category handling
-    const categorySelect = document.getElementById('companyCategorySelect');
-    const customCategoryInput = document.getElementById('companyCustomCategory');
-
-    if (categorySelect) {
-        categorySelect.addEventListener('change', () => {
-            if (categorySelect.value === '自定义') {
-                customCategoryInput.style.display = 'inline-block';
-                customCategoryInput.required = true;
-            } else {
-                customCategoryInput.style.display = 'none';
-                customCategoryInput.required = false;
-                customCategoryInput.value = '';
-            }
-        });
-    }
-
-    // Company file upload – validate category before opening file picker
-    const uploadCompanyBtn = document.getElementById('uploadCompanyFileBtn');
-    const companyFileInput = document.getElementById('companyFileInput');
-
-    if (uploadCompanyBtn && companyFileInput) {
-        uploadCompanyBtn.onclick = () => {
-            let category = categorySelect.value;
-            if (category === '自定义') {
-                category = customCategoryInput.value.trim();
-                if (!category) {
-                    alert('请先输入自定义分类名称');
-                    return;
-                }
-            }
-            if (!category) {
-                alert('请先选择或输入分类');
-                return;
-            }
-            companyFileInput.click();
-        };
-
-        companyFileInput.onchange = async (e) => {
-            const files = e.target.files;
-            if (!files.length) return;
-
-            uploadCompanyBtn.disabled = true;
-            const originalText = uploadCompanyBtn.textContent;
-            uploadCompanyBtn.textContent = '⏳ 上传中...';
-
-            let category = categorySelect.value;
-            if (category === '自定义') {
-                category = customCategoryInput.value.trim();
-            }
-
-            for (const file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('category', category);
-                try {
-                    const res = await fetch('/company_kb/upload', { method: 'POST', credentials: 'include', body: formData });
-                    const data = await res.json();
-                    if (res.ok) {
-                        showToast(`✅ ${data.filename} 上传成功 (分类: ${category})`, 'success', 2000);
-                        if (data.overlap_suggestions && data.overlap_suggestions.length) {
-                            setTimeout(() => showOverlapSuggestions(data.overlap_suggestions, data.file_id, 'company_knowledge_base'), 500);
-                        }
-                    } else {
-                        showToast('上传失败，请重试', 'error', 3000);
-                    }
-                } catch (err) {
-                    showToast('❌ 网络错误', 'error', 3000);
-                }
-            }
-            await loadCompanyKnowledgeBase();
-            await loadCompanyCategories();
-            uploadCompanyBtn.disabled = false;
-            uploadCompanyBtn.textContent = originalText;
-            e.target.value = '';
-        };
-    }
-
-    document.getElementById('refreshCompanyKbBtn').onclick = () => {
-        loadCompanyKnowledgeBase();
-    };
-    document.getElementById('companyKbSearch').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadCompanyKnowledgeBase();
-    });
-    if (sessionStorage.getItem('isAdmin') === 'true') {
-        document.getElementById('adminCompanyTools').style.display = 'block';
-    }
-
-    // ── Category filter pills for chat RAG ──
-    window._selectedRagCategory = '';
-    const catFilterBar = document.getElementById('categoryFilterBar');
-    const catPills = document.querySelectorAll('.cat-pill');
-    const catClearBtn = document.getElementById('catFilterClear');
-
-    function showCatFilterIfNeeded() {
-        const el = document.getElementById('categoryFilterBar');
-        if (!el) return;
-        if (selectedKnowledgeFiles.length > 0) {
-            el.style.display = 'flex';
-        } else {
-            el.style.display = 'none';
-            window._selectedRagCategory = '';
-        }
-    }
-
-    if (catPills.length) {
-        catPills.forEach(pill => {
-            pill.addEventListener('click', () => {
-                catPills.forEach(p => {
-                    p.style.background = '';
-                    p.style.color = '';
-                });
-                pill.style.background = 'var(--accent)';
-                pill.style.color = 'white';
-                window._selectedRagCategory = pill.dataset.cat || '';
-                if (catClearBtn) catClearBtn.style.display = window._selectedRagCategory ? 'inline' : 'none';
-            });
-        });
-    }
-    if (catClearBtn) {
-        catClearBtn.addEventListener('click', () => {
-            catPills.forEach(p => { p.style.background = ''; p.style.color = ''; });
-            const allPill = document.querySelector('.cat-pill[data-cat=""]');
-            if (allPill) { allPill.style.background = 'var(--accent)'; allPill.style.color = 'white'; }
-            window._selectedRagCategory = '';
-            catClearBtn.style.display = 'none';
-        });
-    }
-    // ── Skill overlap suggestions after upload ──
-    function showOverlapSuggestions(overlaps, newFileId, sourceTable) {
-        if (!overlaps || !overlaps.length) return;
-        const msg = overlaps.map(o =>
-            `📄 ${escapeHtml(o.name)} (相似度 ${o.similarity}%)`
-        ).join('\n');
-        if (!confirm(`检测到新上传的文件与以下 ${overlaps.length} 个同分类技能高度相似，是否合并？\n\n${msg}\n\n选择「确定」合并，「取消」忽略`)) return;
-        // Merge the top overlap into the new file
-        const top = overlaps[0];
-        fetch('/admin/skill_supersession/respond', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'merge',
-                keep_id: newFileId,
-                merge_id: top.id,
-                source: sourceTable || 'company_knowledge_base'
-            })
-        }).then(r => r.json()).then(data => {
-            if (data.success) showToast(`✅ 已与「${top.name}」合并`, 'success', 3000);
-            else showToast('❌ 合并失败: ' + (data.error || ''), 'error', 5000);
-        }).catch(() => showToast('❌ 合并请求失败', 'error', 3000));
-    }
-
     // ======================== Editable Quick Links ========================
     function getCustomLinksKey(projectId) {
         return projectId ? `project_quicklinks_${projectId}` : 'global_quicklinks';
@@ -8341,7 +6556,7 @@
                 updateProjectTabVisibility();
                 setTimeout(() => {
                     const activeTab = restoreActiveTab();
-                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn', cases:'casesTabBtn' };
+                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
                     const targetBtn = document.getElementById(tabMap[activeTab] || 'chatTabBtn');
                     _programmaticTabSwitch = true;
                     if (targetBtn) targetBtn.click();
@@ -8746,11 +6961,14 @@
     // ======================== Admin Database Browser ========================
     async function loadTableList(cachedData) {
         try {
-            const data = cachedData || await (await fetch('/admin/db_tables', { credentials: 'include' })).json();
+            const data = cachedData || await (await fetch('/admin/db_tables_overview', { credentials: 'include' })).json();
             const select = document.getElementById('dbTableSelect');
             select.innerHTML = '<option value="">-- 选择表 --</option>';
-            for (const table of data.tables) {
-                select.innerHTML += `<option value="${escapeHtml(table)}">${escapeHtml(table)}</option>`;
+            var tables = data.tables || [];
+            for (const t of tables) {
+                var name = t.table_name || t;
+                var count = t.row_count != null ? ' (' + t.row_count + '行)' : '';
+                select.innerHTML += '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + count + '</option>';
             }
         } catch (err) {
             console.error(err);
@@ -9501,436 +7719,19 @@
         if (indicator) indicator.textContent = '';
     }
 
-    // ======================== Wiki Tab ========================
-    if (wikiTab && wikiPanel) {
-        (function() {
-            var wc = document.getElementById('wikiContent');
-            if (!wc) return;
-            wc.addEventListener('click', function(e) {
-                var editBtn = e.target.closest('.wiki-edit-btn');
-                if (editBtn && editBtn.dataset.editPath) {
-                    var container = editBtn.closest('#wikiContent > div') || editBtn.parentElement.parentElement;
-                    if (!container) container = wc;
-                    _startWikiEdit(container, null, editBtn.dataset.editPath);
-                    return;
-                }
-                var delBtn = e.target.closest('.wiki-delete-btn');
-                if (delBtn && delBtn.dataset.deletePath) {
-                    if (!confirm('确定删除此页面？')) return;
-                    fetch('/wiki/page/' + encodeURIComponent(delBtn.dataset.deletePath), { method: 'DELETE', credentials: 'include' })
-                        .then(function(r) { return r.json(); }).then(function(r) { showToast(r.message, 'success'); var wt2 = document.getElementById('wikiTabBtn'); if (wt2) wt2.click(); }).catch(function() { showToast('删除失败', 'error'); });
-                }
-            });
-        })();
-        var _currentWikiPrefix = '';
-
-        async function _loadWiki(prefix) {
-            _currentWikiPrefix = prefix || '';
-            var idxUrl = '/wiki/index';
-            if (_currentWikiPrefix) idxUrl += '?prefix=' + encodeURIComponent(_currentWikiPrefix);
-            var content = document.getElementById('wikiContent');
-            try {
-                var indexRes = await fetch(idxUrl, { credentials: 'include' });
-                var statsRes = await fetch('/wiki/stats', { credentials: 'include' });
-                var indexData = await indexRes.json();
-                var statsData = await statsRes.json();
-                var badge = document.getElementById('wikiStatsBadge');
-                if (badge && statsData.success) {
-                    var s = statsData.stats || {};
-                    badge.textContent = (s.total_pages||0) + '页 · ' + (s.total_sources||0) + '来源';
-                }
-                loadSidebarWiki(indexData, statsData);
-                var html = '';
-                var tree = indexData && indexData.tree;
-                var recent = indexData && indexData.recent;
-                if (tree && tree.children && tree.children.length) {
-                    var sections = [];
-                    function _findLeafSections(nodes) {
-                        if (!nodes) return;
-                        nodes.forEach(function(n) {
-                            if (n.type === 'dir') {
-                                var hasDirectFiles = false;
-                                if (n.children) {
-                                    n.children.forEach(function(c) { if (c.type === 'file') hasDirectFiles = true; });
-                                    if (hasDirectFiles) sections.push(n);
-                                    else _findLeafSections(n.children);
-                                }
-                            }
-                        });
-                    }
-                    _findLeafSections(tree.children);
-                    sections.forEach(function(node) {
-                        var count = 0;
-                        function _cnt(n) { if (n.type === 'file') count++; if (n.children) n.children.forEach(_cnt); }
-                        _cnt(node);
-                        var sampleFiles = [];
-                        function _collect(n) { if (n.type === 'file' && sampleFiles.length < 5) sampleFiles.push(n); if (n.children && sampleFiles.length < 5) n.children.forEach(_collect); }
-                        _collect(node);
-                        var icon = '📁';
-                        var pp = (node.path||'').toLowerCase();
-                        if (pp.startsWith('legal')) icon = '📜';
-                        else if (pp.startsWith('projects')) icon = '📊';
-                        else if (pp.startsWith('sources')) icon = '📄';
-                        else if (pp.startsWith('entities')) icon = '🏢';
-                        else if (pp.startsWith('concepts')) icon = '📖';
-                        html += '<div style="margin-bottom:10px;border:1px solid var(--card-border);border-radius:8px;overflow:hidden;">';
-                        html += '<div style="background:var(--card-bg);padding:8px 12px;font-size:0.8rem;font-weight:600;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:center;">';
-                        html += '<span>' + icon + ' ' + escapeHtml(node.name) + ' <span style="font-weight:400;font-size:0.72rem;color:var(--card-muted);">(' + count + '页)</span></span>';
-                        html += '<span class="wiki-page-link" data-path="' + escapeHtml((node.path||'') + '/index') + '" style="font-size:0.7rem;color:var(--accent-color);cursor:pointer;">更多 →</span>';
-                        html += '</div><div style="padding:4px 8px;">';
-                        sampleFiles.forEach(function(f) {
-                            var name = f.name.replace(/\.md$/i, '');
-                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(f.path) + '" style="padding:5px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;">📄 ' + escapeHtml(name) + '</div>';
-                        });
-                        if (count > 5) html += '<div class="wiki-page-link" data-path="' + escapeHtml((node.path||'') + '/index') + '" style="padding:3px 8px;font-size:0.72rem;cursor:pointer;border-radius:3px;border:1px solid transparent;color:var(--card-muted);">全部 ' + count + ' 个页面 →</div>';
-                        html += '</div></div>';
-                    });
-                    tree.children.forEach(function(node) {
-                        if (node.type === 'file') {
-                            var name = node.name.replace(/\.md$/i, '');
-                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(node.path) + '" style="padding:5px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;margin-bottom:4px;">📝 ' + escapeHtml(name) + '</div>';
-                        }
-                    });
-                    if (recent && recent.length) {
-                        html += '<div style="margin-top:16px;border-top:1px solid var(--card-border);padding-top:10px;">';
-                        html += '<div style="font-size:0.78rem;font-weight:600;margin-bottom:6px;">🕐 最近更新</div>';
-                        recent.forEach(function(r) {
-                            var name = (r.title||'').replace(/\.md$/i, '');
-                            var mtimeStr = '';
-                            try {
-                                var d = new Date(r.mtime * 1000);
-                                mtimeStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-                            } catch(e) { mtimeStr = ''; }
-                            html += '<div class="wiki-page-link" data-path="' + escapeHtml(r.path) + '" style="padding:4px 8px;font-size:0.78rem;cursor:pointer;border-radius:3px;border:1px solid transparent;display:flex;justify-content:space-between;">';
-                            html += '<span>📄 ' + escapeHtml(name) + '</span>';
-                            html += '<span style="color:var(--card-muted);font-size:0.68rem;">' + mtimeStr + '</span></div>';
-                        });
-                        html += '</div>';
-                    }
-                } else {
-                    html += '<p style="color:var(--card-muted);">Wiki暂无内容。上传知识库文件后，系统将自动生成Wiki页面。</p>';
-                }
-                content.innerHTML = html;
-                content.querySelectorAll('.wiki-page-link').forEach(function(el) {
-                    el.onmouseenter = function() { el.style.borderColor = 'var(--card-border)'; };
-                    el.onmouseleave = function() { el.style.borderColor = 'transparent'; };
-                    el.onclick = async function() {
-                        try {
-                            var path = el.dataset.path.replace(/\.md$/i, '');
-                            var pageRes = await fetch('/wiki/page/' + encodeURIComponent(path), { credentials: 'include' });
-                            var pageData = await pageRes.json();
-                            if (pageData.success) {
-                                var d = pageData;
-                                var detailHtml = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
-                                detailHtml += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
-                                if (sessionStorage.getItem('isAdmin') === 'true') {
-                                    detailHtml += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(path) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
-                                    detailHtml += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(path) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
-                                }
-                                detailHtml += '</div>';
-                                detailHtml += '<div id="wikiPageContent" style="background:var(--card-bg);border-radius:8px;padding:16px;">';
-                                if (d.frontmatter?.tags) {
-                                    detailHtml += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(function(t) { return '<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#' + escapeHtml(t) + '</span>'; }).join('') + '</div>';
-                                }
-                                detailHtml += d.html;
-                                detailHtml += '</div>';
-                                content.innerHTML = detailHtml;
-                                content.querySelector('.wiki-back-btn').onclick = function() { var wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
-                            } else {
-                                console.warn('Wiki page load fail:', path, pageData);
-                            }
-                        } catch(e) {
-                            console.error('Wiki page click error:', e);
-                        }
-                    };
-                });
-            } catch(e) {
-                console.error('Wiki load failed:', e);
-                content.innerHTML = '<p style="color:#ef4444;font-size:.78rem;">加载Wiki失败</p>';
-            }
-        }
-
-        templatesTab.onclick = async () => {
-            saveActiveTab('templates');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            templatesTab.classList.add('active');
-            switchToPanel('templatesPanel');
-            switchSidebarPane('chat');
-        };
-
-        casesTab.onclick = async () => {
-            saveActiveTab('cases');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            casesTab.classList.add('active');
-            switchToPanel('casesPanel');
-            switchSidebarPane('chat');
-        };
-
-        wikiTab.onclick = async () => {
-            saveActiveTab('wiki');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            wikiTab.classList.add('active');
-            switchToPanel('wikiPanel');
-            switchSidebarPane('wiki');
-            const content = document.getElementById('wikiContent');
-            content.innerHTML = '<p style="color:var(--card-muted);">加载Wiki...</p>';
-            const legalImportBtn = document.getElementById('wikiImportLegalBtn');
-            const legalFileInput = document.getElementById('wikiLegalFileInput');
-            if (sessionStorage.getItem('isAdmin') === 'true') {
-                if (legalImportBtn) legalImportBtn.style.display = '';
-                if (legalImportBtn) legalImportBtn.onclick = () => { legalFileInput.click(); };
-                if (legalFileInput) legalFileInput.onchange = async () => {
-                    if (!legalFileInput.files.length) return;
-                    const fileCount = legalFileInput.files.length;
-                    const wikiContentEl = document.getElementById('wikiContent');
-                    wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">⏳ 正在导入 ' + fileCount + ' 个文件，请稍候...</p>';
-                    const formData = new FormData();
-                    for (const f of legalFileInput.files) formData.append('files', f);
-                    try {
-                        const res = await fetch('/wiki/legal/import', { method: 'POST', credentials: 'include', body: formData });
-                        const d = await res.json();
-                        showToast(d.message, d.success ? 'success' : 'error', 4000);
-                        legalFileInput.value = '';
-                        wikiTab.click();
-                    } catch(e) { showToast('导入失败', 'error'); wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">导入失败，请重试。</p>'; }
-                };
-            } else {
-                if (legalImportBtn) legalImportBtn.style.display = 'none';
-            }
-            _loadWiki('');
-        };
-        // Search handler
-        const searchInput = document.getElementById('wikiSearchInput');
-        const refreshBtn = document.getElementById('wikiRefreshBtn');
-        if (searchInput) {
-            let searchTimer;
-            searchInput.addEventListener('input', () => {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(async () => {
-                    const q = searchInput.value.trim();
-                    if (!q) { wikiTab.click(); return; }
-                    const res = await fetch('/wiki/search?q=' + encodeURIComponent(q), { credentials: 'include' });
-                    const data = await res.json();
-                    const content = document.getElementById('wikiContent');
-                    if (data.success && data.data?.results?.length) {
-                        let html = '<div style="margin-bottom:8px;font-size:.72rem;color:var(--card-muted);">搜索 ' + escapeHtml(q) + ' 共 ' + data.data.results.length + ' 条结果</div>';
-                        data.data.results.forEach(r => {
-                            html += `<div style="padding:6px 10px;background:var(--card-bg);border-radius:4px;margin-bottom:3px;font-size:.78rem;"><strong>${escapeHtml(r.filename||r.path)}</strong><br><small style="color:var(--card-muted);">${escapeHtml(r.snippet||'')}</small></div>`;
-                        });
-                        content.innerHTML = html;
-                    } else {
-                        content.innerHTML = '<p style="color:var(--card-muted);font-size:.78rem;">无匹配结果</p>';
-                    }
-                }, 300);
-            });
-        }
-        if (refreshBtn) refreshBtn.onclick = () => wikiTab.click();
-    }
-
-    function _startWikiEdit(container, pageData, path) {
-        fetch('/wiki/page/' + encodeURIComponent(path) + '/raw', { credentials: 'include' })
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) { showToast('无法加载编辑内容', 'error'); return; }
-                const raw = data.data.content || '';
-                const html = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
-                    '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回</button>' +
-                    '<button id="wikiEditSaveBtn" style="background:#38a169;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">💾 保存</button>' +
-                    '<button id="wikiEditCancelBtn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">❌ 取消</button>' +
-                    '</div>' +
-                    '<textarea id="wikiEditArea" style="width:100%;min-height:60vh;font-size:.78rem;padding:12px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text-color);font-family:monospace;resize:vertical;">' +
-                    escapeHtml(raw) + '</textarea>';
-                container.innerHTML = html;
-                container.querySelector('.wiki-back-btn').onclick = () => { wikiTab.click(); };
-                container.querySelector('#wikiEditCancelBtn').onclick = () => { wikiTab.click(); };
-                container.querySelector('#wikiEditSaveBtn').onclick = async () => {
-                    const newContent = container.querySelector('#wikiEditArea').value;
-                    try {
-                        const res = await fetch('/wiki/page/' + encodeURIComponent(path), {
-                            method: 'PUT', headers: {'Content-Type': 'application/json'},
-                            credentials: 'include',
-                            body: JSON.stringify({content: newContent})
-                        });
-                        const d = await res.json();
-                        showToast(d.message, d.success ? 'success' : 'error');
-                        if (d.success) wikiTab.click();
-                    } catch(e) { showToast('保存失败', 'error'); }
-                };
-            }).catch(() => showToast('加载失败', 'error'));
-    }
-
-    // ── Wiki sidebar: page tree navigation ──
-    function loadSidebarWiki(indexData, statsData) {
-        const statsEl = document.getElementById('sidebarWikiStats');
-        const treeEl = document.getElementById('sidebarWikiTree');
-        if (!statsEl || !treeEl) return;
-        if (statsData?.success) {
-            const s = statsData.stats || {};
-            statsEl.textContent = `${s.total_pages||0}页 · ${s.total_sources||0}来源` + (s.orphan_count ? ` · \ud83d\udd78\ufe0f${s.orphan_count}孤立` : '');
-        }
-        var tabsEl = document.getElementById('sidebarWikiTabs');
-        if (tabsEl) {
-            var WIKI_TABS = [
-                { prefix: '', label: '全部', icon: '📖' },
-                { prefix: 'legal', label: '法律', icon: '📜' },
-                { prefix: 'projects', label: '项目', icon: '📊' },
-                { prefix: 'audit', label: '审计', icon: '📋' },
-                { prefix: 'sources', label: '来源', icon: '📄' },
-                { prefix: 'entities', label: '实体', icon: '🏢' },
-                { prefix: 'concepts', label: '概念', icon: '📖' },
-                { prefix: 'regulations', label: '法规', icon: '📋' },
-                { prefix: 'templates', label: '模板', icon: '📄' },
-                { prefix: 'experts', label: '专家', icon: '💡' },
-                { prefix: 'comparisons', label: '对比', icon: '🔗' },
-            ];
-            tabsEl.innerHTML = '';
-            WIKI_TABS.forEach(function(t) {
-                var tabBtn = document.createElement('span');
-                tabBtn.textContent = t.icon + ' ' + t.label;
-                tabBtn.style.cssText = 'display:inline-block;padding:2px 5px;font-size:0.62rem;border-radius:3px;cursor:pointer;white-space:nowrap;border:1px solid var(--card-border);';
-                if (t.prefix === _currentWikiPrefix) {
-                    tabBtn.style.background = 'var(--accent-color)';
-                    tabBtn.style.color = 'white';
-                }
-                tabBtn.onmouseenter = function() {
-                    if (t.prefix !== _currentWikiPrefix) tabBtn.style.background = 'var(--card-border)';
-                };
-                tabBtn.onmouseleave = function() {
-                    if (t.prefix !== _currentWikiPrefix) tabBtn.style.background = '';
-                };
-                tabBtn.onclick = function() { _loadWiki(t.prefix); };
-                tabsEl.appendChild(tabBtn);
-            });
-        }
-        const tree = indexData?.tree;
-        if (!tree || !tree.children?.length) {
-            treeEl.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">暂无Wiki页面</p>';
-            return;
-        }
-        function renderTree(node, depth) {
-            if (node.type === 'file') {
-                const displayName = node.name.replace(/\.md$/i, '');
-                const div = document.createElement('div');
-                div.style.cssText = `padding:3px 6px 3px ${12 + depth * 16}px;cursor:pointer;border-radius:3px;font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
-                div.className = 'wiki-sidebar-page';
-                div.dataset.path = node.path;
-                div.textContent = '📄 ' + displayName;
-                div.onmouseenter = () => div.style.background = 'var(--card-border)';
-                div.onmouseleave = () => div.style.background = '';
-                div.onclick = async () => {
-                    const content = document.getElementById('wikiContent');
-                    if (!content) return;
-                    content.innerHTML = '<p style="color:var(--card-muted);">加载中...</p>';
-                    try {
-                        const res = await fetch('/wiki/page/' + encodeURIComponent(node.path.replace(/\.md$/i, '')), { credentials: 'include' });
-                        const data = await res.json();
-                        if (data.success) {
-                            const d = data;
-                            let html = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
-                            html += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
-                            if (sessionStorage.getItem('isAdmin') === 'true') {
-                                html += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(node.path.replace(/\.md$/i, '')) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
-                                html += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(node.path.replace(/\.md$/i, '')) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
-                            }
-                            html += '</div>';
-                            html += '<div style="background:var(--card-bg);border-radius:8px;padding:16px;">';
-                            if (d.frontmatter?.tags) {
-                                html += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(t => `<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#${escapeHtml(t)}</span>`).join('') + '</div>';
-                            }
-                            html += d.html;
-                            html += '</div>';
-                            content.innerHTML = html;
-                            content.querySelector('.wiki-back-btn').onclick = () => { const wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
-                            content.querySelectorAll('.wiki-page-link').forEach(function(el) {
-                                el.onmouseenter = function() { el.style.borderColor = 'var(--card-border)'; };
-                                el.onmouseleave = function() { el.style.borderColor = 'transparent'; };
-                                el.onclick = async function() {
-                                    try {
-                                        var path = el.dataset.path.replace(/\.md$/i, '');
-                                        var pageRes = await fetch('/wiki/page/' + encodeURIComponent(path), { credentials: 'include' });
-                                        var pageData = await pageRes.json();
-                                        if (pageData.success) {
-                                            var d = pageData;
-                                            var detailHtml = '<div style="display:flex;gap:6px;margin-bottom:12px;">';
-                                            detailHtml += '<button class="wiki-back-btn" style="background:#e2e8f0;border:none;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">← 返回Wiki首页</button>';
-                                            if (sessionStorage.getItem('isAdmin') === 'true') {
-                                                detailHtml += '<button class="wiki-edit-btn" data-edit-path="' + escapeHtml(path) + '" style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">✏️ 编辑</button>';
-                                                detailHtml += '<button class="wiki-delete-btn" data-delete-path="' + escapeHtml(path) + '" style="background:#fee2e2;border:1px solid #ef4444;border-radius:6px;padding:4px 12px;font-size:.75rem;cursor:pointer;">🗑️ 删除</button>';
-                                            }
-                                            detailHtml += '</div>';
-                                            detailHtml += '<div id="wikiPageContent" style="background:var(--card-bg);border-radius:8px;padding:16px;">';
-                                            if (d.frontmatter?.tags) {
-                                                detailHtml += '<div style="margin-bottom:8px;">' + d.frontmatter.tags.map(function(t) { return '<span style="background:#e2e8f0;padding:2px 8px;border-radius:4px;font-size:.65rem;margin-right:4px;">#' + escapeHtml(t) + '</span>'; }).join('') + '</div>';
-                                            }
-                                            detailHtml += d.html;
-                                            detailHtml += '</div>';
-                                            content.innerHTML = detailHtml;
-                                            content.querySelector('.wiki-back-btn').onclick = function() { var wt = document.getElementById('wikiTabBtn'); if (wt) wt.click(); };
-                                        } else {
-                                            console.warn('Wiki page load fail:', path, pageData);
-                                        }
-                                    } catch(e) {
-                                        console.error('Wiki page click error:', e);
-                                    }
-                                };
-                            });
-                        } else {
-                            content.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
-                        }
-                    } catch(e) {
-                        content.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
-                    }
-                };
-                return div;
-            }
-            // Directory node
-            const wrapper = document.createElement('div');
-            const header = document.createElement('div');
-            header.style.cssText = `padding:3px 6px 3px ${12 + depth * 16}px;cursor:pointer;border-radius:3px;font-size:0.76rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`;
-            header.className = 'wiki-sidebar-folder';
-            let folderIcon = '📁';
-            const p = node.path || '';
-            if (p.startsWith('sources')) folderIcon = '📄';
-            else if (p.startsWith('entities')) folderIcon = '🏢';
-            else if (p.startsWith('concepts')) folderIcon = '📖';
-            else if (p.startsWith('regulations')) folderIcon = '📋';
-            else if (p.startsWith('templates')) folderIcon = '📄';
-            else if (p.startsWith('projects')) folderIcon = '📊';
-            else if (p.startsWith('experts')) folderIcon = '💡';
-            else if (p.startsWith('comparisons')) folderIcon = '🔗';
-            header.textContent = folderIcon + ' ' + (node.name || 'Wiki');
-            header.onmouseenter = () => header.style.background = 'var(--card-border)';
-            header.onmouseleave = () => header.style.background = '';
-            header.onclick = () => {
-                childrenDiv.style.display = childrenDiv.style.display === 'none' ? '' : 'none';
-                header.textContent = (childrenDiv.style.display === 'none' ? '📁 ' : '📂 ') + (node.name || 'Wiki');
-            };
-            wrapper.appendChild(header);
-            const childrenDiv = document.createElement('div');
-            childrenDiv.style.display = '';
-            (node.children || []).forEach(child => {
-                const childEl = renderTree(child, depth + 1);
-                if (childEl) childrenDiv.appendChild(childEl);
-            });
-            wrapper.appendChild(childrenDiv);
-            return wrapper;
-        }
-        treeEl.innerHTML = '';
-        (tree.children || []).forEach(child => {
-            const el = renderTree(child, 0);
-            if (el) treeEl.appendChild(el);
-        });
-    }
 
     // ======================== Timeline Tab ========================
     const timelineTabBtn = document.getElementById('timelineTabBtn');
     const timelinePanel = document.getElementById('timelinePanel');
     if (timelineTabBtn && timelinePanel) {
         timelineTabBtn.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('timeline');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             timelineTabBtn.classList.add('active');
             switchToPanel('timelinePanel');
+            switchSidebarPane('projects');
+            showSubTabBar('projects');
             loadTimelinePanel();
         };
     }
@@ -9946,72 +7747,129 @@
         content.innerHTML = '<p style="color:var(--card-muted);">加载时间线...</p>';
 
         try {
-            const [catRes, tRes] = await Promise.all([
-                fetch('/timeline/legal/categories', { credentials: 'include' }),
-                fetch('/timeline/' + currentProjectId, { credentials: 'include' })
-            ]);
-            const catData = await catRes.json();
-            const tData = await tRes.json();
+            const listRes = await fetch('/timeline/' + currentProjectId + '/list', { credentials: 'include' });
+            const listData = await listRes.json();
 
-            if (tData.success && tData.id) {
+            if (listData.success && listData.timelines && listData.timelines.length > 0) {
                 setup.style.display = 'none';
-                content.innerHTML = _renderTimelineView(tData);
+                content.innerHTML = _renderTimelineList(listData.timelines);
+                _loadTimelineDetail(currentProjectId, listData.timelines[0].id);
             } else {
                 setup.style.display = 'block';
                 content.innerHTML = '';
-                if (catData.success && catData.categories) {
-                    const catSel = document.getElementById('timelineCategorySelect');
-                    const mSel = document.getElementById('timelineMethodSelect');
-                    catSel.innerHTML = '<option value="">选择类别...</option>';
-                    catData.categories.forEach(c => {
-                        catSel.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
-                    });
-                    catSel.onchange = () => {
-                        mSel.innerHTML = '<option value="">选择方式...</option>';
-                        const sel = catData.categories.find(c => c.code === catSel.value);
-                        if (sel && sel.methods) {
-                            sel.methods.forEach(m => {
-                                mSel.innerHTML += '<option value="' + m.code + '">' + m.name + '</option>';
-                            });
-                        }
-                    };
-                    document.getElementById('timelineCreateBtn').onclick = async () => {
-                        const cat = catSel.value;
-                        const meth = mSel.value;
-                        const start = document.getElementById('timelineStartDate').value;
-                        if (!cat || !meth || !start) { alert('请填写所有必填项'); return; }
-                        try {
-                            const cr = await fetch('/timeline/' + currentProjectId, {
-                                method: 'POST', headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({category_code: cat, method_code: meth, planned_start_date: start}),
-                                credentials: 'include'
-                            });
-                            const cd = await cr.json();
-                            if (cd.success) { loadTimelinePanel(); } else { alert(cd.error || '创建失败'); }
-                        } catch(e) { alert('创建失败: ' + e.message); }
-                    };
-                }
+                _setupTimelineCreationForm(currentProjectId);
             }
         } catch (e) {
             content.innerHTML = '<p style="color:var(--card-muted);">加载失败: ' + e.message + '</p>';
         }
     }
 
+    function _renderTimelineList(timelines) {
+        var h = '<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">';
+        h += '<span style="font-weight:600;">📋 项目时间线</span>';
+        h += '<button id="tlNewBtn" style="background:var(--accent);color:white;border:none;border-radius:4px;padding:4px 12px;font-size:0.7rem;cursor:pointer;">➕ 新建时间线</button>';
+        h += '</div>';
+        h += '<div id="timelineDetailArea" style="margin-bottom:12px;"></div>';
+        h += '<div id="timelineListContainer" style="display:flex;flex-direction:column;gap:6px;">';
+        timelines.forEach(function(t) {
+            h += '<div class="tl-list-entry" data-tid="' + t.id + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;cursor:pointer;transition:border-color .2s;">';
+            h += '<div>';
+            h += '<div style="font-weight:600;font-size:0.82rem;">📊 ' + (t.name || '主招标流程') + '</div>';
+            h += '<div style="font-size:0.68rem;color:var(--card-muted);">' + (t.category_code || '') + ' / ' + (t.method_code || '') + ' · ' + _statusBadge(t.status || 'active') + '</div>';
+            h += '</div>';
+            h += '<div style="text-align:right;">';
+            h += '<div style="font-size:0.68rem;color:var(--card-muted);">' + (t.planned_start_date || '') + ' → ' + (t.planned_end_date || '-') + '</div>';
+            h += '</div>';
+            h += '</div>';
+        });
+        h += '</div>';
+        return h;
+    }
+
+    async function _loadTimelineDetail(projectId, timelineId) {
+        var area = document.getElementById('timelineDetailArea');
+        area.innerHTML = '<p style="color:var(--card-muted);font-size:0.75rem;">加载中...</p>';
+        try {
+            var res = await fetch('/timeline/' + projectId + '?timeline_id=' + timelineId, { credentials: 'include' });
+            var tl = await res.json();
+            if (tl.success && tl.id) {
+                area.innerHTML = _renderTimelineView(tl);
+                _wireTimelineDetailActions(projectId, tl);
+            } else {
+                area.innerHTML = '<p style="color:var(--card-muted);">未找到时间线</p>';
+            }
+        } catch(e) {
+            area.innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
+        }
+        // Highlight active entry
+        document.querySelectorAll('.tl-list-entry').forEach(function(e) { e.style.borderColor = 'var(--card-border)'; });
+        var active = document.querySelector('.tl-list-entry[data-tid="' + timelineId + '"]');
+        if (active) active.style.borderColor = 'var(--accent)';
+    }
+
+    function _setupTimelineCreationForm(projectId) {
+        var catSel = document.getElementById('timelineCategorySelect');
+        var mSel = document.getElementById('timelineMethodSelect');
+        fetch('/timeline/legal/categories', { credentials: 'include' }).then(function(r) { return r.json(); }).then(function(catData) {
+            if (catData.success && catData.categories) {
+                catSel.innerHTML = '<option value="">选择类别...</option>';
+                catData.categories.forEach(function(c) {
+                    catSel.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
+                });
+                catSel.onchange = function() {
+                    mSel.innerHTML = '<option value="">选择方式...</option>';
+                    var sel = catData.categories.find(function(c) { return c.code === catSel.value; });
+                    if (sel && sel.methods) {
+                        sel.methods.forEach(function(m) {
+                            mSel.innerHTML += '<option value="' + m.code + '">' + m.name + '</option>';
+                        });
+                    }
+                };
+                document.getElementById('timelineCreateBtn').onclick = async function() {
+                    var cat = catSel.value;
+                    var meth = mSel.value;
+                    var start = document.getElementById('timelineStartDate').value;
+                    var name = document.getElementById('timelineNameInput') ? document.getElementById('timelineNameInput').value : '';
+                    if (!cat || !meth || !start) { alert('请填写所有必填项'); return; }
+                    try {
+                        var body = {category_code: cat, method_code: meth, planned_start_date: start};
+                        if (name) body.name = name;
+                        var cr = await fetch('/timeline/' + projectId, {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(body), credentials: 'include'
+                        });
+                        var cd = await cr.json();
+                        if (cd.success) { loadTimelinePanel(); } else { alert(cd.error || '创建失败'); }
+                    } catch(e) { alert('创建失败: ' + e.message); }
+                };
+            }
+        });
+    }
+
     function _renderTimelineView(tl) {
         var ms = tl.milestones || [];
         var html = '<div style="margin-bottom:12px;">';
+        html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;">📊 ' + (tl.name || '主招标流程') + '</div>';
         html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">';
         html += '<span style="font-size:0.75rem;"><b>类别:</b> ' + (tl.category_code || '') + '</span>';
         html += '<span style="font-size:0.75rem;"><b>方式:</b> ' + (tl.method_code || '') + '</span>';
         html += '<span style="font-size:0.75rem;"><b>计划开始:</b> ' + (tl.planned_start_date || '') + '</span>';
+        html += '<span style="font-size:0.75rem;"><b>计划结束:</b> ' + (tl.planned_end_date || '-') + '</span>';
+        if (tl.actual_start_date || tl.actual_end_date) {
+            html += '<span style="font-size:0.75rem;"><b>实际:</b> ' + (tl.actual_start_date || '?') + ' → ' + (tl.actual_end_date || '进行中') + '</span>';
+        }
         html += '<span style="font-size:0.75rem;"><b>状态:</b> ' + _statusBadge(tl.status || '') + '</span>';
         html += '</div>';
+        if (tl.created_at) {
+            html += '<div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:4px;">创建于 ' + tl.created_at + (tl.created_by ? ' · 由 ' + tl.created_by : '') + (tl.updated_at && tl.updated_at !== tl.created_at ? ' · 更新于 ' + tl.updated_at : '') + '</div>';
+        }
 
         if (tl.diff_summary) {
             var ds = tl.diff_summary;
             html += '<div style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">';
             html += '总节点: ' + ds.total_milestones + ' | 已完成: ' + ds.completed;
-            html += ' | 延期: ' + ds.delayed + ' | 准点: ' + ds.on_time;
+            html += ' | 待处理: ' + ds.pending + ' | 延期: ' + ds.delayed;
+            html += ' | 准点: ' + ds.on_time + ' | 提前: ' + ds.advanced;
             if (ds.total_delay_days > 0) html += ' | 累计延期: ' + ds.total_delay_days + '天';
             html += '</div>';
         }
@@ -10020,7 +7878,8 @@
         html += '<div style="max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px;">';
         ms.forEach(function(m, i) {
             var bg = m.status === 'completed' ? '#f0fff4' : (m.diff_days && m.diff_days > 0 ? '#fff5f5' : 'transparent');
-            html += '<div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid var(--card-border);background:' + bg + ';font-size:0.72rem;">';
+            var reasonTip = m.diff_reason ? ' title="原因: ' + m.diff_reason.replace(/"/g, '&quot;') + '"' : '';
+            html += '<div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid var(--card-border);background:' + bg + ';font-size:0.72rem;"' + reasonTip + '>';
             html += '<span style="width:24px;font-weight:700;color:var(--card-muted);">' + (i+1) + '</span>';
             html += '<span style="flex:1;font-weight:600;">' + (m.name || m.code) + '</span>';
             html += '<span style="width:90px;text-align:center;color:var(--card-muted);">' + (m.planned_date || '待定') + '</span>';
@@ -10032,15 +7891,29 @@
             } else {
                 html += '<span style="width:60px;text-align:center;">-</span>';
             }
+            if (m.reason_category) {
+                html += '<span style="width:70px;text-align:center;font-size:0.62rem;background:#f1f5f9;padding:1px 6px;border-radius:10px;color:#475569;">' + m.reason_category + '</span>';
+            }
             html += _statusBadge(m.status || 'pending');
             html += '</div>';
         });
         html += '</div>';
 
+        if (tl.diff_summary && tl.diff_summary.by_reason_category && Object.keys(tl.diff_summary.by_reason_category).length > 0) {
+            var cats = tl.diff_summary.by_reason_category;
+            html += '<div style="margin-top:8px;font-size:0.7rem;border:1px solid var(--card-border);border-radius:8px;padding:8px;">';
+            html += '<b style="font-size:0.72rem;">延期原因分类</b>';
+            html += '<div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">';
+            Object.keys(cats).forEach(function(k) {
+                html += '<span style="background:#f1f5f9;padding:2px 10px;border-radius:10px;">' + k + ': <b>' + cats[k] + '</b></span>';
+            });
+            html += '</div></div>';
+        }
+
         html += '<div style="margin-top:12px;display:flex;gap:6px;">';
         html += '<button onclick="loadTimelinePanel()" class="file-btn" style="font-size:0.7rem;">🔄 刷新</button>';
-        html += '<button onclick="fetch(\'/timeline/' + tl.project_id + '/suggestions\',{credentials:\'include\'}).then(r=>r.json()).then(d=>{if(d.success)alert(\'规则建议已刷新\')}).catch(e=>alert(e.message))" class="file-btn" style="font-size:0.7rem;">💡 查看建议</button>';
-        html += '<button onclick="fetch(\'/timeline/' + tl.project_id + '/diff\',{credentials:\'include\'}).then(r=>r.json()).then(d=>{if(d.success){var s=JSON.stringify(d.summary,2);alert(s.substring(0,500))}}).catch(e=>alert(e.message))" class="file-btn" style="font-size:0.7rem;">📊 差异报告</button>';
+        html += '<button onclick="showSuggestions(' + tl.project_id + ')" class="file-btn" style="font-size:0.7rem;">💡 查看建议</button>';
+        html += '<button onclick="showDiffReport(' + tl.project_id + ')" class="file-btn" style="font-size:0.7rem;">📊 差异报告</button>';
         html += '</div>';
 
         return html;
@@ -10054,13 +7927,156 @@
         return '<span style="display:inline-block;background:' + c + ';color:#fff;padding:1px 6px;border-radius:4px;font-size:0.6rem;margin-left:4px;">' + l + '</span>';
     }
 
+    function _closeTimelineModal() {
+        var ov = document.querySelector('.tl-modal-overlay');
+        if (ov) ov.remove();
+    }
+
+    window.showDiffReport = async function(projectId) {
+        _closeTimelineModal();
+        var ov = document.createElement('div');
+        ov.className = 'tl-modal-overlay';
+        ov.onclick = function(e) { if (e.target === ov) _closeTimelineModal(); };
+        ov.innerHTML = '<div class="tl-modal"><div class="tl-modal-header"><h3>差异报告</h3><button class="tl-modal-close" onclick="_closeTimelineModal()">×</button></div><div class="tl-modal-body" style="text-align:center;color:var(--card-muted);">加载中...</div></div>';
+        document.body.appendChild(ov);
+        try {
+            var res = await fetch('/timeline/' + projectId + '/diff', { credentials: 'include' });
+            var d = await res.json();
+            if (!d.success) { ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">' + (d.error || '加载失败') + '</p>'; return; }
+            var s = d.summary || {};
+            var body = '<div class="tl-summary-grid">';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.total_milestones || 0) + '</div><div class="tl-summary-label">总里程碑</div></div>';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#16a34a;">' + (s.completed || 0) + '</div><div class="tl-summary-label">已完成</div></div>';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#ea580c;">' + (s.delayed || 0) + '</div><div class="tl-summary-label">延期</div></div>';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.on_time || 0) + '</div><div class="tl-summary-label">准点</div></div>';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.pending || 0) + '</div><div class="tl-summary-label">待处理</div></div>';
+            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#2563eb;">' + (s.advanced || 0) + '</div><div class="tl-summary-label">提前</div></div>';
+            if (s.total_delay_days > 0) body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#dc2626;">+' + s.total_delay_days + '</div><div class="tl-summary-label">累计延期(天)</div></div>';
+            body += '</div>';
+
+            if (s.by_reason_category && Object.keys(s.by_reason_category).length > 0) {
+                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">按原因分类</h4>';
+                body += '<div class="tl-table-wrap"><table><thead><tr><th>原因类别</th><th>数量</th></tr></thead><tbody>';
+                Object.keys(s.by_reason_category).forEach(function(k) {
+                    body += '<tr><td>' + k + '</td><td>' + s.by_reason_category[k] + '</td></tr>';
+                });
+                body += '</tbody></table></div>';
+            }
+
+            if (d.milestones && d.milestones.length > 0) {
+                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">里程碑详情</h4>';
+                body += '<div class="tl-table-wrap"><table><thead><tr><th>节点名称</th><th>计划日期</th><th>实际日期</th><th>差异(天)</th><th>状态</th><th>原因</th></tr></thead><tbody>';
+                d.milestones.forEach(function(m) {
+                    var delayStyle = m.diff_days > 0 ? 'color:#dc2626;font-weight:600;' : (m.diff_days < 0 ? 'color:#16a34a;' : '');
+                    body += '<tr><td>' + (m.name || m.code) + '</td>';
+                    body += '<td>' + (m.planned_date || '-') + '</td>';
+                    body += '<td>' + (m.actual_date || '-') + '</td>';
+                    body += '<td style="' + delayStyle + '">' + (m.diff_days != null ? (m.diff_days > 0 ? '+' : '') + m.diff_days : '-') + '</td>';
+                    body += '<td>' + (m.status || '-') + '</td>';
+                    body += '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (m.diff_reason || m.reason_category || '-') + '</td></tr>';
+                });
+                body += '</tbody></table></div>';
+            }
+
+            if (d.diff_log && d.diff_log.length > 0) {
+                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">差异日志 (' + d.diff_log.length + '条)</h4>';
+                body += '<div class="tl-table-wrap"><table><thead><tr><th>节点</th><th>计划日期</th><th>实际日期</th><th>差异</th><th>原因</th><th>时间</th></tr></thead><tbody>';
+                d.diff_log.forEach(function(lg) {
+                    body += '<tr><td>' + (lg.milestone_code || '-') + '</td>';
+                    body += '<td>' + (lg.planned_date || '-') + '</td>';
+                    body += '<td>' + (lg.actual_date || '-') + '</td>';
+                    body += '<td>' + (lg.diff_days != null ? (lg.diff_days > 0 ? '+' : '') + lg.diff_days + '天' : '-') + '</td>';
+                    body += '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (lg.reason_detail || lg.reason_category || '-') + '</td>';
+                    body += '<td>' + (lg.created_at || '-') + '</td></tr>';
+                });
+                body += '</tbody></table></div>';
+            }
+
+            ov.querySelector('.tl-modal-body').innerHTML = body;
+        } catch(e) {
+            ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
+        }
+    };
+
+    window.showSuggestions = async function(projectId) {
+        _closeTimelineModal();
+        var ov = document.createElement('div');
+        ov.className = 'tl-modal-overlay';
+        ov.onclick = function(e) { if (e.target === ov) _closeTimelineModal(); };
+        ov.innerHTML = '<div class="tl-modal"><div class="tl-modal-header"><h3>规则建议</h3><button class="tl-modal-close" onclick="_closeTimelineModal()">×</button></div><div class="tl-modal-body" style="text-align:center;color:var(--card-muted);">加载中...</div></div>';
+        document.body.appendChild(ov);
+
+        async function _loadSuggestions() {
+            try {
+                var res = await fetch('/timeline/' + projectId + '/suggestions', { credentials: 'include' });
+                var d = await res.json();
+                if (!d.success) { ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">' + (d.error || '加载失败') + '</p>'; return; }
+                var suggestions = d.suggestions || [];
+                var body = '';
+                if (suggestions.length === 0) {
+                    body = '<p style="text-align:center;color:var(--card-muted);padding:24px 0;">暂无建议</p>';
+                } else {
+                    var priorityLabels = { critical: '严重', high: '高', medium: '中', info: '信息' };
+                    suggestions.forEach(function(s) {
+                        var p = s.priority || 'medium';
+                        body += '<div class="tl-suggestion-card">';
+                        body += '<span class="tl-priority-badge tl-priority-' + p + '">' + (priorityLabels[p] || p) + '</span>';
+                        body += '<div class="tl-suggestion-body">';
+                        body += '<div class="tl-suggestion-content">' + (s.content || '') + '</div>';
+                        if (s.suggestion) body += '<div class="tl-suggestion-advice">' + s.suggestion + '</div>';
+                        body += '</div>';
+                        body += '<button class="tl-suggestion-dismiss" onclick="event.stopPropagation();dismissSuggestion(' + projectId + ',' + s.id + ',this)">忽略</button>';
+                        body += '</div>';
+                    });
+                }
+                body += '<div class="tl-modal-actions"><button class="file-btn" style="font-size:0.72rem;" onclick="generateAiSuggestions(' + projectId + ')">🤖 AI生成建议</button></div>';
+                ov.querySelector('.tl-modal-body').innerHTML = body;
+            } catch(e) {
+                ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
+            }
+        }
+        _loadSuggestions();
+    };
+
+    window.dismissSuggestion = async function(projectId, suggestionId, btn) {
+        btn.disabled = true;
+        btn.textContent = '已忽略';
+        try {
+            await fetch('/timeline/' + projectId + '/suggestions/' + suggestionId, { method: 'POST', credentials: 'include' });
+            var card = btn.closest('.tl-suggestion-card');
+            if (card) card.style.opacity = '0.4';
+        } catch(e) { /* silent */ }
+    };
+
+    window.generateAiSuggestions = async function(projectId) {
+        var ov = document.querySelector('.tl-modal-overlay');
+        if (!ov) return;
+        var body = ov.querySelector('.tl-modal-body');
+        body.innerHTML = '<p style="text-align:center;color:var(--card-muted);">AI分析中，请稍候...</p>';
+        try {
+            var res = await fetch('/timeline/' + projectId + '/suggestions/generate', { method: 'POST', credentials: 'include' });
+            var d = await res.json();
+            if (d.success) {
+                showToast(d.message || 'AI建议已刷新', 'success');
+                showSuggestions(projectId);
+            } else {
+                body.innerHTML = '<p style="color:#ef4444;">' + (d.error || 'AI分析失败') + '</p>';
+            }
+        } catch(e) {
+            body.innerHTML = '<p style="color:#ef4444;">AI分析失败: ' + e.message + '</p>';
+        }
+    };
+
     // ======================== Usage Tab (Admin only) ========================
     const analyticsTabBtn = document.getElementById('analyticsTabBtn');
     const analyticsPanel = document.getElementById('analyticsPanel');
     if (analyticsTabBtn && analyticsPanel) {
         let _usageLoaded = { rc: false, assets: false, archives: false, styles: false, auditConfig: false, skillAudit: false };
         analyticsTabBtn.onclick = async function() {
+            stopRealtimePoll();
             saveActiveTab('stats');
+            showSubTabBar('stats');
+            resetSubTabs('analyticsSubTabs');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             analyticsTabBtn.classList.add('active');
             switchToPanel('analyticsPanel');
@@ -10081,11 +8097,14 @@
                 const items = [];
                 if (isAdmin) {
                     items.push(`<span title="用户总数">👥<b>${stats.total_users}</b></span>`, `<span title="24h活跃用户">🟢<b>${stats.active_users_24h}</b></span>`, `<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`,
-                        `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`, `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`,
+                        `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`, `<span title="今日消息">📨<b>${stats.messages_today||0}</b></span>`,
+                        `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`,
                         `<span title="活跃项目数">📂<b>${stats.active_projects}</b></span>`);
+                    if (stats.credit_checks != null) items.push(`<span title="信用查询">🔍<b>${stats.credit_checks}</b></span>`);
                     if (stats.rag_stats?.total > 0) items.push(`<span title="RAG索引数">🧠<b>${stats.rag_stats.total}</b></span>`);
                 } else {
                     items.push(`<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`,
+                        `<span title="今日消息">📨<b>${stats.messages_today||0}</b></span>`,
                         `<span title="文件总数">📁<b>${stats.total_files||0}</b></span>`, `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`);
                 }
                 let sparkline = '';
@@ -10120,1437 +8139,21 @@
 
     // ======================== Review Tab (Admin + Auditor) ========================
     const reviewTabBtn = document.getElementById('reviewTabBtn');
-    const reviewPanel = document.getElementById('reviewPanel');
+    var reviewPanel = document.getElementById('reviewPanel');
     if (reviewTabBtn && reviewPanel) {
         console.log('Audit: reviewTab block entered');
-        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
-        reviewTabBtn.onclick = async function() {
+        reviewTabBtn.onclick = async () => {
+            stopRealtimePoll();
             saveActiveTab('review');
+            showSubTabBar('stats');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             reviewTabBtn.classList.add('active');
             switchToPanel('reviewPanel');
             switchSidebarPane('review');
-            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
-            const content = document.getElementById('reviewContent');
-            const sections = document.getElementById('reviewSections');
-            try {
-                const res = await fetch('/admin/analytics', { credentials: 'include' });
-                if (res.status === 403) { content.innerHTML = '<span>需要登录</span>'; return; }
-                if (!res.ok) { content.innerHTML = `<span style="color:#e74c3c;">服务器错误 (${res.status})</span>`; return; }
-                const stats = await res.json();
-                const items = [`<span title="用户总数">👥<b>${stats.total_users}</b></span>`, `<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`];
-                content.innerHTML = `<div style="font-size:0.7rem;color:var(--card-muted);">${items.join(' \u00b7 ')}</div>
-                    <div style="margin:10px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px;">
-                        <span id="auditRunningBadge" style="display:none;font-size:0.72rem;color:#f59e0b;">\u23f3 \u5ba1\u8ba1\u8fdb\u884c\u4e2d...</span>
-                    </div>`;
-                if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); _checkRunningAudit(); }
-                _checkStaleReviews();
-                _updateReviewSidebarStatus();
-                _checkRunningAudit();
-            } catch(e) { console.error('Review stats load error:', e); content.innerHTML = '<span style="color:#e74c3c;">加载失败</span>'; }
+            if (window._initReviewPanel && typeof window._initReviewPanel === 'function') {
+                window._initReviewPanel();
+            }
         };
-
-        // Check for stale reviews (pending >3 days) and warn
-        async function _checkStaleReviews() {
-            try {
-                const r = await fetch('/admin/ingest/stale_status', {credentials:'include'});
-                const d = await r.json();
-                const stale = d.stale || {};
-                const tasks = stale.kb_review_tasks || [];
-                const oldTasks = tasks.filter(t => t.days_pending >= 3);
-                if (oldTasks.length) {
-                    showToast(`⚠️ ${oldTasks.length}个KB审核超过3天未处理`, 'warning', 6000);
-                }
-            } catch(_) {}
-        }
-
-        // Review sidebar: quick status + wiring
-        async function _updateReviewSidebarStatus() {
-            const statusEl = document.getElementById('sidebarReviewStatus');
-            if (!statusEl) return;
-            try {
-                const r = await fetch('/admin/ingest/stale_status', {credentials:'include'});
-                const d = await r.json();
-                const s = d.stale || {};
-                let parts = [];
-                if (s.kb_review_tasks?.length) parts.push(`📋 ${s.kb_review_tasks.length}个KB待审`);
-                if (s.domain_candidates) parts.push(`📝 ${s.domain_candidates}个词待审`);
-                if (!parts.length) parts.push('✅ 暂无待审核项');
-                statusEl.innerHTML = parts.join('<br>');
-            } catch(_) { statusEl.textContent = '加载失败'; }
-        }
-
-        // Wire review sidebar buttons
-        setTimeout(() => {
-            const ingestUploadBtn = document.getElementById('sidebarIngestUploadBtn');
-            const ingestFileInput = document.getElementById('sidebarIngestFileInput');
-            if (ingestUploadBtn && ingestFileInput) {
-                ingestUploadBtn.onclick = () => ingestFileInput.click();
-                ingestFileInput.onchange = async () => {
-                    const file = ingestFileInput.files[0];
-                    if (!file) return;
-                    const form = new FormData();
-                    form.append('file', file);
-                    ingestUploadBtn.disabled = true; ingestUploadBtn.textContent = '⏳ 上传中...';
-                    try {
-                        const r = await fetch('/admin/ingest/upload', {method:'POST',credentials:'include',body:form});
-                        const d = await r.json();
-                        if (r.ok) showToast('✅ 文档包上传成功，正在处理...', 'success');
-                        else showToast('❌ '+(d.error||'上传失败'), 'error');
-                    } catch(_) { showToast('网络错误', 'error'); }
-                    ingestUploadBtn.disabled = false; ingestUploadBtn.textContent = '📥 上传文档包';
-                    ingestFileInput.value = '';
-                };
-            }
-            const viewStructuredBtn = document.getElementById('sidebarViewStructuredBtn');
-            if (viewStructuredBtn) {
-                viewStructuredBtn.onclick = () => {
-                    const details = document.getElementById('structuredDocsDetails');
-                    if (details) { details.open = true; loadStructuredDocsPanel(); details.scrollIntoView({behavior:'smooth'}); }
-                };
-            }
-            const viewWorkloadBtn = document.getElementById('sidebarViewWorkloadBtn');
-            if (viewWorkloadBtn) {
-                viewWorkloadBtn.onclick = () => {
-                    const details = document.getElementById('workloadDetails');
-                    if (details) { details.open = true; loadWorkloadPanel(); details.scrollIntoView({behavior:'smooth'}); }
-                };
-            }
-        }, 200);
-
-        // ── Full Audit button uses inline onclick → window._showAuditModal ──
-
-        async function _checkRunningAudit() {
-            const badge = document.getElementById('auditRunningBadge');
-            if (!badge) return;
-            const pid = window._currentProjectId || currentProjectId;
-            if (!pid) { badge.style.display = 'none'; return; }
-            try {
-                const r = await fetch(`/audit/running/${pid}`, {credentials:'include'});
-                const d = await r.json();
-                if (r.ok && d && d.run_id) {
-                    badge.style.display = 'inline';
-                    const chatBtn = document.getElementById('chatFullAuditBtn');
-                    if (chatBtn) chatBtn.disabled = true;
-                } else {
-                    badge.style.display = 'none';
-                    const chatBtn = document.getElementById('chatFullAuditBtn');
-                    if (chatBtn) chatBtn.disabled = false;
-                }
-            } catch(_) { badge.style.display = 'none'; }
-        }
-
-        function _setupReviewLazySections() {
-            const map = [
-                ['ingestDetails', 'ingest', loadIngestPanel],
-                ['trainingDetails', 'training', loadTrainingExportPanel],
-                ['ingestHistoryDetails', 'history', loadIngestHistory],
-                ['structuredDocsDetails', 'structured', loadStructuredDocsPanel],
-                ['workloadDetails', 'workload', loadWorkloadPanel],
-                ['auditHistoryDetails', 'auditHistory', loadAuditHistory],
-            ];
-            for (const [id, key, fn] of map) {
-                const el = document.getElementById(id);
-                if (el && !el._listenerSet) {
-                    el._listenerSet = true;
-                    el.addEventListener('toggle', () => { if (el.open && !_reviewLoaded[key]) { _reviewLoaded[key] = true; fn(); } });
-                }
-            }
-        }
-    }
-
-    // ── Review panel helper functions ──
-
-    async function loadIngestHistory() {
-        const panel = document.getElementById('ingestHistoryPanel'); if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const [staleR, structR] = await Promise.all([
-                fetch('/admin/ingest/stale_status', {credentials:'include'}),
-                fetch('/admin/ingest/structured', {credentials:'include'})
-            ]);
-            const staleD = await staleR.json();
-            const structD = await structR.json();
-            const stale = staleD.stale || {};
-            const docs = structD.documents || [];
-            let html = '<div style="font-size:0.68rem;margin-bottom:8px;">';
-            if (docs.length) html += `📑 ${docs.length} 份结构化文档已提取。`;
-            if (stale.kb_review_tasks?.length) html += `📋 ${stale.kb_review_tasks.length} 个KB审核待处理。`;
-            if (stale.domain_candidates) html += `📝 ${stale.domain_candidates} 个领域词待审核。`;
-            html += '</div>';
-            if (docs.length) {
-                html += '<details style="font-size:0.65rem;"><summary>结构化文档 ('+docs.length+')</summary><table style="width:100%;font-size:0.62rem;border-collapse:collapse;">';
-                for (const d of docs) {
-                    html += `<tr style="border-bottom:1px solid var(--card-border);"><td><b>${escapeHtml(d.project_name||d.document_type||'?')}</b></td>
-                        <td>${escapeHtml(d.bid_number||'')}</td><td>${d.budget_amount_cny?d.budget_amount_cny.toLocaleString()+'\u00a5':''}</td></tr>`;
-                }
-                html += '</table></details>';
-            }
-            panel.innerHTML = html || '<span style="color:var(--card-muted);">暂无摄入历史。</span>';
-        } catch(_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
-    }
-
-    async function loadDocReviewPanel() {
-        const panel = document.getElementById('docReviewPanel'); if (!panel) return;
-        const fileInput = document.getElementById('docReviewFileInput');
-        const selectBtn = document.getElementById('selectDocReviewFileBtn');
-        const fileName = document.getElementById('docReviewFileName');
-        const runBtn = document.getElementById('runDocReviewBtn');
-        const status = document.getElementById('docReviewStatus');
-        const results = document.getElementById('docReviewResults');
-
-        if (selectBtn && fileInput) {
-            selectBtn.onclick = () => fileInput.click();
-            fileInput.onchange = () => {
-                if (fileInput.files.length) {
-                    fileName.textContent = fileInput.files[0].name;
-                    if (runBtn) runBtn.disabled = false;
-                } else {
-                    fileName.textContent = '';
-                    if (runBtn) runBtn.disabled = true;
-                }
-            };
-        }
-
-        if (runBtn) {
-            runBtn.onclick = async () => {
-                if (!fileInput || !fileInput.files.length) {
-                    if (status) status.textContent = '请先选择文件';
-                    return;
-                }
-                runBtn.disabled = true;
-                if (status) status.textContent = '⏳ AI正在审查...';
-                if (results) { results.style.display = 'none'; results.innerHTML = ''; }
-
-                const form = new FormData();
-                form.append('file', fileInput.files[0]);
-
-                const selectedAxes = [];
-                document.querySelectorAll('.doc-review-axis:checked').forEach(cb => selectedAxes.push(cb.value));
-                if (selectedAxes.length < 5) form.append('axes', selectedAxes.join(','));
-
-                try {
-                    const res = await fetch('/admin/review/document', {
-                        method: 'POST',
-                        credentials: 'include',
-                        body: form
-                    });
-                    const data = await res.json();
-                    if (!data.success) {
-                        if (status) status.textContent = '❌ ' + (data.error || '审查失败');
-                        runBtn.disabled = false;
-                        return;
-                    }
-                    const r = data;
-                    if (status) status.textContent = '✅ 审查完成';
-
-                    let html = '';
-                    if (r.scores) {
-                        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
-                        for (const [k, v] of Object.entries(r.scores)) {
-                            const color = v >= 7 ? '#16a34a' : (v >= 5 ? '#d97706' : '#dc2626');
-                            html += `<span style="background:${color};color:white;border-radius:6px;padding:4px 10px;font-size:0.75rem;"><b>${k}: ${v}</b></span>`;
-                        }
-                        html += '</div>';
-                    }
-                    if (r.overall) {
-                        html += `<div style="font-size:0.9rem;margin-bottom:6px;">综合评分: <b style="font-size:1.1rem;">${r.overall}/10</b> — ${r.verdict||''}</div>`;
-                    }
-                    if (r.issues && r.issues.length) {
-                        html += '<table style="width:100%;font-size:0.7rem;border-collapse:collapse;">';
-                        html += '<tr style="background:var(--card-bg);"><th style="padding:4px;">维度</th><th>严重度</th><th>位置</th><th>问题</th><th>建议</th></tr>';
-                        for (const iss of r.issues) {
-                            const sevColor = iss.severity === '高' ? '#dc2626' : (iss.severity === '中' ? '#d97706' : '#6b7280');
-                            html += `<tr style="border-top:1px solid var(--card-border);">
-                                <td style="padding:4px;">${escapeHtml(iss.axis||'')}</td>
-                                <td style="color:${sevColor};font-weight:600;">${escapeHtml(iss.severity||'')}</td>
-                                <td>${escapeHtml(iss.location||'')}</td>
-                                <td>${escapeHtml(iss.finding||'')}</td>
-                                <td>${escapeHtml(iss.suggestion||'')}</td></tr>`;
-                        }
-                        html += '</table>';
-                    }
-                    if (r.summary) {
-                        html += `<div style="margin-top:10px;padding:8px;background:#f8fafc;border-radius:6px;font-size:0.75rem;">📝 ${escapeHtml(r.summary)}</div>`;
-                    }
-                    if (r.parse_error) {
-                        html += `<div style="margin-top:10px;padding:8px;background:#fef3c7;border-radius:6px;font-size:0.72rem;white-space:pre-wrap;">⚠️ AI返回格式异常，原文如下：\n${escapeHtml(r.raw_analysis||'')}</div>`;
-                    }
-                    results.innerHTML = html;
-                    results.style.display = '';
-                } catch(e) {
-                    console.error('Doc review error:', e);
-                    if (status) status.textContent = '❌ 网络错误';
-                }
-                runBtn.disabled = false;
-            };
-        }
-    }
-
-    // ── Doc Review toggle listener (moved to chat's docAnalysisTools) ──
-    (function initDocReviewToggle() {
-        const el = document.getElementById('docReviewDetails');
-        if (el) {
-            let loaded = false;
-            el.addEventListener('toggle', () => { if (el.open && !loaded) { loaded = true; loadDocReviewPanel(); } });
-            // Also load eagerly if already open
-            if (el.open) { loaded = true; loadDocReviewPanel(); }
-        }
-    })();
-
-    async function loadStructuredDocsPanel() {
-        const panel = document.getElementById('structuredDocsPanel'); if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const r = await fetch('/admin/ingest/structured', {credentials:'include'});
-            const docs = (await r.json()).documents || [];
-            if (!docs.length) { panel.innerHTML = '<span style="color:var(--card-muted);">暂无结构化文档。</span>'; return; }
-            let html = `<div style="font-size:0.65rem;margin-bottom:4px;">${docs.length} 份文档</div>
-                <table style="width:100%;font-size:0.65rem;border-collapse:collapse;">`;
-            for (const d of docs) {
-                html += `<tr style="border-bottom:1px solid var(--card-border);">
-                    <td><b>${escapeHtml(d.project_name||'?')}</b></td>
-                    <td>${escapeHtml(d.document_type||'')}</td>
-                    <td>${escapeHtml(d.bid_number||'')}</td>
-                    <td>${d.budget_amount_cny?d.budget_amount_cny.toLocaleString()+'\u00a5':''}</td></tr>`;
-            }
-            html += '</table>';
-            panel.innerHTML = html;
-        } catch(_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
-    }
-
-    async function loadWorkloadPanel() {
-        const panel = document.getElementById('workloadPanel'); if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const r = await fetch('/admin/ingest/review_workload', {credentials:'include'});
-            const d = await r.json();
-            const wl = d.workload || {};
-            const recent = d.recent_log || [];
-            if (!Object.keys(wl).length) { panel.innerHTML = '<span style="color:var(--card-muted);">暂无审核记录。</span>'; return; }
-            let html = '<table style="width:100%;font-size:0.65rem;border-collapse:collapse;">';
-            html += '<tr style="border-bottom:2px solid var(--card-border);text-align:left;"><th>审核人</th><th>角色</th><th>操作数</th><th>项目数</th><th>分类</th><th>最近</th></tr>';
-            for (const [uid, w] of Object.entries(wl)) {
-                const bd = Object.entries(w.by_type||{}).map(([k,v])=>`${k}:${v}`).join(', ');
-                html += `<tr style="border-bottom:1px solid var(--card-border);">
-                    <td>${escapeHtml(w.username)}</td><td>${escapeHtml(w.role)}</td>
-                    <td><b>${w.total_actions}</b></td><td><b>${w.total_items}</b></td>
-                    <td style="font-size:0.55rem;">${bd}</td><td>${new Date(w.last_action).toLocaleDateString()}</td></tr>`;
-            }
-            html += '</table>';
-            if (recent.length) {
-                html += '<details style="font-size:0.6rem;margin-top:4px;"><summary>最近操作 ('+recent.length+')</summary>';
-                for (const r of recent) {
-                    html += `<div>${new Date(r.timestamp).toLocaleString()} ${escapeHtml(r.username)}(${r.role}): ${r.action_type} \u00d7${r.count}</div>`;
-                }
-                html += '</details>';
-            }
-            panel.innerHTML = html;
-        } catch(_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
-    }
-
-    // ── Archived Sessions Admin ──
-    async function loadArchivedSessionsAdmin() {
-        const panel = document.getElementById('archivedSessionsAdmin');
-        if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const r = await fetch('/admin/archived_sessions', {credentials:'include'});
-            const d = await r.json();
-            const sessions = d.sessions || [];
-            if (!sessions.length) { panel.innerHTML = '<span style="color:var(--card-muted);">暂无归档会话</span>'; return; }
-            let html = '<table style="width:100%;font-size:0.65rem;border-collapse:collapse;">';
-            html += '<tr style="border-bottom:2px solid var(--card-border);"><th>会话</th><th>用户</th><th>归档时间</th></tr>';
-            for (const s of sessions) {
-                html += `<tr style="border-bottom:1px solid var(--card-border);">
-                    <td>${escapeHtml(s.title||s.thread_id?.substring(0,8))}</td>
-                    <td>${escapeHtml(s.user_id||'?')}</td>
-                    <td>${s.archived_at ? new Date(s.archived_at).toLocaleString() : ''}</td></tr>`;
-            }
-            html += '</table>';
-            panel.innerHTML = html;
-        } catch(_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
-    }
-
-    // ── Ingest Panel (batch document ingestion UI) ──
-    async function loadIngestPanel() {
-        const panel = document.getElementById('ingestPanel');
-        if (!panel) return;
-        panel.innerHTML = `
-            <div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:8px;">
-                上传ZIP压缩包（含多个文档），AI自动完成：解压→OCR→分类→提取→生成技能
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <input type="file" id="ingestFileInput" accept=".zip" style="display:none;">
-                <button id="ingestUploadBtn" class="file-btn" style="background:#2563eb;color:white;border-color:#1d4ed8;">📥 选择ZIP文件</button>
-                <span id="ingestStatus" style="font-size:0.7rem;color:var(--card-muted);"></span>
-            </div>
-            <div id="ingestProgress" style="margin-top:8px;font-size:0.68rem;"></div>
-            <div id="ingestResults" style="margin-top:8px;"></div>
-        `;
-        setTimeout(() => {
-            const fileInput = document.getElementById('ingestFileInput');
-            const uploadBtn = document.getElementById('ingestUploadBtn');
-            const statusEl = document.getElementById('ingestStatus');
-            const progressEl = document.getElementById('ingestProgress');
-            if (uploadBtn && fileInput) {
-                uploadBtn.onclick = () => fileInput.click();
-                fileInput.onchange = async () => {
-                    const file = fileInput.files[0];
-                    if (!file) return;
-                    const form = new FormData(); form.append('file', file);
-                    uploadBtn.disabled = true; uploadBtn.textContent = '⏳ 上传中...';
-                    statusEl.textContent = '';
-                    try {
-                        const r = await fetch('/admin/ingest/upload', {method:'POST',credentials:'include',body:form});
-                        const d = await r.json();
-                        if (r.ok) {
-                            statusEl.textContent = '✅ 上传成功，后台处理中...';
-                            if (d.task_id) {
-                                progressEl.innerHTML = `<span>任务ID: ${d.task_id}</span>`;
-                                // Poll status
-                                const poll = setInterval(async () => {
-                                    const sr = await fetch(`/admin/ingest/status/${d.task_id}`, {credentials:'include'});
-                                    const sd = await sr.json();
-                                    if (sd.status === 'done') {
-                                        progressEl.innerHTML += '<br>✅ 处理完成';
-                                        clearInterval(poll);
-                                        progressEl.innerHTML += '<div style="margin-top:6px;display:flex;gap:6px;"><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',5,this)">👍 满意</button><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',1,this)">👎 不满意</button></div>';
-                                    }
-                                    else if (sd.status === 'failed') { progressEl.innerHTML += '<br>❌ 处理失败'; clearInterval(poll); }
-                                    else { progressEl.innerHTML = `<span>任务ID: ${d.task_id} — ${sd.status||'processing'} ${sd.progress||''}</span>`; }
-                                }, 3000);
-                            }
-                        } else {
-                            statusEl.textContent = '❌ ' + (d.error || '上传失败');
-                        }
-                    } catch(_) { statusEl.textContent = '❌ 网络错误'; }
-                    uploadBtn.disabled = false; uploadBtn.textContent = '📥 选择ZIP文件';
-                    fileInput.value = '';
-                };
-            }
-        }, 100);
-    }
-
-        // ── Writing Style Manager (Admin) ──
-    async function loadStyleManager() {
-        const panel = document.getElementById('styleManagerPanel');
-        if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const r = await fetch('/admin/user_styles', { credentials: 'include' });
-            const d = await r.json();
-            const styles = d.styles || [];
-            if (!styles.length) { panel.innerHTML = '<span style="color:var(--card-muted);">暂无风格画像。</span>'; return; }
-            let html = `<div style="margin-bottom:6px;display:flex;gap:6px;align-items:center;">
-                <span style="font-size:0.68rem;">${styles.length} 个画像</span>
-                <button id="styleAnalyzeAllBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 全量分析</button>
-            </div>
-            <table style="width:100%;font-size:0.65rem;border-collapse:collapse;">`;
-            for (const s of styles) {
-                const kwPreview = (s.keywords||[]).slice(0,5).map(k=>k.word).join(', ');
-                html += `<tr style="border-bottom:1px solid var(--card-border);">
-                    <td style="padding:3px 4px;"><b>${escapeHtml(s.user_id).substring(0,12)}</b></td>
-                    <td>${escapeHtml(s.style_label||'无')}</td>
-                    <td>${s.total_analyzed||0} 条消息</td>
-                    <td style="font-size:0.55rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(kwPreview)}">${escapeHtml(kwPreview)}</td>
-                    <td>
-                        <button class="styleAnalyzeBtn" data-uid="${escapeHtml(s.user_id)}" style="font-size:0.55rem;">🔄</button>
-                        <button class="styleDelBtn" data-uid="${escapeHtml(s.user_id)}" style="font-size:0.55rem;color:#ef4444;">🗑</button>
-                    </td></tr>`;
-            }
-            html += '</table><div id="styleMsg" style="margin-top:6px;font-size:0.65rem;"></div>';
-            panel.innerHTML = html;
-
-            document.getElementById('styleAnalyzeAllBtn').onclick = async () => {
-                const btn = document.getElementById('styleAnalyzeAllBtn');
-                btn.disabled = true; btn.textContent = '⏳...';
-                try {
-                    await fetch('/admin/user_styles/analyze_all', { method:'POST', credentials:'include' });
-                    document.getElementById('styleMsg').innerHTML = '<span style="color:#22c55e;">✅ 批量分析已触发</span>';
-                    loadStyleManager();
-                } catch(_) { document.getElementById('styleMsg').innerHTML = '<span style="color:#ef4444;">失败</span>'; }
-                btn.disabled = false; btn.textContent = '🔄 全量分析';
-            };
-            panel.querySelectorAll('.styleAnalyzeBtn').forEach(btn => {
-                btn.onclick = async () => {
-                    btn.disabled = true;
-                    await fetch('/admin/user_styles/'+btn.dataset.uid+'/analyze', { method:'POST', credentials:'include' });
-                    loadStyleManager();
-                };
-            });
-            panel.querySelectorAll('.styleDelBtn').forEach(btn => {
-                btn.onclick = async () => {
-                    if (!confirm('删除用户 '+btn.dataset.uid+' 的风格画像？')) return;
-                    await fetch('/admin/user_styles/'+btn.dataset.uid+'/delete', { method:'POST', credentials:'include' });
-                    loadStyleManager();
-                };
-            });
-        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; }
-    }
-
-    // ── Training Data Export Panel ──
-    async function loadTrainingExportPanel() {
-        const panel = document.getElementById('trainingExportPanel');
-        if (!panel) return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        try {
-            const [hr, sr] = await Promise.all([
-                fetch('/admin/training_export_history', { credentials: 'include' }),
-                fetch('/admin/training_stats', { credentials: 'include' })
-            ]);
-            const hd = await hr.json();
-            const sd = await sr.json();
-            const h = hd.history || {};
-            const s = sd.stats || {};
-
-            const pending = h.pending_new || 0;
-            const hasWm = h.has_watermark;
-            const lastTs = h.last_exported_timestamp
-                ? new Date(h.last_exported_timestamp).toLocaleString()
-                : '从未';
-            const totalFull = h.total_exported_full || 0;
-            const totalIncr = h.total_exported_incremental || 0;
-            const recent = h.recent_exports || [];
-            const files = h.export_files || [];
-
-            let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:0.72rem;">
-                <span>💾 <b>${s.sessions||0}</b> 个会话</span> ·
-                <span>✉️ <b>${s.interactions||0}</b> 对</span> ·
-                <span>⭐ <b>${s.qualifying||0}</b> 已评分 ≥3★</span> ·
-                <span style="color:${pending>0?'#f59e0b':'#22c55e'};">🆕 <b>${pending}</b> 待导出</span>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-                <button id="trExportIncrBtn" class="file-btn" style="background:#3b82f6;color:white;border-color:#2563eb;font-size:0.72rem;padding:4px 10px;">📥 增量导出${pending>0?` (${pending} 条新)`:' (已是最新)'}</button>
-                <button id="trExportFullBtn" class="file-btn" style="font-size:0.72rem;padding:4px 10px;">📦 全量导出</button>
-                <button id="trExportAllBtn" class="file-btn" style="font-size:0.72rem;padding:4px 10px;">📦 全量(含低质量)</button>
-                <button id="trResetWmBtn" class="file-btn" style="font-size:0.72rem;padding:4px 10px;background:#ef4444;color:white;border-color:#dc2626;">↺ 重置水印</button>
-            </div>`;
-
-            // Watermark status
-            html += `<div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:8px;">
-                水印: ${hasWm ? '✅ 已激活' : '❌ 未设置'} · 上次导出: ${lastTs} ·
-                已导出: ${totalFull} 次全量 + ${totalIncr} 次增量 = <b>${totalFull+totalIncr}</b> 总计
-                ${files.length ? ` · ${files.length} 个文件在磁盘` : ''}
-            </div>`;
-
-            // Recent export history
-            if (recent.length) {
-                html += `<details style="font-size:0.68rem;margin-bottom:4px;"><summary>导出历史 (最近 ${recent.length} 条)</summary>
-                    <table style="width:100%;font-size:0.65rem;border-collapse:collapse;margin-top:4px;">
-                    <tr style="border-bottom:1px solid var(--card-border);text-align:left;"><th>文件</th><th>模式</th><th>数量</th><th>时间</th></tr>`;
-                for (let i = recent.length - 1; i >= 0; i--) {
-                    const r = recent[i];
-                    html += `<tr style="border-bottom:1px solid var(--card-border);">
-                        <td style="font-family:monospace;font-size:0.6rem;">${escapeHtml(r.file||'')}</td>
-                        <td>${r.mode==='incremental'?'🔄 增量':'📦 全量'}</td>
-                        <td><b>${r.count||0}</b></td>
-                        <td>${new Date(r.time).toLocaleString()}</td>
-                    </tr>`;
-                }
-                html += '</table></details>';
-            }
-
-            // Export file manager
-            html += `<details id="exportFilesDetails" style="font-size:0.68rem;">
-                <summary>📄 导出文件列表 <span id="exportFileCount">(${files.length})</span></summary>
-                <div id="exportFilesContent" style="margin-top:4px;font-size:0.62rem;color:var(--card-muted);">点击加载详情...</div>
-            </details>`;
-
-            html += '<div id="trMsg" style="margin-top:6px;font-size:0.7rem;"></div>';
-
-            // ── Cleanup section (build HTML, don't render yet) ──
-            let cleanupStats = null;
-            try {
-                const cr = await fetch('/admin/training_cleanup_stats', { credentials: 'include' });
-                cleanupStats = (await cr.json()).stats || null;
-            } catch (_) {}
-
-            if (cleanupStats && cleanupStats.total_sessions > 0) {
-                const cs = cleanupStats;
-                html += `<hr style="margin:12px 0;">
-                    <div style="font-size:0.7rem;margin-bottom:6px;">
-                        🗑️ <b>数据生命周期</b> · ${cs.total_sessions} 个会话 ·
-                        最旧 ${cs.oldest_days}天 · 最新 ${cs.newest_days}天 ·
-                        <span style="color:${cs.older_than_threshold>0?'#ef4444':'#22c55e'};">${cs.older_than_threshold} 个超过 ${cs.retention_days}天保留期</span>
-                        <br><span style="color:var(--card-muted);font-size:0.62rem;">自动清理每季度运行 (1月/4月/7月/10月1日)</span>
-                    </div>
-                    <div style="display:flex;gap:6px;">
-                        <button id="trCleanupPreviewBtn" class="file-btn" style="font-size:0.68rem;padding:3px 8px;">🔍 预览</button>
-                        <button id="trCleanupNowBtn" class="file-btn" style="font-size:0.68rem;padding:3px 8px;background:#ef4444;color:white;border-color:#dc2626;">🗑️ 立即清理</button>
-                    </div>`;
-            }
-
-            // ── Health check section (build HTML, don't render yet) ──
-            let healthSummary = null;
-            try {
-                const hr = await fetch('/admin/training_health_history', { credentials: 'include' });
-                healthSummary = (await hr.json()).history || null;
-            } catch (_) {}
-
-            if (healthSummary && healthSummary.last_check) {
-                const hc = healthSummary.last_check;
-                const statusColor = hc.status === 'ok' ? '#22c55e' : (hc.status === 'warning' ? '#f59e0b' : '#ef4444');
-                const statusIcon = hc.status === 'ok' ? '✅' : (hc.status === 'warning' ? '⚠️' : '❌');
-                const statusLabel = hc.status === 'ok' ? '正常' : (hc.status === 'warning' ? '警告' : '异常');
-                html += `<hr style="margin:12px 0;">
-                    <div style="font-size:0.7rem;margin-bottom:6px;">
-                        🩺 <b>健康检查</b> ${statusIcon} <span style="color:${statusColor};">${statusLabel}</span>
-                        · ${hc.total||0} 个会话 · 🟢${hc.healthy||0} 🟡${hc.warning||0} 🔴${hc.corrupt||0}
-                        · ${hc.issues_found||0} 个问题 · 上次: ${new Date(hc.timestamp).toLocaleString()}
-                        <br><span style="color:var(--card-muted);font-size:0.62rem;">自动检查每周运行 (周日 03:30 UTC)</span>
-                    </div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <button id="trHealthScanBtn" class="file-btn" style="font-size:0.68rem;padding:3px 8px;background:#3b82f6;color:white;border-color:#2563eb;">🔍 健康扫描</button>
-                        <button id="trHealthRepairBtn" class="file-btn" style="font-size:0.68rem;padding:3px 8px;background:#f59e0b;color:white;border-color:#d97706;">🔧 扫描并修复</button>
-                        <button id="trHealthHistoryBtn" class="file-btn" style="font-size:0.68rem;padding:3px 8px;">📋 历史</button>
-                    </div>`;
-            }
-
-            // ── ONE final render ──
-            panel.innerHTML = html;
-            const msgEl = document.getElementById('trMsg');
-
-            // ── All button handlers (after DOM exists) ──
-            document.getElementById('trExportIncrBtn').onclick = async () => {
-                const btn = document.getElementById('trExportIncrBtn');
-                btn.disabled = true; btn.textContent = '⏳ 导出中...';
-                try {
-                    const r = await fetch('/admin/training_export', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({mode:'incremental'})
-                    });
-                    const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                btn.disabled = false; btn.textContent = '📥 增量导出';
-            };
-
-            document.getElementById('trExportFullBtn').onclick = async () => {
-                if (!confirm('全量导出（仅≥3★高质量）？')) return;
-                const btn = document.getElementById('trExportFullBtn');
-                btn.disabled = true; btn.textContent = '⏳ ...';
-                try {
-                    const r = await fetch('/admin/training_export', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({mode:'quality'})
-                    });
-                    const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                btn.disabled = false; btn.textContent = '📦 全量导出';
-            };
-
-            document.getElementById('trExportAllBtn').onclick = async () => {
-                if (!confirm('全量导出所有数据（含低质量）？')) return;
-                const btn = document.getElementById('trExportAllBtn');
-                btn.disabled = true; btn.textContent = '⏳ ...';
-                try {
-                    const r = await fetch('/admin/training_export', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({mode:'all'})
-                    });
-                    const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                btn.disabled = false; btn.textContent = '📦 全量(含低质量)';
-            };
-
-            document.getElementById('trResetWmBtn').onclick = async () => {
-                if (!confirm('重置导出水印？\n\n下次导出将为全量导出。')) return;
-                try {
-                    const r = await fetch('/admin/training_export', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({mode:'reset_watermark'})
-                    });
-                    const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-            };
-
-            // Cleanup buttons
-            const trCleanupPreviewBtn = document.getElementById('trCleanupPreviewBtn');
-            const trCleanupNowBtn = document.getElementById('trCleanupNowBtn');
-            if (trCleanupPreviewBtn) trCleanupPreviewBtn.onclick = async () => {
-                try {
-                    const r = await fetch('/admin/training_cleanup', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({dry_run:true})
-                    });
-                    const d = await r.json();
-                    if (r.ok && d.stats) {
-                        const cs = d.stats;
-                        msgEl.innerHTML = `<span style="color:var(--card-muted);">将清理 <b>${cs.older_than_threshold}</b> 个 (共${cs.total_sessions}个) 超过${cs.retention_days}天的会话</span>`;
-                    } else msgEl.innerHTML = '<span style="color:#ef4444;">预览失败</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-            };
-            if (trCleanupNowBtn) trCleanupNowBtn.onclick = async () => {
-                if (!confirm(`清理超过 ${cleanupStats?.retention_days||90} 天的训练数据？\n\n这将永久删除旧的训练会话。`)) return;
-                trCleanupNowBtn.disabled = true; trCleanupNowBtn.textContent = '⏳ ...';
-                try {
-                    const r = await fetch('/admin/training_cleanup', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                        body:JSON.stringify({})
-                    });
-                    const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                trCleanupNowBtn.disabled = false; trCleanupNowBtn.textContent = '🗑️ 立即清理';
-            };
-
-            // Health check buttons
-            const trHealthScanBtn = document.getElementById('trHealthScanBtn');
-            const trHealthRepairBtn = document.getElementById('trHealthRepairBtn');
-            const trHealthHistoryBtn = document.getElementById('trHealthHistoryBtn');
-
-            if (trHealthScanBtn) trHealthScanBtn.onclick = async () => {
-                trHealthScanBtn.disabled = true; trHealthScanBtn.textContent = '⏳ 扫描中...';
-                try {
-                    const r = await fetch('/admin/training_health', { credentials: 'include' });
-                    const d = await r.json();
-                    if (r.ok && d.report) {
-                        const rp = d.report;
-                        let issuesHtml = '';
-                        for (const s of (rp.sessions||[]).filter(s => s.issues.length)) {
-                            const prevBadge = s.previous_status
-                                ? ` <span style="font-size:0.55rem;opacity:0.6;">(原状态: ${s.previous_status})</span>`
-                                : '';
-                            const badge = s.status === 'corrupt' ? '🔴' : (s.status === 'warning' ? '🟡' : '🟢');
-                            issuesHtml += `<div style="font-size:0.62rem;margin-bottom:2px;">${badge} 📁 ${escapeHtml(s.session)} [${s.status}]${prevBadge} — ${s.issues.join('; ')}</div>`;
-                        }
-                        const skipped = rp.corrupt_marked_skipped || 0;
-                        msgEl.innerHTML = `<span style="color:${rp.corrupt>0?'#ef4444':'#22c55e'};">
-                            ${rp.corrupt>0?'❌':'✅'} ${rp.healthy} 正常, ${rp.warning} 警告, ${rp.corrupt} 异常, ${rp.issues_found} 问题
-                            ${skipped>0?` · ${skipped} 跳过(已标记异常)` : ''}
-                        </span>`;
-                        if (issuesHtml) {
-                            const details = document.createElement('details');
-                            details.style.cssText = 'font-size:0.65rem;margin-top:4px;';
-                            details.innerHTML = `<summary>${rp.sessions.filter(s=>s.issues.length).length} 个会话有问题</summary>${issuesHtml}</details>`;
-                            msgEl.appendChild(details);
-                        }
-                    } else msgEl.innerHTML = '<span style="color:#ef4444;">扫描失败</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                trHealthScanBtn.disabled = false; trHealthScanBtn.textContent = '🔍 健康扫描';
-            };
-
-            if (trHealthRepairBtn) trHealthRepairBtn.onclick = async () => {
-                if (!confirm('运行健康检查并自动修复？\n\n将修复孤立反馈/上下文索引以及截断的消息。')) return;
-                trHealthRepairBtn.disabled = true; trHealthRepairBtn.textContent = '⏳ 修复中...';
-                try {
-                    const r = await fetch('/admin/training_health', {
-                        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include'
-                    });
-                    const d = await r.json();
-                    if (r.ok && d.report) {
-                        msgEl.innerHTML = `<span style="color:#22c55e;">✅ 扫描并修复完成 · ${d.report.repaired||0} 项修复 · ${d.report.healthy} 正常</span>`;
-                        loadTrainingExportPanel();
-                    } else msgEl.innerHTML = '<span style="color:#ef4444;">修复失败</span>';
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                trHealthRepairBtn.disabled = false; trHealthRepairBtn.textContent = '🔧 扫描并修复';
-            };
-
-            if (trHealthHistoryBtn) trHealthHistoryBtn.onclick = async () => {
-                try {
-                    const r = await fetch('/admin/training_health_history', { credentials: 'include' });
-                    const d = await r.json();
-                    const h = d.history || {};
-                    const trend = h.trend || [];
-                    const recent = h.history || [];
-                    let histHtml = '<div style="font-size:0.68rem;">';
-                    if (trend.length) {
-                        histHtml += '<b>Health Trend (last checks):</b><br>';
-                        for (const t of trend.slice(-8)) {
-                            const icon = (t.corrupt||0) > 0 ? '❌' : ((t.warning||0) > 0 ? '⚠️' : '✅');
-                            histHtml += `${icon} ${t.time}: 🟢${t.healthy||0} 🟡${t.warning||0} 🔴${t.corrupt||0}<br>`;
-                        }
-                    }
-                    if (recent.length) {
-                        histHtml += `<br><b>Last ${recent.length} detailed records:</b><br>`;
-                        for (const r of recent) {
-                            histHtml += `📅 ${new Date(r.timestamp).toLocaleString()}: healthy=${r.healthy} warn=${r.warning} corrupt=${r.corrupt} issues=${r.issues_found} fixed=${r.repaired||0}<br>`;
-                        }
-                    }
-                    histHtml += '</div>';
-                    msgEl.innerHTML = histHtml;
-                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">Load failed</span>'; }
-            };
-
-            // ── Export file manager (load on details toggle) ──
-            const exportFilesDetails = document.getElementById('exportFilesDetails');
-            if (exportFilesDetails) {
-                exportFilesDetails.addEventListener('toggle', async () => {
-                    if (!exportFilesDetails.open || exportFilesDetails._loaded) return;
-                    exportFilesDetails._loaded = true;
-                    const fileContent = document.getElementById('exportFilesContent');
-                    fileContent.innerHTML = '<span style="color:var(--card-muted);">Loading...</span>';
-                    try {
-                        const r = await fetch('/admin/training_exports_list', { credentials: 'include' });
-                        const d = await r.json();
-                        const flist = d.files || [];
-                        const retention = d.retention_count || 20;
-                        if (!flist.length) {
-                            fileContent.innerHTML = '<span style="color:var(--card-muted);">No export files</span>';
-                            return;
-                        }
-                        let fhtml = `<div style="margin-bottom:4px;color:var(--card-muted);">${flist.length} 个文件, 保留最近 ${retention} 个 · <button id="trExportCleanupBtn" class="file-btn" style="font-size:0.62rem;padding:1px 6px;">🧹 清理旧文件</button></div>`;
-                        fhtml += '<table style="width:100%;font-size:0.6rem;border-collapse:collapse;">';
-                        for (const f of flist) {
-                            fhtml += `<tr style="border-bottom:1px solid var(--card-border);">
-                                <td style="font-family:monospace;">📄 ${escapeHtml(f.filename)}</td>
-                                <td>${f.size_mb}MB</td>
-                                <td>${f.mtime_display}</td>
-                                <td>
-                                    <a href="/admin/training_exports_download/${encodeURIComponent(f.filename)}" download style="font-size:0.6rem;color:#3b82f6;">⬇</a>
-                                    <button class="trExportDelBtn" data-fname="${escapeHtml(f.filename)}" style="font-size:0.6rem;color:#ef4444;background:none;border:none;cursor:pointer;">🗑</button>
-                                </td></tr>`;
-                        }
-                        fhtml += '</table>';
-                        fileContent.innerHTML = fhtml;
-
-                        // Cleanup button
-                        document.getElementById('trExportCleanupBtn').onclick = async () => {
-                            if (!confirm(`删除旧导出文件，保留最近 ${retention} 个？`)) return;
-                            const btn = document.getElementById('trExportCleanupBtn');
-                            btn.disabled = true; btn.textContent = '...';
-                            try {
-                                const rr = await fetch('/admin/training_exports_cleanup', {
-                                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include'
-                                });
-                                const dd = await rr.json();
-                                if (rr.ok) {
-                                    msgEl.innerHTML = `<span style="color:#22c55e;">✅ ${dd.message}</span>`;
-                                    exportFilesDetails._loaded = false;  // force reload
-                                    exportFilesDetails.open = false;
-                                    document.getElementById('exportFileCount').textContent = `(${dd.kept})`;
-                                } else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(dd.error||'失败')+'</span>';
-                            } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-                            btn.disabled = false; btn.textContent = '🧹 清理旧文件';
-                        };
-
-                        // Delete buttons
-                        fileContent.querySelectorAll('.trExportDelBtn').forEach(btn => {
-                            btn.onclick = async () => {
-                                const fname = btn.dataset.fname;
-                                if (!confirm(`Delete ${fname} permanently?`)) return;
-                                btn.disabled = true;
-                                try {
-                                    const rr = await fetch('/admin/training_exports_delete/' + encodeURIComponent(fname), {
-                                        method:'POST', credentials:'include'
-                                    });
-                                    const dd = await rr.json();
-                                    if (rr.ok) {
-                                        msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+dd.message+'</span>';
-                                        // Reload file list
-                                        exportFilesDetails._loaded = false;
-                                        exportFilesDetails.open = false;
-                                        setTimeout(() => { exportFilesDetails.open = true; }, 100);
-                                    } else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(dd.error||'Failed')+'</span>';
-                                } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">Network error</span>'; btn.disabled = false; }
-                            };
-                        });
-                    } catch(_) { fileContent.innerHTML = '<span style="color:#ef4444;">Load failed</span>'; }
-                });
-            }
-        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">Load failed</span>'; }
-    }
-
-    // ── Runtime Config Panel ──
-    let _rcData = {}, _rcSchema = {}, _rcDirty = {};
-
-    async function loadRuntimeConfig() {
-        const panel = document.getElementById('runtimeConfigContent');
-        const msgEl = document.getElementById('rcMsg');
-        if (!panel) return;
-        panel.innerHTML = '<p style="font-size:.75rem;color:var(--card-muted);">加载配置中...</p>';
-        _rcDirty = {};
-        const dot = document.getElementById('rcModifiedDot');
-        if (dot) dot.style.display = 'none';
-        let hasFactory = false, factoryData = null, nonFactoryKeys = [], llmInfo = null, vlInfo = null;
-        try {
-            const [cr, sr, lr, vr] = await Promise.all([
-                fetch('/admin/runtime_config', { credentials: 'include' }),
-                fetch('/admin/runtime_config_schema', { credentials: 'include' }),
-                fetch('/admin/llm_providers', { credentials: 'include' }),
-                fetch('/admin/vl_status', { credentials: 'include' })
-            ]);
-            const cd = await cr.json();
-            const sd = await sr.json();
-            _rcData = cd.config || {};
-            _rcSchema = sd.schema || {};
-            hasFactory = sd.has_factory || false;
-            factoryData = sd.factory_presets || null;
-            nonFactoryKeys = sd.non_factory_keys || [];
-            try { const ld = await lr.json(); if (ld.status === 'ok') llmInfo = ld; } catch (_) {}
-            try { const vd = await vr.json(); if (vd.status === 'ok') vlInfo = vd; } catch (_) {}
-        } catch (_) { panel.innerHTML = '<p style="color:#ef4444;">Load failed</p>'; return; }
-
-        // Update factory status in summary
-        const rcSummary = document.querySelector('#rcDetails summary');
-        if (rcSummary) {
-            const dotHtml = '<span id="rcModifiedDot" style="display:none;color:#f59e0b;font-size:0.65rem;">● 已修改</span>';
-            rcSummary.innerHTML = `⚙️ 运行配置 ${hasFactory
-                ? '<span style="color:#22c55e;font-size:0.65rem;">[出厂预设: 已保存]</span>'
-                : '<span style="color:#f59e0b;font-size:0.65rem;">[出厂预设: 未保存]</span>'} ${dotHtml}`;
-        }
-
-        // Group by schema group
-        const groups = {};
-        for (const [key, sch] of Object.entries(_rcSchema)) {
-            const g = sch.group || 'Other';
-            if (!groups[g]) groups[g] = [];
-            groups[g].push({ key, ...sch, value: _rcData[key], is_not_factory: nonFactoryKeys.includes(key) });
-        }
-
-        // LLM active status banner
-        let llmBanner = '';
-        if (llmInfo) {
-            const pName = llmInfo.providers[llmInfo.active_provider]?.name || llmInfo.active_provider;
-            llmBanner = `<div style="background:linear-gradient(135deg,#1e293b,#334155);color:#e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.75rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <span>🤖 <b>当前LLM:</b> ${escapeHtml(pName||'自动')} / ${escapeHtml(llmInfo.active_model||'默认')}</span>
-                ${llmInfo.session_provider ? `<span style="color:#94a3b8;font-size:.65rem;">(会话: ${escapeHtml(llmInfo.session_provider)}/${escapeHtml(llmInfo.session_model||'')})</span>` : ''}
-            </div>`;
-        }
-
-        // VL status banner
-        let vlBanner = '';
-        if (vlInfo) {
-            const availDot = vlInfo.available
-                ? '<span style="color:#22c55e;">●</span>'
-                : vlInfo.has_api_key
-                    ? '<span style="color:#f59e0b;">●</span>'
-                    : '<span style="color:#ef4444;">●</span>';
-            const availText = vlInfo.available ? '可用' : (vlInfo.has_api_key ? '初始化失败' : '未配置API Key');
-            vlBanner = `<div style="background:linear-gradient(135deg,#1a2a3a,#2d4a5a);color:#e2e8f0;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.7rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span>👁️ <b>当前VL模型:</b> ${escapeHtml(vlInfo.model||'未设置')} (<b>${escapeHtml(vlInfo.provider||'')}</b>)</span>
-                <span style="display:inline-flex;align-items:center;gap:3px;">${availDot} ${availText}</span>
-                ${!vlInfo.has_api_key ? '<span style="color:#f87171;">请设置 NVIDIA_API_KEY</span>' : ''}
-                <span style="color:#94a3b8;font-size:.65rem;">${vlInfo.config.max_image_size}px / ${vlInfo.config.max_tokens}tok / t=${vlInfo.config.temperature}</span>
-            </div>`;
-        }
-
-        let html = llmBanner + vlBanner;
-
-        const groupOrder = ['LLM/AI Model', 'VL Model', 'Search & Cache', 'RAG Engine', 'File Processing', 'Session & Messages', 'Auto Cleanup', 'Rate Limits', 'Anonymous Limits', 'Training Data', 'Auto Reports', 'Other'];
-        const groupLabels = {
-            'LLM/AI Model': '🤖 LLM/AI 模型',
-            'VL Model': '👁️ VL 视觉模型',
-            'Search & Cache': '🔍 搜索与缓存',
-            'RAG Engine': '🧠 RAG 引擎',
-            'File Processing': '📄 文件处理',
-            'Session & Messages': '💬 会话与消息',
-            'Auto Cleanup': '🧹 自动清理',
-            'Rate Limits': '⏱️ 频率限制',
-            'Anonymous Limits': '👤 匿名用户限制',
-            'Training Data': '📊 训练数据',
-            'Auto Reports': '📋 自动报告',
-            'Other': '📦 其他',
-        };
-
-        for (const gn of groupOrder) {
-            if (!groups[gn] || !groups[gn].length) continue;
-            html += `<details open style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:.8rem;cursor:pointer;color:var(--card-muted);">${groupLabels[gn]||gn} (${groups[gn].length})</summary>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px;margin-top:8px;">`;
-            for (const item of groups[gn]) {
-                const labelStyle = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
-                if (item.type === 'ordered-list') {
-                    const chain = Array.isArray(item.value) ? item.value : [['zhipu','glm-4.5-air'],['nvidia','nemotron-3-ultra-550b-a55b'],['deepseek','deepseek-v4-flash'],['deepseek','deepseek-v4-pro']];
-                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    const provLabels = {auto:'自动检测',deepseek:'DeepSeek',zhipu:'智谱AI',qwen:'Qwen',siliconflow:'硅基流动',nvidia:'NVIDIA'};
-                    let chainHtml = `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;margin-bottom:4px;" title="${escapeHtml(item.label)}">
-                        <label style="${labelStyle}">${item.label}${nfMark}</label>
-                    </div>
-                    <div data-key="${item.key}" data-type="ordered-list" style="margin-left:4px;">`;
-                    for (let i = 0; i < chain.length; i++) {
-                        const [cp, cm] = chain[i];
-                        const provOpts = Object.entries(provLabels).map(([v,l]) => `<option value="${v}"${cp===v?' selected':''}>${l}</option>`).join('');
-                        chainHtml += `<div class="chain-row" data-index="${i}" draggable="true" style="display:flex;align-items:center;gap:3px;margin-bottom:3px;padding:3px 4px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);font-size:.68rem;">
-                            <span class="chain-drag" style="cursor:grab;color:var(--card-muted);user-select:none;">☰</span>
-                            <select class="chain-provider" style="width:90px;padding:2px 3px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">${provOpts}</select>
-                            <select class="chain-model" style="flex:1;min-width:80px;padding:2px 3px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;"></select>
-                            <button class="chain-remove" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.8rem;padding:0 2px;" title="移除此服务商">×</button>
-                        </div>`;
-                    }
-                    chainHtml += `<button class="chain-add" style="width:100%;padding:4px;border:1px dashed var(--card-border);border-radius:4px;background:transparent;color:var(--card-muted);cursor:pointer;font-size:.65rem;margin-top:2px;">+ 添加服务商</button>`;
-                    chainHtml += '</div>';
-                    html += chainHtml;
-                } else if (item.type === 'select') {
-                    const options = item.options || [];
-                    const labels = item.option_labels || {};
-                    const selOpts = options.map(o => `<option value="${o}"${String(item.value)===o?' selected':''}>${labels[o]||o}</option>`).join('');
-                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    html += `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;" title="${escapeHtml(item.label)}">
-                        <label style="${labelStyle}">${item.label}${nfMark}</label>
-                        <select data-key="${item.key}" data-type="select" style="width:130px;flex-shrink:0;padding:3px 4px;border-radius:4px;border:1px solid var(--card-border);font-size:.68rem;">${selOpts}</select>
-                    </div>`;
-                } else if (item.type === 'bool') {
-                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    html += `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;" title="${escapeHtml(item.label)}">
-                        <label style="${labelStyle}">${item.label}${nfMark}</label>
-                        <input type="checkbox" data-key="${item.key}" data-type="bool" ${item.value ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
-                    </div>`;
-                } else {
-                    const step = item.step || (item.type === 'float' ? '0.1' : '1');
-                    const inputAttrs = item.type === 'float'
-                        ? `type="number" step="${step}" min="${item.min||0}" max="${item.max||999999}"`
-                        : `type="number" step="1" min="${item.min||0}" max="${item.max||999999}"`;
-                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    html += `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;" title="${escapeHtml(item.label)}">
-                        <label style="${labelStyle}">${item.label}${nfMark}</label>
-                        <input data-key="${item.key}" ${inputAttrs} value="${item.value}" style="width:72px;flex-shrink:0;padding:3px 4px;border-radius:4px;border:1px solid var(--card-border);font-size:.68rem;text-align:right;">
-                        <span style="width:28px;color:var(--card-muted);text-align:left;font-size:.65rem;flex-shrink:0;">${item.unit||''}</span>
-                    </div>`;
-                }
-            }
-            html += '</div></details>';
-        }
-        // Any groups not in groupOrder
-        const done = new Set(groupOrder);
-        for (const gn of Object.keys(groups)) {
-            if (done.has(gn)) continue;
-            html += `<details style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:.8rem;cursor:pointer;color:var(--card-muted);">${groupLabels[gn]||gn} (${groups[gn].length})</summary>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px;margin-top:8px;">`;
-            for (const item of groups[gn]) {
-                html += `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;">
-                    <label style="flex:1;">${item.label}</label>
-                    <input data-key="${item.key}" type="number" value="${item.value}" style="width:72px;padding:3px 4px;border-radius:4px;border:1px solid var(--card-border);font-size:.68rem;text-align:right;">
-                    <span style="width:28px;color:var(--card-muted);font-size:.65rem;">${item.unit||''}</span>
-                </div>`;
-            }
-            html += '</div></details>';
-        }
-
-        // Factory action buttons
-        html += `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-            ${!hasFactory
-                ? '<button id="rcSaveFactoryBtn" class="file-btn" style="background:#f59e0b;color:white;border-color:#d97706;font-size:0.75rem;">🏭 保存为出厂预设</button>'
-                : '<button id="rcRestoreFactoryBtn" class="file-btn" style="background:#8b5cf6;color:white;border-color:#7c3aed;font-size:0.75rem;">↩ 恢复出厂预设</button>'}
-            <span style="font-size:.65rem;color:var(--card-muted);align-self:center;">${hasFactory ? '出厂预设已锁定(只读)' : '保存当前值作为不可变的出厂基准'}</span>
-        </div>`;
-
-        panel.innerHTML = html;
-
-        // LLM provider change -> reload model options
-        const provSelect = panel.querySelector('select[data-key="active_llm_provider"]');
-        const modelSelect = panel.querySelector('select[data-key="active_llm_model"]');
-        if (provSelect && modelSelect && llmInfo) {
-            provSelect.addEventListener('change', () => {
-                const pid = provSelect.value;
-                const models = (pid !== 'auto' && llmInfo.providers[pid])
-                    ? ['auto', ...llmInfo.providers[pid].models]
-                    : ['auto'];
-                const labels = llmInfo.providers[pid]?.name
-                    ? { auto: 'Auto (use ' + llmInfo.providers[pid].name + ' default)' }
-                    : { auto: 'Auto (provider default)' };
-                modelSelect.innerHTML = models.map(m => `<option value="${m}">${labels[m]||m}</option>`).join('');
-                // Mark dirty
-                _rcDirty['active_llm_provider'] = provSelect.value !== (_rcData['active_llm_provider']||'') ? provSelect.value : undefined;
-                if (_rcDirty['active_llm_provider'] === undefined) delete _rcDirty['active_llm_provider'];
-                _rcDirty['active_llm_model'] = modelSelect.value !== (_rcData['active_llm_model']||'') ? modelSelect.value : undefined;
-                if (_rcDirty['active_llm_model'] === undefined) delete _rcDirty['active_llm_model'];
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-            });
-            modelSelect.addEventListener('change', () => {
-                _rcDirty['active_llm_model'] = modelSelect.value !== (_rcData['active_llm_model']||'') ? modelSelect.value : undefined;
-                if (_rcDirty['active_llm_model'] === undefined) delete _rcDirty['active_llm_model'];
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-            });
-        }
-
-        // VL provider change → reload VL model options from schema
-        const vlProvSelect = panel.querySelector('select[data-key="active_vl_provider"]');
-        const vlModelSelect = panel.querySelector('select[data-key="active_vl_model"]');
-        if (vlProvSelect && vlModelSelect) {
-            vlProvSelect.addEventListener('change', () => {
-                const pid = vlProvSelect.value;
-                // Fetch updated schema to get provider-specific VL models
-                fetch('/admin/runtime_config_schema')
-                    .then(r => r.json())
-                    .then(schema => {
-                        if (schema.success && schema.schema && schema.schema.active_vl_model) {
-                            const vlSchema = schema.schema.active_vl_model;
-                            const models = vlSchema.options || ['auto'];
-                            const labels = vlSchema.option_labels || {};
-                            const currentModel = _rcData['active_vl_model'] || '';
-                            vlModelSelect.innerHTML = models.map(m => {
-                                const label = labels[m] || m;
-                                const sel = m === currentModel ? ' selected' : '';
-                                return `<option value="${m}"${sel}>${label}</option>`;
-                            }).join('');
-                        }
-                    }).catch(() => {}); // Silent fail — keep current options
-                _rcDirty['active_vl_provider'] = vlProvSelect.value !== (_rcData['active_vl_provider']||'') ? vlProvSelect.value : undefined;
-                if (_rcDirty['active_vl_provider'] === undefined) delete _rcDirty['active_vl_provider'];
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-            });
-            vlModelSelect.addEventListener('change', () => {
-                _rcDirty['active_vl_model'] = vlModelSelect.value !== (_rcData['active_vl_model']||'') ? vlModelSelect.value : undefined;
-                if (_rcDirty['active_vl_model'] === undefined) delete _rcDirty['active_vl_model'];
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-            });
-        }
-
-        // Chain list widget — drag-reorder, add/remove entries
-        function populateChainModels(row) {
-            const provSel = row.querySelector('.chain-provider');
-            const modSel = row.querySelector('.chain-model');
-            if (!provSel || !modSel) return;
-            const pid = provSel.value;
-            const currentModel = modSel.dataset.current || modSel.value || '';
-            const models = llmInfo?.providers?.[pid]?.models ? ['auto', ...llmInfo.providers[pid].models] : ['auto'];
-            if (currentModel && !models.includes(currentModel)) models.push(currentModel);
-            const labels = llmInfo?.providers?.[pid]?.labels || {};
-            modSel.innerHTML = models.map(m => `<option value="${m}"${m===currentModel?' selected':''}>${labels[m]||m}</option>`).join('');
-            modSel.dataset.current = currentModel;
-        }
-        function chainMarkDirty() {
-            const container = document.querySelector('[data-key="llm_fallback_chain"][data-type="ordered-list"]');
-            if (!container) return;
-            const rows = container.querySelectorAll('.chain-row');
-            const now = Array.from(rows).map(r => [r.querySelector('.chain-provider')?.value || 'zhipu', r.querySelector('.chain-model')?.value || 'glm-4.5-air']);
-            const orig = _rcData['llm_fallback_chain'];
-            const nowStr = JSON.stringify(now);
-            _rcDirty['llm_fallback_chain'] = (nowStr !== JSON.stringify(orig ?? [['zhipu','glm-4.5-air']])) ? now : undefined;
-            if (_rcDirty['llm_fallback_chain'] === undefined) delete _rcDirty['llm_fallback_chain'];
-            const modDot = document.getElementById('rcModifiedDot');
-            if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-        }
-        const chainContainer = document.querySelector('[data-key="llm_fallback_chain"][data-type="ordered-list"]');
-        if (chainContainer) {
-            // Populate model dropdowns for each row
-            chainContainer.querySelectorAll('.chain-row').forEach(r => populateChainModels(r));
-            // Provider change → update models
-            chainContainer.addEventListener('change', e => {
-                const row = e.target.closest('.chain-row');
-                if (!row) return;
-                if (e.target.classList.contains('chain-provider')) {
-                    const modSel = row.querySelector('.chain-model');
-                    if (modSel) modSel.dataset.current = ''; // reset
-                    populateChainModels(row);
-                }
-                chainMarkDirty();
-            });
-            // Remove
-            chainContainer.addEventListener('click', e => {
-                if (e.target.classList.contains('chain-remove')) {
-                    const row = e.target.closest('.chain-row');
-                    if (row && chainContainer.querySelectorAll('.chain-row').length > 1) {
-                        row.remove();
-                        chainMarkDirty();
-                    }
-                }
-            });
-            // Add
-            const addBtn = chainContainer.querySelector('.chain-add');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => {
-                    const firstRow = chainContainer.querySelector('.chain-row');
-                    const clone = firstRow.cloneNode(true);
-                    clone.dataset.index = chainContainer.querySelectorAll('.chain-row').length;
-                    const provSel = clone.querySelector('.chain-provider');
-                    const modSel = clone.querySelector('.chain-model');
-                    if (provSel) provSel.value = 'zhipu';
-                    if (modSel) { modSel.dataset.current = ''; modSel.value = ''; }
-                    populateChainModels(clone);
-                    chainContainer.insertBefore(clone, addBtn);
-                    chainMarkDirty();
-                });
-            }
-            // Drag & drop
-            let dragSrcRow = null;
-            chainContainer.addEventListener('dragstart', e => {
-                const row = e.target.closest('.chain-row');
-                if (row) { dragSrcRow = row; row.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); }
-            });
-            chainContainer.addEventListener('dragend', e => {
-                const row = e.target.closest('.chain-row');
-                if (row) row.style.opacity = '';
-                chainMarkDirty();
-            });
-            chainContainer.addEventListener('dragover', e => {
-                e.preventDefault();
-                const row = e.target.closest('.chain-row');
-                if (row && dragSrcRow && row !== dragSrcRow) {
-                    const rect = row.getBoundingClientRect();
-                    const midY = rect.top + rect.height / 2;
-                    if (e.clientY < midY) row.parentNode.insertBefore(dragSrcRow, row);
-                    else row.parentNode.insertBefore(dragSrcRow, row.nextSibling);
-                }
-            });
-            chainContainer.addEventListener('drop', e => { e.preventDefault(); });
-        }
-
-        // VL test widget — drag-drop image analysis
-        const vlGroup = document.querySelector('details summary');
-        const vlTestHtml = `<div style="margin-top:10px;border:1px dashed var(--card-border);border-radius:8px;padding:12px;text-align:center;">
-            <div id="vlDropZone" style="border:2px dashed #4a5a6a;border-radius:8px;padding:20px;cursor:pointer;transition:border-color .2s;">
-                <p style="margin:0;font-size:.75rem;color:var(--card-muted);">📸 拖拽图片到此处或点击上传，测试VL模型</p>
-                <input type="file" id="vlTestInput" accept="image/*" style="display:none;">
-            </div>
-            <div id="vlTestResult" style="margin-top:8px;font-size:.7rem;text-align:left;display:none;background:#1e293b;border-radius:6px;padding:10px;max-height:300px;overflow-y:auto;white-space:pre-wrap;color:#e2e8f0;"></div>
-        </div>`;
-        panel.insertAdjacentHTML('beforeend', vlTestHtml);
-
-        // Wire VL test widget
-        const vlDropZone = document.getElementById('vlDropZone');
-        const vlTestInput = document.getElementById('vlTestInput');
-        const vlTestResult = document.getElementById('vlTestResult');
-        if (vlDropZone && vlTestInput) {
-            vlDropZone.onclick = () => vlTestInput.click();
-            vlDropZone.addEventListener('dragover', e => { e.preventDefault(); vlDropZone.style.borderColor = '#22c55e'; });
-            vlDropZone.addEventListener('dragleave', () => { vlDropZone.style.borderColor = '#4a5a6a'; });
-            vlDropZone.addEventListener('drop', e => { e.preventDefault(); vlDropZone.style.borderColor = '#4a5a6a'; if (e.dataTransfer.files.length) handleVLTest(e.dataTransfer.files[0]); });
-            vlTestInput.onchange = () => { if (vlTestInput.files.length) handleVLTest(vlTestInput.files[0]); };
-        }
-        async function handleVLTest(file) {
-            if (!file) return;
-            vlTestResult.style.display = 'block';
-            vlTestResult.innerHTML = '⏳ 分析中...';
-            const fd = new FormData();
-            fd.append('image', file);
-            try {
-                const r = await fetch('/admin/vl_test', { method:'POST', credentials:'include', body:fd });
-                const d = await r.json();
-                if (d.status === 'ok') {
-                    const txt = escapeHtml(d.data?.description || '');
-                    const reasoning = d.data?.reasoning ? escapeHtml(d.data.reasoning) : '';
-                    vlTestResult.innerHTML = (reasoning ? `<div style="color:#94a3b8;font-size:.65rem;margin-bottom:6px;border-left:2px solid #4a5a6a;padding-left:8px;"><b>推理:</b> ${reasoning}</div>` : '') + `<div>${txt}</div>`;
-                } else {
-                    vlTestResult.innerHTML = `<span style="color:#ef4444;">${escapeHtml(d.error||'分析失败')}</span>`;
-                }
-            } catch(e) {
-                vlTestResult.innerHTML = `<span style="color:#ef4444;">网络错误: ${escapeHtml(e.message)}</span>`;
-            }
-        }
-
-        // Track dirty changes for number inputs
-        panel.querySelectorAll('input[data-key]').forEach(inp => {
-            const eventType = inp.type === 'checkbox' ? 'change' : 'input';
-            inp.addEventListener(eventType, () => {
-                const key = inp.dataset.key;
-                const orig = _rcData[key];
-                const now = inp.type === 'checkbox' ? inp.checked : inp.value;
-                const nowStr = String(now);
-                _rcDirty[key] = (nowStr !== String(orig ?? '')) ? now : undefined;
-                if (_rcDirty[key] === undefined) delete _rcDirty[key];
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-            });
-        });
-
-        // Factory save button
-        const saveFactoryBtn = document.getElementById('rcSaveFactoryBtn');
-        if (saveFactoryBtn) saveFactoryBtn.onclick = async () => {
-            if (!confirm('Save current config as factory presets?\n\nFactory presets are IMMUTABLE — they cannot be edited or deleted. This is a one-time operation.')) return;
-            saveFactoryBtn.disabled = true; saveFactoryBtn.textContent = '⏳ Saving...';
-            try {
-                const r = await fetch('/admin/runtime_config', {
-                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                    body:JSON.stringify({_action:'save_factory'})
-                });
-                const d = await r.json();
-                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadRuntimeConfig(); }
-                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-            } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-            saveFactoryBtn.disabled = false; saveFactoryBtn.textContent = '🏭 保存为出厂预设';
-        };
-
-        // Factory restore button
-        const restoreFactoryBtn = document.getElementById('rcRestoreFactoryBtn');
-        if (restoreFactoryBtn) restoreFactoryBtn.onclick = async () => {
-            if (!confirm('恢复所有配置到出厂预设？\n\n这将丢弃全部自定义修改。LLM服务商/模型设置将保留。')) return;
-            restoreFactoryBtn.disabled = true; restoreFactoryBtn.textContent = '⏳ 恢复中...';
-            try {
-                const r = await fetch('/admin/runtime_config', {
-                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                    body:JSON.stringify({_action:'restore_factory'})
-                });
-                const d = await r.json();
-                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadRuntimeConfig(); }
-                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
-            } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-            restoreFactoryBtn.disabled = false; restoreFactoryBtn.textContent = '↩ 恢复出厂预设';
-        };
-    }
-
-    // Save all button
-    document.getElementById('rcSaveAllBtn').addEventListener('click', async () => {
-        const dirty = Object.entries(_rcDirty).filter(([,v]) => v !== undefined);
-        if (!dirty.length) { document.getElementById('rcMsg').innerHTML = '<span style="color:var(--card-muted);">无修改</span>'; return; }
-        const payload = {};
-        for (const [k, v] of dirty) {
-            const sch = _rcSchema[k];
-            if (sch?.type === 'select') { payload[k] = v; }
-            else if (sch?.type === 'bool') { payload[k] = v === true || v === 'true'; }
-            else if (sch?.type === 'ordered-list') {
-                const parsed = typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch(_) { return v; } })() : v;
-                payload[k] = parsed;
-            }
-            else if (sch?.type === 'float') { payload[k] = parseFloat(v); }
-            else { payload[k] = parseInt(v); }
-        }
-        const btn = document.getElementById('rcSaveAllBtn');
-        btn.disabled = true; btn.textContent = '⏳ 保存中...';
-        try {
-            const r = await fetch('/admin/runtime_config', {
-                method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                body:JSON.stringify(payload)
-            });
-            const d = await r.json();
-            if (r.ok) {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>';
-                _rcDirty = {};
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = 'none';
-                loadRuntimeConfig();
-            } else {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'保存失败')+'</span>';
-            }
-        } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-        btn.disabled = false; btn.textContent = '💾 Save All Changes';
-    });
-
-    // Refresh button — moved to lazy-load handler inside rcDetails toggle
-
-    // Reset button
-    document.getElementById('rcResetBtn').addEventListener('click', async () => {
-        if (!confirm('重置所有运行配置到默认值？\n这将丢弃全部自定义修改。')) return;
-        try {
-            const r = await fetch('/admin/runtime_config', {
-                method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                body:JSON.stringify({_action:'reset'})
-            });
-            const d = await r.json();
-            if (r.ok) {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>';
-                _rcDirty = {};
-                const modDot = document.getElementById('rcModifiedDot');
-                if (modDot) modDot.style.display = 'none';
-                loadRuntimeConfig();
-            } else {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'Failed')+'</span>';
-            }
-        } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">Network error</span>'; }
-    });
-
-    async function loadAssetManager() {
-        const container = document.getElementById('assetManager');
-        if (!container) return;
-        let allUsers = [], deposits = [], selectedSrc = new Set(), selectedDep = new Set();
-        try {
-            const r = await fetch('/admin/user_assets', { credentials: 'include' });
-            const d = await r.json();
-            allUsers = d.users || [];
-            deposits = d.deposits || [];
-        } catch(_) { container.innerHTML = '<p style="color:#e74c3c">加载失败</p>'; return; }
-
-        function render() {
-            const filter = (container.querySelector('#assetSearch')?.value||'').toLowerCase();
-            const filtered = filter ? allUsers.filter(u => u.username.toLowerCase().includes(filter)) : allUsers;
-            const depositCount = deposits.length;
-            let html = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-                <input id="assetSearch" placeholder="🔍 搜索用户..." style="flex:1;min-width:150px;padding:5px 8px;border-radius:6px;border:1px solid var(--card-border);font-size:.75rem;">
-                <button id="assetSelectAll" class="file-btn" style="padding:3px 8px;font-size:.7rem;">全选</button>
-                <span style="font-size:.7rem;color:var(--card-muted);">已选 <b id="assetSelCount">0</b> 用户</span>
-                <select id="assetTarget" style="padding:5px;border-radius:6px;border:1px solid var(--card-border);font-size:.75rem;">
-                    <option value="">-- 选择接收者 --</option>${allUsers.map(u=>`<option value="${u.user_id}">${escapeHtml(u.username)}</option>`).join('')}</select>
-                <button id="assetTransferBtn" class="file-btn" style="background:#2563eb;color:white;padding:4px 12px;font-size:.72rem;">转移选中</button>
-                <button id="assetRefreshBtn" class="file-btn" style="padding:3px 8px;font-size:.7rem;">🔄</button>
-            </div>`;
-
-            // Deposit section
-            if (depositCount > 0) {
-                html += `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;margin-bottom:8px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
-                        <strong style="font-size:.75rem;">📦 孤数据托管 (${depositCount}项)</strong>
-                        <span style="font-size:.65rem;color:var(--card-muted);">已删除账户的遗留资产</span>
-                    </div>
-                    <table style="width:100%;font-size:.68rem;margin-top:4px;border-collapse:collapse;">
-                    <tr style="text-align:left;border-bottom:1px solid var(--card-border);"><th style="padding:2px 4px;"><input type="checkbox" id="depSelectAll"></th><th>来源</th><th>类型</th><th>日期</th></tr>`;
-                for (const item of deposits.slice(0,20)) {
-                    const checked = selectedDep.has(item.id);
-                    html += `<tr style="border-bottom:1px solid var(--card-border);${checked?'background:#eff6ff;':''}">
-                        <td style="padding:2px 4px;"><input type="checkbox" class="dep-cb" data-id="${item.id}" ${checked?'checked':''}></td>
-                        <td>${escapeHtml(item.original_username||'?')}</td>
-                        <td>${escapeHtml(item.item_type||'?')}</td>
-                        <td>${new Date(item.created_at).toLocaleDateString()}</td></tr>`;
-                }
-                html += '</table></div>';
-            }
-
-            // User asset table
-            html += `<div style="overflow-x:auto;">
-            <table style="width:100%;font-size:.7rem;border-collapse:collapse;">
-            <tr style="text-align:left;border-bottom:2px solid var(--card-border);background:var(--card-bg);position:sticky;top:0;">
-                <th style="padding:4px 6px;"><input type="checkbox" id="userSelectAll"></th>
-                <th>用户</th><th>会话</th><th>聊天文件</th><th>知识库</th><th>批量对比</th><th>项目</th><th>合计</th>
-            </tr>`;
-            for (const u of filtered) {
-                const checked = selectedSrc.has(u.user_id);
-                html += `<tr style="border-bottom:1px solid var(--card-border);${checked?'background:#eff6ff;':''}${u.total===0?' color:var(--card-muted);':''}">
-                    <td style="padding:2px 4px;"><input type="checkbox" class="user-cb" data-uid="${u.user_id}" ${checked?'checked':''}></td>
-                    <td style="white-space:nowrap;"><b>${escapeHtml(u.username)}</b></td>
-                    <td>${u.sessions}</td><td>${u.chat_files}${u.chat_mb>0?`<small> ${u.chat_mb}MB</small>`:''}</td>
-                    <td>${u.kb_files}</td><td>${u.batch_results}</td><td>${u.projects}</td>
-                    <td><b>${u.total}</b></td></tr>`;
-            }
-            html += '</table></div>';
-            container.innerHTML = html;
-
-            // Wire checkboxes
-            const updateCount = () => {
-                const cnt = container.querySelector('#assetSelCount'); if(cnt) cnt.textContent = selectedSrc.size;
-            };
-            container.querySelector('#assetSelectAll').onclick = () => {
-                filtered.forEach(u => selectedSrc.add(u.user_id)); updateCount(); render();
-            };
-            container.querySelector('#userSelectAll').onchange = (e) => {
-                filtered.forEach(u => e.target.checked ? selectedSrc.add(u.user_id) : selectedSrc.delete(u.user_id));
-                updateCount(); render();
-            };
-            container.querySelectorAll('.user-cb').forEach(cb => {
-                cb.onchange = () => { cb.checked ? selectedSrc.add(cb.dataset.uid) : selectedSrc.delete(cb.dataset.uid); updateCount(); };
-            });
-            container.querySelectorAll('.dep-cb').forEach(cb => {
-                cb.onchange = () => { cb.checked ? selectedDep.add(parseInt(cb.dataset.id)) : selectedDep.delete(parseInt(cb.dataset.id)); };
-            });
-            const depAll = container.querySelector('#depSelectAll');
-            if (depAll) depAll.onchange = (e) => {
-                deposits.forEach(item => e.target.checked ? selectedDep.add(item.id) : selectedDep.delete(item.id));
-                render();
-            };
-            updateCount();
-            // Transfer button
-            container.querySelector('#assetTransferBtn').onclick = async () => {
-                const target = container.querySelector('#assetTarget').value;
-                if (!target) { alert('请选择接收用户'); return; }
-                if (!selectedSrc.size && !selectedDep.size) { alert('请至少选择一个来源用户或托管项'); return; }
-                const count = selectedSrc.size + selectedDep.size;
-                if (!confirm(`将 ${count} 个来源的资产转移给目标用户？`)) return;
-                const res = await fetch('/admin/transfer_assets', {
-                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-                    body:JSON.stringify({target_user_id:target, source_user_ids:[...selectedSrc], deposit_ids:[...selectedDep], types:['all']})
-                });
-                const d = await res.json();
-                if (res.ok) { showToast(`已转移 ${d.transferred} 项`, 'success'); selectedSrc.clear(); selectedDep.clear(); loadAssetManager(); }
-                else alert(d.error||'转移失败');
-            };
-            container.querySelector('#assetRefreshBtn').onclick = () => loadAssetManager();
-            // Search
-            container.querySelector('#assetSearch').oninput = () => render();
-        }
-        render();
     }
 
     // ======================== Share Conversation ========================
@@ -11761,8 +8364,25 @@
                 document.getElementById('messageInput').rows = 1;
                 document.querySelectorAll('.quote-badge').forEach(b => b.remove());
                 _currentQuoteContext = null;
+        });
+    }
+
+    function _wireTimelineDetailActions(projectId, tl) {
+        setTimeout(function() {
+            document.querySelectorAll('.tl-list-entry').forEach(function(el) {
+                el.onclick = function() {
+                    var tid = parseInt(el.getAttribute('data-tid'));
+                    if (tid) _loadTimelineDetail(projectId, tid);
+                };
             });
-        }
+            var newBtn = document.getElementById('tlNewBtn');
+            if (newBtn) newBtn.onclick = function() {
+                var setup = document.getElementById('timelineSetup');
+                setup.style.display = 'block';
+                _setupTimelineCreationForm(projectId);
+            };
+        }, 50);
+    }
     }
 
     // ======================== Todo Panel ========================
@@ -11874,6 +8494,9 @@
 
     let _bgTasksActiveSSE = null;
     let _bgTasksPollTimer = null;
+    let _bgTasksBackoff = 0;
+    let _bgTasksStopped = false;
+    const BG_TASKS_BASE = 5000;
 
     async function loadBgTasks() {
         try {
@@ -11885,9 +8508,11 @@
             const tasks = data.tasks || [];
             countSpan.textContent = tasks.length;
             if (tasks.length === 0) {
+                _bgTasksBackoff++;
                 list.innerHTML = '<li style="color:#999;font-size:0.72rem;">无进行中的任务</li>';
                 return;
             }
+            _bgTasksBackoff = 0;
             list.innerHTML = tasks.map(t => {
                 const statusIcon = t.status === 'running' ? '🔄' : t.status === 'completed' ? '✅' : t.status === 'failed' ? '❌' : '⏳';
                 const barWidth = t.progress || 0;
@@ -11904,7 +8529,16 @@
                     ${t.message && t.status !== 'completed' ? `<div style="font-size:0.65rem;color:var(--card-muted);margin-top:2px;">${escapeHtml(t.message)}</div>` : ''}
                 </li>`;
             }).join('');
-        } catch(e) { /* silent */ }
+        } catch(e) { _bgTasksBackoff++; /* silent */ }
+    }
+
+    function _scheduleBgTasksPoll() {
+        if (_bgTasksStopped) return;
+        const delay = Math.min(BG_TASKS_BASE * Math.pow(1.3, Math.min(_bgTasksBackoff, 12)), 30000);
+        _bgTasksPollTimer = setTimeout(async () => {
+            await loadBgTasks();
+            _scheduleBgTasksPoll();
+        }, delay);
     }
 
     function _handleTaskClick(e) {
@@ -11948,13 +8582,15 @@
     console.log('[TASK] click handler registered on document');
 
     function startBgTasksPolling() {
+        _bgTasksStopped = false;
+        _bgTasksBackoff = 0;
         loadBgTasks();
-        if (_bgTasksPollTimer) clearInterval(_bgTasksPollTimer);
-        _bgTasksPollTimer = setInterval(loadBgTasks, 5000);
+        _scheduleBgTasksPoll();
     }
 
     function stopBgTasksPolling() {
-        if (_bgTasksPollTimer) { clearInterval(_bgTasksPollTimer); _bgTasksPollTimer = null; }
+        _bgTasksStopped = true;
+        if (_bgTasksPollTimer) { clearTimeout(_bgTasksPollTimer); _bgTasksPollTimer = null; }
     }
 
     // Global: subscribe to SSE progress for a task, updates progressBar + toast
@@ -12186,144 +8822,130 @@
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Quote Anomaly standalone tool
     // ══════════════════════════════════════════════════════════════════
-    function initQuoteAnomalyTool() {
-        const fileInput = document.getElementById('quoteAnomalyFileInput');
-        const selectBtn = document.getElementById('selectQuoteAnomalyFilesBtn');
-        const runBtn = document.getElementById('runQuoteAnomalyBtn');
-        const fileNames = document.getElementById('quoteAnomalyFileNames');
-        const statusEl = document.getElementById('quoteAnomalyStatus');
-        const resultsPanel = document.getElementById('quoteAnomalyResultsPanel');
+    // System A: Compare mode toggle + single-file compare
+    // ══════════════════════════════════════════════════════════════════
+    function initCompareTools() {
+        var singleBtn = document.getElementById('compareModeSingle');
+        var batchBtn = document.getElementById('compareModeBatch');
+        var singlePanel = document.getElementById('compareSinglePanel');
+        var batchPanel = document.getElementById('compareBatchPanel');
+        var singleInput = document.getElementById('compareSingleInput');
+        var selectSingleBtn = document.getElementById('selectCompareSingleBtn');
+        var runSingleBtn = document.getElementById('runCompareSingleBtn');
+        var singleFileNames = document.getElementById('compareSingleFileNames');
+        var resultsPanel = document.getElementById('compareResults');
 
-        if (!selectBtn || !runBtn || !fileInput) return;
+        var singleFiles = [];
 
-        let selectedFiles = [];
+        if (singleBtn && batchBtn) {
+            singleBtn.onclick = function() {
+                singlePanel.style.display = 'block';
+                batchPanel.style.display = 'none';
+                singleBtn.style.background = '#dbeafe'; singleBtn.style.color = '#1e40af';
+                batchBtn.style.background = ''; batchBtn.style.color = '';
+            };
+            batchBtn.onclick = function() {
+                singlePanel.style.display = 'none';
+                batchPanel.style.display = 'block';
+                batchBtn.style.background = '#dbeafe'; batchBtn.style.color = '#1e40af';
+                singleBtn.style.background = ''; singleBtn.style.color = '';
+            };
+        }
 
-        selectBtn.onclick = () => fileInput.click();
-
-        fileInput.onchange = () => {
-            selectedFiles = Array.from(fileInput.files);
-            if (selectedFiles.length > 0) {
-                fileNames.textContent = selectedFiles.map(f => f.name).join(', ');
-                runBtn.disabled = false;
-            } else {
-                fileNames.textContent = '';
-                runBtn.disabled = true;
-            }
-        };
-
-        runBtn.onclick = async () => {
-            if (selectedFiles.length === 0) return;
-            runBtn.disabled = true;
-            statusEl.textContent = '正在分析报价异常...';
-            statusEl.style.color = '#e67e22';
-            resultsPanel.style.display = 'none';
-
-            try {
-                const formData = new FormData();
-                selectedFiles.forEach(f => formData.append('files', f));
-
-                // Use cross-bidder endpoint if multiple files, single-doc otherwise
-                const endpoint = selectedFiles.length >= 2 ? '/compare_bidders_quotes' : '/check_quote_anomaly';
-                if (selectedFiles.length === 1) formData.append('file', selectedFiles[0]);
-
-                const resp = await fetch(endpoint, { method: 'POST', body: formData });
-                const data = await resp.json();
-                if (resp.ok) {
-                    renderQuoteAnomalyResults(data, resultsPanel);
-                    resultsPanel.style.display = 'block';
-                    statusEl.textContent = '✓ 报价异常检测完成';
-                    statusEl.style.color = '#27ae60';
+        if (selectSingleBtn && singleInput) {
+            selectSingleBtn.onclick = function() { singleInput.click(); };
+            singleInput.onchange = function() {
+                singleFiles = Array.from(singleInput.files);
+                if (singleFiles.length > 0) {
+                    singleFileNames.textContent = singleFiles.map(function(f) { return f.name; }).join(', ');
+                    runSingleBtn.disabled = singleFiles.length < 2;
                 } else {
-                    statusEl.textContent = '✗ ' + (data.error || '检测失败');
-                    statusEl.style.color = '#e74c3c';
+                    singleFileNames.textContent = '';
+                    runSingleBtn.disabled = true;
                 }
-            } catch (err) {
-                statusEl.textContent = '✗ 网络错误: ' + err.message;
-                statusEl.style.color = '#e74c3c';
-            } finally {
-                runBtn.disabled = false;
-            }
-        };
+            };
+        }
+
+        if (runSingleBtn) {
+            runSingleBtn.onclick = async function() {
+                if (singleFiles.length < 2) { alert('请选择至少2个投标文件进行对比'); return; }
+                runSingleBtn.disabled = true;
+                resultsPanel.style.display = 'block';
+                resultsPanel.innerHTML = '<p style="color:var(--card-muted);">正在对比分析...</p>';
+
+                try {
+                    var formData = new FormData();
+                    singleFiles.forEach(function(f) { formData.append('files', f); });
+                    formData.append('project_id', currentProjectId || '');
+                    var resp = await fetch('/compare_bidders_quotes', { method: 'POST', body: formData, credentials: 'include' });
+                    var data = await resp.json();
+                    if (data.success) {
+                        renderSingleCompareResults(data, resultsPanel);
+                    } else {
+                        resultsPanel.innerHTML = '<p style="color:#e74c3c;">' + (data.error || '对比失败') + '</p>';
+                    }
+                } catch (err) {
+                    resultsPanel.innerHTML = '<p style="color:#e74c3c;">网络错误: ' + err.message + '</p>';
+                } finally {
+                    runSingleBtn.disabled = false;
+                }
+            };
+        }
     }
 
-    function renderQuoteAnomalyResults(data, panel) {
-        let html = '';
-        const perBidder = data.per_bidder || (data.doc_name ? [data] : []);
-
-        if (perBidder.length === 0 && !data.risk_score && !data.doc_name) {
-            panel.innerHTML = '<p>无数据</p>';
-            return;
-        }
-
-        // Single doc mode
-        if (!data.per_bidder && data.doc_name) {
-            html += `<p><strong>文档:</strong> ${escapeHtml(data.doc_name)} | <strong>风险评分:</strong> <span style="color:${data.risk_score > 50 ? '#e74c3c' : data.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(data.risk_score||0).toFixed(1)}</span></p>`;
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;">';
-            html += '<tr><th>CV</th><th>同价疑义</th><th>异常降幅</th><th>聚类</th><th>本福特偏差</th></tr>';
-            html += `<tr>`;
-            html += `<td>${(data.cv||0).toFixed(4)}</td>`;
-            html += `<td>${data.same_rate_flag ? '⚠️ 是' : '否'}</td>`;
-            html += `<td>${data.abnormal_drop_flag ? '⬇️ 是' : '否'}</td>`;
-            html += `<td>${data.clustering_flag ? '🔗 是' : '否'}</td>`;
-            html += `<td>${(data.benford_deviation||0).toFixed(3)}</td></tr></table>`;
-            if (data.details && data.details.length) {
-                html += '<ul style="font-size:0.7rem;margin-top:4px;">';
-                data.details.forEach(d => html += `<li>${escapeHtml(d)}</li>`);
-                html += '</ul>';
-            }
-            if (data.daxie_mismatches && data.daxie_mismatches.length) {
-                html += '<p style="color:#e67e22;font-size:0.7rem;">⚠️ 大写金额不一致: ' + data.daxie_mismatches.length + ' 处</p>';
-            }
-        } else {
-            // Cross-bidder mode
-            html += `<p><strong>投标单位:</strong> ${perBidder.length} | <strong>最高风险:</strong> <span style="color:${(data.max_risk_score||0) > 50 ? '#e74c3c' : '#e67e22'}">${(data.max_risk_score||0).toFixed(1)}</span> | <strong>平均CV:</strong> ${(data.avg_cv||0).toFixed(4)}</p>`;
-            if (data.cross_same_rate) html += '<p style="color:#e67e22;">⚠️ 跨投标单位同价疑义</p>';
-            if (data.cross_clustering) html += '<p style="color:#e67e22;">🔗 跨投标单位聚类疑义</p>';
+    function renderSingleCompareResults(data, panel) {
+        var html = '';
+        var perBidder = data.per_bidder || [];
+        if (perBidder.length > 0) {
+            html += '<div style="font-size:0.78rem;margin-bottom:8px;">';
+            html += '<strong>对比单位:</strong> ' + perBidder.length;
+            html += ' | <strong>最高风险:</strong> <span style="color:' + ((data.max_risk_score||0) > 50 ? '#e74c3c' : '#e67e22') + '">' + (data.max_risk_score||0).toFixed(1) + '</span>';
+            html += ' | <strong>平均CV:</strong> ' + (data.avg_cv||0).toFixed(4);
+            if (data.cross_same_rate) html += ' | <span style="color:#e67e22;">⚠️ 同价疑义</span>';
+            if (data.cross_clustering) html += ' | <span style="color:#e67e22;">🔗 聚类疑义</span>';
+            html += '</div>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;">';
-            html += '<tr><th>投标单位</th><th>风险</th><th>CV</th><th>同价</th><th>降幅</th><th>聚类</th></tr>';
-            perBidder.forEach(pb => {
-                html += `<tr>`;
-                html += `<td>${escapeHtml((pb.filename||'').substring(0,25))}</td>`;
-                html += `<td style="color:${pb.risk_score > 50 ? '#e74c3c' : pb.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(pb.risk_score||0).toFixed(1)}</td>`;
-                html += `<td>${(pb.cv||0).toFixed(4)}</td>`;
-                html += `<td>${pb.same_rate_flag ? '⚠️' : '✓'}</td>`;
-                html += `<td>${pb.abnormal_drop_flag ? '⬇️' : '✓'}</td>`;
-                html += `<td>${pb.clustering_flag ? '🔗' : '✓'}</td></tr>`;
+            html += '<tr><th>投标单位</th><th>风险</th><th>CV</th><th>同价</th><th>降幅</th><th>聚类</th><th>本福特</th></tr>';
+            perBidder.forEach(function(pb) {
+                html += '<tr>';
+                html += '<td>' + escapeHtml((pb.filename||'').substring(0,20)) + '</td>';
+                html += '<td style="color:' + (pb.risk_score > 50 ? '#e74c3c' : pb.risk_score > 20 ? '#e67e22' : '#27ae60') + '">' + (pb.risk_score||0).toFixed(1) + '</td>';
+                html += '<td>' + (pb.cv||0).toFixed(4) + '</td>';
+                html += '<td>' + (pb.same_rate_flag ? '⚠️' : '✓') + '</td>';
+                html += '<td>' + (pb.abnormal_drop_flag ? '⬇️' : '✓') + '</td>';
+                html += '<td>' + (pb.clustering_flag ? '🔗' : '✓') + '</td>';
+                html += '<td>' + (pb.benford_deviation||0).toFixed(3) + '</td></tr>';
             });
             html += '</table>';
+        } else {
+            html += '<p style="color:var(--card-muted);">对比完成，未发现异常。</p>';
         }
-        const docName = (data.per_bidder && data.per_bidder.length) ? data.per_bidder.map(function(p){return p.filename||''}).join(';').substring(0,80) : data.doc_name || '未知';
-        html += '<div style="margin-top:8px;display:flex;gap:6px;font-size:0.7rem;align-items:center;">';
-        html += '<span style="color:var(--card-muted);">分析结果有帮助吗？</span>';
-        html += '<button class="fb-btn" onclick="window.submitQuoteFeedback(\''+escapeHtml(docName)+'\',5,this)">👍 有帮助</button>';
-        html += '<button class="fb-btn" onclick="window.submitQuoteFeedback(\''+escapeHtml(docName)+'\',1,this)">👎 无帮助</button>';
-        html += '</div>';
         panel.innerHTML = html;
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Relationship Extraction standalone tool
+    // System B: Document Deep Analysis (SSE + indicator cards)
     // ══════════════════════════════════════════════════════════════════
-    function initRelationshipTool() {
-        const fileInput = document.getElementById('relationshipFileInput');
-        const selectBtn = document.getElementById('selectRelationshipFilesBtn');
-        const runBtn = document.getElementById('runRelationshipBtn');
-        const fileNames = document.getElementById('relationshipFileNames');
-        const statusEl = document.getElementById('relationshipStatus');
-        const resultsPanel = document.getElementById('relationshipResultsPanel');
+    function initDocAnalysisTool() {
+        var fileInput = document.getElementById('docAnalysisFileInput');
+        var selectBtn = document.getElementById('selectDocAnalysisFilesBtn');
+        var runBtn = document.getElementById('runDocAnalysisBtn');
+        var fileNames = document.getElementById('docAnalysisFileNames');
+        var progDiv = document.getElementById('docAnalysisProgress');
+        var progText = document.getElementById('docAnalysisProgressText');
+        var progBar = document.getElementById('docAnalysisProgressBar');
+        var resultsDiv = document.getElementById('docAnalysisResults');
 
         if (!selectBtn || !runBtn || !fileInput) return;
 
-        let selectedFiles = [];
+        var selectedFiles = [];
 
-        selectBtn.onclick = () => fileInput.click();
-
-        fileInput.onchange = () => {
+        selectBtn.onclick = function() { fileInput.click(); };
+        fileInput.onchange = function() {
             selectedFiles = Array.from(fileInput.files);
             if (selectedFiles.length > 0) {
-                fileNames.textContent = selectedFiles.map(f => f.name).join(', ');
+                fileNames.textContent = selectedFiles.map(function(f) { return f.name; }).join(', ');
                 runBtn.disabled = false;
             } else {
                 fileNames.textContent = '';
@@ -12331,181 +8953,157 @@
             }
         };
 
-        runBtn.onclick = async () => {
-            if (selectedFiles.length === 0) return;
+        runBtn.onclick = async function() {
+            if (selectedFiles.length === 0) { alert('请先选择投标文件'); return; }
             runBtn.disabled = true;
-            statusEl.textContent = '正在提取关联关系...';
-            statusEl.style.color = '#8e44ad';
-            resultsPanel.style.display = 'none';
+            resultsDiv.style.display = 'none';
+            progDiv.style.display = 'block';
+            progText.textContent = '正在提交分析...';
+            progBar.style.width = '5%';
 
             try {
-                const formData = new FormData();
-                selectedFiles.forEach(f => formData.append('files', f));
-                const resp = await fetch('/extract_relationships', { method: 'POST', body: formData });
-                const data = await resp.json();
-                if (resp.ok) {
-                    renderRelationshipResults(data, resultsPanel);
-                    resultsPanel.style.display = 'block';
-                    statusEl.textContent = '✓ 关联关系分析完成';
-                    statusEl.style.color = '#27ae60';
-                } else {
-                    statusEl.textContent = '✗ ' + (data.error || '分析失败');
-                    statusEl.style.color = '#e74c3c';
+                var formData = new FormData();
+                selectedFiles.forEach(function(f) { formData.append('files', f); });
+                var resp = await fetch('/document_analysis/analyze', {
+                    method: 'POST', body: formData, credentials: 'include'
+                });
+                var initData = await resp.json();
+                if (!initData.success) {
+                    progDiv.style.display = 'none';
+                    alert(initData.error || '启动分析失败');
+                    runBtn.disabled = false;
+                    return;
                 }
+                var taskId = initData.task_id;
+                progText.textContent = '分析已启动，正在建立连接...';
+
+                // Check if already completed (SSE reconnection edge case)
+                var statusCheck = await fetch('/document_analysis/status/' + taskId, { credentials: 'include' });
+                var statusData = await statusCheck.json();
+                if (statusData.success && statusData.completed && statusData.result) {
+                    progDiv.style.display = 'none';
+                    renderDocAnalysisResults(statusData.result.report, resultsDiv, statusData.result.download_url);
+                    runBtn.disabled = false;
+                    return;
+                }
+
+                // Subscribe to SSE
+                var sse = new EventSource('/document_analysis/stream/' + taskId);
+                sse.onmessage = function(e) {
+                    try {
+                        var evt = JSON.parse(e.data);
+                        if (evt.event === 'progress') {
+                            progBar.style.width = evt.progress + '%';
+                            progText.textContent = evt.message || (evt.progress + '%');
+                        } else if (evt.event === 'complete') {
+                            sse.close();
+                            progDiv.style.display = 'none';
+                            var result = evt.result || {};
+                            renderDocAnalysisResults(result.report, resultsDiv, result.download_url);
+                            runBtn.disabled = false;
+                        } else if (evt.event === 'error') {
+                            sse.close();
+                            progDiv.style.display = 'none';
+                            resultsDiv.innerHTML = '<p style="color:#e74c3c;">分析失败: ' + (evt.message || '未知错误') + '</p>';
+                            resultsDiv.style.display = 'block';
+                            runBtn.disabled = false;
+                        }
+                    } catch (_) {}
+                };
+                sse.onerror = function() {
+                    sse.close();
+                    progDiv.style.display = 'none';
+                    resultsDiv.innerHTML = '<p style="color:#e74c3c;">连接中断，请重试</p>';
+                    resultsDiv.style.display = 'block';
+                    runBtn.disabled = false;
+                };
             } catch (err) {
-                statusEl.textContent = '✗ 网络错误: ' + err.message;
-                statusEl.style.color = '#e74c3c';
-            } finally {
+                progDiv.style.display = 'none';
+                resultsDiv.innerHTML = '<p style="color:#e74c3c;">网络错误: ' + err.message + '</p>';
+                resultsDiv.style.display = 'block';
                 runBtn.disabled = false;
             }
         };
     }
 
-    function renderRelationshipResults(data, panel) {
-        let html = '';
-        html += `<p><strong>风险评分:</strong> <span style="color:${data.risk_score > 50 ? '#e74c3c' : data.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(data.risk_score||0).toFixed(1)}</span> | <strong>实体:</strong> ${(data.entities||[]).length} | <strong>关系:</strong> ${(data.relationships||[]).length} | <strong>模块:</strong> ${(data.modules_run||[]).join(', ')}</p>`;
+    function renderDocAnalysisResults(report, panel, downloadUrl) {
+        if (!report) { panel.innerHTML = '<p>分析完成但无数据</p>'; panel.style.display = 'block'; return; }
 
-        if (data.red_flags && data.red_flags.length) {
-            html += '<div style="margin-top:8px;"><strong style="color:#e74c3c;">🚨 风险警告:</strong><ul style="font-size:0.7rem;">';
-            data.red_flags.slice(0, 10).forEach(f => html += `<li style="color:#e67e22;">${escapeHtml(f)}</li>`);
-            html += '</ul></div>';
-        }
+        var info = report.basic_info || {};
+        var indicators = report.indicators || [];
+        var suspected = report.suspected_units || [];
+        var personnel = report.personnel_summary || {};
 
-        if (data.relationships && data.relationships.length) {
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:8px;">';
-            html += '<tr><th>源实体</th><th>目标实体</th><th>类型</th><th>置信度</th><th>风险</th></tr>';
-            data.relationships.slice(0, 20).forEach(r => {
-                html += `<tr>`;
-                html += `<td>${escapeHtml((r.source||'').substring(0,25))}</td>`;
-                html += `<td>${escapeHtml((r.target||'').substring(0,25))}</td>`;
-                html += `<td>${escapeHtml(r.type||'')}/${escapeHtml(r.subtype||'')}</td>`;
-                html += `<td>${((r.confidence||0)*100).toFixed(0)}%</td>`;
-                html += `<td>${r.risk_flag ? '⚠️' : '✓'}</td></tr>`;
+        var html = '';
+
+        // Basic info
+        html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
+        html += '<strong>投标单位:</strong> ' + info.bidder_count;
+        html += ' | <strong>综合评分:</strong> <span style="color:' + (info.total_score > 50 ? '#e74c3c' : info.total_score > 20 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
+        if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">📥 下载DOCX报告</a>';
+        html += '</div>';
+
+        // Suspected units
+        if (suspected.length > 0) {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔴 预警嫌疑单位 (' + suspected.length + '家)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
+            suspected.forEach(function(su) {
+                html += '<tr>';
+                html += '<td>' + (su.score > 10 ? '★ ' : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
+                html += '<td>' + (su.indicators_triggered||0) + '</td>';
+                html += '<td style="color:' + (su.score > 30 ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
             });
-            html += '</table>';
-            if (data.relationships.length > 20) html += `<p style="font-size:0.65rem;color:#888;">(仅显示前20项，共${data.relationships.length}项)</p>`;
+            html += '</table></details>';
+        } else {
+            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现预警嫌疑单位</p>';
         }
 
-        // Company-personnel map (for manual review when 天眼查 is off)
-        const cpm = data.company_personnel_map;
-        if (cpm && cpm.companies && cpm.companies.length) {
-            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">📋 公司与关键人员清单 (供人工审查)</summary>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
-            html += '<tr><th>公司</th><th>关键人员</th><th>涉及文件</th></tr>';
-            cpm.companies.slice(0, 15).forEach(c => {
-                const personnel = (c.personnel||[]).map(p => `${escapeHtml(p.name)}(${escapeHtml(p.title)})`).join('; ');
-                html += `<tr><td>${escapeHtml((c.name||'').substring(0,30))}</td><td>${personnel}</td><td>${c.file_count||0}个文件</td></tr>`;
+        // Indicator cards
+        html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析详情 (' + indicators.length + '项)</summary>';
+        indicators.forEach(function(ind, idx) {
+            var catTag = (ind.category || '') + (ind.skipped ? ' ⏭️' : '');
+            html += '<div style="padding:8px 10px;border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+            html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + escapeHtml(ind.name||'') + '</strong>';
+            html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + escapeHtml(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
+            html += '</div>';
+            var resText = ind.result || '';
+            var resColor = '#16a34a';
+            if (resText.indexOf('⚠️') !== -1 || resText.indexOf('🔴') !== -1 || resText.indexOf('⏭') !== -1) resColor = '#e74c3c';
+            else if (resText.indexOf('✅') !== -1) resColor = '#16a34a';
+            html += '<div style="font-size:0.68rem;color:' + resColor + ';">' + escapeHtml(resText) + '</div>';
+            if (ind.details && ind.details.length > 0 && !ind.skipped) {
+                html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
+                var keys = Object.keys(ind.details[0] || {});
+                ind.details.slice(0, 5).forEach(function(d) {
+                    html += keys.map(function(k) { return escapeHtml(k) + ': ' + escapeHtml(String(d[k]||'').substring(0, 60)); }).join(' | ');
+                    html += '<br>';
+                });
+                if (ind.details.length > 5) html += '...共' + ind.details.length + '项';
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+        html += '</details>';
+
+        // Personnel summary
+        if (personnel.list && personnel.list.length > 0) {
+            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">👥 关系人员汇总 (' + personnel.total + '人)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位</th><th>姓名</th><th>类型</th></tr>';
+            personnel.list.slice(0, 20).forEach(function(p) {
+                html += '<tr><td>' + escapeHtml((p.company||'').substring(0,20)) + '</td><td>' + escapeHtml(p.person||'') + '</td><td>' + escapeHtml(p.title||'') + '</td></tr>';
             });
             html += '</table></details>';
         }
 
-        if (!data.relationships || !data.relationships.length) {
-            html += '<p style="font-size:0.72rem;color:#888;">未发现关联关系</p>';
-        }
-
         panel.innerHTML = html;
+        panel.style.display = 'block';
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // Typo Detection standalone tool
-    // ══════════════════════════════════════════════════════════════════
-    function initTypoDetectionTool() {
-        const fileInput = document.getElementById('typoFileInput');
-        const selectBtn = document.getElementById('selectTypoFileBtn');
-        const runBtn = document.getElementById('runTypoBtn');
-        const fileName = document.getElementById('typoFileName');
-        const statusEl = document.getElementById('typoStatus');
-        const resultsPanel = document.getElementById('typoResultsPanel');
-        const diffMode = document.getElementById('typoDiffMode');
-
-        if (!selectBtn || !runBtn || !fileInput) return;
-
-        let selectedFile = null;
-
-        selectBtn.onclick = () => fileInput.click();
-
-        fileInput.onchange = () => {
-            selectedFile = fileInput.files[0] || null;
-            if (selectedFile) {
-                fileName.textContent = selectedFile.name;
-                runBtn.disabled = false;
-            } else {
-                fileName.textContent = '';
-                runBtn.disabled = true;
-            }
-        };
-
-        runBtn.onclick = async () => {
-            if (!selectedFile) return;
-            runBtn.disabled = true;
-            statusEl.textContent = '正在检测错别字...';
-            statusEl.style.color = '#16a085';
-            resultsPanel.style.display = 'none';
-
-            try {
-                const formData = new FormData();
-                formData.append('file', selectedFile);
-                if (diffMode && diffMode.checked) formData.append('diff_mode', 'true');
-
-                const resp = await fetch('/check_typos', { method: 'POST', body: formData });
-                const data = await resp.json();
-                if (resp.ok) {
-                    renderTypoResults(data, resultsPanel);
-                    resultsPanel.style.display = 'block';
-                    statusEl.textContent = '✓ 错别字检测完成 (' + data.total_suspects + '处疑似)';
-                    statusEl.style.color = '#27ae60';
-                } else {
-                    statusEl.textContent = '✗ ' + (data.error || '检测失败');
-                    statusEl.style.color = '#e74c3c';
-                }
-            } catch (err) {
-                statusEl.textContent = '✗ 网络错误: ' + err.message;
-                statusEl.style.color = '#e74c3c';
-            } finally {
-                runBtn.disabled = false;
-            }
-        };
-    }
-
-    function renderTypoResults(data, panel) {
-        let html = '';
-        html += `<p><strong>文档:</strong> ${escapeHtml(data.doc_name||'')} | <strong>疑似:</strong> ${data.total_suspects}处 | <strong>严重:</strong> ${data.critical_count}处 | <strong>检测层:</strong> ${(data.layers_run||[]).join(', ')}</p>`;
-
-        if (data.findings && data.findings.length) {
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:8px;">';
-            html += '<tr><th>层次</th><th>疑似文本</th><th>建议修正</th><th>置信度</th><th>严重性</th></tr>';
-            data.findings.slice(0, 30).forEach(f => {
-                const sevColor = f.severity === 'critical' ? '#e74c3c' : f.severity === 'warning' ? '#e67e22' : '#888';
-                html += `<tr>`;
-                html += `<td>${escapeHtml(f.layer||'')}</td>`;
-                html += `<td><code style="font-size:0.68rem;">${escapeHtml((f.suspect_text||'').substring(0,30))}</code></td>`;
-                html += `<td>${escapeHtml((f.suggestions||[]).join(', ').substring(0,40) || '—')}</td>`;
-                html += `<td>${((f.confidence||0)*100).toFixed(0)}%</td>`;
-                html += `<td style="color:${sevColor};font-weight:bold;">${escapeHtml(f.severity||'')}</td></tr>`;
-                if (f.context_snippet) {
-                    html += `<tr><td colspan="5" style="font-size:0.6rem;color:#888;padding-left:16px;">上下文: ${escapeHtml(f.context_snippet.substring(0,80))}</td></tr>`;
-                }
-                if (f.is_daxie_error) {
-                    html += `<tr><td colspan="5" style="font-size:0.6rem;color:#e67e22;padding-left:16px;">⚠️ 大写金额不一致: 实际=${escapeHtml(f.daxie_actual||'')} 期望=${escapeHtml(f.daxie_expected||'无')}</td></tr>`;
-                }
-            });
-            html += '</table>';
-            if (data.findings.length > 30) html += `<p style="font-size:0.65rem;color:#888;">(仅显示前30项，共${data.findings.length}项)</p>`;
-        } else {
-            html += '<p style="color:#27ae60;font-size:0.72rem;">✓ 未发现疑似错别字</p>';
-        }
-
-        if (data.diff_text) {
-            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">📋 差异审查 (修正预览)</summary>';
-            html += `<div style="max-height:300px;overflow-y:auto;border:1px solid #ddd;padding:8px;margin-top:4px;font-size:0.7rem;line-height:1.6;white-space:pre-wrap;">${escapeHtml(data.diff_text.substring(0, 3000))}</div>`;
-            html += '</details>';
-        }
-
-        panel.innerHTML = html;
-    }
-
-    // ══════════════════════════════════════════════════════════════════
-    // Admin sidebar: result history viewers
     // ══════════════════════════════════════════════════════════════════
     function initAdminResultViewers() {
         const quoteBtn = document.getElementById('sidebarQuoteAnomalyResultsBtn');
@@ -12622,7 +9220,7 @@
     }
 
     // ======================== Unified Bid Audit ========================
-    const _auditFunctionLabels = {
+    var _auditFunctionLabels = {
         rule_extraction: '规则提取',
         compliance_check: '合规审查',
         typo_detection: '错别字检测',
@@ -12633,7 +9231,7 @@
     };
 
     // Severity threshold definitions per function: [{key, label, type, default}]
-    const _auditThresholdDefs = {
+    var _auditThresholdDefs = {
         rule_extraction: [
             {key: 'min_extracted_rules', label: '最少提取规则数', type: 'int', default: 5}
         ],
@@ -13030,8 +9628,8 @@
     }
 
     // ── Audit Modal (preflight + progress) ──
-    let _auditSSE = null;
-    let _auditModalActive = false;
+    var _auditSSE = null;
+    var _auditModalActive = false;
 
     async function showAuditModal() {
         const pid = window._currentProjectId || currentProjectId;
@@ -13468,4 +10066,104 @@
             if (phaseLabel) phaseLabel.textContent = '❌ 连接中断，请检查审计状态';
             if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
         };
+    }
+
+    async function loadProjectCollusionGraph() {
+        var panel = document.getElementById('projectGraphContainer');
+        var statsEl = document.getElementById('projectGraphStats');
+        if (!panel) return;
+        var pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">请先打开一个项目。</span>';
+            return;
+        }
+        panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载中...</span>';
+        try {
+            var r = await fetch('/api/graph/collusion?project_id=' + encodeURIComponent(pid), { credentials: 'include' });
+            if (!r.ok) {
+                var txt = await r.text();
+                panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载失败: ' + escapeHtml(txt.substring(0, 80)) + '</span>';
+                return;
+            }
+            var data = await r.json();
+            if (!data.success || !data.nodes || !data.nodes.length) {
+                panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">暂无关联数据。请先对项目运行投标文档分析。</span>';
+                return;
+            }
+            var nodeCount = data.nodes.length;
+            var edgeCount = data.edges.length;
+            if (statsEl) statsEl.textContent = '(' + nodeCount + ' 节点, ' + edgeCount + ' 条关联)';
+
+            renderGraph(panel, data);
+
+        } catch (e) {
+            console.error('Collusion graph error:', e);
+            panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">网络错误</span>';
+        }
+    }
+
+    async function loadProjectComplianceGraph() {
+        var panel = document.getElementById('projectGraphContainer');
+        var statsEl = document.getElementById('projectGraphStats');
+        if (!panel) return;
+        var pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">请先打开一个项目。</span>';
+            return;
+        }
+        panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载中...</span>';
+        try {
+            var r = await fetch('/api/graph/compliance?project_id=' + encodeURIComponent(pid), { credentials: 'include' });
+            if (!r.ok) {
+                var txt = await r.text();
+                panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载失败: ' + escapeHtml(txt.substring(0, 80)) + '</span>';
+                return;
+            }
+            var data = await r.json();
+            if (!data.success || !data.nodes || !data.nodes.length) {
+                panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">暂无合规违规数据。请先对该项目执行合规检查。</span>';
+                return;
+            }
+            var nodeCount = data.nodes.length;
+            var edgeCount = data.edges.length;
+            if (statsEl) statsEl.textContent = '(' + nodeCount + ' 节点, ' + edgeCount + ' 条关联)';
+
+            renderGraph(panel, data);
+        } catch (e) {
+            console.error('Compliance graph error:', e);
+            panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">网络错误</span>';
+        }
+    }
+
+    async function loadProjectCitationGraph() {
+        var panel = document.getElementById('projectGraphContainer');
+        var statsEl = document.getElementById('projectGraphStats');
+        if (!panel) return;
+        var pid = window._currentProjectId || currentProjectId;
+        if (!pid) {
+            panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">请先打开一个项目。</span>';
+            return;
+        }
+        panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载中...</span>';
+        try {
+            var r = await fetch('/api/graph/citation?project_id=' + encodeURIComponent(pid), { credentials: 'include' });
+            if (!r.ok) {
+                var txt = await r.text();
+                panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">加载失败: ' + escapeHtml(txt.substring(0, 80)) + '</span>';
+                return;
+            }
+            var data = await r.json();
+            if (!data.success || !data.nodes || !data.nodes.length) {
+                panel.innerHTML = '<span style="color:var(--card-muted);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">暂无文档引用数据。</span>';
+                return;
+            }
+            var nodeCount = data.nodes.length;
+            var edgeCount = data.edges.length;
+            if (statsEl) statsEl.textContent = '(' + nodeCount + ' 节点, ' + edgeCount + ' 条关联)';
+
+            renderGraph(panel, data);
+        } catch (e) {
+            console.error('Citation graph error:', e);
+            panel.innerHTML = '<span style="color:#ef4444;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">网络错误</span>';
+        }
     }

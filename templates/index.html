@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/darkly.css') }}" id="highlight-dark" disabled>
     <script src="{{ url_for('static', filename='js/highlight.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260706c">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=20260706d">
 </head>
 <body class="light">
 <div class="sidebar" id="sidebar">
@@ -66,6 +66,10 @@
             <hr style="margin: 10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:4px;">⏱️ 近期活动</h4>
             <div id="knowledgeSidebarActivity" style="font-size:0.65rem;"></div>
+            <hr style="margin:10px 0;">
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🔗 图谱中心</h4>
+            <button id="sidebarLawImpactGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;">🏛️ 法规影响图谱</button>
+            <button id="sidebarGlobalCitationGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;">📄 全局引用图谱</button>
         </div>
 
         <!-- ===== RECYCLE SECTION ===== -->
@@ -248,6 +252,23 @@
         <div id="mobileMoreTabsBtn" style="display:none"></div>
         <div id="mobileMoreDropdown" style="display:none"></div>
 
+        <!-- Sub-tab bars (shown/hidden based on active main tab) -->
+        <div class="sub-tab-bar" id="adminSubTabs" style="display:none; padding: 0 1rem;">
+            <button class="sub-tab-btn active" data-panel="adminPanel" data-sidebar="projects">📂 项目</button>
+            <button class="sub-tab-btn" data-panel="timelinePanel" data-sidebar="projects">⏱️ 时间线</button>
+        </div>
+        <div class="sub-tab-bar" id="knowledgeSubTabs" style="display:none; padding: 0 1rem;">
+            <button class="sub-tab-btn active" data-panel="knowledgeLabPanel" data-sidebar="knowledge">📁 知识库</button>
+            <button class="sub-tab-btn" data-panel="templatesPanel" data-sidebar="templates">📋 模板库</button>
+            <button class="sub-tab-btn" data-panel="casesPanel" data-sidebar="cases">📊 案例库</button>
+            <button class="sub-tab-btn" data-panel="wikiPanel" data-sidebar="wiki">📖 法规维基</button>
+        </div>
+        <div class="sub-tab-bar" id="analyticsSubTabs" style="display:none; padding: 0 1rem;">
+            <button class="sub-tab-btn active" data-panel="analyticsPanel" data-sidebar="stats">⚙️ 配置</button>
+            <button class="sub-tab-btn" data-panel="reviewPanel" data-sidebar="review">📋 审计</button>
+            <button class="sub-tab-btn" data-panel="databasePanel" data-sidebar="db">🗄️ 数据库</button>
+        </div>
+
         <!-- Chat Interface -->
         <div id="chatInterface" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
             <div id="grillModeBanner" style="display:none;background:linear-gradient(135deg,#fef2f2,#fff5f5);border:1px solid #fca5a5;border-radius:8px;padding:8px 14px;margin-bottom:4px;font-size:0.78rem;color:#991b1b;text-align:center;">
@@ -423,12 +444,10 @@
                     <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--card-border);">
                         <button id="complianceDashboardBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;">📊 仪表盘</button>
                         <button id="complianceCompareBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;margin-left:6px;">🔄 多项目对比</button>
-                        <button id="complianceGraphBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;margin-left:6px;">🔗 知识图谱</button>
                         <span id="complianceDashboardStatus" style="font-size:0.62rem;color:var(--card-muted);margin-left:8px;"></span>
                     </div>
                     <div id="complianceDashboardPanel" style="display:none;margin-top:6px;"></div>
                     <div id="complianceComparePanel" style="display:none;margin-top:6px;"></div>
-                    <div id="complianceGraphPanel" style="display:none;margin-top:6px;"></div>
                 </div>
             </details>
 
@@ -892,6 +911,9 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" crossorigin="anonymous"
+        onerror="this.onerror=null;this.src='{{ url_for('static', filename='js/purify.min.js') }}'"></script>
+<script defer src="{{ url_for('static', filename='js/graph-view.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
