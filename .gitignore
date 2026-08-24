@@ -55,3 +55,7 @@ data/pet_command.json
 data/agent_prompt.json
 data/checkpoints.db
 data/current_state.yaml
+data/test_out*.txt
+test.txt
+data/user_laws/
+*.json
