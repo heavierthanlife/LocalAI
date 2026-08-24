@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 document_analysis_bp = Blueprint('document_analysis', __name__, url_prefix='/document_analysis')
 
 
+@document_analysis_bp.before_request
+def _increase_body_limit():
+    # 深度分析需上传多份投标文件（PDF 扫描件），全局 50MB 不够。提高到 200MB。
+    request.max_content_length = 200 * 1024 * 1024
+
+
 @document_analysis_bp.route('/analyze', methods=['POST'])
 def start_analysis():
     """Submit files for deep analysis. Launches Celery task, returns task_id for SSE."""

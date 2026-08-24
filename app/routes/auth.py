@@ -50,7 +50,10 @@ def check_auth():
         "is_admin": role == 'admin',
         "is_auditor": is_auditor,
         "role": role,
-        "user_id": user_id
+        "user_id": user_id,
+        "has_llm": any(os.getenv(k) for k in (
+            'DEEPSEEK_API_KEY', 'ZHIPU_API_KEY', 'QWEN_API_KEY', 'SILICONFLOW_API_KEY',
+        ))
     })
 
 @auth_bp.route('/create_account', methods=['POST'])

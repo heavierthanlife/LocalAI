@@ -2,19 +2,22 @@
     // ======================== File Station Functions ========================
     var fileStationData = [];
     var selectedFileIds = new Set();
-    var fileStationBtn = document.getElementById('fileStationBtn');
+    var fileStationBtn = document.getElementById('inputFileStationBtn') || document.getElementById('clearanceFileStationBtn');
     var fileStationModal = document.getElementById('fileStationModal');
     var closeFileStationModal = document.getElementById('closeFileStationModal');
 
+    function openFileStation() {
+        if (fileStationModal) {
+            loadFileStation();          // load the file list
+            fileStationModal.style.display = 'block';
+        } else {
+            console.error('File station modal not found');
+        }
+    }
+    window.__openFileStation = window.__openFileStation || openFileStation;
+
     if (fileStationBtn) {
-        fileStationBtn.onclick = () => {
-            if (fileStationModal) {
-                loadFileStation();          // load the file list
-                fileStationModal.style.display = 'block';
-            } else {
-                console.error('File station modal not found');
-            }
-        };
+        fileStationBtn.onclick = openFileStation;
     }
 
     // ── Chat toolbar: daily report button ──

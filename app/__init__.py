@@ -85,6 +85,17 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
     Session(app)
 
+    # 413 → JSON instead of HTML, so frontend can show a friendly message
+    from werkzeug.exceptions import RequestEntityTooLarge
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def _too_large(e):
+        return {
+            "success": False,
+            "error": "文件过大（超过上传限制），请减少文件数量或压缩后重试",
+            "code": "TOO_LARGE",
+        }, 413
+
     # CSRF — opt-in only (all API routes use JSON, safe from CSRF via CORS + Content-Type)
     app.config['WTF_CSRF_CHECK_DEFAULT'] = False
     csrf = CSRFProtect()

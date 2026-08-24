@@ -1,0 +1,30 @@
+[
+ {
+  "law_name": "中华人民共和国招标投标法",
+  "short_name": "招标投标法",
+  "version": "2017年修订",
+  "category": "法律",
+  "n_articles": 10
+ },
+ {
+  "law_name": "中华人民共和国招标投标法实施条例",
+  "short_name": "招标投标法实施条例",
+  "version": "2019年修订",
+  "category": "行政法规",
+  "n_articles": 5
+ },
+ {
+  "law_name": "中华人民共和国政府采购法",
+  "short_name": "政府采购法",
+  "version": "2014年修订",
+  "category": "法律",
+  "n_articles": 5
+ },
+ {
+  "law_name": "中华人民共和国民法典（合同编·建设工程合同）",
+  "short_name": "民法典",
+  "version": "2021年施行",
+  "category": "法律",
+  "n_articles": 5
+ }
+]

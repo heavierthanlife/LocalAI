@@ -34,6 +34,12 @@ def register_all(flask_app):
         return send_from_directory(str(flask_app.static_folder), 'favicon.ico',
                                    mimetype='image/vnd.microsoft.icon')
 
+    @flask_app.route('/.well-known/appspecific/com.chrome.devtools.json')
+    def chrome_devtools_discovery():
+        # Chrome/Edge DevTools protocol probe — silence with 204 instead of 404 noise
+        from flask import Response
+        return Response(status=204)
+
     @flask_app.route('/health')
     def health():
         try:
@@ -133,6 +139,12 @@ def register_all(flask_app):
     from app.routes.document_analysis import document_analysis_bp
     flask_app.register_blueprint(document_analysis_bp)
     logger.info(f"  OK document_analysis_bp ({time.time()-t0:.0f}s)")
+
+    # ── Clearance: eager (unified 清标 entry, merges compare/analysis/compliance/AI review) ──
+    t0 = time.time()
+    from app.routes.clearance import clearance_bp
+    flask_app.register_blueprint(clearance_bp)
+    logger.info(f"  OK clearance_bp ({time.time()-t0:.0f}s)")
 
     # ── Graph: eager (spider-web knowledge graphs) ──
     t0 = time.time()

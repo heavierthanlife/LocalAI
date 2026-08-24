@@ -21,14 +21,21 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
     && apt-get autoremove -y && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
+# ── LibreOffice (headless docx→pdf) ──
+# Used by document analysis to produce the PDF variant of the report.
+# fonts-noto-cjk required for Chinese rendering in the PDF.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-writer libreoffice-core fonts-noto-cjk \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
+
 # ── App user ──
 RUN useradd -m -s /bin/bash localai && mkdir -p /app && chown localai:localai /app
 
 # ── Python dependencies ──
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir gunicorn gevent
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
+    && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent
 
 # ── Application code ──
 COPY --chown=localai:localai . .
@@ -43,9 +50,9 @@ RUN mkdir -p /app/data/user_files /app/data/project_files /app/data/credit_repor
 USER localai
 EXPOSE 8000
 
-# Health check
+# Health check (curl is purged from the image; use python stdlib instead)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/check_auth || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/check_auth', timeout=5)" || exit 1
 
 # ── Start ──
 # Uses gunicorn with gevent workers for production performance.

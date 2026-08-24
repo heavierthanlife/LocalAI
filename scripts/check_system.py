@@ -356,6 +356,34 @@ audit_report, _ = _grep_file('app/routes/audit.py', r'overview|report|run')
 _add('integration', 'Audit engine run + report', 'PASS' if audit_report else 'FAIL')
 
 # ===========================================================================
+# 10b. Law corpus (清标 law reference data)
+# ===========================================================================
+laws_dir = os.path.join(PROJECT_ROOT, 'data', 'laws')
+law_clean_dir = os.path.join(laws_dir, 'clean')
+BEIJING_STEMS = {'010_bj_tender_regs', '011_bj_construction_supervision',
+                 '012_bj_public_resource_supervision'}
+law_counts = {'national': 0, 'beijing': 0}
+if os.path.isdir(law_clean_dir):
+    for fn in os.listdir(law_clean_dir):
+        if not fn.endswith('.md'):
+            continue
+        stem = fn[:-3]
+        if stem in BEIJING_STEMS:
+            law_counts['beijing'] += 1
+        else:
+            law_counts['national'] += 1
+law_total = sum(law_counts.values())
+_add('integration', f'Law corpus clean files: {law_total}',
+     'PASS' if law_total >= 13 else 'WARN',
+     f'national={law_counts["national"]}, beijing={law_counts["beijing"]}, expected >= 13 total')
+_add('integration', 'Law corpus national coverage',
+     'PASS' if law_counts['national'] >= 5 else 'FAIL',
+     f'found {law_counts["national"]}, expected >= 5')
+_add('integration', 'Law corpus beijing coverage',
+     'PASS' if law_counts['beijing'] >= 2 else 'FAIL',
+     f'found {law_counts["beijing"]}, expected >= 2')
+
+# ===========================================================================
 # Fix Registry + Regression Tests
 # ===========================================================================
 fix_registry = _file_exists('data/fix_registry.yaml')

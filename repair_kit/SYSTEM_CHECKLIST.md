@@ -151,7 +151,7 @@ _(5/5 verified automatically)_
 
 ## INTEGRATION
 
-_(7/7 verified automatically)_
+_(10/10 verified automatically)_
 
 - [x] Chat send endpoint
 - [x] RAG retrieval
@@ -160,6 +160,9 @@ _(7/7 verified automatically)_
 - [x] Batch compare
 - [x] Compliance check + report
 - [x] Audit engine run + report
+- [x] Law corpus clean files: 14
+- [x] Law corpus national coverage
+- [x] Law corpus beijing coverage
 
 ## META
 
@@ -176,8 +179,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 106 |
+| [x] Pass | 109 |
 | [?] Manual | 4 |
-| **Total** | **110** |
+| **Total** | **113** |
 
-**Verification rate**: 106/110 auto-verified (96%)
+**Verification rate**: 109/113 auto-verified (96%)

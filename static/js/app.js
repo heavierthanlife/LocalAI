@@ -858,6 +858,7 @@
         if (authData.role) sessionStorage.setItem('role', authData.role);
         else if (authData.is_admin) sessionStorage.setItem('role', 'admin');
         sessionStorage.setItem('is_auditor', (authData.is_auditor || authData.is_admin) ? '1' : '0');
+        sessionStorage.setItem('hasLLM', authData.has_llm ? 'true' : 'false');
         const username = authData.username || sessionStorage.getItem('username') || '';
         const isAdmin = authData.is_admin || false;
 
@@ -2185,17 +2186,7 @@
     // ======================== Original DOM Event Listeners ========================
     const fileBtn = document.getElementById('fileBtn');
     const fileInput = document.getElementById('fileInput');
-    const batchFileInputContainer = document.getElementById('batchFileInputContainer');
-    const batchCompareBtn = document.getElementById('batchCompareBtn');
-    const clearBatchFilesBtn = document.getElementById('clearBatchFilesBtn');
-    const templateFileInput = document.getElementById('templateFileInput');
-    const selectTemplateBtn = document.getElementById('selectTemplateBtn');
-    const clearTemplateBtn = document.getElementById('clearTemplateBtn');
-    const templateFileNameSpan = document.getElementById('templateFileName');
-    const checkTextSim = document.getElementById('checkTextSim');
-    const checkKeyInfo = document.getElementById('checkKeyInfo');
-    const checkFileAttr = document.getElementById('checkFileAttr');
-    const checkImageSim = document.getElementById('checkImageSim');
+    const inputFileStationBtn = document.getElementById('inputFileStationBtn');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -2370,192 +2361,16 @@
         });
     }
 
-    let selectedTemplateFile = null;
+    // ── 清标 (unified) — replaces Smart Compare / Doc Analysis / Compliance / AI Review ──
+    initClearanceTool();
 
-    function updateBatchFileNames(files) {
-        const span = document.getElementById('batchFileNames');
-        const clearBtn = document.getElementById('clearBatchFilesBtn');
-        if (files.length === 0) {
-            span.textContent = '';
-            if (clearBtn) clearBtn.style.display = 'none';
-        } else {
-            const names = files.map(f => f.name).join(', ');
-            span.textContent = `📁 已选 ${files.length} 个文件: ${names}`;
-            if (clearBtn) clearBtn.style.display = 'inline-block';
-        }
+    // ── File station quick access from input bar ──
+    if (inputFileStationBtn && window.__openFileStation) {
+        inputFileStationBtn.onclick = window.__openFileStation;
     }
-
-    batchCompareBtn.onclick = () => {
-        batchFileInputContainer.innerHTML = '';
-        const newInput = document.createElement('input');
-        newInput.type = 'file';
-        newInput.multiple = true;
-        newInput.accept = '*/*';
-        newInput.style.display = 'none';
-        newInput.id = 'batchFileInput';
-        batchFileInputContainer.appendChild(newInput);
-        newInput.click();
-        newInput.onchange = async (e) => {
-            const files = Array.from(newInput.files);
-            if (files.length === 0) return;
-            if (files.length < 2) {
-                alert('请至少选择2个文件进行对比');
-                batchFileInputContainer.innerHTML = '';
-                updateBatchFileNames([]);
-                return;
-            }
-            if (files.length > 10) {
-                alert('最多选择10个文件');
-                batchFileInputContainer.innerHTML = '';
-                updateBatchFileNames([]);
-                return;
-            }
-            const semanticCheckbox = document.getElementById('checkSemantic');
-            if (files.length > 10 && semanticCheckbox && semanticCheckbox.checked) {
-                addSystemMessage('⚠️ 文件数超过10个，智能语义分析已自动关闭。');
-                semanticCheckbox.checked = false;
-            }
-            const checkItems = {
-                text_sim: checkTextSim.checked,
-                key_info: checkKeyInfo.checked,
-                file_attr: checkFileAttr.checked,
-                image_sim: checkImageSim.checked,
-                semantic: semanticCheckbox ? semanticCheckbox.checked : false
-            };
-            updateBatchFileNames(files);
-            try {
-                await performBatchCompare(files, selectedTemplateFile, checkItems);
-            } catch (err) {
-                console.error('Batch compare error:', err);
-                addSystemMessage('批量对比失败: ' + (err.message || '未知错误'));
-            } finally {
-                batchFileInputContainer.innerHTML = '';
-                updateBatchFileNames([]);
-            }
-        };
-    };
-
-    if (clearBatchFilesBtn) {
-        clearBatchFilesBtn.onclick = () => {
-            batchFileInputContainer.innerHTML = '';
-            updateBatchFileNames([]);
-        };
-    }
-
-    selectTemplateBtn.onclick = () => templateFileInput.click();
-    templateFileInput.onchange = () => {
-        if (templateFileInput.files.length) {
-            selectedTemplateFile = templateFileInput.files[0];
-            templateFileNameSpan.textContent = selectedTemplateFile.name;
-        }
-    };
-    clearTemplateBtn.onclick = async () => {
-        if (selectedTemplateFile) {
-            const confirmed = await confirm('确定要清除已选中的模板文件吗？');
-            if (!confirmed) return;
-        }
-        selectedTemplateFile = null;
-        templateFileInput.value = '';
-        templateFileNameSpan.textContent = '';
-    };
-
-    // ── System A: Smart Compare mode toggle ──
-    initCompareTools();
-
-    // ── System B: Document Deep Analysis ──
-    initDocAnalysisTool();
 
     // ── Admin sidebar: result history viewers ──
     initAdminResultViewers();
-
-    async function performBatchCompare(files, templateFile, checkItems) {
-        const formData = new FormData();
-        files.forEach(file => formData.append('files', file));
-        if (templateFile) formData.append('template_file', templateFile);
-        formData.append('check_items', JSON.stringify(checkItems));
-        formData.append('project_id', currentProjectId || '');
-        const tempGroup = document.createElement('div');
-        tempGroup.className = 'message-group';
-        const tempTimerDiv = document.createElement('div');
-        tempTimerDiv.className = 'temp-timer';
-        tempTimerDiv.textContent = '⏱️ 0.0s (批量对比中)';
-        tempGroup.appendChild(tempTimerDiv);
-        messagesDiv.appendChild(tempGroup);
-        scrollToBottom();
-        const startTime = Date.now();
-        // Register with floating task indicator
-        const batchTaskId = 'batch-' + Date.now();
-        _activeTaskIds.add(batchTaskId);
-        _taskResults[batchTaskId] = { label: '批量对比中' };
-        updateFloatingIndicator();
-        const timerInterval = setInterval(() => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            tempTimerDiv.textContent = `⏱️ ${elapsed.toFixed(1)}s (批量对比中)`;
-        }, 100);
-        if (currentBatchAbortController) currentBatchAbortController.abort();
-        currentBatchAbortController = new AbortController();
-        const signal = currentBatchAbortController.signal;
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = '取消对比';
-        cancelBtn.style.marginLeft = '10px';
-        cancelBtn.style.background = '#e74c3c';
-        cancelBtn.style.color = 'white';
-        cancelBtn.style.border = 'none';
-        cancelBtn.style.borderRadius = '8px';
-        cancelBtn.style.padding = '2px 8px';
-        cancelBtn.onclick = () => {
-            currentBatchAbortController.abort();
-            cancelBtn.disabled = true;
-            cancelBtn.textContent = '取消中...';
-        };
-        tempGroup.appendChild(cancelBtn);
-        try {
-            const response = await fetch('/compare_batch', {
-                method: 'POST',
-                credentials: 'include',
-                body: formData,
-                signal
-            });
-            clearInterval(timerInterval);
-            _activeTaskIds.delete(batchTaskId);
-            updateFloatingIndicator();
-            tempGroup.remove();
-            if (response.status === 409) {
-                const data = await response.json();
-                alert(data.message || '操作冲突');
-                return;
-            }
-            if (response.status === 400) {
-                const data = await response.json();
-                alert('批量对比失败，请检查文件类型是否支持');
-                return;
-            }
-            const data = await response.json();
-            if (data.success) {
-                const currentThread = sessionStorage.getItem('currentThreadId') ||
-                    (await fetch('/get_sessions', { credentials: 'include' }).then(r=>r.json())).sessions[0]?.thread_id;
-                if (currentThread) await loadSession(currentThread, true);
-                else location.reload();
-                await checkStorage();
-                // Permanent download URL from new ZIP system
-                if (data.download_url) {
-                    showToast(`✅ 对比完成！${data.pair_count}对 · <a href="${data.download_url}" download style="color:#16a34a;">📦 下载完整报告</a> · <span id="batchAnalyzeLink" style="color:#7c3aed;cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();this.onclick=async()=>{const q=prompt('输入分析需求(可选):','生成这批对比的综合分析报告');if(!q)return;const r=await fetch('/admin/projects/'+(sessionStorage.getItem('lastProjectId')||1)+'/ai_assist',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({query:'根据以下批量对比结果:\n'+JSON.stringify({pair_count:data.pair_count,groups:data.comparison_groups||[]}).substring(0,3000)+'\n\n'+q})});const d=await r.json();if(d.result)showContentModal('对比分析报告',d.result);}">📊 AI分析报告</span>`, 'success', 12000);
-                } else if (data.token) {
-                    // Fallback for old token-based system
-                    showToast('对比完成！<a href="/export_batch_docx_download/'+data.token+'" download>📥 下载DOCX报告</a>', 'success', 8000);
-                }
-            } else {
-                addSystemMessage('批量对比失败，请重试');
-            }
-        } catch (err) {
-            clearInterval(timerInterval);
-            tempGroup.remove();
-            if (err.name === 'AbortError') addSystemMessage('批量对比已取消。');
-            else addSystemMessage('网络错误，批量对比失败');
-        } finally {
-            if (currentBatchAbortController === signal.controller) currentBatchAbortController = null;
-        }
-    }
 
     // ======================== Admin Panel & Tab Functions ========================
     
@@ -5504,14 +5319,15 @@
         }
         if (formData.getAll('files').length < 2) { alert('无法获取足够的文件内容'); return; }
         try {
-            const res = await fetch('/compare_batch', { method: 'POST', credentials: 'include', body: formData });
-            const data = await res.json();
+            const res = await fetch('/clearance/run', { method: 'POST', credentials: 'include', body: formData });
+            let data = {};
+            try { data = await res.json(); } catch (_) { data = { error: '服务器错误 (' + res.status + ')' }; }
             if (res.ok) {
-                showToast(`对比完成！${data.pair_count}对结果已保存`, 'success', 3000);
+                showToast(`清标已启动！${data.file_count}个文件，task_id=${data.task_id}`, 'success', 3000);
                 // Refresh batch history if the modal is open
                 if (typeof loadBatchHistory === 'function') loadBatchHistory();
             } else {
-                alert(data.error || '对比失败');
+                alert(data.error || '清标启动失败');
             }
         } catch(_) { alert('网络错误'); }
     }
@@ -8548,6 +8364,7 @@
         const status = li.getAttribute('data-task-status');
         if (!tid || (status !== 'completed' && status !== 'failed')) return;
         e.stopPropagation();
+        console.log('[TASK] clicked task', tid, 'status', status);
         let tc = document.getElementById('toast-container');
         if (!tc) {
             tc = document.createElement('div');
@@ -8563,20 +8380,122 @@
             .then(r => r.json())
             .then(d => {
                 toast.remove();
-                if (!d.success) return;
-                const result = d.result || '';
-                const shortResult = result.length > 80 ? result.substring(0, 80) + '...' : result;
-                const info = (d.label || d.type || '') + ' — ' + d.status +
-                    (d.message ? ' | ' + d.message : '') +
-                    (shortResult ? ' | ' + shortResult : '');
+                if (d.error || !d.status) { console.warn('[TASK] task not found:', tid); return; }
+
+                // ── Completed tasks: always show a visible result modal first ──
+                if (d.status === 'completed' && d.result) {
+                    const result = (typeof d.result === 'object') ? d.result : {};
+                    _showTaskResultModal(d, result);
+
+                    // Then best-effort render into the clearance panel
+                    if (result.report && typeof renderClearanceResults === 'function') {
+                        try {
+                            const details = document.getElementById('clearanceTools');
+                            if (details) details.open = true;
+                            const resultsDiv = document.getElementById('clearanceResults');
+                            const downloadLink = document.getElementById('clearanceDownloadLink');
+                            if (resultsDiv) {
+                                renderClearanceResults({ report: result.report, download_url: result.download_url }, resultsDiv, downloadLink);
+                            }
+                        } catch (err) {
+                            console.error('[TASK] renderClearanceResults failed:', err);
+                        }
+                    }
+                    return;
+                }
+
+                // ── Failed tasks: error toast ──
                 const t2 = document.createElement('div');
-                t2.setAttribute('class', 'toast ' + (d.status === 'failed' ? 'error' : 'info'));
-                t2.textContent = info;
+                t2.setAttribute('class', 'toast error');
+                t2.textContent = (d.label || d.type || '任务') + ' — ' + d.status + (d.message ? ' | ' + d.message : '');
                 t2.style.cursor = 'pointer';
                 t2.onclick = () => t2.remove();
                 tc.appendChild(t2);
                 setTimeout(() => { if (t2.parentNode) t2.remove(); }, 8000);
-            }).catch(() => { toast.textContent = 'Error loading task'; });
+            }).catch((err) => { toast.textContent = 'Error loading task'; console.error('[TASK] load failed:', err); });
+    }
+
+    // Centered modal shown on completed-task click — always visible regardless of panel rendering.
+    function _showTaskResultModal(taskData, resultData) {
+        const existingBackdrop = document.querySelector('.task-result-backdrop');
+        if (existingBackdrop) existingBackdrop.remove();
+        const existingModal = document.querySelector('.task-result-modal');
+        if (existingModal) existingModal.remove();
+
+        const label = taskData.label || taskData.type || '任务';
+        const dlUrl = resultData.download_url || '';
+        const fileCount = resultData.file_count || 0;
+        const report = resultData.report || {};
+        const info = report.basic_info || {};
+        const totalScore = info.total_score;
+        const warning = info.warning_level || '';
+        const indicatorCount = (report.indicators || []).length;
+        const crossPairCount = ((report.cross_comparison || {}).pairs || []).length;
+
+        let html = '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;color:#16a34a;">✅ ' + escapeHtml(label) + ' 完成</div>';
+        html += '<div style="font-size:0.78rem;margin-bottom:14px;line-height:1.8;">';
+        if (fileCount) html += '<div>📂 投标文件数: <b>' + fileCount + '</b></div>';
+        if (totalScore !== undefined && totalScore !== null) html += '<div>📊 综合评分: <b style="color:' + (totalScore > 50 ? '#dc2626' : totalScore > 20 ? '#d97706' : '#16a34a') + '">' + totalScore + ' 分</b></div>';
+        if (warning) html += '<div>⚠️ 预警级别: <b>' + escapeHtml(warning) + '</b></div>';
+        if (indicatorCount) html += '<div>📋 指标分析: <b>' + indicatorCount + '</b> 项</div>';
+        if (crossPairCount) html += '<div>🔀 横向对比: <b>' + crossPairCount + '</b> 对组合</div>';
+        html += '</div>';
+        if (dlUrl) {
+            html += '<div style="text-align:center;margin-bottom:10px;"><button class="task-result-download" data-url="' + dlUrl + '" style="display:inline-block;background:#8e44ad;color:#fff;padding:10px 24px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;">📥 下载报告 (DOCX+PDF)</button></div>';
+        }
+        html += '<div style="text-align:center;"><button class="task-result-close" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 18px;cursor:pointer;background:#f9fafb;font-size:0.75rem;">关闭</button></div>';
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'task-result-backdrop';
+        backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:10003;';
+        const modal = document.createElement('div');
+        modal.className = 'task-result-modal';
+        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10004;background:white;border:1px solid #e5e7eb;border-radius:16px;padding:22px;max-width:420px;width:90%;box-shadow:0 12px 32px rgba(0,0,0,.25);';
+        modal.innerHTML = html;
+        document.body.appendChild(backdrop);
+        document.body.appendChild(modal);
+
+        // Download via fetch + Blob URL — works on self-signed HTTPS where
+        // native <a download> navigation is silently blocked by Chrome.
+        const dlBtn = modal.querySelector('.task-result-download');
+        if (dlBtn) {
+            dlBtn.addEventListener('click', async function() {
+                const url = this.getAttribute('data-url');
+                if (!url) return;
+                const btn = this;
+                const origText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '⏳ 下载中...';
+                try {
+                    const res = await fetch(url, { credentials: 'include' });
+                    if (!res.ok) {
+                        let msg = 'HTTP ' + res.status;
+                        try { msg = (await res.json()).error || msg; } catch (_) {}
+                        showToast('下载失败: ' + msg, 'error', 5000);
+                        return;
+                    }
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const tmp = document.createElement('a');
+                    tmp.href = blobUrl;
+                    tmp.download = '串通投标线索分析报告.zip';
+                    document.body.appendChild(tmp);
+                    tmp.click();
+                    setTimeout(() => { URL.revokeObjectURL(blobUrl); tmp.remove(); }, 1000);
+                    showToast('✅ 报告已开始下载', 'success', 3000);
+                } catch (err) {
+                    console.error('[TASK] download failed:', err);
+                    showToast('下载失败: ' + (err.message || '网络错误'), 'error', 5000);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = origText;
+                }
+            });
+        }
+
+        const close = () => { backdrop.remove(); modal.remove(); };
+        backdrop.onclick = close;
+        modal.querySelector('.task-result-close').onclick = close;
     }
     document.addEventListener('click', _handleTaskClick);
     console.log('[TASK] click handler registered on document');
@@ -8822,173 +8741,159 @@
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // 清标 (unified) — merges Smart Compare / Doc Analysis / Compliance / AI Review
     // ══════════════════════════════════════════════════════════════════
-    // System A: Compare mode toggle + single-file compare
-    // ══════════════════════════════════════════════════════════════════
-    function initCompareTools() {
-        var singleBtn = document.getElementById('compareModeSingle');
-        var batchBtn = document.getElementById('compareModeBatch');
-        var singlePanel = document.getElementById('compareSinglePanel');
-        var batchPanel = document.getElementById('compareBatchPanel');
-        var singleInput = document.getElementById('compareSingleInput');
-        var selectSingleBtn = document.getElementById('selectCompareSingleBtn');
-        var runSingleBtn = document.getElementById('runCompareSingleBtn');
-        var singleFileNames = document.getElementById('compareSingleFileNames');
-        var resultsPanel = document.getElementById('compareResults');
-
-        var singleFiles = [];
-
-        if (singleBtn && batchBtn) {
-            singleBtn.onclick = function() {
-                singlePanel.style.display = 'block';
-                batchPanel.style.display = 'none';
-                singleBtn.style.background = '#dbeafe'; singleBtn.style.color = '#1e40af';
-                batchBtn.style.background = ''; batchBtn.style.color = '';
-            };
-            batchBtn.onclick = function() {
-                singlePanel.style.display = 'none';
-                batchPanel.style.display = 'block';
-                batchBtn.style.background = '#dbeafe'; batchBtn.style.color = '#1e40af';
-                singleBtn.style.background = ''; singleBtn.style.color = '';
-            };
-        }
-
-        if (selectSingleBtn && singleInput) {
-            selectSingleBtn.onclick = function() { singleInput.click(); };
-            singleInput.onchange = function() {
-                singleFiles = Array.from(singleInput.files);
-                if (singleFiles.length > 0) {
-                    singleFileNames.textContent = singleFiles.map(function(f) { return f.name; }).join(', ');
-                    runSingleBtn.disabled = singleFiles.length < 2;
-                } else {
-                    singleFileNames.textContent = '';
-                    runSingleBtn.disabled = true;
-                }
-            };
-        }
-
-        if (runSingleBtn) {
-            runSingleBtn.onclick = async function() {
-                if (singleFiles.length < 2) { alert('请选择至少2个投标文件进行对比'); return; }
-                runSingleBtn.disabled = true;
-                resultsPanel.style.display = 'block';
-                resultsPanel.innerHTML = '<p style="color:var(--card-muted);">正在对比分析...</p>';
-
-                try {
-                    var formData = new FormData();
-                    singleFiles.forEach(function(f) { formData.append('files', f); });
-                    formData.append('project_id', currentProjectId || '');
-                    var resp = await fetch('/compare_bidders_quotes', { method: 'POST', body: formData, credentials: 'include' });
-                    var data = await resp.json();
-                    if (data.success) {
-                        renderSingleCompareResults(data, resultsPanel);
-                    } else {
-                        resultsPanel.innerHTML = '<p style="color:#e74c3c;">' + (data.error || '对比失败') + '</p>';
-                    }
-                } catch (err) {
-                    resultsPanel.innerHTML = '<p style="color:#e74c3c;">网络错误: ' + err.message + '</p>';
-                } finally {
-                    runSingleBtn.disabled = false;
-                }
-            };
-        }
+    function _clearanceEscape(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
     }
 
-    function renderSingleCompareResults(data, panel) {
-        var html = '';
-        var perBidder = data.per_bidder || [];
-        if (perBidder.length > 0) {
-            html += '<div style="font-size:0.78rem;margin-bottom:8px;">';
-            html += '<strong>对比单位:</strong> ' + perBidder.length;
-            html += ' | <strong>最高风险:</strong> <span style="color:' + ((data.max_risk_score||0) > 50 ? '#e74c3c' : '#e67e22') + '">' + (data.max_risk_score||0).toFixed(1) + '</span>';
-            html += ' | <strong>平均CV:</strong> ' + (data.avg_cv||0).toFixed(4);
-            if (data.cross_same_rate) html += ' | <span style="color:#e67e22;">⚠️ 同价疑义</span>';
-            if (data.cross_clustering) html += ' | <span style="color:#e67e22;">🔗 聚类疑义</span>';
-            html += '</div>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;">';
-            html += '<tr><th>投标单位</th><th>风险</th><th>CV</th><th>同价</th><th>降幅</th><th>聚类</th><th>本福特</th></tr>';
-            perBidder.forEach(function(pb) {
-                html += '<tr>';
-                html += '<td>' + escapeHtml((pb.filename||'').substring(0,20)) + '</td>';
-                html += '<td style="color:' + (pb.risk_score > 50 ? '#e74c3c' : pb.risk_score > 20 ? '#e67e22' : '#27ae60') + '">' + (pb.risk_score||0).toFixed(1) + '</td>';
-                html += '<td>' + (pb.cv||0).toFixed(4) + '</td>';
-                html += '<td>' + (pb.same_rate_flag ? '⚠️' : '✓') + '</td>';
-                html += '<td>' + (pb.abnormal_drop_flag ? '⬇️' : '✓') + '</td>';
-                html += '<td>' + (pb.clustering_flag ? '🔗' : '✓') + '</td>';
-                html += '<td>' + (pb.benford_deviation||0).toFixed(3) + '</td></tr>';
-            });
-            html += '</table>';
-        } else {
-            html += '<p style="color:var(--card-muted);">对比完成，未发现异常。</p>';
-        }
-        panel.innerHTML = html;
-    }
-
-    // ══════════════════════════════════════════════════════════════════
-    // System B: Document Deep Analysis (SSE + indicator cards)
-    // ══════════════════════════════════════════════════════════════════
-    function initDocAnalysisTool() {
-        var fileInput = document.getElementById('docAnalysisFileInput');
-        var selectBtn = document.getElementById('selectDocAnalysisFilesBtn');
-        var runBtn = document.getElementById('runDocAnalysisBtn');
-        var fileNames = document.getElementById('docAnalysisFileNames');
-        var progDiv = document.getElementById('docAnalysisProgress');
-        var progText = document.getElementById('docAnalysisProgressText');
-        var progBar = document.getElementById('docAnalysisProgressBar');
-        var resultsDiv = document.getElementById('docAnalysisResults');
+    function initClearanceTool() {
+        var fileInput = document.getElementById('clearanceFileInput');
+        var selectBtn = document.getElementById('selectClearanceFilesBtn');
+        var tenderInput = document.getElementById('clearanceTenderInput');
+        var tenderBtn = document.getElementById('selectClearanceTenderBtn');
+        var runBtn = document.getElementById('runClearanceBtn');
+        var fileNames = document.getElementById('clearanceFileNames');
+        var progDiv = document.getElementById('clearanceProgress');
+        var progText = document.getElementById('clearanceProgressText');
+        var progBar = document.getElementById('clearanceProgressBar');
+        var resultsDiv = document.getElementById('clearanceResults');
+        var optCompliance = document.getElementById('optCompliance');
+        var optAI = document.getElementById('optAIReview');
+        var hint = document.getElementById('clearanceHint');
+        var stationBtn = document.getElementById('clearanceFileStationBtn');
+        var downloadLink = document.getElementById('clearanceDownloadLink');
 
         if (!selectBtn || !runBtn || !fileInput) return;
 
         var selectedFiles = [];
+        var tenderFile = null;
+        var hasLLM = (sessionStorage.getItem('hasLLM') === 'true');
+
+        // File station (global) quick open — expose once for input bar reuse
+        if (stationBtn && !window.__openFileStation) {
+            window.__openFileStation = function() {
+                var modal = document.getElementById('fileStationModal');
+                if (modal) {
+                    if (typeof loadFileStation === 'function') loadFileStation();
+                    modal.style.display = 'block';
+                }
+            };
+            stationBtn.onclick = window.__openFileStation;
+        }
+
+        // AI dimension hint: check_auth may still be in flight; backend skips
+        // AI review when no LLM, and the AI tab hides if there is no result.
+        if (!hasLLM) {
+            if (hint) hint.textContent = hint.textContent || '未检测到 LLM 连接，AI 评审将自动跳过。';
+        }
+
+        // Compliance needs a tender doc
+        function updateComplianceHint() {
+            if (optCompliance) {
+                var disabled = !tenderFile;
+                optCompliance.disabled = false;
+                optCompliance.checked = tenderFile ? true : false;
+                var lbl = optCompliance.closest('label');
+                if (lbl) lbl.style.opacity = tenderFile ? '1' : '0.5';
+            }
+            if (hint) {
+                hint.textContent = tenderFile
+                    ? ('招标文件: ' + tenderFile.name)
+                    : '选择招标文件后可启用合规审查';
+            }
+        }
 
         selectBtn.onclick = function() { fileInput.click(); };
         fileInput.onchange = function() {
             selectedFiles = Array.from(fileInput.files);
             if (selectedFiles.length > 0) {
                 fileNames.textContent = selectedFiles.map(function(f) { return f.name; }).join(', ');
-                runBtn.disabled = false;
+                runBtn.disabled = selectedFiles.length < 2;
             } else {
                 fileNames.textContent = '';
                 runBtn.disabled = true;
             }
         };
+        tenderBtn.onclick = function() { tenderInput.click(); };
+        tenderInput.onchange = function() {
+            tenderFile = tenderInput.files.length ? tenderInput.files[0] : null;
+            updateComplianceHint();
+        };
+
+        // Tab switching
+        var tabBtns = document.querySelectorAll('.clearance-tab-btn');
+        var tabPanels = document.querySelectorAll('.clearance-tab-panel');
+        tabBtns.forEach(function(btn) {
+            btn.onclick = function() {
+                var target = btn.getAttribute('data-tab');
+                tabBtns.forEach(function(b) {
+                    b.style.background = b === btn ? '#8e44ad' : 'transparent';
+                    b.style.color = b === btn ? '#fff' : '';
+                    b.style.border = b === btn ? 'none' : '1px solid var(--card-border)';
+                });
+                tabPanels.forEach(function(p) {
+                    p.style.display = (p.id === 'clearanceTab' + target.charAt(0).toUpperCase() + target.slice(1)) ? 'block' : 'none';
+                });
+            };
+        });
 
         runBtn.onclick = async function() {
-            if (selectedFiles.length === 0) { alert('请先选择投标文件'); return; }
+            if (selectedFiles.length < 2) { alert('请至少选择 2 份投标文件'); return; }
             runBtn.disabled = true;
             resultsDiv.style.display = 'none';
             progDiv.style.display = 'block';
-            progText.textContent = '正在提交分析...';
+            progText.textContent = '正在提交清标...';
             progBar.style.width = '5%';
+
+            var options = {
+                indicator_analysis: document.getElementById('optIndicators').checked,
+                cross_comparison: document.getElementById('optCrossComparison').checked,
+                compliance_check: !!(tenderFile && document.getElementById('optCompliance').checked),
+                ai_review: !!(hasLLM && document.getElementById('optAIReview').checked)
+            };
 
             try {
                 var formData = new FormData();
                 selectedFiles.forEach(function(f) { formData.append('files', f); });
-                var resp = await fetch('/document_analysis/analyze', {
+                if (tenderFile) formData.append('tender_file', tenderFile);
+                formData.append('options', JSON.stringify(options));
+                formData.append('project_id', window.currentProjectId || '');
+                var resp = await fetch('/clearance/run', {
                     method: 'POST', body: formData, credentials: 'include'
                 });
+                if (!resp.ok) {
+                    var errData = {};
+                    try { errData = await resp.json(); } catch (_) { errData = { error: '服务器错误 (' + resp.status + ')' }; }
+                    progDiv.style.display = 'none';
+                    alert(errData.error || '启动清标失败');
+                    runBtn.disabled = false;
+                    return;
+                }
                 var initData = await resp.json();
                 if (!initData.success) {
                     progDiv.style.display = 'none';
-                    alert(initData.error || '启动分析失败');
+                    alert(initData.error || '启动清标失败');
                     runBtn.disabled = false;
                     return;
                 }
                 var taskId = initData.task_id;
-                progText.textContent = '分析已启动，正在建立连接...';
+                progText.textContent = '清标已启动，正在建立连接...';
 
                 // Check if already completed (SSE reconnection edge case)
-                var statusCheck = await fetch('/document_analysis/status/' + taskId, { credentials: 'include' });
+                var statusCheck = await fetch('/clearance/status/' + taskId, { credentials: 'include' });
                 var statusData = await statusCheck.json();
                 if (statusData.success && statusData.completed && statusData.result) {
                     progDiv.style.display = 'none';
-                    renderDocAnalysisResults(statusData.result.report, resultsDiv, statusData.result.download_url);
+                    renderClearanceResults(statusData.result, resultsDiv, downloadLink);
                     runBtn.disabled = false;
                     return;
                 }
 
                 // Subscribe to SSE
-                var sse = new EventSource('/document_analysis/stream/' + taskId);
+                var sse = new EventSource('/clearance/stream/' + taskId);
                 sse.onmessage = function(e) {
                     try {
                         var evt = JSON.parse(e.data);
@@ -8998,13 +8903,12 @@
                         } else if (evt.event === 'complete') {
                             sse.close();
                             progDiv.style.display = 'none';
-                            var result = evt.result || {};
-                            renderDocAnalysisResults(result.report, resultsDiv, result.download_url);
+                            renderClearanceResults(evt.result || {}, resultsDiv, downloadLink);
                             runBtn.disabled = false;
                         } else if (evt.event === 'error') {
                             sse.close();
                             progDiv.style.display = 'none';
-                            resultsDiv.innerHTML = '<p style="color:#e74c3c;">分析失败: ' + (evt.message || '未知错误') + '</p>';
+                            resultsDiv.innerHTML = '<p style="color:#e74c3c;">清标失败: ' + (evt.message || '未知错误') + '</p>';
                             resultsDiv.style.display = 'block';
                             runBtn.disabled = false;
                         }
@@ -9024,6 +8928,238 @@
                 runBtn.disabled = false;
             }
         };
+
+        updateComplianceHint();
+    }
+
+    function renderClearanceResults(result, panel, downloadLinkEl) {
+        var report = result.report || {};
+        var cross = report.cross_comparison || {};
+        var compliance = report.compliance;
+        var ai = report.ai_review;
+
+        if (downloadLinkEl && result.download_url) {
+            downloadLinkEl.innerHTML = '<a href="' + result.download_url + '" download style="color:#16a34a;text-decoration:none;">📥 下载报告 (DOCX+PDF)</a>';
+        }
+
+        // ── Tab: 指标分析 ──
+        var indPanel = document.getElementById('clearanceTabIndicators');
+        if (indPanel) indPanel.innerHTML = _renderIndicatorsTab(report);
+
+        // ── Tab: 横向对比 ──
+        var crossPanel = document.getElementById('clearanceTabCross');
+        if (crossPanel) crossPanel.innerHTML = _renderCrossTab(cross, report._files || []);
+
+        // ── Tab: 合规审查 ──
+        var compTabBtn = document.querySelector('.clearance-tab-btn[data-tab="compliance"]');
+        var compPanel = document.getElementById('clearanceTabCompliance');
+        if (compPanel) {
+            if (compliance && !compliance.skipped) {
+                compPanel.innerHTML = _renderComplianceTab(compliance);
+            } else {
+                compPanel.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p>';
+                if (compTabBtn) compTabBtn.style.display = 'none';
+            }
+        }
+
+        // ── Tab: AI 评审 ──
+        var aiTabBtn = document.querySelector('.clearance-tab-btn[data-tab="ai"]');
+        var aiPanel = document.getElementById('clearanceTabAI');
+        if (aiPanel) {
+            if (ai && ai.per_file && ai.per_file.length) {
+                aiPanel.innerHTML = _renderAITab(ai);
+            } else {
+                aiPanel.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p>';
+                if (aiTabBtn) aiTabBtn.style.display = 'none';
+            }
+        }
+
+        panel.style.display = 'block';
+    }
+
+    function _renderIndicatorsTab(report) {
+        var info = report.basic_info || {};
+        var indicators = report.indicators || [];
+        var suspected = report.suspected_units || [];
+        var personnel = report.personnel_summary || {};
+        var html = '';
+
+        html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
+        html += '<strong>投标单位:</strong> ' + (info.bidder_count||0);
+        html += ' | <strong>综合评分:</strong> <span style="color:' + ((info.total_score||0) > 50 ? '#e74c3c' : (info.total_score||0) > 20 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
+        html += '</div>';
+
+        if (suspected.length > 0) {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔴 预警嫌疑单位 (' + suspected.length + '家)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
+            suspected.forEach(function(su) {
+                html += '<tr>';
+                html += '<td>' + ((su.score||0) > 10 ? '★ ' : '') + _clearanceEscape((su.name||'').substring(0,30)) + '</td>';
+                html += '<td>' + (su.indicators_triggered||0) + '</td>';
+                html += '<td style="color:' + ((su.score||0) > 30 ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
+            });
+            html += '</table></details>';
+        } else {
+            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现预警嫌疑单位</p>';
+        }
+
+        html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析详情 (' + indicators.length + '项)</summary>';
+        indicators.forEach(function(ind, idx) {
+            var catTag = (ind.category || '') + (ind.skipped ? ' ⏭️' : '');
+            html += '<div style="padding:8px 10px;border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+            html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + _clearanceEscape(ind.name||'') + '</strong>';
+            html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + _clearanceEscape(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
+            html += '</div>';
+            var resText = ind.result || '';
+            var resColor = '#16a34a';
+            if (resText.indexOf('⚠️') !== -1 || resText.indexOf('🔴') !== -1 || resText.indexOf('⏭') !== -1) resColor = '#e74c3c';
+            else if (resText.indexOf('✅') !== -1) resColor = '#16a34a';
+            html += '<div style="font-size:0.68rem;color:' + resColor + ';">' + _clearanceEscape(resText) + '</div>';
+            if (ind.details && ind.details.length > 0 && !ind.skipped) {
+                html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
+                var keys = Object.keys(ind.details[0] || {});
+                ind.details.slice(0, 5).forEach(function(d) {
+                    html += keys.map(function(k) { return _clearanceEscape(k) + ': ' + _clearanceEscape(String(d[k]||'').substring(0, 60)); }).join(' | ');
+                    html += '<br>';
+                });
+                if (ind.details.length > 5) html += '...共' + ind.details.length + '项';
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+        html += '</details>';
+
+        if (personnel.list && personnel.list.length > 0) {
+            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">👥 关系人员汇总 (' + personnel.total + '人)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位</th><th>姓名</th><th>类型</th></tr>';
+            personnel.list.slice(0, 20).forEach(function(p) {
+                html += '<tr><td>' + _clearanceEscape((p.company||'').substring(0,20)) + '</td><td>' + _clearanceEscape(p.person||'') + '</td><td>' + _clearanceEscape(p.title||'') + '</td></tr>';
+            });
+            html += '</table></details>';
+        }
+        return html;
+    }
+
+    function _renderCrossTab(cross, files) {
+        var pairs = cross.pairs || [];
+        var riskMatrix = cross.risk_matrix || [];
+        var keyInfo = cross.key_info_matches || [];
+        var html = '';
+
+        html += '<div style="font-size:0.78rem;margin-bottom:8px;"><strong>横向对比:</strong> ' + files.length + ' 个投标单位 · ' + pairs.length + ' 对组合</div>';
+
+        if (riskMatrix.length > 0) {
+            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 风险矩阵</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:4px;">';
+            html += '<tr><th style="position:sticky;left:0;background:var(--card-bg);">单位</th>';
+            files.forEach(function(f) { html += '<th>' + _clearanceEscape((f||'').substring(0,6)) + '</th>'; });
+            html += '</tr>';
+            riskMatrix.forEach(function(row, i) {
+                html += '<tr><td style="font-weight:bold;">' + _clearanceEscape((files[i]||'').substring(0,6)) + '</td>';
+                row.forEach(function(v, j) {
+                    var cell = i === j ? '--' : (v||0).toFixed(1);
+                    var color = (v||0) > 20 ? '#e74c3c' : (v||0) > 10 ? '#e67e22' : '';
+                    html += '<td style="color:' + color + ';">' + cell + '</td>';
+                });
+                html += '</tr>';
+            });
+            html += '</table></details>';
+        }
+
+        var high = pairs.filter(function(p) { return (p.risk||0) > 5; });
+        if (high.length > 0) {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚠️ 高风险组合 (' + high.length + '对)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位1</th><th>单位2</th><th>风险</th><th>文本相似</th><th>属性雷同</th></tr>';
+            high.forEach(function(p) {
+                html += '<tr><td>' + _clearanceEscape((p.name1||'').substring(0,18)) + '</td><td>' + _clearanceEscape((p.name2||'').substring(0,18)) + '</td>';
+                html += '<td style="color:' + ((p.risk||0) > 20 ? '#e74c3c' : '#e67e22') + ';">' + (p.risk||0).toFixed(1) + '</td>';
+                html += '<td>' + (p.sim||0).toFixed(1) + '%</td><td>' + (p.attr_same ? '是' : '否') + '</td></tr>';
+            });
+            html += '</table></details>';
+        } else {
+            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现高风险组合</p>';
+        }
+
+        if (keyInfo.length > 0) {
+            html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔑 重点信息雷同 (' + keyInfo.length + '组)</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>单位1</th><th>单位2</th><th>共同关键词</th></tr>';
+            keyInfo.slice(0, 20).forEach(function(ki) {
+                html += '<tr><td>' + _clearanceEscape((ki.name1||'').substring(0,18)) + '</td><td>' + _clearanceEscape((ki.name2||'').substring(0,18)) + '</td>';
+                html += '<td>' + _clearanceEscape((ki.common_keywords||[]).slice(0,8).join(', ')) + '</td></tr>';
+            });
+            html += '</table></details>';
+        }
+        return html;
+    }
+
+    function _renderComplianceTab(comp) {
+        var html = '';
+        var summary = comp.summary || {};
+        html += '<div style="font-size:0.78rem;margin-bottom:8px;">⚖️ 基于招标文件《' + _clearanceEscape(comp.tender_name||'') + '》' + (comp.rules||[]).length + ' 条规则</div>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
+        html += '<span style="background:#16a34a;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">通过 ' + (summary.pass||0) + '</span>';
+        html += '<span style="background:#d97706;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">警告 ' + (summary.warning||0) + '</span>';
+        html += '<span style="background:#dc2626;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">违规 ' + (summary.violation||0) + '</span>';
+        html += '<span style="background:#7f1d1d;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">严重 ' + (summary.critical||0) + '</span>';
+        html += '</div>';
+
+        (comp.per_file || []).forEach(function(pf, pi) {
+            var s = pf.summary || {};
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.75rem;">📄 ' + _clearanceEscape(pf.filename||'') + ' — 通过' + (s.pass||0) + ' 警告' + (s.warning||0) + ' 违规' + (s.violation||0) + ' 严重' + (s.critical||0) + '</summary>';
+            var results = pf.results || [];
+            if (results.length) {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:4px;">';
+                html += '<tr><th>规则</th><th>结论</th><th>证据</th></tr>';
+                results.slice(0, 30).forEach(function(r) {
+                    var vc = { 'CRITICAL': '#7f1d1d', 'VIOLATION': '#dc2626', 'WARNING': '#d97706', 'PASS': '#16a34a' }[r.verdict] || '';
+                    html += '<tr><td>' + _clearanceEscape(r.rule_id||'') + '</td>';
+                    html += '<td style="color:' + vc + ';font-weight:600;">' + _clearanceEscape(r.verdict||'') + '</td>';
+                    html += '<td>' + _clearanceEscape((r.evidence||'').substring(0,60)) + '</td></tr>';
+                });
+                html += '</table>';
+            }
+            html += '</details>';
+        });
+        return html;
+    }
+
+    function _renderAITab(ai) {
+        var html = '';
+        (ai.per_file || []).forEach(function(pf, pi) {
+            var r = pf.review || {};
+            var scores = r.scores || {};
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.75rem;">🤖 ' + _clearanceEscape(pf.filename||'') + ' — ' + (r.verdict||'') + ' (' + (r.overall||0) + '/10)</summary>';
+            if (Object.keys(scores).length) {
+                html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;">';
+                Object.keys(scores).forEach(function(k) {
+                    var v = scores[k];
+                    var c = v >= 7 ? '#16a34a' : (v >= 5 ? '#d97706' : '#dc2626');
+                    html += '<span style="background:' + c + ';color:#fff;border-radius:6px;padding:3px 8px;font-size:0.7rem;"><b>' + _clearanceEscape(k) + ': ' + v + '</b></span>';
+                });
+                html += '</div>';
+            }
+            if (r.issues && r.issues.length) {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;">';
+                html += '<tr><th>维度</th><th>严重度</th><th>问题</th><th>建议</th></tr>';
+                r.issues.slice(0, 15).forEach(function(iss) {
+                    var sc = iss.severity === '高' ? '#dc2626' : (iss.severity === '中' ? '#d97706' : '#6b7280');
+                    html += '<tr><td>' + _clearanceEscape(iss.axis||'') + '</td>';
+                    html += '<td style="color:' + sc + ';">' + _clearanceEscape(iss.severity||'') + '</td>';
+                    html += '<td>' + _clearanceEscape((iss.finding||'').substring(0,50)) + '</td>';
+                    html += '<td>' + _clearanceEscape((iss.suggestion||'').substring(0,50)) + '</td></tr>';
+                });
+                html += '</table>';
+            }
+            if (r.summary) html += '<div style="margin-top:6px;font-size:0.7rem;">📝 ' + _clearanceEscape(r.summary) + '</div>';
+            html += '</details>';
+        });
+        return html;
     }
 
     function renderDocAnalysisResults(report, panel, downloadUrl) {

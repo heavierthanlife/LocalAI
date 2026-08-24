@@ -2009,14 +2009,15 @@ let currentProjectName = '';
         if (formData.getAll('files').length < 2) { alert('无法获取足够的文件内容'); return; }
         formData.append('project_id', projectId || '');
         try {
-            const res = await fetch('/compare_batch', { method: 'POST', credentials: 'include', body: formData });
-            const data = await res.json();
+            const res = await fetch('/clearance/run', { method: 'POST', credentials: 'include', body: formData });
+            let data = {};
+            try { data = await res.json(); } catch (_) { data = { error: '服务器错误 (' + res.status + ')' }; }
             if (res.ok) {
-                showToast(`对比完成！${data.pair_count}对结果已保存`, 'success', 3000);
+                showToast(`清标已启动！${data.file_count}个文件，task_id=${data.task_id}`, 'success', 3000);
                 // Refresh batch history if the modal is open
                 if (typeof loadBatchHistory === 'function') loadBatchHistory();
             } else {
-                alert(data.error || '对比失败');
+                alert(data.error || '清标启动失败');
             }
         } catch(_) { alert('网络错误'); }
     }

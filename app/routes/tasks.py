@@ -41,6 +41,12 @@ def get_task(task_id: str):
     if not meta:
         return jsonify({'error': 'Task not found'}), 404
     meta['task_id'] = task_id
+    # Parse result JSON string → dict so the frontend doesn't need double-parsing
+    if isinstance(meta.get('result'), str) and meta['result']:
+        try:
+            meta['result'] = json.loads(meta['result'])
+        except (json.JSONDecodeError, TypeError):
+            pass
     return jsonify(meta)
 
 

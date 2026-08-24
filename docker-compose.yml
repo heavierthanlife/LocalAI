@@ -43,6 +43,8 @@ services:
       # Persistent data — survives container restarts
       - app_data:/app/data
       - app_logs:/app/logs
+      # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
+      - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
       - ./cert:/app/cert:ro
     depends_on:
@@ -53,7 +55,7 @@ services:
     networks:
       - localai-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/check_auth"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/check_auth', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -105,6 +107,8 @@ services:
     container_name: localai-celery-worker
     restart: unless-stopped
     command: celery -A celery_app worker -l info -c 2 --max-tasks-per-child 50
+    healthcheck:
+      disable: true
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
@@ -117,6 +121,7 @@ services:
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
+      - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
       postgres:
@@ -133,6 +138,8 @@ services:
     container_name: localai-celery-beat
     restart: unless-stopped
     command: celery -A celery_app beat -l info
+    healthcheck:
+      disable: true
     environment:
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       - REDIS_URL=redis://redis:6379/0

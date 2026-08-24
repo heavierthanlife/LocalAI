@@ -90,11 +90,21 @@ def db_transaction(conn: "PgConn"):
 
 
 def init_postgres_tables():
-    """Initialize all PostgreSQL tables. Called once at startup."""
+    """Initialize all PostgreSQL tables. Called once at startup.
+
+    Serialized with a PostgreSQL advisory lock so that concurrent workers
+    (gunicorn multi-worker boot) do not deadlock on CREATE INDEX.
+    """
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            import_init_tables(cur)
-            conn.commit()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_lock(732014)")
+                import_init_tables(cur)
+                conn.commit()
+                cur.execute("SELECT pg_advisory_unlock(732014)")
+        except Exception:
+            conn.rollback()
+            raise
     logger.info("PostgreSQL tables initialized.")
 
 

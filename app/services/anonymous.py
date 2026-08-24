@@ -17,9 +17,15 @@ def cleanup_anon_temp(anon_id):
         logger.info(f"Cleaned up temp files for anon user {anon_id}")
 
 def cleanup_all_temp_on_exit():
-    if os.path.exists(TEMP_ROOT):
-        shutil.rmtree(TEMP_ROOT)
-        logger.info("Cleaned up all temp files on exit.")
+    # Concurrent gunicorn workers exiting together can race on rmtree
+    # (one worker deletes the dir while another is mid-removal). Wrap in
+    # try/except so an already-gone dir never aborts process teardown.
+    try:
+        if os.path.exists(TEMP_ROOT):
+            shutil.rmtree(TEMP_ROOT, ignore_errors=True)
+            logger.info("Cleaned up all temp files on exit.")
+    except Exception:
+        pass
 
 atexit.register(cleanup_all_temp_on_exit)
 

@@ -29,6 +29,10 @@ data/audit_reports/
 data/user_files/
 data/wiki/
 data/legal_schedules/
+# 法规库 raw 抓取物（含 HTML 原文，体量大且可再生；clean/ 索引亦由脚本生成）
+data/laws/raw/
+data/laws/curated/
+data/laws/index.json
 company_kb_files/
 knowledge_lab_files/
 local_cache/
@@ -40,4 +44,14 @@ local_cache/
 .opencode/plugins/
 .opencode/node_modules/
 .opencode/plans/
-.opencode/settings.local.json
+.opencode/settings.local.jsontest.txt
+stdout.txt
+stderr.txt
+localai-run*.log
+pycorrector-*.tar.gz
+.playwright-mcp/
+data/pytest_err.txt
+data/pet_command.json
+data/agent_prompt.json
+data/checkpoints.db
+data/current_state.yaml

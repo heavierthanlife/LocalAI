@@ -1,4 +1,6 @@
 {
-  "active_llm_provider": "zhipu",
-  "active_llm_model": "auto"
+  "active_llm_provider": "mimo",
+  "active_llm_model": "mimo-v2.5",
+  "active_vl_provider": "mimo",
+  "active_vl_model": "mimo-v2.5"
 }

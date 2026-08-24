@@ -295,6 +295,7 @@
             <div class="input-area" id="inputArea">
                 <textarea id="messageInput" rows="1" placeholder="输入您的问题..."></textarea>
                 <div class="file-btn" id="fileBtn" aria-label="上传文件">📄 附加文件</div>
+                <div class="file-btn" id="inputFileStationBtn">🗂️ 文件站</div>
                 <div class="file-btn" id="knowledgeBaseBtn">📚 知识库</div>
                 <input type="file" id="fileInput" style="display:none" multiple>
                 <button class="send-btn" id="sendBtn" aria-label="发送消息">发送 ➤</button>
@@ -338,140 +339,48 @@
                 </div>
             </div>
 
-            <!-- Row 2: Smart Compare (System A) -->
-            <details id="compareTools" open style="margin-top:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;">🔀 智能对比分析</summary>
-                <div style="padding:6px 0;">
-                    <div style="display:flex;gap:4px;margin-bottom:6px;">
-                        <button id="compareModeSingle" class="file-btn" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;">📄 单文件对比</button>
-                        <button id="compareModeBatch" class="file-btn">📚 批量对比</button>
-                    </div>
-                    <div id="compareSinglePanel">
-                        <input type="file" id="compareSingleInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" multiple style="display:none">
-                        <button id="selectCompareSingleBtn" class="file-btn">📄 选择2个投标文件</button>
-                        <button id="runCompareSingleBtn" class="file-btn" style="background:#16a34a;color:white;" disabled>🔍 对比</button>
-                        <span id="compareSingleFileNames" class="template-info"></span>
-                    </div>
-                    <div id="compareBatchPanel" style="display:none;">
-                        <div class="risk-row" style="margin-bottom:6px;">
-                            <span>🔬 对比因子：</span>
-                            <label><input type="checkbox" id="checkTextSim" checked> 文本</label>
-                            <label><input type="checkbox" id="checkKeyInfo" checked> 关键信息</label>
-                            <label><input type="checkbox" id="checkFileAttr" checked> 属性</label>
-                            <label><input type="checkbox" id="checkImageSim" checked> 图片</label>
-                            <label title="使用深度学习模型分析语义相似度"><input type="checkbox" id="checkSemantic"> 🧠 语义</label>
-                        </div>
-                        <div class="action-group">
-                            <div id="batchFileInputContainer"></div>
-                            <button id="batchCompareBtn">📚 批量对比</button>
-                            <button id="clearBatchFilesBtn" class="file-btn" style="display:none;">🗑️ 清空</button>
-                            <span id="batchFileNames" class="template-info"></span>
-                            <input type="file" id="templateFileInput" accept="*/*" style="display:none">
-                            <button id="selectTemplateBtn">📄 模板文件</button>
-                            <button id="clearTemplateBtn">✖️ 清除模板</button>
-                            <span id="templateFileName" class="template-info"></span>
-                        </div>
-                    </div>
-                    <div style="margin-top:6px;">
-                        <button id="fileStationBtn" class="file-btn">🗂️ 文件站</button>
-                        <span id="storageWarning" class="storage-warning"></span>
-                    </div>
-                    <div id="compareResults" style="display:none;margin-top:6px;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);max-height:400px;overflow-y:auto;"></div>
-                </div>
-            </details>
-
-            <!-- Row 3: Document Analysis (System B) -->
-            <details id="docAnalysisTools" style="margin-top:2px;border:1px dashed var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.75rem;">📊 投标文档深度分析</summary>
+            <!-- Unified 清标 tool: merges Smart Compare + Doc Analysis + Compliance + AI Review -->
+            <details id="clearanceTools" open style="margin-top:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
+                <summary style="font-weight:600;font-size:0.78rem;">📋 清标（横向对比 · 指标分析 · 合规审查 · AI 评审）</summary>
                 <div style="padding:6px 0;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
-                        <input type="file" id="docAnalysisFileInput" accept=".pdf,.docx,.doc,.txt,.xlsx,.xls" multiple style="display:none">
-                        <button id="selectDocAnalysisFilesBtn" class="file-btn">📄 选择投标文件</button>
-                        <button id="runDocAnalysisBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 开始深度分析</button>
-                        <span id="docAnalysisFileNames" class="template-info"></span>
+                        <input type="file" id="clearanceFileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" multiple style="display:none">
+                        <button id="selectClearanceFilesBtn" class="file-btn">📄 选择投标文件</button>
+                        <input type="file" id="clearanceTenderInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
+                        <button id="selectClearanceTenderBtn" class="file-btn">📋 选择招标文件</button>
+                        <span id="clearanceFileNames" class="template-info"></span>
                     </div>
-                    <div id="docAnalysisProgress" style="display:none;margin-bottom:6px;">
-                        <div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:2px;"><span id="docAnalysisProgressText">初始化...</span></div>
-                        <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;"><div id="docAnalysisProgressBar" style="width:0%;height:100%;background:#8e44ad;border-radius:4px;transition:width 0.3s;"></div></div>
+                    <div class="risk-row" style="margin-bottom:6px;flex-wrap:wrap;">
+                        <span>🔬 分析维度：</span>
+                        <label><input type="checkbox" id="optCrossComparison" checked> 横向对比</label>
+                        <label><input type="checkbox" id="optIndicators" checked> 指标分析</label>
+                        <label><input type="checkbox" id="optCompliance" checked> 合规审查</label>
+                        <label><input type="checkbox" id="optAIReview" checked> AI 评审</label>
+                        <span id="clearanceHint" style="color:var(--card-muted);font-size:0.68rem;"></span>
                     </div>
-                    <div id="docAnalysisResults" style="display:none;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:8px;background:var(--card-bg);"></div>
-                </div>
-            </details>
-
-            <!-- Compliance Checker -->
-            <details id="complianceToggle" style="margin-bottom:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">⚖️ 合规审查</summary>
-                <div style="margin-top:6px;font-size:0.72rem;">
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px;">
-                        <div class="action-group">
-                            <span style="font-size:0.68rem;color:var(--card-muted);">📋 招标文件：</span>
-                            <input type="file" id="complianceBidDocInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
-                            <button id="selectComplianceBidDocBtn" class="file-btn">选择招标文件</button>
-                            <span id="complianceBidDocName" class="template-info"></span>
+                    <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <button id="runClearanceBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 开始清标</button>
+                        <button id="clearanceFileStationBtn" class="file-btn">🗂️ 文件站</button>
+                        <span id="storageWarning" class="storage-warning"></span>
+                    </div>
+                    <div id="clearanceProgress" style="display:none;margin-top:6px;">
+                        <div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:2px;"><span id="clearanceProgressText">初始化...</span></div>
+                        <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;"><div id="clearanceProgressBar" style="width:0%;height:100%;background:#8e44ad;border-radius:4px;transition:width 0.3s;"></div></div>
+                    </div>
+                    <div id="clearanceResults" style="display:none;margin-top:8px;border:1px solid var(--card-border);border-radius:6px;background:var(--card-bg);">
+                        <div style="display:flex;gap:2px;border-bottom:1px solid var(--card-border);padding:4px 6px;flex-wrap:wrap;">
+                            <button class="clearance-tab-btn" data-tab="indicators" style="border:none;background:#8e44ad;color:#fff;border-radius:4px;padding:3px 10px;font-size:0.7rem;cursor:pointer;">📊 指标分析</button>
+                            <button class="clearance-tab-btn" data-tab="cross" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:3px 10px;font-size:0.7rem;cursor:pointer;">🔀 横向对比</button>
+                            <button class="clearance-tab-btn" data-tab="compliance" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:3px 10px;font-size:0.7rem;cursor:pointer;">⚖️ 合规审查</button>
+                            <button class="clearance-tab-btn" data-tab="ai" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:3px 10px;font-size:0.7rem;cursor:pointer;">🤖 AI 评审</button>
+                            <span style="flex:1;"></span>
+                            <span id="clearanceDownloadLink" style="font-size:0.7rem;align-self:center;"></span>
                         </div>
-                        <div class="action-group">
-                            <span style="font-size:0.68rem;color:var(--card-muted);">📝 投标文件：</span>
-                            <input type="file" id="complianceCheckFileInput" accept=".pdf,.docx,.doc,.txt" multiple style="display:none">
-                            <button id="selectComplianceCheckFileBtn" class="file-btn">选投标文件</button>
-                            <span id="complianceCheckFileNames" class="template-info"></span>
-                        </div>
+                        <div id="clearanceTabIndicators" class="clearance-tab-panel" style="padding:8px;max-height:480px;overflow-y:auto;"></div>
+                        <div id="clearanceTabCross" class="clearance-tab-panel" style="padding:8px;max-height:480px;overflow-y:auto;display:none;"></div>
+                        <div id="clearanceTabCompliance" class="clearance-tab-panel" style="padding:8px;max-height:480px;overflow-y:auto;display:none;"></div>
+                        <div id="clearanceTabAI" class="clearance-tab-panel" style="padding:8px;max-height:480px;overflow-y:auto;display:none;"></div>
                     </div>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <button id="complianceExtractBtn" disabled style="font-size:0.68rem;padding:4px 10px;">🔍 提取规则</button>
-                        <button id="complianceCheckBtn" disabled style="font-size:0.68rem;padding:4px 10px;background:#e67e22;color:#fff;">⚖️ 开始审查</button>
-                        <button id="complianceTextModeBtn" style="font-size:0.68rem;padding:4px 10px;background:#2980b9;color:#fff;border:none;border-radius:4px;cursor:pointer;">✏️ 文字编辑</button>
-                        <label style="font-size:0.68rem;display:flex;align-items:center;gap:4px;">
-                            <input type="checkbox" id="complianceUseAI" checked> AI分析
-                        </label>
-                        <span id="complianceStatus" style="font-size:0.68rem;color:var(--card-muted);"></span>
-                    </div>
-                    <div id="complianceEditorPanel" style="display:none;margin-top:6px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <span style="font-size:0.65rem;color:var(--card-muted);">📝 投标文件编辑 — 变动自动增量审查</span>
-                            <span id="complianceEditorScore" style="font-size:0.68rem;font-weight:600;"></span>
-                        </div>
-                        <div id="complianceTiptapEditor" style="min-height:200px;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:10px 14px;background:var(--card-bg);font-size:0.78rem;line-height:1.6;outline:none;"></div>
-                        <div id="complianceEditorFindings" style="margin-top:4px;font-size:0.62rem;max-height:120px;overflow-y:auto;"></div>
-                    </div>
-                    <div id="complianceRulesPreview" style="display:none;margin-top:6px;max-height:300px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:6px;background:var(--card-bg);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <strong style="font-size:0.7rem;">📜 已提取规则 (<span id="complianceRuleCount">0</span>条)</strong>
-                            <span style="font-size:0.63rem;color:var(--card-muted);">可删除不需要的规则</span>
-                        </div>
-                        <div id="complianceRulesList"></div>
-                    </div>
-                    <div id="complianceResultsPanel" style="display:none;margin-top:6px;"></div>
-                    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--card-border);">
-                        <button id="complianceDashboardBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;">📊 仪表盘</button>
-                        <button id="complianceCompareBtn" style="font-size:0.65rem;padding:3px 10px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:3px;cursor:pointer;margin-left:6px;">🔄 多项目对比</button>
-                        <span id="complianceDashboardStatus" style="font-size:0.62rem;color:var(--card-muted);margin-left:8px;"></span>
-                    </div>
-                    <div id="complianceDashboardPanel" style="display:none;margin-top:6px;"></div>
-                    <div id="complianceComparePanel" style="display:none;margin-top:6px;"></div>
-                </div>
-            </details>
-
-            <!-- AI Document Review (moved from review panel to same level as other audit tools) -->
-            <details id="docReviewDetails" style="margin-bottom:4px;border:1px solid var(--card-border);border-radius:6px;padding:2px 8px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.72rem;cursor:pointer;">🤖 AI 文档审查</summary>
-                <div style="margin-top:6px;font-size:0.72rem;">
-                    <p style="color:var(--card-muted);margin-bottom:8px;">上传一份文档（投标函、合同、技术方案等），AI 用五轴法审查并打分。</p>
-                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
-                        <input type="file" id="docReviewFileInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
-                        <button id="selectDocReviewFileBtn" class="file-btn">📄 选择文件</button>
-                        <span id="docReviewFileName" class="template-info"></span>
-                    </div>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-                        <span style="font-size:0.68rem;color:var(--card-muted);">审查维度：</span>
-                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="合规性" checked> 合规性</label>
-                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="清晰度" checked> 清晰度</label>
-                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="完整性" checked> 完整性</label>
-                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="风险" checked> 风险</label>
-                        <label style="font-size:0.68rem;"><input type="checkbox" class="doc-review-axis" value="专业性" checked> 专业性</label>
-                    </div>
-                    <button id="runDocReviewBtn" class="file-btn" style="background:#7c3aed;color:#fff;border-color:#6d28d9;" disabled>🔍 开始审查</button>
-                    <span id="docReviewStatus" style="font-size:0.68rem;color:var(--card-muted);margin-left:8px;"></span>
-                    <div id="docReviewResults" style="display:none;margin-top:10px;max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:6px;padding:10px;background:var(--card-bg);"></div>
                 </div>
             </details>
         </div>
