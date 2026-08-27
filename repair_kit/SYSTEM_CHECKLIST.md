@@ -20,15 +20,16 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(17/17 verified automatically)_
+_(19/19 verified automatically)_
 
-- [x] Route module files exist: 16
+- [x] Route module files exist: 18
 - [x] Route: admin.py
 - [x] Route: audit.py
 - [x] Route: auth.py
 - [x] Route: batch.py
 - [x] Route: cases.py
 - [x] Route: chat.py
+- [x] Route: clearance.py
 - [x] Route: compliance.py
 - [x] Route: credit.py
 - [x] Route: document_analysis.py
@@ -38,6 +39,7 @@ _(17/17 verified automatically)_
 - [x] Route: tasks.py
 - [x] Route: templates.py
 - [x] Route: timeline.py
+- [x] Route: upload.py
 - [x] Route: wiki.py
 
 ## DATABASE
@@ -179,8 +181,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 109 |
+| [x] Pass | 111 |
 | [?] Manual | 4 |
-| **Total** | **113** |
+| **Total** | **115** |
 
-**Verification rate**: 109/113 auto-verified (96%)
+**Verification rate**: 111/115 auto-verified (96%)

@@ -666,17 +666,6 @@ let currentProjectName = '';
             }
         } catch(e) { console.warn('Project chat load failed:', e); }
 
-        // Reset per-project audit history when switching projects
-        const auditDetails = document.getElementById('projectAuditHistoryDetails');
-        if (auditDetails) {
-            auditDetails.open = false;
-            auditDetails._auditLoaded = false;
-            const auditPanel = document.getElementById('projectAuditHistoryPanel');
-            if (auditPanel) auditPanel.innerHTML = '<span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>';
-            const auditCount = document.getElementById('projectAuditCount');
-            if (auditCount) auditCount.textContent = '';
-        }
-
         syncActiveTabWithView();
     }
 
@@ -766,14 +755,6 @@ let currentProjectName = '';
             <div id="projectFilesTab">
                 <div id="folderTreeContainer" style="margin-bottom: 20px;"></div>
                 <div id="fileListContainer"></div>
-                <details id="projectAuditHistoryDetails" style="margin-top:16px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.82rem;cursor:pointer;color:var(--card-muted);">
-                        📋 审计历史 <span id="projectAuditCount" style="font-size:0.7rem;color:var(--card-muted);font-weight:normal;"></span>
-                    </summary>
-                    <div id="projectAuditHistoryPanel" style="font-size:0.72rem;margin-top:8px;">
-                        <span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>
-                    </div>
-                </details>
             </div>
             <!-- Graph tab (hidden by default) -->
             <div id="projectGraphTab" style="display:none;">
@@ -852,17 +833,6 @@ let currentProjectName = '';
 
         // Wire project sub-tab switching
         setTimeout(() => {
-            const auditDetails = document.getElementById('projectAuditHistoryDetails');
-            if (auditDetails && !auditDetails._auditListenerSet) {
-                auditDetails._auditListenerSet = true;
-                auditDetails.addEventListener('toggle', () => {
-                    if (auditDetails.open && !auditDetails._auditLoaded) {
-                        auditDetails._auditLoaded = true;
-                        loadProjectAuditHistory();
-                    }
-                });
-            }
-
             // Sub-tab switching
             document.querySelectorAll('.project-sub-tab-btn').forEach(btn => {
                 btn.addEventListener('click', () => {

@@ -1,5 +1,6 @@
 """File processing, text extraction, and similarity (auto-extracted)."""
 import os, re, io, time, hashlib, logging, tempfile, subprocess, html, difflib
+import threading
 import numpy as np
 import pandas as pd
 import openpyxl
@@ -29,65 +30,232 @@ from app.services.ocr import ocr_manager, run_ocr
 from app.services.file_cache import add_to_cache
 from app.services.session_manager import get_cached_image_description, cache_image_description
 
+# ── VL circuit breaker ────────────────────────────────────────────────────
+# After N consecutive VL failures (e.g. misconfigured endpoint returning 404),
+# skip all further VL calls in this process — prevents dozens of slow failing
+# requests from stalling analysis for minutes. A per-file cumulative counter
+# also trips the breaker when many failures accumulate even if not consecutive.
+_VL_FAIL_THRESHOLD = 3
+_VL_CUMULATIVE_THRESHOLD = 8
+_vl_fail_lock = threading.Lock()
+_vl_consecutive_fails = 0
+_vl_broken = False
+_vl_file_fails = 0
+
+
+def _vl_note_success():
+    global _vl_consecutive_fails, _vl_broken
+    with _vl_fail_lock:
+        _vl_consecutive_fails = 0
+        _vl_broken = False
+
+
+def _vl_reset_file():
+    """Reset per-file cumulative failure counter (call at start of a file)."""
+    global _vl_file_fails
+    with _vl_fail_lock:
+        _vl_file_fails = 0
+
+
+def _vl_note_failure() -> bool:
+    """Record a VL failure. Returns True if the breaker just tripped."""
+    global _vl_consecutive_fails, _vl_broken, _vl_file_fails
+    with _vl_fail_lock:
+        _vl_consecutive_fails += 1
+        _vl_file_fails += 1
+        if (_vl_consecutive_fails >= _VL_FAIL_THRESHOLD
+                or _vl_file_fails >= _VL_CUMULATIVE_THRESHOLD) and not _vl_broken:
+            _vl_broken = True
+            logger.warning(
+                f"VL failed {_vl_consecutive_fails}x consec / {_vl_file_fails}x total — "
+                f"circuit breaker OPEN, skipping remaining VL calls")
+            return True
+        return False
+
+
+def _vl_available():
+    """vl_model.is_available() AND breaker not open."""
+    if _vl_broken:
+        return False
+    return vl_model.is_available()
+
+
+# ── Image sampling log (per-process) ──────────────────────────────────────
+# Collects {filename, samples} for the clearance report's 图片随机抽检说明.
+_IMAGE_SAMPLING_LOG = []
+_IMAGE_SAMPLING_LOCK = threading.Lock()
+
+
+def take_image_sampling_log():
+    """Atomically drain and return the accumulated sampling log."""
+    global _IMAGE_SAMPLING_LOG
+    with _IMAGE_SAMPLING_LOCK:
+        out = list(_IMAGE_SAMPLING_LOG)
+        _IMAGE_SAMPLING_LOG = []
+        return out
+
+
+def _trunc(s, n):
+    s = (s or '').replace('\n', ' ').strip()
+    return s[:n] if len(s) > n else s
+
+
+def _describe_sampled_images(items, filename):
+    """Describe a sampled list of (image_bytes, anchor) with batched multi-image
+    VL calls (VL_BATCH default 5) across a bounded thread pool (VL_PARALLEL=2).
+    Returns (description_lines, sample_info_rows).
+
+    items: list of dicts {blob, chapter, prev, next, prompt}
+    """
+    import random
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    max_img = int(os.getenv('VL_MAX_IMAGES_PER_FILE', '20'))
+    parallel = int(os.getenv('VL_PARALLEL', '2'))
+    batch = int(os.getenv('VL_BATCH', '5'))
+    total = len(items)
+    chosen = random.sample(items, min(max_img, total))
+
+    lines = []
+    rows = []
+    lock = threading.Lock()
+
+    def _run_batch(batch_items, base_seq):
+        """One multi-image VL call; returns list of per-item results."""
+        if _vl_broken:
+            return [None] * len(batch_items)
+        blobs = [it['blob'] for it in batch_items]
+        descs = vl_model.describe_images_batch(
+            blobs, '请逐一描述下列每张图片。每张图严格用单独一行，行首是序号：图1、图2、…，'
+                   '然后是本图内容摘要（40字内，含主要文字/数字）。不要添加任何多余段落。'
+                   '如果某张图看不清，该行写：图N：无法识别。')
+        out = []
+        for i, it in enumerate(batch_items):
+            desc = (descs[i] if descs else None)
+            if desc and not desc.startswith('⚠'):
+                _vl_note_success()
+                out.append({'seq': base_seq + i, 'chapter': it.get('chapter', ''),
+                            'prev': it.get('prev', ''), 'next': it.get('next', ''), 'desc': desc})
+            elif descs is None:
+                # whole API call failed — counts toward the breaker
+                _vl_note_failure()
+                out.append(None)
+            else:
+                # model returned empty/unparseable for this image — API OK, skip silently
+                out.append(None)
+        return out
+
+    batches = [chosen[i:i + batch] for i in range(0, len(chosen), batch)]
+    with ThreadPoolExecutor(max_workers=parallel) as pool:
+        futures = [pool.submit(_run_batch, b, i * batch + 1) for i, b in enumerate(batches)]
+        for fut in as_completed(futures):
+            res = fut.result() or []
+            with lock:
+                for r in res:
+                    if r is None:
+                        continue
+                    rows.append(r)
+                    lines.append(
+                        f"[抽检图片{r['seq']}/{len(chosen)} 位置:{_trunc(r.get('chapter', ''), 40)}]: {r['desc']}")
+
+    rows.sort(key=lambda r: r['seq'])
+    if total > len(chosen):
+        lines.append(f"[图片抽检说明] 本文件共 {total} 张图片，随机抽检 {len(chosen)} 张；其余 {total - len(chosen)} 张未逐一识别以控制耗时。")
+    if _vl_broken and not lines:
+        lines.append("[图片抽检说明] VL 连续/累计失败已熔断，未识别图片内容。")
+    return lines, rows
+
+
 def describe_images_in_file(file_bytes, filename, page_texts=None):
-    if not vl_model.is_available():
-        return ""
+    """Describe images in a document — RANDOMLY samples up to
+    VL_MAX_IMAGES_PER_FILE (default 20) images, in parallel (VL_PARALLEL=2),
+    and records each sampled image's location + surrounding text.
+
+    Returns (text, sample_info):
+      text:  assembled description text (for the extracted document text)
+      sample_info: [{'seq','chapter','prev','next','desc'}, ...] for the
+                   report's 图片随机抽检说明 section.
+    """
+    if not _vl_available():
+        return "", []
+    _vl_reset_file()
     ext = os.path.splitext(filename)[1].lower()
-    descriptions = []
+    items = []
     try:
         if ext == '.pdf':
-            doc = None
+            doc = fitz.open(stream=BytesIO(file_bytes), filetype="pdf")
             try:
-                doc = fitz.open(stream=BytesIO(file_bytes), filetype="pdf")
                 for page_num in range(len(doc)):
                     page = doc.load_page(page_num)
-                    img_list = page.get_images(full=True)
-                    for img_idx, img in enumerate(img_list):
-                        xref = img[0]
-                        base_image = doc.extract_image(xref)
-                        image_bytes = base_image["image"]
-                        prompt = f"Describe this image from page {page_num+1} of the PDF. Include any charts, diagrams, tables, or visual information."
-                        # Use cross-check for PDF images (likely charts/tables with critical data)
-                        description = vl_model.describe_with_crosscheck(image_bytes, prompt)
-                        if description and not description.startswith("⚠️ VL模型不可用"):
-                            descriptions.append(f"[Image on page {page_num+1}, image {img_idx+1}]: {description}")
+                    for img_idx, img in enumerate(page.get_images(full=True)):
+                        base_image = doc.extract_image(img[0])
+                        page_txt = (page.get_text() or '').strip()
+                        items.append({
+                            'blob': base_image["image"],
+                            'chapter': f"第{page_num + 1}页",
+                            'prev': _trunc(page_txt, 10),
+                            'next': '',
+                            'prompt': f"Describe this image from page {page_num+1} of the PDF.",
+                        })
             finally:
-                if doc:
-                    doc.close()
+                doc.close()
         elif ext in ['.docx', '.docm']:
             import docx
             doc = docx.Document(BytesIO(file_bytes))
-            img_counter = 1
-            for rel in doc.part.rels.values():
-                if "image" in rel.target_ref:
-                    try:
-                        image_blob = rel.target_part.blob
-                        description = vl_model.describe_image(image_blob, "Describe this image from the Word document.")
-                        if description and not description.startswith("⚠️ VL模型不可用"):
-                            descriptions.append(f"[Image {img_counter}]: {description}")
-                        img_counter += 1
-                    except Exception:
-                        pass
+            # map rId -> image rel
+            rels = doc.part.rels
+            import re as _re
+            pat = _re.compile(r'r:embed="(rId\d+)"')
+            paras = doc.paragraphs
+            seen = set()
+            for pi, para in enumerate(paras):
+                for m in pat.finditer(para._element.xml):
+                    rid = m.group(1)
+                    if rid in seen or rid not in rels or 'image' not in rels[rid].target_ref:
+                        continue
+                    seen.add(rid)
+                    cur_txt = para.text.strip()
+                    prev_txt = ''
+                    for j in range(pi - 1, -1, -1):
+                        t = paras[j].text.strip()
+                        if t:
+                            prev_txt = t
+                            break
+                    nxt_txt = ''
+                    for j in range(pi + 1, len(paras)):
+                        t = paras[j].text.strip()
+                        if t:
+                            nxt_txt = t
+                            break
+                    items.append({
+                        'blob': rels[rid].target_part.blob,
+                        'chapter': _trunc(cur_txt or prev_txt or f"第{pi + 1}段", 30),
+                        'prev': _trunc(prev_txt, 10),
+                        'next': _trunc(nxt_txt, 10),
+                        'prompt': "Describe this image from the Word document.",
+                    })
+                    if _vl_broken:
+                        break
         elif ext in ['.pptx', '.pptm']:
             from pptx import Presentation
             prs = Presentation(BytesIO(file_bytes))
             slide_num = 1
-            img_counter = 1
             for slide in prs.slides:
                 for shape in slide.shapes:
                     if shape.shape_type == 13:
-                        try:
-                            image_bytes = shape.image.blob
-                            description = vl_model.describe_image(image_bytes, f"Describe this image from slide {slide_num} of the PowerPoint.")
-                            if description and not description.startswith("⚠️ VL模型不可用"):
-                                descriptions.append(f"[Image on slide {slide_num}, image {img_counter}]: {description}")
-                            img_counter += 1
-                        except Exception:
-                            pass
+                        items.append({
+                            'blob': shape.image.blob,
+                            'chapter': f"第{slide_num}页幻灯片",
+                            'prev': '', 'next': '',
+                            'prompt': f"Describe this image from slide {slide_num}.",
+                        })
                 slide_num += 1
     except Exception as e:
-        logger.error(f"Error extracting images from {filename}: {e}")
-    return "\n".join(descriptions)
+        logger.error(f"Error collecting images from {filename}: {e}")
+        return "", []
+
+    lines, rows = _describe_sampled_images(items, filename)
+    return "\n".join(lines), rows
 
 
 # Agent is managed by app.services.agent.get_agent (imported as _svc_get_agent)
@@ -1024,9 +1192,16 @@ def extract_text_from_file(file_storage):
         if cached_desc:
             image_desc = cached_desc
         else:
-            image_desc = describe_images_in_file(file_bytes, filename, page_texts if page_texts else None)
+            image_desc, sample_info = describe_images_in_file(file_bytes, filename, page_texts if page_texts else None)
             if image_desc:
                 cache_image_description(file_hash, image_desc)
+            if sample_info:
+                # stash for clearance report's 图片随机抽检说明 section
+                with _IMAGE_SAMPLING_LOCK:
+                    _IMAGE_SAMPLING_LOG.append({
+                        'filename': filename,
+                        'samples': sample_info,
+                    })
         if image_desc:
             text += "\n\n--- Image Descriptions ---\n" + image_desc
 
@@ -1059,6 +1234,228 @@ def extract_text_from_file(file_storage):
         text = clean_report_headers(text)
 
     return text, page_texts
+
+
+# ── Path-based streaming extraction (large-file friendly) ────────────────
+
+class _BytesFileShim:
+    """Minimal FileStorage-like wrapper so legacy extractors can work on a
+    disk path without loading the whole file twice."""
+
+    def __init__(self, abs_path, filename=None):
+        self._abs_path = abs_path
+        self.filename = filename or os.path.basename(abs_path)
+        self._buf = None
+
+    def read(self):
+        if self._buf is None:
+            with open(self._abs_path, 'rb') as f:
+                self._buf = f.read()
+        return self._buf
+
+    def seek(self, pos):
+        # Legacy code calls seek(0) after read(); drop cache to re-read
+        if pos == 0:
+            self._buf = None
+        return 0
+
+
+def _extract_pdf_streaming(abs_path):
+    """Page-by-page PDF text extraction straight from disk.
+
+    fitz.open(filename=...) reads pages lazily, so peak memory is bounded by
+    one rendered page instead of the whole file.
+    Returns (text, page_texts) with the same semantics as extract_text_from_file.
+    """
+    text = None
+    page_texts = {}
+    try:
+        doc = fitz.open(filename=abs_path)
+    except Exception as e:
+        logger.error(f"PDF open failed ({abs_path}): {e}", exc_info=True)
+        return safe_error_response("无法解析PDF文件，请确保文件未损坏。", log_error=e), {}
+
+    try:
+        full_text = []
+        has_text = False
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            page_text = page.get_text()
+            if page_text and page_text.strip():
+                has_text = True
+                full_text.append(page_text)
+                page_texts[page_num + 1] = page_text
+            # Page objects are not retained; fitz reclaims them on next load_page
+        extracted = "\n".join(full_text).strip()
+
+        if has_text and len(extracted) > 50:
+            text = extracted
+        else:
+            logger.info("PDF appears to be scanned (no text). Starting page-by-page OCR...")
+            if ocr_manager.is_available():
+                ocr_results = []
+                ocr_page_texts = {}
+                mat = fitz.Matrix(2.0, 2.0)
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    pix = page.get_pixmap(matrix=mat, alpha=False)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    max_dim = 2000
+                    if max(img.size) > max_dim:
+                        ratio = max_dim / max(img.size)
+                        img = img.resize((int(img.size[0] * ratio), int(img.size[1] * ratio)),
+                                         Image.Resampling.LANCZOS)
+                    page_ocr = run_ocr(np.array(img))
+                    ocr_results.append(page_ocr or "")
+                    ocr_page_texts[page_num + 1] = page_ocr or ""
+                    del pix, img  # free the page bitmap before the next page
+                if any(t.strip() for t in ocr_results):
+                    text = "\n\n".join(ocr_results)
+                    page_texts = ocr_page_texts
+                elif _vl_available():
+                    text = ""
+                    for page_num in range(len(doc)):
+                        if _vl_broken:
+                            break
+                        page = doc.load_page(page_num)
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+                        desc = vl_model.describe_pdf_page(pix.tobytes("png"), page_num + 1)
+                        if desc:
+                            _vl_note_success()
+                        else:
+                            if _vl_note_failure():
+                                break
+                        text += f"\n\n--- 第{page_num + 1}页 (VL分析) ---\n{desc}"
+                    page_texts = {i + 1: "" for i in range(len(doc))}
+                else:
+                    text = "[No text detected in PDF even after OCR and VL not available]"
+            elif _vl_available():
+                text = ""
+                for page_num in range(len(doc)):
+                    if _vl_broken:
+                        break
+                    page = doc.load_page(page_num)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+                    desc = vl_model.describe_pdf_page(pix.tobytes("png"), page_num + 1)
+                    if desc:
+                        _vl_note_success()
+                    else:
+                        if _vl_note_failure():
+                            break
+                    text += f"\n\n--- 第{page_num + 1}页 (VL分析) ---\n{desc}"
+                page_texts = {i + 1: "" for i in range(len(doc))}
+            else:
+                text = "[无法提取PDF文本，且OCR/VL不可用]"
+    except Exception as e:
+        logger.error(f"PDF streaming error ({abs_path}): {e}", exc_info=True)
+        return safe_error_response("无法解析PDF文件，请确保文件未损坏。", log_error=e), {}
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+    return text, page_texts
+
+
+def extract_text_from_path(abs_path, filename=None):
+    """Extract text from a file on disk without loading it fully into memory.
+
+    Large PDFs are processed page-by-page (constant memory); plain-text formats
+    are streamed in chunks; other formats (docx/xlsx/pptx/images — typically
+    small) delegate to the existing bytes-based extractor.
+    Returns (text, page_texts).
+    """
+    filename = filename or os.path.basename(abs_path)
+    ext = os.path.splitext(filename)[1].lower()
+    wps_map = {'.wps': '.doc', '.et': '.xls', '.dps': '.ppt'}
+    ext = wps_map.get(ext, ext)
+
+    # PDF — the big-file case — streams page by page
+    if ext == '.pdf':
+        text, page_texts = _extract_pdf_streaming(abs_path)
+        if text and not text.startswith("["):
+            text = _clean_report_headers_static(text)
+        return text, page_texts
+
+    # Plain text formats — stream in chunks
+    if ext in ['.txt', '.md', '.text', '.csv', '.json']:
+        chunks = []
+        try:
+            with open(abs_path, 'rb') as f:
+                while True:
+                    chunk = f.read(8 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+        except OSError as e:
+            logger.error(f"Text read failed ({abs_path}): {e}")
+            return safe_error_response("无法读取文件。", log_error=e), {1: ''}
+        data = b''.join(chunks)
+        try:
+            text = data.decode('utf-8')
+        except UnicodeDecodeError:
+            text = data.decode('utf-8', errors='replace')
+        return text, {1: text}
+
+    if ext in ['.html', '.htm']:
+        shim = _BytesFileShim(abs_path, filename)
+        return extract_text_from_file(shim)
+
+    # Everything else delegates via the shim (docx/xlsx/pptx/images/etc.)
+    shim = _BytesFileShim(abs_path, filename)
+    return extract_text_from_file(shim)
+
+
+def _clean_report_headers_static(text):
+    """Header cleanup shared by the streaming extractor (mirror of the inner
+    clean_report_headers in extract_text_from_file)."""
+    if not text:
+        return text
+    lines = text.split('\n')
+    cleaned_lines = []
+    skip = False
+    for line in lines:
+        stripped = line.strip()
+        is_header = any(stripped.startswith(prefix) for prefix in [
+            '--- Sheet:', '技术标规律性分析检查结果', '标段名称：', '投标单位个数：',
+            '检查结果：', '检查规则：', '相似度计算说明：', '一、标书围串风险分析结果',
+            '二、分析结果详情', '签字：', '日期：', '技术标规律性分析详情'
+        ])
+        if is_header:
+            skip = True
+            continue
+        if skip:
+            if stripped == '':
+                skip = False
+            continue
+        cleaned_lines.append(line)
+    return '\n'.join(cleaned_lines)
+
+
+def extract_metadata_from_path(abs_path, filename=None):
+    """Metadata extraction from a file on disk (PDF opened from path)."""
+    filename = filename or os.path.basename(abs_path)
+    meta = {'filename': filename}
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == '.pdf':
+        try:
+            doc = fitz.open(filename=abs_path)
+            info = doc.metadata or {}
+            meta['author'] = info.get('author', '')
+            meta['creator'] = info.get('creator', '')
+            meta['producer'] = info.get('producer', '')
+            meta['creationDate'] = info.get('creationDate', '')
+            doc.close()
+        except Exception:
+            pass
+        return meta
+    # Other formats reuse the bytes path via shim
+    shim = _BytesFileShim(abs_path, filename)
+
+    class _ShimNameOnly(_BytesFileShim):
+        pass
+    return extract_metadata(shim)
 
 
 def get_or_extract_file_analysis(file_storage, file_type, user_id, thread_id=None, project_id=None):

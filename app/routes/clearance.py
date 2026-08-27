@@ -49,15 +49,29 @@ def run_clearance_route():
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    if 'files' not in request.files:
+    # ── New flow: pre-uploaded file_ids (large-file friendly, zero body) ──
+    from app.services.file_store import resolve as resolve_file
+    from app.services.file_processing import extract_text_from_file, extract_metadata
+
+    file_ids = request.form.getlist('file_ids')
+    # Back-compat: direct multipart upload (small files)
+    uploaded_files = request.files.getlist('files') if 'files' in request.files else []
+
+    if not file_ids and not uploaded_files:
         return err("No files uploaded", "VALIDATION_ERROR", 400)
-    uploaded_files = request.files.getlist('files')
-    if len(uploaded_files) < 2:
-        return err("清标至少需要 2 份投标文件", "VALIDATION_ERROR", 400)
-    if len(uploaded_files) > 10:
+    if len(file_ids) + len(uploaded_files) > 10:
         return err("最多支持 10 份投标文件", "VALIDATION_ERROR", 400)
 
-    from app.services.file_processing import extract_text_from_file, extract_metadata
+    resolved = []   # [{'abs_path','filename','size'}]
+    for fid in file_ids:
+        info = resolve_file(fid, user_id=user_id)
+        if not info:
+            return err(f"文件不存在或无权访问: file_id={fid}", "NOT_FOUND", 404)
+        if not allowed_file(info['filename']):
+            continue
+        resolved.append({'abs_path': info['abs_path'], 'filename': info['filename']})
+
+    # Legacy direct-upload path — small files, extract inline as before
     file_data = []
     for f in uploaded_files:
         if not f.filename or not allowed_file(f.filename):
@@ -72,14 +86,21 @@ def run_clearance_route():
             'metadata': meta or {},
             'images': [],
         })
-    if len(file_data) < 2:
-        return err("至少需要 2 份可提取文本的投标文件", "VALIDATION_ERROR", 400)
 
-    # 招标文件（可选）
+    if len(file_data) + len(resolved) < 2:
+        return err("至少需要 2 份投标文件", "VALIDATION_ERROR", 400)
+
+    # 招标文件（可选）— pre-uploaded id or direct upload
     tender_text = None
     tender_name = None
+    tender_spec = None
+    tender_fid = request.form.get('tender_file_id')
+    if tender_fid:
+        tinfo = resolve_file(tender_fid, user_id=user_id)
+        if tinfo and allowed_file(tinfo['filename']):
+            tender_spec = {'abs_path': tinfo['abs_path'], 'filename': tinfo['filename']}
     tender_file = request.files.get('tender_file')
-    if tender_file and tender_file.filename and allowed_file(tender_file.filename):
+    if not tender_spec and tender_file and tender_file.filename and allowed_file(tender_file.filename):
         ttext, _ = extract_text_from_file(tender_file)
         if ttext and not ttext.startswith("["):
             tender_text = ttext
@@ -90,26 +111,36 @@ def run_clearance_route():
         options = json.loads(request.form.get('options', '{}') or '{}')
     except (json.JSONDecodeError, TypeError):
         options = {}
+    has_tender = bool(tender_text or tender_spec)
     options.setdefault('indicator_analysis', True)
     options.setdefault('cross_comparison', True)
-    options.setdefault('compliance_check', bool(tender_text))
+    options.setdefault('compliance_check', has_tender)
     options.setdefault('ai_review', True)
     # 未提供招标文件时强制关闭合规
-    if not tender_text:
+    if not has_tender:
         options['compliance_check'] = False
 
     task_id = str(uuid.uuid4())
     thread_id = session.get('thread_id', '')
     project_id = request.form.get('project_id', type=int)
 
+    info_overrides = {}
+    for field in ('bid_number', 'bid_open_time', 'bidder_name', 'agent_name',
+                   'eval_method', 'award_announce_time', 'winner', 'award_amount',
+                   'region', 'regulator', 'platform'):
+        val = request.form.get(field, '').strip()
+        if val:
+            info_overrides[field] = val
+
     from celery_app import celery
     celery.send_task(
         'clearance_task',
-        args=[file_data, tender_text, tender_name, options, user_id, thread_id, task_id, project_id],
+        args=[file_data, resolved, tender_text, tender_name, tender_spec,
+              options, user_id, thread_id, task_id, project_id, info_overrides],
         task_id=task_id,
     )
 
-    return ok({'task_id': task_id, 'file_count': len(file_data)})
+    return ok({'task_id': task_id, 'file_count': len(file_data) + len(resolved)})
 
 
 @clearance_bp.route('/status/<task_id>', methods=['GET'])

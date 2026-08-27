@@ -110,12 +110,6 @@ def register_all(flask_app):
     flask_app.register_blueprint(templates_bp)
     logger.info(f"  OK templates_bp ({time.time()-t0:.0f}s)")
 
-    # ── Audit: eager (lightweight, needed for unified bid audit) ──
-    t0 = time.time()
-    from app.routes.audit import audit_bp
-    flask_app.register_blueprint(audit_bp)
-    logger.info(f"  OK audit_bp ({time.time()-t0:.0f}s)")
-
     # ── Wiki: eager (needed for wiki tab) ──
     t0 = time.time()
     from app.routes.wiki import wiki_bp
@@ -145,6 +139,12 @@ def register_all(flask_app):
     from app.routes.clearance import clearance_bp
     flask_app.register_blueprint(clearance_bp)
     logger.info(f"  OK clearance_bp ({time.time()-t0:.0f}s)")
+
+    # ── Upload: eager (stream large-file uploads to disk) ──
+    t0 = time.time()
+    from app.routes.upload import upload_bp
+    flask_app.register_blueprint(upload_bp)
+    logger.info(f"  OK upload_bp ({time.time()-t0:.0f}s)")
 
     # ── Graph: eager (spider-web knowledge graphs) ──
     t0 = time.time()

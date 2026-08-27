@@ -53,7 +53,29 @@ def safe_error_response(user_message="处理文件时出错，请检查文件格
 
 
 def split_thinking_answer(text: str) -> tuple:
-    """Split AI response into thinking and answer parts using common delimiters."""
+    """Split AI response into thinking and answer parts.
+
+    Supports:
+      - MiMo dual blocks:  【思考】A...【思考】B...【回答】C...
+      - Standard single:   【思考】A...【回答】C...
+      - 段错位置暴露:      …text…【思考】A...【回答】C...
+    The entire text before the last 【回答】 is treated as thinking, so
+    multi-block MiMo output is correctly separated.
+    """
+    if not text:
+        return None, text
+
+    # ── MiMo / multi-block (≥2 【思考】) ──
+    if text.count('【思考】') >= 2:
+        idx = text.rfind('【回答】')
+        if idx >= 0:
+            thinking = text[:idx].replace('【思考】', '').strip()
+            thinking = re.sub(r'\n{3,}', '\n\n', thinking)
+            answer = text[idx + len('【回答】'):].strip()
+            return thinking, answer
+        return None, text
+
+    # ── Standard single-block formats ──
     patterns = [
         r'【思考】(.*?)【回答】',
         r'思考：(.*?)回答：',

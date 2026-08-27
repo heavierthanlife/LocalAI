@@ -1,6 +1,7 @@
 """Vision-Language model for image description — multi-provider (NVIDIA, Mimo, DashScope)."""
 import os
 import io
+import re
 import base64
 import logging
 from PIL import Image
@@ -99,8 +100,8 @@ class VLModel:
         cfg = _get_active_vl_config()
         self._provider_id = cfg['provider_id']
         self._model_name = cfg['model']
+        self._base_url = cfg['base_url']
         api_key = cfg['api_key']
-        base_url = cfg['base_url']
 
         if not api_key:
             self._client = None
@@ -109,7 +110,7 @@ class VLModel:
 
         try:
             from openai import OpenAI
-            self._client = OpenAI(api_key=api_key, base_url=base_url)
+            self._client = OpenAI(api_key=api_key, base_url=self._base_url, timeout=60.0)
             logger.info(f"VL client initialized: provider={cfg['provider_id']}, model={self._model_name}")
         except ImportError:
             logger.error("OpenAI package not installed. VL model disabled.")
@@ -118,7 +119,22 @@ class VLModel:
             logger.error(f"VL client init failed: {e}")
             self._client = None
 
+    def _ensure_current(self):
+        """Re-init if the active VL config changed since the client was built
+        (e.g. admin switched provider in runtime config). Keeps long-lived
+        worker singletons from pinning a stale endpoint forever."""
+        try:
+            cfg = _get_active_vl_config()
+            if (cfg['provider_id'] != getattr(self, '_provider_id', None)
+                    or cfg['model'] != getattr(self, '_model_name', None)
+                    or cfg['base_url'] != getattr(self, '_base_url', None)):
+                logger.info(f"VL config changed ({getattr(self, '_provider_id', '?')}→{cfg['provider_id']}), reloading client")
+                self.reload()
+        except Exception as e:
+            logger.warning(f"VL config check failed: {e}")
+
     def is_available(self):
+        self._ensure_current()
         if self._client is None:
             return False
         cfg = _get_active_vl_config()
@@ -150,6 +166,7 @@ class VLModel:
         return base64.b64encode(processed).decode('utf-8')
 
     def describe_image(self, image_bytes, prompt="请描述这张图片的内容"):
+        self._ensure_current()
         if not self.is_available():
             return "⚠️ VL模型不可用，请检查API密钥。"
         try:
@@ -164,7 +181,8 @@ class VLModel:
                     ]
                 }],
                 max_tokens=800,
-                temperature=0.7
+                temperature=0.7,
+                timeout=60.0
             )
             description = response.choices[0].message.content
             if not description:
@@ -181,6 +199,62 @@ class VLModel:
                 return "⚠️ 图片内容不符合安全规范，无法描述。"
             else:
                 return f"⚠️ 图片描述失败: {error_msg[:100]}"
+
+    def describe_images_batch(self, images, prompt=None):
+        """Describe up to N images in a SINGLE API call (multi-image content).
+
+        images: list of raw image bytes
+        Returns: list of per-image description strings aligned by index.
+                 Entries may be '' when the model returned fewer lines than
+                 images (non-compliance) — the API call itself succeeded.
+                 Returns None only if the whole request failed.
+        """
+        if not images:
+            return []
+        self._ensure_current()
+        if not self.is_available():
+            return [f"⚠️ VL模型不可用，请检查API密钥。"] * len(images)
+        n = len(images)
+        prompt = prompt or (
+            "请逐一描述下列每张图片。每张图严格用单独一行，行首是序号：图1、图2、…，"
+            "然后是本图内容摘要（40字内，含主要文字/数字）。不要添加任何多余段落。"
+            "如果某张图看不清，该行写：图N：无法识别。")
+        try:
+            content = []
+            for img in images:
+                b64 = self.encode_image_to_base64(img)
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+            content.append({"type": "text", "text": prompt})
+            response = self._client.chat.completions.create(
+                model=self._model_name,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=1500,
+                temperature=0.2,
+                timeout=90.0
+            )
+            raw = response.choices[0].message.content or ""
+            return self._parse_batch_desc(raw, n)
+        except Exception as e:
+            logger.error(f"VL batch description failed: {e}")
+            return None
+
+    @staticmethod
+    def _parse_batch_desc(raw, n):
+        """Parse '图1：…\n图2：…' style output into n aligned descriptions."""
+        # split on lines starting with 图<number>
+        pattern = re.compile(r'图\s*(\d+)\s*[:：]\s*')
+        matches = list(pattern.finditer(raw))
+        out = [''] * n
+        if len(matches) >= 1:
+            for mi, m in enumerate(matches):
+                num = int(m.group(1))
+                end = matches[mi + 1].start() if mi + 1 < len(matches) else len(raw)
+                if 1 <= num <= n:
+                    out[num - 1] = raw[m.start():end].strip()
+        else:
+            # no numbering — put the whole text on the first image
+            out[0] = raw.strip()
+        return out
 
     def describe_pdf_page(self, image_bytes, page_num):
         return self.describe_image(

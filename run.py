@@ -49,7 +49,8 @@ try:
         with conn.cursor() as cur:
             cur.execute(
                 "DELETE FROM chat_sessions WHERE project_id IS NULL "
-                "AND thread_id NOT IN (SELECT DISTINCT thread_id FROM chat_messages)"
+                "AND thread_id NOT IN (SELECT DISTINCT thread_id FROM chat_messages) "
+                "AND thread_id NOT IN (SELECT DISTINCT thread_id FROM user_files WHERE thread_id IS NOT NULL)"
             )
             if cur.rowcount:
                 import logging

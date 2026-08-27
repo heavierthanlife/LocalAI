@@ -334,9 +334,6 @@
                 <div class="settings-group">
                     <button id="promptTemplatesBtn" class="file-btn" title="提示词模板" style="font-size:0.78rem;">📋 模板</button>
                 </div>
-                <div class="settings-group">
-                    <button id="chatFullAuditBtn" class="file-btn" onclick="if(!window._showAuditModal){showToast('审计模块未就绪，请刷新页面','error',3000);return;}window._showAuditModal()" style="background:#7c3aed;color:#fff;border-color:#6d28d9;font-size:0.75rem;">📋 全量审计</button>
-                </div>
             </div>
 
             <!-- Unified 清标 tool: merges Smart Compare + Doc Analysis + Compliance + AI Review -->
@@ -359,8 +356,8 @@
                         <span id="clearanceHint" style="color:var(--card-muted);font-size:0.68rem;"></span>
                     </div>
                     <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <button id="runClearanceBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>🔍 开始清标</button>
-                        <button id="clearanceFileStationBtn" class="file-btn">🗂️ 文件站</button>
+                        <button id="runClearanceBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>开始清标</button>
+                        <button id="clearanceFileStationBtn" class="file-btn">文件站</button>
                         <span id="storageWarning" class="storage-warning"></span>
                     </div>
                     <div id="clearanceProgress" style="display:none;margin-top:6px;">
@@ -414,25 +411,6 @@
                 <details id="stylesDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
                     <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">✍️ 写作风格</summary>
                     <div id="styleManagerPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
-                </details>
-                <details id="auditConfigDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📋 审计设置 <span id="auditConfigModifiedDot" style="display:none;color:#f59e0b;font-size:0.65rem;">● 已修改</span></summary>
-                    <div id="auditConfigContent" style="font-size:0.72rem;margin-top:6px;">
-                        <table style="width:100%;border-collapse:collapse;" id="auditConfigTable">
-                            <thead><tr style="background:#f1f5f9;">
-                                <th style="padding:4px;text-align:left;">功能</th>
-                                <th style="padding:4px;">默认启用</th>
-                                <th style="padding:4px;">失败阈值</th>
-                                <th style="padding:4px;">权重</th>
-                                <th style="padding:4px;">严重度阈值</th>
-                            </tr></thead>
-                            <tbody id="auditConfigTbody"></tbody>
-                        </table>
-                    </div>
-                    <div style="display:flex;gap:6px;margin-top:10px;">
-                        <button id="auditConfigSaveBtn" class="file-btn" style="flex:1;background:#3b82f6;color:white;border-color:#2563eb;font-size:0.75rem;padding:6px;">💾 保存审计配置</button>
-                    </div>
-                    <div id="auditConfigMsg" style="margin-top:6px;font-size:0.7rem;"></div>
                 </details>
                 <details id="skillAuditDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
                     <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">🧠 技能审核</summary>
@@ -508,10 +486,6 @@
                 <details id="workloadDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
                     <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📈 审核工作量</summary>
                     <div id="workloadPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
-                </details>
-                <details id="auditHistoryDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📋 审计历史</summary>
-                    <div id="auditHistoryPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
             </div>
         </div>
@@ -833,7 +807,7 @@
     <script defer src="{{ url_for('static', filename='js/wiki.js') }}?v={{ cache_buster }}"></script>
     <script defer src="{{ url_for('static', filename='js/review.js') }}?v={{ cache_buster }}"></script>
     <script defer src="{{ url_for('static', filename='js/knowledge-lab.js') }}?v={{ cache_buster }}"></script>
-    <script defer src="{{ url_for('static', filename='js/bid-audit.js') }}?v={{ cache_buster }}"></script>
+    
     <script defer src="{{ url_for('static', filename='js/file-station.js') }}?v={{ cache_buster }}"></script>
 </body>
 </html>

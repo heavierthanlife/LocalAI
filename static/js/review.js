@@ -5,11 +5,10 @@
     // ======================== Review Tab (Admin + Auditor) ========================
     var reviewPanel = document.getElementById('reviewPanel');
     if (reviewTabBtn && reviewPanel) {
-        console.log('Audit: reviewTab block entered');
-        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
+        let _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false };
 
         async function _initReviewPanel() {
-            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false, auditHistory: false };
+            _reviewLoaded = { ingest: false, training: false, history: false, structured: false, workload: false };
             const content = document.getElementById('reviewContent');
             const sections = document.getElementById('reviewSections');
             try {
@@ -18,14 +17,10 @@
                 if (!res.ok) { content.innerHTML = '<span style="color:#e74c3c;">服务器错误 (' + res.status + ')</span>'; return; }
                 const stats = await res.json();
                 const items = ['<span title="用户总数">👥<b>' + stats.total_users + '</b></span>', '<span title="会话总数">💬<b>' + stats.total_sessions + '</b></span>', '<span title="消息总数">✉️<b>' + stats.total_messages + '</b></span>'];
-                content.innerHTML = '<div style="font-size:0.7rem;color:var(--card-muted);">' + items.join(' · ') + '</div>' +
-                    '<div style="margin:10px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:12px;">' +
-                        '<span id="auditRunningBadge" style="display:none;font-size:0.72rem;color:#f59e0b;">⏳ 审计进行中...</span>' +
-                    '</div>';
-                if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); _checkRunningAudit(); }
+                content.innerHTML = '<div style="font-size:0.7rem;color:var(--card-muted);">' + items.join(' · ') + '</div>';
+                if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); }
                 _checkStaleReviews();
                 _updateReviewSidebarStatus();
-                _checkRunningAudit();
             } catch(e) { console.error('Review stats load error:', e); content.innerHTML = '<span style="color:#e74c3c;">加载失败</span>'; }
         }
         window._initReviewPanel = _initReviewPanel;
@@ -98,27 +93,6 @@
             }
         }, 200);
 
-        // ── Full Audit button uses inline onclick → window._showAuditModal ──
-
-        async function _checkRunningAudit() {
-            const badge = document.getElementById('auditRunningBadge');
-            if (!badge) return;
-            const pid = window._currentProjectId || currentProjectId;
-            if (!pid) { badge.style.display = 'none'; return; }
-            try {
-                const r = await fetch(`/audit/running/${pid}`, {credentials:'include'});
-                const d = await r.json();
-                if (r.ok && d && d.run_id) {
-                    badge.style.display = 'inline';
-                    const chatBtn = document.getElementById('chatFullAuditBtn');
-                    if (chatBtn) chatBtn.disabled = true;
-                } else {
-                    badge.style.display = 'none';
-                    const chatBtn = document.getElementById('chatFullAuditBtn');
-                    if (chatBtn) chatBtn.disabled = false;
-                }
-            } catch(_) { badge.style.display = 'none'; }
-        }
 
         function _setupReviewLazySections() {
             const map = [
@@ -127,7 +101,6 @@
                 ['ingestHistoryDetails', 'history', 'loadIngestHistory'],
                 ['structuredDocsDetails', 'structured', 'loadStructuredDocsPanel'],
                 ['workloadDetails', 'workload', 'loadWorkloadPanel'],
-                ['auditHistoryDetails', 'auditHistory', 'loadAuditHistory'],
             ];
             for (const [id, key, fnName] of map) {
                 const el = document.getElementById(id);

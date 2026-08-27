@@ -179,6 +179,22 @@ class TaskBus:
         return tasks
 
     @staticmethod
+    def delete(task_id: str) -> bool:
+        """Remove a task from the registry and drop its metadata hash.
+
+        Returns True if the task existed (meta removed), False otherwise.
+        """
+        r = _get_redis()
+        if not r:
+            return False
+        pipe = r.pipeline()
+        pipe.zrem(TASK_REGISTRY, task_id)
+        pipe.delete(META_PREFIX + task_id)
+        pipe.execute()
+        existed = r.exists(META_PREFIX + task_id) == 0
+        return True
+
+    @staticmethod
     def subscribe(task_id: str, timeout: float = 300):
         """Generator: yield SSE-formatted progress events from Redis pub/sub.
 

@@ -125,6 +125,8 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
         'name2': file_data[j]['filename'],
         'text1': text1, 'text2': text2,
         'sim': sim * 100,
+        'key_sim': key_info_val,
+        'attr_sim': file_attr_val,
         'risk': risk,
         'blocks': blocks,
         'html1': html1, 'html2': html2,
@@ -174,6 +176,103 @@ def build_attr_details(file_data):
             'producer': meta.get('producer', ''),
         })
     return details
+
+
+def cluster_order_by_risk(risk_matrix, files):
+    """E3 — heuristic reorder of rows/cols so mutually-high-risk companies
+    cluster together (visual "gang block"). Greedy: start from the row with
+    the largest total risk, then repeatedly pick the file most connected to
+    the already-selected set.
+
+    Returns list of indices (new order).
+    """
+    n = len(files)
+    if n <= 2:
+        return list(range(n))
+    total = [sum(row) for row in risk_matrix]
+    used = set()
+    order = []
+    # start with max total
+    first = max(range(n), key=lambda i: total[i])
+    used.add(first)
+    order.append(first)
+    while len(order) < n:
+        best = None
+        best_score = -1
+        for i in range(n):
+            if i in used:
+                continue
+            # connection = sum of risk to already-ordered files
+            score = sum(risk_matrix[i][j] for j in used)
+            # tie-break by own total risk
+            score = (score, total[i])
+            if best is None or score > best_score:
+                best = i
+                best_score = score
+        used.add(best)
+        order.append(best)
+    return order
+
+
+def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2):
+    """E2 — find connected groups where every internal pair exceeds
+    `threshold` risk (a "gang"/疑似围标集团).
+
+    Returns list of dicts: {members:[indices], files:[names],
+                            internal_pairs:[(i,j)], max_risk, avg_risk}
+    """
+    n = len(files)
+    groups = []
+
+    def _is_connected(inds):
+        for a in range(len(inds)):
+            for b in range(a + 1, len(inds)):
+                i, j = inds[a], inds[b]
+                if risk_matrix[i][j] <= threshold:
+                    return False
+        return True
+
+    def _grow(seed):
+        members = set(seed)
+        changed = True
+        while changed:
+            changed = False
+            for i in range(n):
+                if i in members:
+                    continue
+                if all(risk_matrix[i][j] > threshold for j in members):
+                    members.add(i)
+                    changed = True
+        return members
+
+    seen_groups = set()
+    for i in range(n):
+        for j in range(i + 1, n):
+            if risk_matrix[i][j] <= threshold:
+                continue
+            g = _grow([i, j])
+            if len(g) < min_members:
+                continue
+            key = tuple(sorted(g))
+            if key in seen_groups:
+                continue
+            seen_groups.add(key)
+            pairs = []
+            risks = []
+            gl = sorted(g)
+            for a in range(len(gl)):
+                for b in range(a + 1, len(gl)):
+                    pairs.append((gl[a], gl[b]))
+                    risks.append(risk_matrix[gl[a]][gl[b]])
+            groups.append({
+                'members': gl,
+                'files': [files[x] for x in gl],
+                'internal_pairs': pairs,
+                'max_risk': max(risks) if risks else 0.0,
+                'avg_risk': round(sum(risks) / len(risks), 2) if risks else 0.0,
+            })
+    groups.sort(key=lambda g: (-len(g['members']), -g['max_risk']))
+    return groups
 
 
 # ═══════════════════════════════════════════════════════════════════════════

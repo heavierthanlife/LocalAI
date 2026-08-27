@@ -1,6 +1,5 @@
 /* AI_Services Application Logic */
 // ======================== Global Variables & Setup ========================
-    window._showAuditModal = null;  // placeholder — set after audit functions defined
     let selectedFiles = [];
     let currentFeedbackState = new Map();
     let isProcessing = false;
@@ -420,7 +419,6 @@
             }
         }).catch(function(){});
     };
-
 
     function fallbackCopy(text) {
         const ta = document.createElement('textarea');
@@ -1380,7 +1378,6 @@
         closeAccountModal.onclick = () => { accountModal.style.display = 'none'; };
     }
 
-
     // ======================== File Station Functions ========================
     var fileStationData = [];
     var selectedFileIds = new Set();
@@ -1938,7 +1935,7 @@
             const res = await fetch('/check_storage', { credentials: 'include' });
             const data = await res.json();
             const warningSpan = document.getElementById('storageWarning');
-            if (data.warning && warningSpan) warningSpan.innerHTML = '⚠️ ' + data.message + '，请删除旧的聊天记录以释放空间。';
+            if (data.warning && warningSpan) warningSpan.innerHTML = '⚠️ ' + data.message + '，可在「我的文件」中清理旧文件释放空间。';
             else if (warningSpan) warningSpan.innerHTML = '';
         } catch (err) { console.error('Storage check failed', err); }
     }
@@ -2394,7 +2391,6 @@
                          📁 ${escapeHtml(p.name)}
                          ${p.status && p.status !== 'active' ? `<span style="font-size:.7rem;color:var(--card-muted);">${p.status}</span>` : ''}
                          </span>
-                         ${(!p.status || p.status === 'active') ? `<button onclick="event.stopPropagation();if(!window._showAuditModal){showToast('审计模块未就绪，请刷新页面','error',3000);return;}window._currentProjectId=${p.id};window._showAuditModal()" style="background:#7c3aed;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:.65rem;cursor:pointer;flex-shrink:0;margin-left:4px;" title="全量审计">📋</button>` : ''}
                      </li>`
                 ).join('');
             }
@@ -3302,7 +3298,6 @@
             adminExtras.style.display = '';
         }
         // Wire admin tool buttons
-        const auditLogBtn = document.getElementById('sidebarAuditLogBtn');
         setTimeout(() => {
             const cacheBtn = document.getElementById('sidebarClearCacheBtn');
             const cleanupBtn = document.getElementById('sidebarCleanupNowBtn');
@@ -3580,6 +3575,7 @@
         }
 
         // Audit log handler (defined here so createQuickModal is in scope)
+        const auditLogBtn = document.getElementById('sidebarAuditLogBtn');
         if (auditLogBtn) auditLogBtn.onclick = () => {
             const modal = createQuickModal('审计日志');
             modal.innerHTML('<h3 style="margin-bottom:4px;">📊 管理员操作审计</h3>' +
@@ -3726,7 +3722,6 @@
             }
             showToast(`已导出 ${allLogs.length} 条记录`, 'success');
         }
-
 
         // Knowledge sidebar
         const sukBtn = document.getElementById('sidebarUploadKnowledgeBtn');
@@ -3983,17 +3978,6 @@
             }
         } catch(e) { console.warn('Project chat load failed:', e); }
 
-        // Reset per-project audit history when switching projects
-        const auditDetails = document.getElementById('projectAuditHistoryDetails');
-        if (auditDetails) {
-            auditDetails.open = false;
-            auditDetails._auditLoaded = false;
-            const auditPanel = document.getElementById('projectAuditHistoryPanel');
-            if (auditPanel) auditPanel.innerHTML = '<span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>';
-            const auditCount = document.getElementById('projectAuditCount');
-            if (auditCount) auditCount.textContent = '';
-        }
-
         syncActiveTabWithView();
     }
 
@@ -4082,13 +4066,7 @@
             <div id="projectFilesTab">
                 <div id="folderTreeContainer" style="margin-bottom: 20px;"></div>
                 <div id="fileListContainer"></div>
-                <details id="projectAuditHistoryDetails" style="margin-top:16px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.82rem;cursor:pointer;color:var(--card-muted);">
-                        📋 审计历史 <span id="projectAuditCount" style="font-size:0.7rem;color:var(--card-muted);font-weight:normal;"></span>
-                    </summary>
-                    <div id="projectAuditHistoryPanel" style="font-size:0.72rem;margin-top:8px;">
-                        <span style="color:var(--card-muted);">点击展开查看该项目的审计记录...</span>
-                    </div>
+            </div>
                 </details>
             </div>
             <!-- Graph tab (hidden by default) -->
@@ -4161,17 +4139,6 @@
 
         // Wire project sub-tab switching
         setTimeout(() => {
-            const auditDetails = document.getElementById('projectAuditHistoryDetails');
-            if (auditDetails && !auditDetails._auditListenerSet) {
-                auditDetails._auditListenerSet = true;
-                auditDetails.addEventListener('toggle', () => {
-                    if (auditDetails.open && !auditDetails._auditLoaded) {
-                        auditDetails._auditLoaded = true;
-                        loadProjectAuditHistory();
-                    }
-                });
-            }
-
             // Sub-tab switching
             document.querySelectorAll('.project-sub-tab-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -6349,7 +6316,6 @@
         sessionStorage.removeItem('forceAdminTab');
     }
 
-
     sessionStorage.setItem('currentThreadId', '');
     // Consent check deferred to loadAccountModal() — bootstrap route provides it
     // Always load UI; consent gate handled server-side and in account modal
@@ -6387,7 +6353,6 @@
                 console.error('Failed to initialize chat:', err);
             }
         }, 100);
-
 
     // ======================== Global Keyboard Shortcuts ========================
     document.addEventListener('keydown', async (e) => {
@@ -7072,7 +7037,6 @@
                 dailyChatBtn.style.display = data.authenticated ? '' : 'none';
             }
 
-
             // Review tab for admins and auditors
             const reviewTab = document.getElementById('reviewTabBtn');
             if (reviewTab) {
@@ -7535,7 +7499,6 @@
         if (indicator) indicator.textContent = '';
     }
 
-
     // ======================== Timeline Tab ========================
     const timelineTabBtn = document.getElementById('timelineTabBtn');
     const timelinePanel = document.getElementById('timelinePanel');
@@ -7940,7 +7903,6 @@
                 ['assetDetails', 'assets', loadAssetManager],
                 ['archiveDetails', 'archives', loadArchivedSessionsAdmin],
                 ['stylesDetails', 'styles', loadStyleManager],
-                ['auditConfigDetails', 'auditConfig', loadAuditConfig],
                 ['skillAuditDetails', 'skillAudit', loadSkillAuditWorkspace],
             ];
             for (const [id, key, fn] of map) {
@@ -7957,7 +7919,6 @@
     const reviewTabBtn = document.getElementById('reviewTabBtn');
     var reviewPanel = document.getElementById('reviewPanel');
     if (reviewTabBtn && reviewPanel) {
-        console.log('Audit: reviewTab block entered');
         reviewTabBtn.onclick = async () => {
             stopRealtimePoll();
             saveActiveTab('review');
@@ -8334,17 +8295,47 @@
                 const barWidth = t.progress || 0;
                 const barColor = t.status === 'failed' ? '#ef4444' : t.status === 'completed' ? '#22c55e' : '#5a7c9b';
                 const taskId = t.task_id || '';
-                const clickable = (t.status === 'completed' || t.status === 'failed');
-                const style = clickable ? 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);cursor:pointer;' : 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);';
+                const isRunning = (t.status === 'running' || t.status === 'queued' || t.status === 'pending');
+                const isDone = (t.status === 'completed' || t.status === 'failed');
+                // running → cancel button; done → two-step delete button
+                const actionBtn = isRunning
+                    ? `<button class="task-cancel-btn" data-task-id="${taskId}" title="取消任务" style="background:none;border:none;cursor:pointer;font-size:0.68rem;color:var(--card-muted);padding:0 2px;">⛔</button>`
+                    : isDone
+                        ? `<button class="task-delete-btn" data-task-id="${taskId}" title="删除任务" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:var(--card-muted);padding:0 2px;">✕</button>`
+                        : '';
+                const style = isDone ? 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);cursor:pointer;' : 'padding:6px 8px;font-size:0.73rem;border-bottom:1px solid var(--border-color);';
                 return `<li data-task-id="${taskId}" data-task-status="${t.status || ''}" style="${style}">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span>${statusIcon} ${escapeHtml(t.label || t.type || '任务')}</span>
-                        <span style="font-size:0.65rem;color:var(--card-muted);">${t.progress || 0}%</span>
+                        <span style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.65rem;color:var(--card-muted);">${t.progress || 0}%</span>${actionBtn}</span>
                     </div>
-                    ${t.status === 'running' ? `<div style="background:var(--border-color);height:3px;border-radius:2px;margin-top:3px;"><div style="background:${barColor};height:100%;width:${barWidth}%;border-radius:2px;transition:width .3s;"></div></div>` : ''}
+                    ${isRunning ? `<div style="background:var(--border-color);height:3px;border-radius:2px;margin-top:3px;"><div style="background:${barColor};height:100%;width:${barWidth}%;border-radius:2px;transition:width .3s;"></div></div>` : ''}
                     ${t.message && t.status !== 'completed' ? `<div style="font-size:0.65rem;color:var(--card-muted);margin-top:2px;">${escapeHtml(t.message)}</div>` : ''}
                 </li>`;
             }).join('');
+            // Bind delete buttons (two-step inline confirm, no native dialog)
+            list.querySelectorAll('.task-delete-btn').forEach(btn => {
+                btn.onclick = (ev) => {
+                    ev.stopPropagation();
+                    _deleteTask(btn.dataset.taskId, btn);
+                };
+            });
+            // Bind cancel buttons (running tasks): cancel then auto-remove
+            list.querySelectorAll('.task-cancel-btn').forEach(btn => {
+                btn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    btn.disabled = true;
+                    btn.textContent = '...';
+                    try {
+                        const res = await fetch('/tasks/' + btn.dataset.taskId + '/cancel', { method: 'POST', credentials: 'include' });
+                        if (res.ok) showToast('任务已取消', 'success', 2500);
+                        else {
+                            const d = await res.json().catch(() => ({}));
+                            showToast(d.error || '取消失败（任务可能已结束）', 'error', 3000);
+                        }
+                    } catch (_) { showToast('取消失败：网络错误', 'error', 3000); }
+                };
+            });
         } catch(e) { _bgTasksBackoff++; /* silent */ }
     }
 
@@ -8497,6 +8488,44 @@
         backdrop.onclick = close;
         modal.querySelector('.task-result-close').onclick = close;
     }
+
+    // Two-step inline delete — no native confirm() (Chrome dialog-blocker
+    // silently cancels it after a few dialogs, making deletion impossible).
+    function _deleteTask(taskId, btn) {
+        if (btn.dataset.armed === '1') {
+            btn.disabled = true;
+            btn.textContent = '...';
+            fetch('/tasks/' + taskId + '/delete', { method: 'POST', credentials: 'include' })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        const li = btn.closest('li');
+                        if (li) li.remove();
+                        showToast('任务已删除', 'success', 2000);
+                    } else {
+                        showToast('删除失败', 'error', 3000);
+                        _disarmDelete(btn);
+                    }
+                })
+                .catch(() => { showToast('删除失败：网络错误', 'error', 3000); _disarmDelete(btn); });
+        } else {
+            btn.dataset.armed = '1';
+            btn.textContent = '确认删除';
+            btn.style.color = '#dc2626';
+            btn.style.fontWeight = '600';
+            clearTimeout(btn._revertTimer);
+            btn._revertTimer = setTimeout(() => _disarmDelete(btn), 3000);
+        }
+    }
+
+    function _disarmDelete(btn) {
+        if (!btn || !btn.isConnected) return;
+        delete btn.dataset.armed;
+        btn.textContent = '✕';
+        btn.style.color = '';
+        btn.style.fontWeight = '';
+    }
+
     document.addEventListener('click', _handleTaskClick);
     console.log('[TASK] click handler registered on document');
 
@@ -8806,12 +8835,90 @@
             }
         }
 
+        // ── Pre-upload: stream each file to /upload_file, collect file_ids ──
+        var uploadedFileIds = [];   // [{id, name, size}]
+        var tenderFileId = null;
+        var uploading = false;
+
+        function _fmtSize(bytes) {
+            if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(1) + 'GB';
+            if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+            return (bytes / 1024).toFixed(0) + 'KB';
+        }
+
+        function _uploadOne(file, onProgress) {
+            return new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/stream_upload', true);
+                xhr.withCredentials = true;
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+                };
+                xhr.onload = function() {
+                    try {
+                        var d = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && d.success) resolve({ id: d.file_id, name: d.filename, size: d.size });
+                        else reject(new Error(d.error || ('HTTP ' + xhr.status)));
+                    } catch (err) { reject(new Error('服务器响应解析失败')); }
+                };
+                xhr.onerror = function() { reject(new Error('网络错误')); };
+                var fd = new FormData();
+                fd.append('file', file);
+                xhr.send(fd);
+            });
+        }
+
+        async function _preUploadFiles() {
+            uploading = true;
+            runBtn.disabled = true;
+            uploadedFileIds = [];
+            tenderFileId = null;
+            try {
+                var imgExts = ['.pdf', '.docx', '.doc', '.docm', '.pptx', '.pptm'];
+                for (var i = 0; i < selectedFiles.length; i++) {
+                    var f = selectedFiles[i];
+                    fileNames.textContent = '上传中 (' + (i + 1) + '/' + selectedFiles.length + '): '
+                        + f.name + ' [' + _fmtSize(f.size) + '] — 0%';
+                    var res = await _uploadOne(f, function(pct) {
+                        fileNames.textContent = '上传中 (' + (i + 1) + '/' + selectedFiles.length + '): '
+                            + f.name + ' [' + _fmtSize(f.size) + '] — ' + pct + '%';
+                    });
+                    uploadedFileIds.push(res);
+                }
+                if (tenderFile) {
+                    fileNames.textContent = '上传招标文件: ' + tenderFile.name + '...';
+                    var tr = await _uploadOne(tenderFile);
+                    tenderFileId = tr.id;
+                }
+                var imgFiles = selectedFiles.filter(function(f) {
+                    var ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+                    return imgExts.indexOf(ext) !== -1;
+                });
+                fileNames.textContent = '已上传 ' + uploadedFileIds.length + ' 份投标文件'
+                    + (tenderFileId ? ' + 招标文件' : '') + '，可以开始清标';
+                hint.textContent = imgFiles.length
+                    ? ('📷 ' + imgFiles.length + ' 个文件含图片，将随机抽检 20 张进行识别')
+                    : '';
+                runBtn.disabled = false;
+            } catch (err) {
+                fileNames.textContent = '';
+                hint.textContent = '';
+                alert('上传失败: ' + err.message);
+                runBtn.disabled = true;
+            } finally {
+                uploading = false;
+            }
+        }
+
         selectBtn.onclick = function() { fileInput.click(); };
         fileInput.onchange = function() {
             selectedFiles = Array.from(fileInput.files);
             if (selectedFiles.length > 0) {
                 fileNames.textContent = selectedFiles.map(function(f) { return f.name; }).join(', ');
-                runBtn.disabled = selectedFiles.length < 2;
+                runBtn.disabled = true;
+                if (selectedFiles.length >= 2) {
+                    _preUploadFiles();   // stream to disk, then enable 开始清标
+                }
             } else {
                 fileNames.textContent = '';
                 runBtn.disabled = true;
@@ -8821,6 +8928,10 @@
         tenderInput.onchange = function() {
             tenderFile = tenderInput.files.length ? tenderInput.files[0] : null;
             updateComplianceHint();
+            if (tenderFile && uploadedFileIds.length > 0) {
+                // re-run pre-upload so the new tender doc gets an id too
+                _preUploadFiles();
+            }
         };
 
         // Tab switching
@@ -8840,8 +8951,76 @@
             };
         });
 
-        runBtn.onclick = async function() {
+        runBtn.onclick = function() {
             if (selectedFiles.length < 2) { alert('请至少选择 2 份投标文件'); return; }
+            _showClearanceInfoModal();
+        };
+
+        function _showClearanceInfoModal() {
+            // Remove any existing modal
+            var oldBackdrop = document.querySelector('.clearance-info-backdrop');
+            if (oldBackdrop) oldBackdrop.remove();
+            var oldModal = document.querySelector('.clearance-info-modal');
+            if (oldModal) oldModal.remove();
+
+            var fields = [
+                ['bid_number', '标段编号'], ['bid_open_time', '开标时间'],
+                ['bidder_name', '招标单位'], ['agent_name', '招标代理'],
+                ['eval_method', '评标办法'], ['award_announce_time', '中标公告发布时间'],
+                ['winner', '中标单位'], ['award_amount', '中标金额'],
+                ['region', '地区'], ['regulator', '监督部门'],
+                ['platform', '真实交易平台']
+            ];
+
+            var fieldsHtml = fields.map(function(f) {
+                return '<div style="display:flex;flex-direction:column;font-size:0.68rem;color:#6b7280;">'
+                    + '<label style="margin-bottom:1px;">' + f[1] + '</label>'
+                    + '<input id="ci_' + f[0] + '" type="text" placeholder="—" '
+                    + 'style="padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:0.75rem;" />'
+                    + '</div>';
+            }).join('');
+
+            var backdrop = document.createElement('div');
+            backdrop.className = 'clearance-info-backdrop';
+            backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:10003;';
+            var modal = document.createElement('div');
+            modal.className = 'clearance-info-modal';
+            modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10004;background:white;border:1px solid #e5e7eb;border-radius:16px;padding:20px;max-width:520px;width:92%;box-shadow:0 12px 32px rgba(0,0,0,.25);';
+            modal.innerHTML = ''
+                + '<div style="font-size:0.85rem;font-weight:700;margin-bottom:6px;">基本信息填写（可选）</div>'
+                + '<div style="font-size:0.68rem;color:#9ca3af;margin-bottom:10px;">不填写的字段报告中显示为 "—"</div>'
+                + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:14px;">'
+                + fieldsHtml
+                + '</div>'
+                + '<div style="display:flex;justify-content:flex-end;gap:8px;">'
+                + '<button class="ci-skip" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 16px;cursor:pointer;background:#f9fafb;font-size:0.75rem;">跳过</button>'
+                + '<button class="ci-confirm" style="border:none;border-radius:6px;padding:5px 16px;cursor:pointer;background:#8e44ad;color:#fff;font-weight:600;font-size:0.75rem;">确认并开始</button>'
+                + '</div>';
+            document.body.appendChild(backdrop);
+            document.body.appendChild(modal);
+
+            var submitWithInfo = async function(collectFields) {
+                var infoFields = collectFields();
+                backdrop.remove(); modal.remove();
+                // append to options store for FormData collection
+                window._clearanceInfoOverrides = infoFields;
+                // trigger the actual submit
+                await _runClearanceSubmit();
+            };
+
+            modal.querySelector('.ci-skip').onclick = function() { submitWithInfo(function() { return {}; }); };
+            modal.querySelector('.ci-confirm').onclick = function() {
+                var info = {};
+                fields.forEach(function(f) {
+                    var el = modal.querySelector('#ci_' + f[0]);
+                    if (el && el.value.trim()) info[f[0]] = el.value.trim();
+                });
+                submitWithInfo(function() { return info; });
+            };
+            backdrop.onclick = function() { submitWithInfo(function() { return {}; }); };
+        }
+
+        async function _runClearanceSubmit() {
             runBtn.disabled = true;
             resultsDiv.style.display = 'none';
             progDiv.style.display = 'block';
@@ -8857,10 +9036,21 @@
 
             try {
                 var formData = new FormData();
-                selectedFiles.forEach(function(f) { formData.append('files', f); });
-                if (tenderFile) formData.append('tender_file', tenderFile);
+                if (uploadedFileIds.length >= 2) {
+                    // Pre-uploaded path: submit ids only (no binary body)
+                    uploadedFileIds.forEach(function(u) { formData.append('file_ids', u.id); });
+                    if (tenderFileId) formData.append('tender_file_id', tenderFileId);
+                } else {
+                    selectedFiles.forEach(function(f) { formData.append('files', f); });
+                    if (tenderFile) formData.append('tender_file', tenderFile);
+                }
                 formData.append('options', JSON.stringify(options));
                 formData.append('project_id', window.currentProjectId || '');
+                var infoOverrides = window._clearanceInfoOverrides || {};
+                Object.keys(infoOverrides).forEach(function(k) {
+                    if (infoOverrides[k]) formData.append(k, infoOverrides[k]);
+                });
+                window._clearanceInfoOverrides = null;
                 var resp = await fetch('/clearance/run', {
                     method: 'POST', body: formData, credentials: 'include'
                 });
@@ -9044,58 +9234,208 @@
         return html;
     }
 
+    function _heatColor(v, maxV) {
+        // green -> yellow -> red background by value relative to maxV
+        var t = maxV > 0 ? Math.min(1, v / maxV) : 0;
+        var r = Math.round(240 - 150 * t);
+        var g = Math.round(255 - 150 * t);
+        var b = Math.round(220 - 180 * t);
+        return 'rgba(' + r + ',' + g + ',' + b + ',0.85)';
+    }
+
     function _renderCrossTab(cross, files) {
         var pairs = cross.pairs || [];
         var riskMatrix = cross.risk_matrix || [];
+        var textMatrix = cross.text_matrix || riskMatrix;
+        var keyMatrix = cross.key_matrix || riskMatrix;
+        var attrMatrix = cross.attr_matrix || riskMatrix;
         var keyInfo = cross.key_info_matches || [];
+        var gangs = cross.gangs || [];
+        var clusterOrder = cross.cluster_order || null;
         var html = '';
 
-        html += '<div style="font-size:0.78rem;margin-bottom:8px;"><strong>横向对比:</strong> ' + files.length + ' 个投标单位 · ' + pairs.length + ' 对组合</div>';
+        var maxRisk = 0;
+        riskMatrix.forEach(function(row) { row.forEach(function(v) { if (v > maxRisk) maxRisk = v; }); });
 
-        if (riskMatrix.length > 0) {
-            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 风险矩阵</summary>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:4px;">';
-            html += '<tr><th style="position:sticky;left:0;background:var(--card-bg);">单位</th>';
-            files.forEach(function(f) { html += '<th>' + _clearanceEscape((f||'').substring(0,6)) + '</th>'; });
-            html += '</tr>';
-            riskMatrix.forEach(function(row, i) {
-                html += '<tr><td style="font-weight:bold;">' + _clearanceEscape((files[i]||'').substring(0,6)) + '</td>';
-                row.forEach(function(v, j) {
-                    var cell = i === j ? '--' : (v||0).toFixed(1);
-                    var color = (v||0) > 20 ? '#e74c3c' : (v||0) > 10 ? '#e67e22' : '';
-                    html += '<td style="color:' + color + ';">' + cell + '</td>';
-                });
-                html += '</tr>';
+        html += '<div style="font-size:0.78rem;margin-bottom:8px;"><strong>横向对比:</strong> ' + files.length + ' 个投标单位 · ' + pairs.length + ' 对组合 · 点击矩阵单元格查看对详情</div>';
+
+        // ── E2: 帮派 ──
+        if (gangs && gangs.length) {
+            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;color:#dc2626;">🕸️ 疑似围标集团 (' + gangs.length + '个)</summary>';
+            gangs.forEach(function(g, gi) {
+                html += '<div style="font-size:0.7rem;margin:4px 0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:#fef2f2;">';
+                html += '<b>集团' + (gi + 1) + '</b>：' + (g.files || []).map(_clearanceEscape).join(' ⚡ ') +
+                    ' | 成员 ' + (g.members || []).length + ' 家 | 最高风险 ' + (g.max_risk || 0).toFixed(1) +
+                    ' | 平均 ' + (g.avg_risk || 0).toFixed(1);
+                html += '</div>';
             });
-            html += '</table></details>';
+            html += '</details>';
         }
 
-        var high = pairs.filter(function(p) { return (p.risk||0) > 5; });
+        // ── 多维矩阵切换 ──
+        html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 风险矩阵</summary>';
+        html += '<div style="display:flex;gap:6px;margin:4px 0;">';
+        html += '<button class="cm-matrix-btn" data-m="risk" style="border:1px solid var(--card-border);background:#8e44ad;color:#fff;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">综合风险</button>';
+        html += '<button class="cm-matrix-btn" data-m="text" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">文本相似</button>';
+        html += '<button class="cm-matrix-btn" data-m="key" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">关键信息</button>';
+        html += '<button class="cm-matrix-btn" data-m="attr" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">文件属性</button>';
+        html += '</div>';
+
+        function matrixRows(m, fmt, isAttr) {
+            var order = clusterOrder || files.map(function(_, idx) { return idx; });
+            var r = '<tr><th style="position:sticky;left:0;background:var(--card-bg);">单位</th>';
+            order.forEach(function(idx) { r += '<th>' + _clearanceEscape((files[idx] || '').substring(0, 6)) + '</th>'; });
+            r += '</tr>';
+            order.forEach(function(ii) {
+                r += '<tr><td style="font-weight:bold;">' + _clearanceEscape((files[ii] || '').substring(0, 6)) + '</td>';
+                order.forEach(function(jj) {
+                    var v = ii === jj ? '--' : (m[ii] && m[ii][jj] != null ? m[ii][jj] : 0);
+                    var disp = (v === '--') ? '--' : fmt(v);
+                    var bg = (v === '--') ? '' : _heatColor(Number(v), maxRisk);
+                    if (v !== '--') {
+                        r += '<td data-i="' + ii + '" data-j="' + jj + '" style="background:' + bg + ';text-align:center;cursor:pointer;">' + disp + '</td>';
+                    } else {
+                        r += '<td style="text-align:center;">--</td>';
+                    }
+                });
+                r += '</tr>';
+            });
+            return r;
+        }
+
+        var riskRows = matrixRows(riskMatrix, function(v) { return Number(v).toFixed(1); });
+        var textRows = matrixRows(textMatrix, function(v) { return Number(v).toFixed(1); });
+        var keyRows = matrixRows(keyMatrix, function(v) { return Number(v).toFixed(1); });
+        var attrRows = matrixRows(attrMatrix, function(v) { return v === 1 ? '是' : '否'; });
+
+        html += '<div class="cm-matrix" data-name="risk" style="overflow-x:auto;">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.62rem;margin-top:4px;">' + riskRows + '</table></div>';
+        html += '<div class="cm-matrix" data-name="text" style="overflow-x:auto;display:none;">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.62rem;margin-top:4px;">' + textRows + '</table></div>';
+        html += '<div class="cm-matrix" data-name="key" style="overflow-x:auto;display:none;">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.62rem;margin-top:4px;">' + keyRows + '</table></div>';
+        html += '<div class="cm-matrix" data-name="attr" style="overflow-x:auto;display:none;">' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.62rem;margin-top:4px;">' + attrRows + '</table></div>';
+        html += '<div style="font-size:0.58rem;color:var(--card-muted);margin-top:2px;">色阶：绿(低) → 红(高，最高 ' + maxRisk.toFixed(1) + ')</div>';
+        html += '</details>';
+
+        // ── C: 全部组合明细 ──
+        html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📋 全部组合明细 (' + pairs.length + '对)</summary>';
+        var maxP = Math.max.apply(null, pairs.map(function(p) { return p.risk || 0; }));
+        var avgP = pairs.reduce(function(s, p) { return s + (p.risk || 0); }, 0) / (pairs.length || 1);
+        var hiP = pairs.filter(function(p) { return (p.risk || 0) > 5; }).length;
+        html += '<div style="font-size:0.65rem;color:var(--card-muted);margin:4px 0;">共 ' + pairs.length + ' 对 · 最高风险 ' + maxP.toFixed(1) + ' · 平均 ' + avgP.toFixed(1) + ' · 高风险(>5) ' + hiP + ' 对</div>';
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.62rem;">';
+        html += '<tr><th>单位1</th><th>单位2</th><th>风险</th><th>文本%</th><th>关键%</th><th>属性</th><th>坐标</th></tr>';
+        pairs.slice(0, 100).forEach(function(p) {
+            var c = (p.risk || 0) > 20 ? '#e74c3c' : (p.risk || 0) > 5 ? '#e67e22' : '';
+            html += '<tr style="border-top:1px solid var(--card-border);"><td>' + _clearanceEscape((p.name1 || '').substring(0, 16)) + '</td>' +
+                '<td>' + _clearanceEscape((p.name2 || '').substring(0, 16)) + '</td>' +
+                '<td style="color:' + c + ';font-weight:600;">' + (p.risk || 0).toFixed(1) + '</td>' +
+                '<td>' + (p.sim || 0).toFixed(1) + '</td>' +
+                '<td>' + (p.key_sim || 0).toFixed(1) + '</td>' +
+                '<td>' + (p.attr_same ? '是' : '否') + '</td>' +
+                '<td>(' + (p.i != null ? p.i : '-') + ',' + (p.j != null ? p.j : '-') + ')</td></tr>';
+        });
+        html += '</table></details>';
+
+        // ── 高风险组合 ──
+        var high = pairs.filter(function(p) { return (p.risk || 0) > 5; });
         if (high.length > 0) {
             html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚠️ 高风险组合 (' + high.length + '对)</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>风险</th><th>文本相似</th><th>属性雷同</th></tr>';
             high.forEach(function(p) {
-                html += '<tr><td>' + _clearanceEscape((p.name1||'').substring(0,18)) + '</td><td>' + _clearanceEscape((p.name2||'').substring(0,18)) + '</td>';
-                html += '<td style="color:' + ((p.risk||0) > 20 ? '#e74c3c' : '#e67e22') + ';">' + (p.risk||0).toFixed(1) + '</td>';
-                html += '<td>' + (p.sim||0).toFixed(1) + '%</td><td>' + (p.attr_same ? '是' : '否') + '</td></tr>';
+                html += '<tr><td>' + _clearanceEscape((p.name1 || '').substring(0, 18)) + '</td><td>' + _clearanceEscape((p.name2 || '').substring(0, 18)) + '</td>';
+                html += '<td style="color:' + ((p.risk || 0) > 20 ? '#e74c3c' : '#e67e22') + ';">' + (p.risk || 0).toFixed(1) + '</td>';
+                html += '<td>' + (p.sim || 0).toFixed(1) + '%</td><td>' + (p.attr_same ? '是' : '否') + '</td></tr>';
             });
             html += '</table></details>';
         } else {
             html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现高风险组合</p>';
         }
 
+        // ── 重点信息雷同 ──
         if (keyInfo.length > 0) {
             html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔑 重点信息雷同 (' + keyInfo.length + '组)</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>共同关键词</th></tr>';
             keyInfo.slice(0, 20).forEach(function(ki) {
-                html += '<tr><td>' + _clearanceEscape((ki.name1||'').substring(0,18)) + '</td><td>' + _clearanceEscape((ki.name2||'').substring(0,18)) + '</td>';
-                html += '<td>' + _clearanceEscape((ki.common_keywords||[]).slice(0,8).join(', ')) + '</td></tr>';
+                html += '<tr><td>' + _clearanceEscape((ki.name1 || '').substring(0, 18)) + '</td><td>' + _clearanceEscape((ki.name2 || '').substring(0, 18)) + '</td>';
+                html += '<td>' + _clearanceEscape((ki.common_keywords || []).slice(0, 8).join(', ')) + '</td></tr>';
             });
             html += '</table></details>';
         }
+
+        // Matrix dimension switcher + click delegation (deferred to after insert)
+        setTimeout(function() {
+            var btns = document.querySelectorAll('.cm-matrix-btn');
+            btns.forEach(function(b) {
+                b.onclick = function() {
+                    var name = b.getAttribute('data-m');
+                    document.querySelectorAll('.cm-matrix-btn').forEach(function(x) {
+                        x.style.background = (x === b ? '#8e44ad' : 'transparent');
+                        x.style.color = (x === b ? '#fff' : '');
+                    });
+                    document.querySelectorAll('.cm-matrix').forEach(function(m) {
+                        m.style.display = (m.getAttribute('data-name') === name) ? 'block' : 'none';
+                    });
+                };
+            });
+            // click on matrix cell -> pair detail modal
+            var cells = document.querySelectorAll('#clearanceTabCross td.cm-cell-click, .cm-matrix td');
+            document.querySelectorAll('.cm-matrix td[style*="cursor:pointer"], .cm-matrix td').forEach(function(td) {
+                td.onclick = function() {
+                    var i = this.getAttribute('data-i');
+                    var j = this.getAttribute('data-j');
+                    if (i == null || j == null) return;
+                    var p = pairs.find(function(x) { return x.i === Number(i) && x.j === Number(j); }) ||
+                        pairs.find(function(x) { return x.i === Number(j) && x.j === Number(i); });
+                    if (!p) return;
+                    _showPairDetail(p, files);
+                };
+            });
+        }, 0);
+
         return html;
+    }
+
+    function _showPairDetail(p, files) {
+        var html = '<div style="font-size:0.85rem;font-weight:700;margin-bottom:8px;">🔍 ' + _clearanceEscape(p.name1 || '') + ' ↔ ' + _clearanceEscape(p.name2 || '') + '</div>';
+        html += '<div style="font-size:0.75rem;margin-bottom:10px;line-height:1.7;">';
+        html += '综合风险: <b style="color:' + ((p.risk || 0) > 20 ? '#dc2626' : (p.risk || 0) > 5 ? '#d97706' : '#16a34a') + '">' + (p.risk || 0).toFixed(1) + '</b>';
+        html += ' · 文本相似: <b>' + (p.sim || 0).toFixed(1) + '%</b>';
+        html += ' · 关键信息: <b>' + (p.key_sim || 0).toFixed(1) + '%</b>';
+        html += ' · 属性雷同: <b>' + (p.attr_same ? '是' : '否') + '</b>';
+        html += ' · 矩阵坐标: (' + (p.i != null ? p.i : '-') + ',' + (p.j != null ? p.j : '-') + ')';
+        html += '</div>';
+
+        var blocks = p.blocks || [];
+        if (blocks.length) {
+            html += '<div style="font-size:0.7rem;color:var(--card-muted);margin-bottom:4px;">相似文本片段 (' + blocks.length + ' 处，可展开查看)</div>';
+            blocks.slice(0, 15).forEach(function(b, bi) {
+                html += '<details style="font-size:0.68rem;border:1px solid var(--card-border);border-radius:6px;padding:4px 8px;margin-bottom:4px;">' +
+                    '<summary style="cursor:pointer;">片段 ' + (bi + 1) + '（' + _clearanceEscape(b.id || '') + ' · ' + (b.size || '') + '字）</summary>';
+                html += '<div style="margin-top:4px;color:#374151;">' + (_clearanceEscape(b.text1_snippet || '').substring(0, 200)) + '</div>';
+                html += '<div style="color:#7c3aed;margin-top:2px;">— ' + (_clearanceEscape(b.text2_snippet || '').substring(0, 200)) + '</div>';
+                html += '</details>';
+            });
+        } else {
+            html += '<p style="font-size:0.7rem;color:var(--card-muted);">该对未见明显文本重合片段。</p>';
+        }
+
+        var backdrop = document.createElement('div');
+        backdrop.className = 'clearance-pair-backdrop';
+        backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:10003;';
+        var modal = document.createElement('div');
+        modal.className = 'clearance-pair-modal';
+        modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10004;background:white;border:1px solid #e5e7eb;border-radius:16px;padding:18px;max-width:520px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.25);';
+        modal.innerHTML = html + '<div style="text-align:center;margin-top:10px;"><button class="cp-close" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 16px;cursor:pointer;background:#f9fafb;font-size:0.72rem;">关闭</button></div>';
+        document.body.appendChild(backdrop);
+        document.body.appendChild(modal);
+        var close = function() { backdrop.remove(); modal.remove(); };
+        backdrop.onclick = close;
+        modal.querySelector('.cp-close').onclick = close;
     }
 
     function _renderComplianceTab(comp) {
@@ -9356,853 +9696,6 @@
     }
 
     // ======================== Unified Bid Audit ========================
-    var _auditFunctionLabels = {
-        rule_extraction: '规则提取',
-        compliance_check: '合规审查',
-        typo_detection: '错别字检测',
-        quote_anomaly: '报价异常',
-        relationship_extraction: '关系分析',
-        ai_doc_review: 'AI文档审查',
-        style_analysis: '文风分析',
-    };
-
-    // Severity threshold definitions per function: [{key, label, type, default}]
-    var _auditThresholdDefs = {
-        rule_extraction: [
-            {key: 'min_extracted_rules', label: '最少提取规则数', type: 'int', default: 5}
-        ],
-        compliance_check: [
-            {key: 'critical', label: '严重违规≥', type: 'int', default: 1},
-            {key: 'violation', label: '一般违规≥', type: 'int', default: 3}
-        ],
-        typo_detection: [
-            {key: 'penalty_per_10k', label: '每万字扣分', type: 'int', default: 5}
-        ],
-        quote_anomaly: [
-            {key: 'same_rate', label: '雷同报价阈值', type: 'float', default: 0.05},
-            {key: 'drop', label: '异常降价阈值', type: 'float', default: 0.15}
-        ],
-        relationship_extraction: [
-            {key: 'risk_signal_weight', label: '风险信号权重', type: 'int', default: 15}
-        ],
-        ai_doc_review: [
-            {key: 'min_chars', label: '最少字符数', type: 'int', default: 500}
-        ],
-        style_analysis: []
-    };
-
-    // ── Audit Config Panel (analytics admin) ──
-    async function loadAuditConfig() {
-        const tbody = document.getElementById('auditConfigTbody');
-        const msgEl = document.getElementById('auditConfigMsg');
-        if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--card-muted);padding:8px;">加载中...</td></tr>';
-        let cfg = [];
-        try {
-            const r = await fetch('/audit/config', { credentials: 'include' });
-            if (!r.ok) { tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;padding:8px;">加载失败</td></tr>'; return; }
-            const raw = await r.json();
-            cfg = Array.isArray(raw) ? raw : (raw.configs || raw.data || []);
-        } catch (_) {
-            tbody.innerHTML = '<tr><td colspan="5" style="color:#ef4444;text-align:center;padding:8px;">网络错误</td></tr>';
-            return;
-        }
-        if (!Array.isArray(cfg) || !cfg.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--card-muted);padding:8px;">暂无审计配置</td></tr>';
-            return;
-        }
-        let html = '';
-        const _origCfg = {};
-        for (const c of cfg) {
-            _origCfg[c.function_name] = { ...c };
-            const fn = c.function_name;
-            const label = _auditFunctionLabels[fn] || fn;
-            const defs = _auditThresholdDefs[fn] || [];
-            const sev = (typeof c.severity_thresholds === 'object' && c.severity_thresholds)
-                ? c.severity_thresholds
-                : (typeof c.severity_thresholds === 'string' ? JSON.parse(c.severity_thresholds || '{}') : {});
-
-            // Build severity threshold inputs
-            let sevHtml = '';
-            if (defs.length === 0) {
-                sevHtml = '<span style="font-size:0.6rem;color:var(--card-muted);">-</span>';
-            } else {
-                for (const d of defs) {
-                    const val = sev[d.key] !== undefined ? sev[d.key] : d.default;
-                    sevHtml += '<span style="white-space:nowrap;margin-right:6px;">' +
-                        '<span style="font-size:0.58rem;color:var(--card-muted);">' + escapeHtml(d.label) + '</span> ' +
-                        '<input type="number" class="audit-cfg-thr" data-fn="' + fn + '" data-key="' + d.key +
-                        '" value="' + val + '" step="' + (d.type === 'float' ? '0.01' : '1') +
-                        '" style="width:' + (d.type === 'float' ? '55px' : '45px') +
-                        ';font-size:0.62rem;padding:1px 3px;border-radius:3px;border:1px solid var(--card-border);">' +
-                        '</span>';
-                }
-            }
-
-            html += '<tr>' +
-                '<td style="padding:4px;font-weight:600;">' + escapeHtml(label) + '</td>' +
-                '<td style="text-align:center;"><input type="checkbox" class="audit-cfg-cb" data-fn="' + fn + '" ' + (c.enabled_by_default ? 'checked' : '') + '></td>' +
-                '<td style="text-align:center;">' +
-                    '<input type="range" class="audit-cfg-range" data-fn="' + fn + '" data-field="fail_threshold" min="0" max="100" value="' + c.fail_threshold + '" style="width:60px;vertical-align:middle;">' +
-                    '<span class="audit-cfg-val" style="margin-left:2px;font-size:0.65rem;">' + c.fail_threshold + '</span>' +
-                '</td>' +
-                '<td style="text-align:center;">' +
-                    '<input type="range" class="audit-cfg-range" data-fn="' + fn + '" data-field="weight" min="0" max="100" value="' + c.weight + '" style="width:60px;vertical-align:middle;">' +
-                    '<span class="audit-cfg-val" style="margin-left:2px;font-size:0.65rem;">' + c.weight + '</span>' +
-                '</td>' +
-                '<td style="font-size:0.62rem;">' + sevHtml + '</td>' +
-            '</tr>';
-        }
-        tbody.innerHTML = html;
-
-        const dot = document.getElementById('auditConfigModifiedDot');
-        const _dirty = {};
-        function _updateDot() {
-            if (dot) dot.style.display = Object.keys(_dirty).length ? 'inline' : 'none';
-        }
-
-        tbody.querySelectorAll('.audit-cfg-range').forEach(inp => {
-            inp.addEventListener('input', () => {
-                const fn = inp.dataset.fn;
-                const field = inp.dataset.field;
-                const valEl = inp.parentElement.querySelector('.audit-cfg-val');
-                if (valEl) valEl.textContent = inp.value;
-                if (!_dirty[fn]) _dirty[fn] = {};
-                _dirty[fn][field] = parseInt(inp.value);
-                _updateDot();
-            });
-        });
-        tbody.querySelectorAll('.audit-cfg-cb').forEach(cb => {
-            cb.addEventListener('change', () => {
-                const fn = cb.dataset.fn;
-                if (!_dirty[fn]) _dirty[fn] = {};
-                _dirty[fn].enabled_by_default = cb.checked;
-                _updateDot();
-            });
-        });
-        tbody.querySelectorAll('.audit-cfg-thr').forEach(inp => {
-            inp.addEventListener('input', () => {
-                const fn = inp.dataset.fn;
-                if (!_dirty[fn]) _dirty[fn] = {};
-                if (!_dirty[fn].severity_thresholds) {
-                    _dirty[fn].severity_thresholds = {};
-                    const origSev = _origCfg[fn] && _origCfg[fn].severity_thresholds;
-                    if (typeof origSev === 'object' && origSev) {
-                        Object.assign(_dirty[fn].severity_thresholds, origSev);
-                    }
-                }
-                const defs = _auditThresholdDefs[fn] || [];
-                const d = defs.find(dd => dd.key === inp.dataset.key);
-                const val = d && d.type === 'float' ? parseFloat(inp.value) : parseInt(inp.value);
-                _dirty[fn].severity_thresholds[inp.dataset.key] = isNaN(val) ? 0 : val;
-                _updateDot();
-            });
-        });
-
-        document.getElementById('auditConfigSaveBtn').onclick = async () => {
-            const dirtyKeys = Object.keys(_dirty);
-            if (!dirtyKeys.length) { msgEl.innerHTML = '<span style="color:var(--card-muted);">无修改</span>'; return; }
-            const configs = dirtyKeys.map(fn => {
-                const d = _dirty[fn];
-                const orig = _origCfg[fn] || {};
-                return {
-                    function_name: fn,
-                    enabled_by_default: d.enabled_by_default !== undefined ? d.enabled_by_default : orig.enabled_by_default,
-                    fail_threshold: d.fail_threshold !== undefined ? d.fail_threshold : orig.fail_threshold,
-                    weight: d.weight !== undefined ? d.weight : orig.weight,
-                    severity_thresholds: d.severity_thresholds !== undefined ? d.severity_thresholds : orig.severity_thresholds,
-                };
-            });
-            const btn = document.getElementById('auditConfigSaveBtn');
-            btn.disabled = true; btn.textContent = '⏳ 保存中...';
-            try {
-                const r = await fetch('/audit/config', {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                    body: JSON.stringify({ configs })
-                });
-                const d = await r.json();
-                if (r.ok) {
-                    msgEl.innerHTML = '<span style="color:#22c55e;">✅ ' + (d.message || '保存成功') + '</span>';
-                    Object.keys(_dirty).forEach(k => delete _dirty[k]);
-                    _updateDot();
-                    loadAuditConfig();
-                } else {
-                    msgEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (d.error || '保存失败') + '</span>';
-                }
-            } catch (_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
-            btn.disabled = false; btn.textContent = '💾 保存审计配置';
-        };
-    }
-
-    // ── Audit History (review tab) ──
-    async function loadAuditHistory() {
-        const panel = document.getElementById('auditHistoryPanel');
-        if (!panel) return;
-        const pid = window._currentProjectId || currentProjectId;
-        if (!pid) {
-            panel.innerHTML = '<span style="color:var(--card-muted);">请先打开一个项目查看审计历史。</span>';
-            return;
-        }
-        // Migration notice: audit history is now per-project in the project view
-        panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);padding:8px;background:#f0f9ff;border-radius:6px;margin-bottom:8px;">📋 审计历史现已移至<strong>项目视图</strong>。请在项目管理中打开具体项目，即可在项目页面的底部查看该项目的审计记录和下载报告。</div>' +
-            '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
-        return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        let runs = [];
-        try {
-            const r = await fetch('/audit/history/' + pid, { credentials: 'include' });
-            if (!r.ok) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; return; }
-            const rawRuns = await r.json();
-            runs = Array.isArray(rawRuns) ? rawRuns : (rawRuns.data || []);
-        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; return; }
-        if (!Array.isArray(runs) || !runs.length) {
-            panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">暂无审计记录。</div>';
-            return;
-        }
-        runs.sort((a, b) => new Date(b.started_at || b.created_at || 0) - new Date(a.started_at || a.created_at || 0));
-        let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
-            '<span style="font-size:0.7rem;color:var(--card-muted);">共 ' + runs.length + ' 次审计</span>' +
-            '<button id="auditHistoryRefreshBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 刷新</button>' +
-            '</div>';
-        for (const run of runs) {
-            const isPass = run.overall_status === 'PASS';
-            const score = run.overall_score != null ? parseFloat(run.overall_score).toFixed(1) : '-';
-            const date = (run.started_at || run.created_at) ? new Date(run.started_at || run.created_at).toLocaleString() : '?';
-            const fileCount = run.file_count ?? run.total_files ?? 0;
-            const bidderCount = run.bidder_count ?? run.total_bidders ?? '?';
-            const runId = run.id;
-
-            html += '<div class="audit-history-card" data-run-id="' + runId + '" style="border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);cursor:pointer;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
-                '<span style="font-size:0.72rem;">' + date + '</span>' +
-                '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
-                '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
-                '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
-                '<span style="font-size:0.6rem;color:var(--card-muted);">▶ 展开</span>' +
-                '</div>' +
-                '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
-                '</div>';
-        }
-        panel.innerHTML = html;
-
-        const refreshBtn = document.getElementById('auditHistoryRefreshBtn');
-        if (refreshBtn) refreshBtn.onclick = loadAuditHistory;
-
-        panel.querySelectorAll('.audit-history-card').forEach(card => {
-            card.onclick = async () => {
-                const detailEl = card.querySelector('.audit-history-detail');
-                if (!detailEl) return;
-                if (detailEl.style.display !== 'none') {
-                    detailEl.style.display = 'none';
-                    card.querySelector('span:last-child').textContent = '▶ 展开';
-                    return;
-                }
-                const runId = card.dataset.runId;
-                detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
-                detailEl.style.display = 'block';
-                card.querySelector('span:last-child').textContent = '▼ 收起';
-                try {
-                    const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
-                    if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
-                    const result = await r.json();
-                    detailEl.innerHTML = _renderAuditResultDetail(result);
-                } catch (_) {
-                    detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">网络错误</span>';
-                }
-            };
-        });
-    }
-
-    async function loadProjectAuditHistory() {
-        const panel = document.getElementById('projectAuditHistoryPanel');
-        if (!panel) return;
-        const pid = window._currentProjectId || currentProjectId;
-        if (!pid) {
-            panel.innerHTML = '<span style="color:var(--card-muted);">请先打开一个项目。</span>';
-            return;
-        }
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        let runs = [];
-        try {
-            const r = await fetch('/audit/history/' + pid, { credentials: 'include' });
-            if (!r.ok) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; return; }
-            const rawRuns = await r.json();
-            runs = Array.isArray(rawRuns) ? rawRuns : (rawRuns.data || []);
-        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; return; }
-        if (!Array.isArray(runs) || !runs.length) {
-            panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">暂无审计记录。</div>';
-            const countEl = document.getElementById('projectAuditCount');
-            if (countEl) countEl.textContent = '';
-            return;
-        }
-        runs.sort((a, b) => new Date(b.started_at || b.created_at || 0) - new Date(a.started_at || a.created_at || 0));
-        const countEl = document.getElementById('projectAuditCount');
-        if (countEl) countEl.textContent = `(${runs.length} 条记录)`;
-        let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
-            '<span style="font-size:0.7rem;color:var(--card-muted);font-weight:600;">审计记录</span>' +
-            '<button id="projectAuditHistoryRefreshBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 刷新</button>' +
-            '</div>';
-        for (const run of runs) {
-            const isPass = run.overall_status === 'PASS';
-            const score = run.overall_score != null ? parseFloat(run.overall_score).toFixed(1) : '-';
-            const date = (run.started_at || run.created_at) ? new Date(run.started_at || run.created_at).toLocaleString() : '?';
-            const fileCount = run.file_count ?? run.total_files ?? 0;
-            const bidderCount = run.bidder_count ?? run.total_bidders ?? '?';
-            const runId = run.id;
-            html += '<div class="audit-history-card" data-run-id="' + runId + '" style="border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);cursor:pointer;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
-                '<span style="font-size:0.72rem;">' + date + '</span>' +
-                '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
-                '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
-                '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
-                '<span style="font-size:0.6rem;color:var(--card-muted);">▶ 展开</span>' +
-                '</div>' +
-                '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
-                '</div>';
-        }
-        panel.innerHTML = html;
-        const refreshBtn = document.getElementById('projectAuditHistoryRefreshBtn');
-        if (refreshBtn) refreshBtn.onclick = loadProjectAuditHistory;
-        panel.querySelectorAll('.audit-history-card').forEach(card => {
-            card.onclick = async () => {
-                const detailEl = card.querySelector('.audit-history-detail');
-                if (!detailEl) return;
-                if (detailEl.style.display !== 'none') {
-                    detailEl.style.display = 'none';
-                    card.querySelector('span:last-child').textContent = '▶ 展开';
-                    return;
-                }
-                const runId = card.dataset.runId;
-                detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
-                detailEl.style.display = 'block';
-                card.querySelector('span:last-child').textContent = '▼ 收起';
-                try {
-                    const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
-                    if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
-                    const result = await r.json();
-                    detailEl.innerHTML = _renderAuditResultDetail(result);
-                } catch (_) {
-                    detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">网络错误</span>';
-                }
-            };
-        });
-    }
-
-    function _renderAuditResultDetail(result) {
-        let html = '';
-
-        // Download buttons
-        if (result.docx_path || result.xlsx_path) {
-            html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
-            if (result.docx_path) html += '<button onclick="window.open(\'/audit/download/' + result.id + '/docx\', \'_blank\')" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">📄 下载DOCX</button>';
-            if (result.xlsx_path) html += '<button onclick="window.open(\'/audit/download/' + result.id + '/xlsx\', \'_blank\')" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">📊 下载XLSX</button>';
-            html += '</div>';
-        }
-
-        // Score summary
-        const score = result.overall_score != null ? parseFloat(result.overall_score).toFixed(1) : '-';
-        const isPass = result.overall_status === 'PASS';
-        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:4px 8px;border-radius:6px;background:' + (isPass ? '#dcfce7' : '#fef2f2') + ';">' +
-            '<span style="font-size:0.7rem;font-weight:600;">综合得分: ' + score + '</span>' +
-            '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
-            '<span style="font-size:0.65rem;color:var(--card-muted);">' + (result.file_count || 0) + ' 文件 · ' + (result.bidder_count || 0) + ' 投标人</span>' +
-            '</div>';
-
-        const fileResults = result.file_results || [];
-        if (!fileResults.length) {
-            html += '<span style="font-size:0.65rem;color:var(--card-muted);">无详细结果</span>';
-            return html;
-        }
-
-        // Group flat file_results by bidder -> file -> function
-        const bidders = {};
-        for (const fr of fileResults) {
-            const bName = fr.bidder_label || '未知';
-            const fName = fr.filename || '?';
-            if (!bidders[bName]) bidders[bName] = {};
-            if (!bidders[bName][fName]) bidders[bName][fName] = [];
-            bidders[bName][fName].push(fr);
-        }
-
-        // Compute bidder-level aggregate score
-        for (const [bName, files] of Object.entries(bidders)) {
-            let allScores = [];
-            let bFail = false;
-            for (const [fName, funcs] of Object.entries(files)) {
-                for (const fn of funcs) {
-                    if (fn.score != null) allScores.push(fn.score);
-                    if (fn.status === 'error' || fn.status === 'skipped') bFail = true;
-                }
-            }
-            const bScore = allScores.length ? (allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
-            const bPass = !bFail && allScores.length > 0;
-
-            html += '<div style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;background:#f8fafc;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">' +
-                '<strong style="font-size:0.7rem;">' + escapeHtml(bName) + '</strong>' +
-                '<span style="font-size:0.65rem;">得分: <b>' + bScore.toFixed(1) + '</b></span>' +
-                '<span class="audit-status-badge ' + (bPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.6rem;padding:0 6px;border-radius:8px;">' + (bPass ? 'PASS' : 'FAIL') + '</span>' +
-                '</div>';
-
-            for (const [fName, funcs] of Object.entries(files)) {
-                html += '<div style="font-size:0.62rem;padding:4px 0;border-top:1px solid var(--card-border);">' +
-                    '<div style="font-weight:600;">📄 ' + escapeHtml(fName) + '</div>' +
-                    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">';
-                for (const fn of funcs) {
-                    const fnLabel = _auditFunctionLabels[fn.function_name] || fn.function_name;
-                    const fnScore = fn.score != null ? parseFloat(fn.score).toFixed(1) : '-';
-                    const fnOk = fn.status === 'success';
-                    html += '<span style="background:' + (fnOk ? '#dcfce7' : (fn.status === 'error' ? '#fef2f2' : '#fef3c7')) + ';border-radius:4px;padding:1px 6px;font-size:0.6rem;">' +
-                        escapeHtml(fnLabel) + ': <b>' + fnScore + '</b> ' + (fnOk ? '✅' : (fn.status === 'skipped' ? '⏭' : '❌')) +
-                        '</span>';
-                }
-                html += '</div></div>';
-            }
-            html += '</div>';
-        }
-        return html;
-    }
-
-    // ── Audit Modal (preflight + progress) ──
-    var _auditSSE = null;
-    var _auditModalActive = false;
-
-    async function showAuditModal() {
-        const pid = window._currentProjectId || currentProjectId;
-        if (!pid) {
-            alert('请先在"项目管理"中打开一个项目，然后再使用全量审计功能。');
-            return;
-        }
-        if (_auditModalActive) return;
-        _auditModalActive = true;
-        console.log('Audit: showAuditModal starting for project', pid);
-
-        let folders = [], config = [];
-        try {
-            const [fRes, cRes] = await Promise.all([
-                fetch('/admin/projects/' + pid + '/folders', { credentials: 'include' }),
-                fetch('/audit/config', { credentials: 'include' })
-            ]);
-            if (fRes.ok) folders = (await fRes.json()).folders || [];
-            if (cRes.ok) { const cRaw = await cRes.json(); config = Array.isArray(cRaw) ? cRaw : (cRaw.data || cRaw.configs || []); }
-        } catch (_) { showToast('加载项目数据失败', 'error'); _auditModalActive = false; return; }
-
-        if (!folders.length) {
-            showToast('该项目没有文件夹', 'error');
-            _auditModalActive = false;
-            return;
-        }
-
-        const defaultFuncs = {};
-        if (Array.isArray(config)) {
-            for (const c of config) {
-                defaultFuncs[c.function_name] = c.enabled_by_default !== false;
-            }
-        }
-        if (!Object.keys(defaultFuncs).length) {
-            for (const k of Object.keys(_auditFunctionLabels)) {
-                defaultFuncs[k] = true;
-            }
-        }
-
-        const overlay = document.createElement('div');
-        overlay.className = 'custom-modal-overlay';
-        overlay.id = 'auditModalOverlay';
-        overlay.style.zIndex = '10000';
-
-        const folderCheckboxes = folders.map((f, i) => {
-            const fid = f.id || f.folder_id || i;
-            const fname = f.name || f.folder_name || '文件夹 ' + fid;
-            return '<label style="display:block;font-size:0.72rem;margin:2px 0;"><input type="checkbox" class="audit-folder-cb" value="' + fid + '" checked> ' + escapeHtml(fname) + '</label>';
-        }).join('');
-
-        const funcToggles = Object.entries(defaultFuncs).map(([fn, enabled]) => {
-            const label = _auditFunctionLabels[fn] || fn;
-            return '<label style="font-size:0.72rem;margin:2px 6px;"><input type="checkbox" class="audit-func-cb" data-fn="' + fn + '" ' + (enabled ? 'checked' : '') + '> ' + escapeHtml(label) + '</label>';
-        }).join('');
-
-        overlay.innerHTML =
-            '<div class="custom-modal" style="max-width:650px;max-height:90vh;overflow-y:auto;">' +
-            '<h3 style="margin-bottom:8px;">📋 全量审计</h3>' +
-            '<div id="auditModalBody">' +
-            // Preflight phase
-            '<div id="auditPreflightPhase">' +
-            '<div style="margin-bottom:10px;">' +
-            '<strong style="font-size:0.75rem;">选择文件夹:</strong>' +
-            '<div style="margin-top:4px;max-height:150px;overflow-y:auto;border:1px solid var(--card-border);border-radius:4px;padding:6px;">' +
-            folderCheckboxes +
-            '</div>' +
-            '<label style="font-size:0.68rem;margin-top:2px;display:block;"><input type="checkbox" id="auditFolderToggleAll" checked> 全选/取消</label>' +
-            '</div>' +
-            '<div style="margin-bottom:10px;">' +
-            '<strong style="font-size:0.75rem;">审计功能:</strong>' +
-            '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;">' + funcToggles + '</div>' +
-            '</div>' +
-            '<div style="margin-bottom:10px;">' +
-            '<label style="font-size:0.72rem;"><input type="checkbox" id="auditExtractOnDemand" checked> 按需提取结构化数据</label>' +
-            '</div>' +
-            '<div id="auditPreflightStatus" style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">点击"预检文件"查看可审计的文档...</div>' +
-            '<div style="display:flex;gap:8px;">' +
-            '<button id="auditStartBtn" class="file-btn" style="background:#7c3aed;color:#fff;border-color:#6d28d9;flex:1;padding:8px;">🔍 预检文件</button>' +
-            '<button id="auditCancelBtn" class="file-btn" style="padding:8px;">取消</button>' +
-            '</div>' +
-            '</div>' +
-            // File selection phase (shown after preflight)
-            '<div id="auditFileSelectPhase" style="display:none;">' +
-            '<div style="margin-bottom:8px;font-size:0.72rem;">' +
-            '<span id="auditFileSelectSummary"></span>' +
-            '<label style="margin-left:12px;font-size:0.68rem;"><input type="checkbox" id="auditFileToggleAll" checked> 全选文档</label>' +
-            '</div>' +
-            '<div id="auditFileSelectList" style="max-height:200px;overflow-y:auto;border:1px solid var(--card-border);border-radius:4px;padding:6px;margin-bottom:8px;font-size:0.68rem;"></div>' +
-            '<div id="auditFileSkipped" style="font-size:0.62rem;color:var(--card-muted);margin-bottom:8px;"></div>' +
-            '<div style="display:flex;gap:8px;">' +
-            '<button id="auditConfirmStartBtn" class="file-btn" style="background:#22c55e;color:#fff;border-color:#16a34a;flex:1;padding:8px;">✅ 确认开始审计</button>' +
-            '<button id="auditBackBtn" class="file-btn" style="padding:8px;">← 返回</button>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            // Progress phase
-            '<div id="auditProgressPhase" style="display:none;">' +
-            '<div style="margin-bottom:8px;">' +
-            '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px;">' +
-            '<span id="auditPhaseLabel">准备中...</span>' +
-            '<span id="auditProgressPct">0%</span>' +
-            '</div>' +
-            '<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">' +
-            '<div id="auditProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#3b82f6);transition:width .3s;"></div>' +
-            '</div>' +
-            '</div>' +
-            '<div id="auditProgressFiles" style="max-height:350px;overflow-y:auto;font-size:0.68rem;border:1px solid var(--card-border);border-radius:4px;padding:6px;margin-bottom:8px;">' +
-            '<span style="color:var(--card-muted);">等待开始...</span>' +
-            '</div>' +
-            '<button id="auditProgressCloseBtn" class="file-btn" style="width:100%;padding:6px;">隐藏 (完成后会通知您)</button>' +
-            '</div>' +
-            '</div>' +
-            '</div>';
-        document.body.appendChild(overlay);
-        overlay.onclick = (e) => { if (e.target === overlay) _closeAuditModal(); };
-
-        const toggleAll = overlay.querySelector('#auditFolderToggleAll');
-        if (toggleAll) {
-            toggleAll.onclick = function() {
-                overlay.querySelectorAll('.audit-folder-cb').forEach(function(cb) { cb.checked = toggleAll.checked; });
-            };
-        }
-
-        overlay.querySelector('#auditCancelBtn').onclick = _closeAuditModal;
-
-        overlay.querySelector('#auditProgressCloseBtn').onclick = function() {
-            overlay.style.display = 'none';
-            showToast('审计正在后台运行，完成后将通知您', 'info', 4000);
-        };
-
-        // Store state for the two-phase flow
-        let _auditSelectedFolders = [];
-        let _auditEnabledFuncs = [];
-        let _auditPreflightData = null;
-
-        overlay.querySelector('#auditStartBtn').onclick = async function() {
-            const btn = overlay.querySelector('#auditStartBtn');
-            const statusEl = overlay.querySelector('#auditPreflightStatus');
-            btn.disabled = true; btn.textContent = '⏳ 预检中...';
-
-            const selectedFolders = [];
-            overlay.querySelectorAll('.audit-folder-cb:checked').forEach(function(cb) { selectedFolders.push(parseInt(cb.value)); });
-
-            const enabledFunctions = [];
-            overlay.querySelectorAll('.audit-func-cb:checked').forEach(function(cb) { enabledFunctions.push(cb.dataset.fn); });
-
-            if (!selectedFolders.length) {
-                statusEl.innerHTML = '<span style="color:#ef4444;">请至少选择一个文件夹</span>';
-                btn.disabled = false; btn.textContent = '🔍 预检文件';
-                return;
-            }
-            if (!enabledFunctions.length) {
-                statusEl.innerHTML = '<span style="color:#ef4444;">请至少选择一个审计功能</span>';
-                btn.disabled = false; btn.textContent = '🔍 预检文件';
-                return;
-            }
-
-            _auditSelectedFolders = selectedFolders;
-            _auditEnabledFuncs = enabledFunctions;
-
-            try {
-                const pfRes = await fetch('/audit/preflight', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                    body: JSON.stringify({ folder_ids: selectedFolders })
-                });
-                const pfData = await pfRes.json();
-                if (!pfRes.ok) {
-                    statusEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (pfData.error || '预检失败') + '</span>';
-                    btn.disabled = false; btn.textContent = '🔍 预检文件';
-                    return;
-                }
-                _auditPreflightData = pfData;
-
-                // Group files by folder
-                const files = pfData.files || [];
-                const byFolder = {};
-                for (const f of files) {
-                    if (!byFolder[f.folder_id]) byFolder[f.folder_id] = [];
-                    byFolder[f.folder_id].push(f);
-                }
-
-                // Render file selection
-                const listEl = overlay.querySelector('#auditFileSelectList');
-                let listHtml = '';
-                for (const fid of selectedFolders) {
-                    const folderFiles = byFolder[fid] || [];
-                    if (!folderFiles.length) continue;
-                    listHtml += '<div style="font-weight:600;margin-top:4px;font-size:0.7rem;color:var(--card-muted);">📁 ' + escapeHtml(folderFiles[0].folder_name || ('文件夹 ' + fid)) + '</div>';
-                    for (const f of folderFiles) {
-                        if (f.status === 'skipped') continue; // non-doc files shown separately
-                        const disabled = f.status === 'missing' ? ' disabled' : '';
-                        const checked = f.status === 'ready' ? ' checked' : '';
-                        const label = f.status === 'missing' ? ' ⚠️未提取' : '';
-                        listHtml += '<label style="display:block;font-size:0.65rem;margin:1px 0;' + (f.status === 'missing' ? 'color:var(--card-muted);' : '') + '">' +
-                            '<input type="checkbox" class="audit-file-cb" data-file-id="' + f.file_id + '" data-folder="' + fid + '"' + checked + disabled + '> ' +
-                            escapeHtml(f.filename) + label + '</label>';
-                    }
-                }
-                listEl.innerHTML = listHtml || '<span style="color:var(--card-muted);">没有可审计的文档文件</span>';
-
-                // Show skipped (non-doc) files
-                const skipped = files.filter(f => f.status === 'skipped');
-                const skippedEl = overlay.querySelector('#auditFileSkipped');
-                if (skipped.length) {
-                    skippedEl.innerHTML = '已排除非文档文件: ' + skipped.map(f => '<span title="' + escapeHtml(f.reason || '') + '">' + escapeHtml(f.filename) + '</span>').join(', ');
-                } else {
-                    skippedEl.innerHTML = '';
-                }
-
-                // Summary
-                const summaryEl = overlay.querySelector('#auditFileSelectSummary');
-                summaryEl.innerHTML = '已找到 <b>' + (pfData.ready_count || 0) + '</b> 个就绪文档' +
-                    (pfData.missing_count ? ', <span style="color:#f59e0b;">' + pfData.missing_count + ' 个未提取</span>' : '') +
-                    (pfData.skipped_count ? ', <span style="color:var(--card-muted);">' + pfData.skipped_count + ' 个非文档已排除</span>' : '');
-
-                // Toggle all
-                const toggleAll = overlay.querySelector('#auditFileToggleAll');
-                if (toggleAll) {
-                    toggleAll.checked = true;
-                    toggleAll.onclick = function() {
-                        overlay.querySelectorAll('.audit-file-cb:not([disabled])').forEach(function(cb) { cb.checked = toggleAll.checked; });
-                    };
-                }
-
-                // Hide preflight, show file selection
-                overlay.querySelector('#auditPreflightPhase').style.display = 'none';
-                overlay.querySelector('#auditFileSelectPhase').style.display = 'block';
-
-                // Back button
-                overlay.querySelector('#auditBackBtn').onclick = function() {
-                    overlay.querySelector('#auditFileSelectPhase').style.display = 'none';
-                    overlay.querySelector('#auditPreflightPhase').style.display = 'block';
-                    btn.disabled = false; btn.textContent = '🔍 预检文件';
-                    statusEl.innerHTML = '点击"预检文件"查看可审计的文档...';
-                };
-
-                // Confirm start button
-                overlay.querySelector('#auditConfirmStartBtn').onclick = async function() {
-                    const confirmBtn = overlay.querySelector('#auditConfirmStartBtn');
-                    confirmBtn.disabled = true; confirmBtn.textContent = '⏳ 启动中...';
-
-                    const selectedFileIds = [];
-                    overlay.querySelectorAll('.audit-file-cb:checked').forEach(function(cb) {
-                        selectedFileIds.push(parseInt(cb.dataset.fileId));
-                    });
-
-                    if (!selectedFileIds.length) {
-                        alert('请至少选择一个文件');
-                        confirmBtn.disabled = false; confirmBtn.textContent = '✅ 确认开始审计';
-                        return;
-                    }
-
-                    const extractOnDemand = overlay.querySelector('#auditExtractOnDemand').checked;
-                    const startRes = await fetch('/audit/start', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                        body: JSON.stringify({
-                            folder_ids: _auditSelectedFolders,
-                            file_ids: selectedFileIds,
-                            enabled_functions: _auditEnabledFuncs,
-                            extract_on_demand: extractOnDemand,
-                            project_id: pid,
-                        })
-                    });
-                    const startData = await startRes.json();
-                    if (!startRes.ok) {
-                        alert((startData.error || '启动失败'));
-                        confirmBtn.disabled = false; confirmBtn.textContent = '✅ 确认开始审计';
-                        return;
-                    }
-
-                    const fullBtn = document.getElementById('chatFullAuditBtn');
-                    if (fullBtn) fullBtn.disabled = true;
-                    const badge = document.getElementById('auditRunningBadge');
-                    if (badge) badge.style.display = 'inline';
-
-                    overlay.querySelector('#auditFileSelectPhase').style.display = 'none';
-                    overlay.querySelector('#auditProgressPhase').style.display = 'block';
-                    _startAuditSSE(startData.run_id, overlay);
-                };
-
-            } catch (_) {
-                statusEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>';
-                btn.disabled = false; btn.textContent = '🔍 预检文件';
-            }
-        };
-    }
-
-    // Expose to global scope for inline onclick
-    window._showAuditModal = showAuditModal;
-    console.log('Audit: window._showAuditModal set to', typeof showAuditModal);
-
-    function _closeAuditModal() {
-        const overlay = document.getElementById('auditModalOverlay');
-        if (overlay) overlay.remove();
-        _auditModalActive = false;
-        if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
-    }
-
-    function _startAuditSSE(runId, overlay) {
-        if (_auditSSE) _auditSSE.close();
-        const es = new EventSource('/audit/progress/' + runId);
-        _auditSSE = es;
-
-        const filesContainer = overlay.querySelector('#auditProgressFiles');
-        const phaseLabel = overlay.querySelector('#auditPhaseLabel');
-        const progressBar = overlay.querySelector('#auditProgressBar');
-        const progressPct = overlay.querySelector('#auditProgressPct');
-
-        let fileRows = {};
-        let completedFiles = 0;
-        let totalFiles = 0;
-
-        function updateProgress() {
-            const pct = totalFiles > 0 ? Math.round((completedFiles / totalFiles) * 100) : 0;
-            if (progressBar) progressBar.style.width = pct + '%';
-            if (progressPct) progressPct.textContent = pct + '%';
-        }
-
-        es.onmessage = function(event) {
-            let data;
-            try { data = JSON.parse(event.data); } catch (_) { return; }
-
-            switch (data.type) {
-                case 'connected':
-                    if (phaseLabel) phaseLabel.textContent = '已连接，准备审计...';
-                    break;
-
-                case 'phase':
-                    var phaseMap = { auditing: '审计中...', extracting: '提取数据中...', reporting: '生成报告中...' };
-                    if (phaseLabel) phaseLabel.textContent = phaseMap[data.phase] || data.phase || '';
-                    break;
-
-                case 'file_start':
-                    totalFiles = data.total_files || 0;
-                    var key = (data.bidder || '') + '||' + (data.filename || '');
-                    if (filesContainer) {
-                        var rowDiv = document.createElement('div');
-                        rowDiv.className = 'audit-file-row';
-                        rowDiv.style.cssText = 'border:1px solid var(--card-border);border-radius:4px;padding:4px 6px;margin-bottom:4px;';
-                        rowDiv.innerHTML = '<div style="font-weight:600;font-size:0.65rem;">📁 ' + escapeHtml(data.bidder || '?') + ' / ' + escapeHtml(data.filename || '?') + '</div>' +
-                            '<div class="audit-file-dots" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;"></div>';
-                        filesContainer.prepend(rowDiv);
-                        fileRows[key] = { div: rowDiv, dots: {} };
-                    }
-                    updateProgress();
-                    break;
-
-                case 'function_start':
-                    if (phaseLabel) phaseLabel.textContent = '审计: ' + (_auditFunctionLabels[data.function] || data.function) + '...';
-                    var fk = (data.bidder || '') + '||' + (data.filename || '');
-                    var fr = fileRows[fk];
-                    if (fr && fr.dots) {
-                        var dotEl = document.createElement('span');
-                        dotEl.className = 'audit-func-dot spinning';
-                        dotEl.title = (_auditFunctionLabels[data.function] || data.function) + ' ...';
-                        dotEl.textContent = '⏳';
-                        dotEl.style.cssText = 'font-size:0.6rem;padding:1px 4px;border-radius:3px;background:#fef3c7;';
-                        fr.dots[data.function] = dotEl;
-                        fr.div.querySelector('.audit-file-dots').appendChild(dotEl);
-                    }
-                    break;
-
-                case 'function_done':
-                    var fdk = (data.bidder || '') + '||' + (data.filename || '');
-                    var fdr = fileRows[fdk];
-                    if (fdr && fdr.dots && fdr.dots[data.function]) {
-                        var el = fdr.dots[data.function];
-                        var isSuccess = data.status === 'success';
-                        el.textContent = isSuccess ? '✅' : '❌';
-                        el.className = 'audit-func-dot';
-                        el.title = (_auditFunctionLabels[data.function] || data.function) + ': ' + (data.score != null ? parseFloat(data.score).toFixed(1) : '?');
-                        el.style.background = isSuccess ? '#dcfce7' : '#fef2f2';
-                    }
-                    break;
-
-                case 'file_error':
-                    var fek = (data.bidder || '') + '||' + (data.filename || '');
-                    var fer = fileRows[fek];
-                    if (fer && fer.div) {
-                        fer.div.style.borderLeft = '3px solid #ef4444';
-                        var errSpan = document.createElement('div');
-                        errSpan.style.cssText = 'font-size:0.6rem;color:#ef4444;margin-top:2px;';
-                        errSpan.textContent = '❌ ' + (data.error || '错误');
-                        fer.div.appendChild(errSpan);
-                    }
-                    completedFiles++;
-                    updateProgress();
-                    break;
-
-                case 'complete':
-                    if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
-                    if (phaseLabel) phaseLabel.textContent = '✅ 审计完成';
-                    if (progressBar) progressBar.style.width = '100%';
-                    if (progressPct) progressPct.textContent = '100%';
-
-                    var badge = document.getElementById('auditRunningBadge');
-                    if (badge) badge.style.display = 'none';
-                    var fullBtn = document.getElementById('chatFullAuditBtn');
-                    if (fullBtn) fullBtn.disabled = false;
-
-                    // Show download links if reports were generated
-                    var downloadHtml = '';
-                    if (data.docx_path) downloadHtml += '<a href="/audit/download/' + runId + '/docx" class="file-btn" style="display:inline-block;margin:4px;">📄 下载DOCX报告</a>';
-                    if (data.xlsx_path) downloadHtml += '<a href="/audit/download/' + runId + '/xlsx" class="file-btn" style="display:inline-block;margin:4px;">📊 下载XLSX数据</a>';
-                    if (downloadHtml) {
-                        var dlDiv = document.createElement('div');
-                        dlDiv.style.cssText = 'margin-top:8px;text-align:center;';
-                        dlDiv.innerHTML = downloadHtml;
-                        if (filesContainer) filesContainer.appendChild(dlDiv);
-                    }
-
-                    var overallScore = data.overall_score != null ? parseFloat(data.overall_score).toFixed(1) : '?';
-                    var overallStatus = data.overall_status || 'PASS';
-                    showToast('审计完成 — 得分 ' + overallScore + ' — ' + (overallStatus === 'PASS' ? '✅ PASS' : '❌ FAIL'), overallStatus === 'PASS' ? 'success' : 'error', 8000);
-                    break;
-
-                case 'error':
-                    if (phaseLabel) phaseLabel.textContent = '❌ ' + (data.message || '错误');
-                    if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
-                    showToast('审计出错: ' + (data.message || ''), 'error', 6000);
-                    var badge2 = document.getElementById('auditRunningBadge');
-                    if (badge2) badge2.style.display = 'none';
-                    var fullBtn2 = document.getElementById('chatFullAuditBtn');
-                    if (fullBtn2) fullBtn2.disabled = false;
-                    break;
-
-                case 'heartbeat':
-                    break;
-            }
-        };
-
-        es.onerror = function(e) {
-            console.error('Audit SSE error:', e);
-            if (phaseLabel) phaseLabel.textContent = '❌ 连接中断，请检查审计状态';
-            if (_auditSSE) { _auditSSE.close(); _auditSSE = null; }
-        };
-    }
 
     async function loadProjectCollusionGraph() {
         var panel = document.getElementById('projectGraphContainer');

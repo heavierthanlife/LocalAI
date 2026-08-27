@@ -23,6 +23,8 @@ services:
       - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
       - QWEN_API_KEY=${QWEN_API_KEY:-}
       - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       # Database
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       # Redis
@@ -106,13 +108,16 @@ services:
     image: local-ai:latest
     container_name: localai-celery-worker
     restart: unless-stopped
-    command: celery -A celery_app worker -l info -c 2 --max-tasks-per-child 50
+    command: celery -A celery_app worker -l info -c 1 --max-tasks-per-child 50
     healthcheck:
       disable: true
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
       - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       - REDIS_URL=redis://redis:6379/0
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-change-me}

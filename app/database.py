@@ -74,7 +74,11 @@ def get_db_connection():
         logger.error("Database health check failed, reconnecting", exc_info=True)
         p.putconn(conn, close=True)
         conn = p.getconn()
-        yield conn
+        # Re-raise the ORIGINAL exception. Previously this block yielded a
+        # second time, which contextlib turns into a misleading
+        # RuntimeError("generator didn't stop after throw()") that masked
+        # every real DB error surfaced inside `with` bodies.
+        raise
     finally:
         p.putconn(conn)
 

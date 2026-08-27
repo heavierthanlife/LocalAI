@@ -1379,12 +1379,16 @@ def check_storage():
         return jsonify({"error": "Consent not given"}), 403
     user_id = get_user_id()
     total_bytes = get_user_total_storage_size(user_id)
-    total_mb = total_bytes / (1024 * 1024)
-    warning = total_mb > 300
+    from app.services.file_store import MAX_TOTAL_UPLOAD_GB
+    limit_gb = float(MAX_TOTAL_UPLOAD_GB)
+    total_gb = total_bytes / (1024 * 1024 * 1024)
+    # Warn at 80% of the unified upload quota (same cap as stream_upload)
+    warning = total_bytes > limit_gb * 0.8 * (1024 ** 3)
     return jsonify({
-        "total_mb": round(total_mb, 2),
+        "total_mb": round(total_bytes / (1024 * 1024), 2),
+        "limit_gb": limit_gb,
         "warning": warning,
-        "message": f"已使用 {total_mb:.2f} MB / 300 MB" if warning else None
+        "message": f"文件存储已使用 {total_gb:.1f} GB / {limit_gb:.0f} GB" if warning else None
     })
 
 @chat_bp.route('/cleanup_now', methods=['POST'])

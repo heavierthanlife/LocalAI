@@ -23,23 +23,40 @@ def _increase_body_limit():
 
 @document_analysis_bp.route('/analyze', methods=['POST'])
 def start_analysis():
-    """Submit files for deep analysis. Launches Celery task, returns task_id for SSE."""
+    """Submit files for deep analysis. Launches Celery task, returns task_id for SSE.
+
+    Accepts either pre-uploaded `file_ids` (large-file friendly — the worker
+    extracts text from disk) or direct multipart `files` (small uploads).
+    """
     if session.get('consent_value', 0) != 1:
         return err("请先登录", "AUTH_REQUIRED", 401)
     user_id = get_user_id()
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    if 'files' not in request.files:
+    file_ids = request.form.getlist('file_ids')
+    uploaded_files = request.files.getlist('files') if 'files' in request.files else []
+    if not file_ids and not uploaded_files:
         return err("No files uploaded", "VALIDATION_ERROR", 400)
 
-    uploaded_files = request.files.getlist('files')
     from app.config import allowed_file
-    if len(uploaded_files) < 1:
+    if len(file_ids) + len(uploaded_files) < 1:
         return err("Need at least 1 file", "VALIDATION_ERROR", 400)
-    if len(uploaded_files) > 10:
+    if len(file_ids) + len(uploaded_files) > 10:
         return err("Maximum 10 files allowed", "VALIDATION_ERROR", 400)
 
+    # Pre-uploaded path specs — extracted in the worker, page-by-page
+    from app.services.file_store import resolve as resolve_file
+    file_specs = []
+    for fid in file_ids:
+        info = resolve_file(fid, user_id=user_id)
+        if not info:
+            return err(f"文件不存在或无权访问: file_id={fid}", "NOT_FOUND", 404)
+        if not allowed_file(info['filename']):
+            continue
+        file_specs.append({'abs_path': info['abs_path'], 'filename': info['filename']})
+
+    # Legacy direct upload (small files) — extract inline
     from app.services.file_processing import extract_text_from_file, extract_metadata
     file_data = []
     for f in uploaded_files:
@@ -56,8 +73,8 @@ def start_analysis():
             'images': [],
         })
 
-    if not file_data:
-        return err("Could not extract valid text from any file", "VALIDATION_ERROR", 400)
+    if not file_data and not file_specs:
+        return err("Could not find any valid files", "VALIDATION_ERROR", 400)
 
     task_id = str(uuid.uuid4())
     thread_id = session.get('thread_id', '')
@@ -66,11 +83,11 @@ def start_analysis():
     from celery_app import celery
     celery.send_task(
         'document_analysis_task',
-        args=[file_data, user_id, thread_id, task_id, project_id],
+        args=[file_data, file_specs, user_id, thread_id, task_id, project_id],
         task_id=task_id,
     )
 
-    return ok({'task_id': task_id, 'file_count': len(file_data)})
+    return ok({'task_id': task_id, 'file_count': len(file_data) + len(file_specs)})
 
 
 @document_analysis_bp.route('/status/<task_id>', methods=['GET'])
