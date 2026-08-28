@@ -124,6 +124,11 @@ def run_clearance_route():
     thread_id = session.get('thread_id', '')
     project_id = request.form.get('project_id', type=int)
 
+    # Pre-register the task as 'queued' so /clearance/status never 404s in the
+    # window before the Celery worker calls bus.start() (which upgrades it).
+    from app.services.task_bus import TaskBus
+    TaskBus(task_id, 'clearance', '清标分析').register_queued(extra={'thread_id': thread_id or ''})
+
     info_overrides = {}
     for field in ('bid_number', 'bid_open_time', 'bidder_name', 'agent_name',
                    'eval_method', 'award_announce_time', 'winner', 'award_amount',

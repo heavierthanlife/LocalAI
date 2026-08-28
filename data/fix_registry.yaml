@@ -361,3 +361,30 @@ fixes:
       - type: grep
         file: app/services/task_bus.py
         pattern: "def start.self, extra"
+
+  - id: FIX-2026-08-28-007
+    title: "Task status 404 race — queued pre-registration"
+    severity: medium
+    rationale: >
+      After POST /clearance/run (or /document_analysis/analyze), the frontend
+      immediately GETs /<route>/status/<task_id>. The route only enqueues a Celery
+      task; task_meta is written when the worker calls bus.start(). In the
+      enqueue→worker-start window TaskBus.get() returns None → 404 → noisy F12
+      console errors ("Failed to load resource: 404", "提取 加载失败"). Fix: (B)
+      add TaskBus.register_queued() and call it synchronously in both routes before
+      send_task so status never 404s (worker start() upgrades queued→running);
+      (A) frontend status pre-check tolerates a failed/404 fetch and falls through
+      to SSE.
+    checks:
+      - type: grep
+        file: app/services/task_bus.py
+        pattern: "def register_queued"
+      - type: grep
+        file: app/routes/clearance.py
+        pattern: "register_queued"
+      - type: grep
+        file: app/routes/document_analysis.py
+        pattern: "register_queued"
+      - type: grep
+        file: static/js/app.js
+        pattern: "statusCheck.ok"

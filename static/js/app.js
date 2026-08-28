@@ -9059,9 +9059,14 @@
                 var taskId = initData.task_id;
                 progText.textContent = '清标已启动，正在建立连接...';
 
-                // Check if already completed (SSE reconnection edge case)
-                var statusCheck = await fetch('/clearance/status/' + taskId, { credentials: 'include' });
-                var statusData = await statusCheck.json();
+                // Check if already completed (SSE reconnection edge case).
+                // Tolerate a transient 404/race before the worker registers the
+                // task — just fall through to SSE in that case.
+                var statusData = {};
+                try {
+                    var statusCheck = await fetch('/clearance/status/' + taskId, { credentials: 'include' });
+                    if (statusCheck.ok) { try { statusData = await statusCheck.json(); } catch (_) { statusData = {}; } }
+                } catch (_) { statusData = {}; }
                 if (statusData.success && statusData.completed && statusData.result) {
                     progDiv.style.display = 'none';
                     if (typeof appendClearanceToChat === 'function') {

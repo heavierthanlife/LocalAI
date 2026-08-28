@@ -392,3 +392,36 @@ def test_taskbus_extra_metadata():
         "TaskBus.start must accept an extra metadata dict"
     assert 'extra.items()' in content, \
         "TaskBus.start must merge extra metadata into the hash"
+
+
+# ── FIX-2026-08-28-007: task status 404 race — queued pre-registration ──
+def test_taskbus_register_queued():
+    """TaskBus must expose register_queued to pre-register a task synchronously."""
+    with open('app/services/task_bus.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'def register_queued' in content, \
+        "TaskBus must have register_queued to avoid status 404 before worker start"
+    assert 'STATUS_QUEUED' in content, \
+        "TaskBus must use the queued status constant"
+
+
+def test_clearance_and_docanalysis_register_queued():
+    """/clearance/run and /document_analysis/analyze must pre-register the task."""
+    with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
+        c = f.read()
+    assert 'register_queued' in c, \
+        "clearance route must pre-register the task as queued before send_task"
+    with open('app/routes/document_analysis.py', 'r', encoding='utf-8') as f:
+        d = f.read()
+    assert 'register_queued' in d, \
+        "document_analysis route must pre-register the task as queued before send_task"
+
+
+def test_clearance_status_precheck_tolerates_404():
+    """app.js status pre-check must tolerate a transient 404/race and fall through to SSE."""
+    with open('static/js/app.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'statusCheck.ok' in content, \
+        "app.js must only parse the status body when statusCheck.ok"
+    assert 'statusData = {}' in content, \
+        "app.js must tolerate a failed/404 status fetch"

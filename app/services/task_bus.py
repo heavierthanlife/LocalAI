@@ -68,6 +68,36 @@ class TaskBus:
 
     # ── Publish side (called from Celery worker) ──
 
+    def register_queued(self, extra: dict = None):
+        """Synchronously write task_meta as ``queued`` so status/SSE endpoints
+        never 404 in the window between the task being enqueued and the worker
+        actually starting it (``start()`` then upgrades it to ``running``).
+
+        Called from the Flask route (e.g. /clearance/run) before
+        ``celery.send_task`` so ``TaskBus.get()`` always finds the task.
+        """
+        r = _get_redis()
+        if not r:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        meta = {
+            'status': STATUS_QUEUED,
+            'type': self.task_type,
+            'label': self.label,
+            'progress': 0,
+            'message': '排队中...',
+            'created_at': now,
+            'started_at': now,
+            'result': '',
+        }
+        if extra:
+            meta.update({k: v for k, v in extra.items() if v is not None})
+        pipe = r.pipeline()
+        pipe.hset(META_PREFIX + self.task_id, mapping=meta)
+        pipe.expire(META_PREFIX + self.task_id, META_TTL)
+        pipe.zadd(TASK_REGISTRY, {self.task_id: time.time()})
+        pipe.execute()
+
     def start(self, extra: dict = None):
         """Mark task as running, publish initial metadata.
 

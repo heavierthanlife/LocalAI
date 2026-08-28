@@ -80,6 +80,11 @@ def start_analysis():
     thread_id = session.get('thread_id', '')
     project_id = request.form.get('project_id', type=int)
 
+    # Pre-register the task as 'queued' so /document_analysis/status never 404s
+    # before the Celery worker calls bus.start() (which upgrades it).
+    from app.services.task_bus import TaskBus
+    TaskBus(task_id, 'document_analysis', '深度分析').register_queued(extra={'thread_id': thread_id or ''})
+
     from celery_app import celery
     celery.send_task(
         'document_analysis_task',
