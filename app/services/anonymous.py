@@ -4,6 +4,7 @@ import shutil
 from flask import session
 from app.config import TEMP_ROOT, logger
 from app.utils.helpers import beijing_now
+from app.database import get_db_connection
 
 def get_anon_temp_dir(anon_id):
     path = os.path.join(TEMP_ROOT, anon_id)
@@ -29,71 +30,56 @@ def cleanup_all_temp_on_exit():
 
 atexit.register(cleanup_all_temp_on_exit)
 
-# Anonymous session storage
+# Anonymous session storage — PostgreSQL-backed (anon_chat_messages), atomic
+# UPSERT per thread. Previously each thread was a JSON file; files are subject
+# to read-modify-write races and loss on crash. See FIX-2026-08-28-004.
+
 def get_anon_history_path(thread_id):
+    """Compat shim — history now lives in PG (anon_chat_messages)."""
     user_id = session.get('user_id') or str(uuid.uuid4())
     temp_dir = get_anon_temp_dir(user_id)
     return os.path.join(temp_dir, f"{thread_id}_history.json")
 
 def get_session_messages_anon(thread_id):
-    path = get_anon_history_path(thread_id)
-    if not os.path.exists(path):
+    if not thread_id:
         return []
     try:
-        from filelock import FileLock
-        lock_path = path + ".lock"
-        with FileLock(lock_path, timeout=5):
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except ImportError:
-        logger.warning("filelock not installed. Anonymous file reads may have race conditions.")
-        # No lock
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to read anon history {thread_id}: {e}")
-            return []
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT messages FROM anon_chat_messages WHERE thread_id = %s",
+                    (thread_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return []
+                messages = row[0]
+                return messages if isinstance(messages, list) else []
     except Exception as e:
         logger.error(f"Failed to read anon history {thread_id}: {e}")
         return []
 
 def store_message_anon(thread_id, role, content, thinking=None):
-    path = get_anon_history_path(thread_id)
+    if not thread_id:
+        logger.error("store_message_anon: missing thread_id")
+        return
+    message = {
+        "role": role,
+        "content": content,
+        "thinking": thinking,
+        "timestamp": beijing_now()
+    }
     try:
-        from filelock import FileLock
-        lock_path = path + ".lock"
-        with FileLock(lock_path, timeout=5):
-            history = []
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    history = json.load(f)
-            history.append({
-                "role": role,
-                "content": content,
-                "thinking": thinking,
-                "timestamp": beijing_now()
-            })
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
-    except ImportError:
-        logger.warning("filelock not installed. Anonymous file writes may have race conditions.")
-        # No lock
-        history = []
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    history = json.load(f)
-            except Exception as e:
-                logger.debug(f"Failed to read anon history during store (fallback path, {thread_id}): {e}")
-        history.append({
-            "role": role,
-            "content": content,
-            "thinking": thinking,
-            "timestamp": beijing_now()
-        })
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Atomic: append to existing JSONB array, or create if absent.
+                cur.execute("""
+                    INSERT INTO anon_chat_messages (thread_id, messages, updated_at)
+                    VALUES (%s, %s::jsonb, NOW())
+                    ON CONFLICT (thread_id) DO UPDATE
+                      SET messages = anon_chat_messages.messages || EXCLUDED.messages,
+                          updated_at = NOW()
+                """, (thread_id, json.dumps([message], ensure_ascii=False)))
+                conn.commit()
     except Exception as e:
         logger.error(f"Failed to write anon history {thread_id}: {e}")
 

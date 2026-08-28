@@ -46,7 +46,7 @@ _(19/19 verified automatically)_
 
 _(28/28 verified automatically)_
 
-- [x] Tables defined in database.py: 70
+- [x] Tables defined in database.py: 71
 - [x] PostgreSQL driver (psycopg2)
 - [x] Core table: users
 - [x] Core table: chat_messages

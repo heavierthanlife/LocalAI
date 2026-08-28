@@ -1215,3 +1215,12 @@ def _run_table_creation(cur: "PgCursor"):
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ccr_user ON credit_check_reports(user_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ccr_created ON credit_check_reports(created_at)")
+
+    # ── Anonymous chat history (JSONB per thread) — replaces JSON file storage ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS anon_chat_messages (
+            thread_id   TEXT PRIMARY KEY,
+            messages    JSONB NOT NULL DEFAULT '[]'::jsonb,
+            updated_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)

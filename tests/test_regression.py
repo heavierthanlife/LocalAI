@@ -234,3 +234,26 @@ def test_credit_routes_no_inmemory_registry():
         "credit.py must not write to the in-memory credit_tasks dict"
     assert '_credit_tasks_lock' not in content, \
         "credit.py must not use the process-local credit_tasks lock"
+
+
+# ── FIX-2026-08-28-004: anonymous chat history must be PostgreSQL-backed ──
+def test_anon_chat_messages_table_defined():
+    """database.py must define the anon_chat_messages JSONB table."""
+    with open('app/database.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'anon_chat_messages' in content, \
+        "database.py must define anon_chat_messages table"
+    assert 'messages    JSONB' in content, \
+        "anon_chat_messages.messages must be JSONB"
+
+
+def test_anonymous_uses_db_not_json_file():
+    """anonymous.py must persist history to PG, not per-thread JSON files."""
+    with open('app/services/anonymous.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'ON CONFLICT (thread_id) DO UPDATE' in content, \
+        "anonymous.py must use atomic UPSERT append to anon_chat_messages"
+    assert 'get_db_connection' in content, \
+        "anonymous.py must use the DB connection pool"
+    assert 'FileLock' not in content, \
+        "anonymous.py must not use file locks for history persistence"

@@ -277,3 +277,24 @@ fixes:
       - type: grep_not
         file: app/routes/credit.py
         pattern: "credit_tasks\\["
+
+  - id: FIX-2026-08-28-004
+    title: "Anonymous chat history must be PostgreSQL-backed (not JSON files)"
+    severity: medium
+    rationale: >
+      Anonymous chat history was stored as one JSON file per thread under
+      TEMP_ROOT with filelock read-modify-rewrite — non-atomic, data-loss on
+      crash, and lock contention under streaming. Fix adds the anon_chat_messages
+      JSONB table (database.py) and stores history via atomic UPSERT append
+      (ON CONFLICT DO UPDATE ... messages || EXCLUDED.messages). Temp-file
+      helpers (get_anon_temp_dir/cleanup_anon_temp) remain file-based.
+    checks:
+      - type: grep
+        file: app/database.py
+        pattern: "anon_chat_messages"
+      - type: grep
+        file: app/services/anonymous.py
+        pattern: "ON CONFLICT .thread_id. DO UPDATE"
+      - type: grep_not
+        file: app/services/anonymous.py
+        pattern: "FileLock"
