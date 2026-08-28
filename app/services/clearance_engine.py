@@ -358,7 +358,7 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
     _req_ctx.push()
 
     bus = TaskBus(task_id, 'clearance', '清标分析')
-    bus.start()
+    bus.start(extra={'thread_id': thread_id or ''})
 
     try:
         n = len(file_data) + len(file_specs)
@@ -461,6 +461,30 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                             round(p.get('sim', 0), 2), round(p.get('risk', 0), 2),
                             json.dumps(risk_scores, ensure_ascii=False), rank + 1,
                         ))
+
+                # ── Persist clearance result as an assistant chat message ──
+                # Store the full report JSON (frontend renders it into a chat
+                # bubble via the CLEARANCE_REPORT marker on both live-complete
+                # and session reload). Reuses this same transaction/connection.
+                if thread_id:
+                    try:
+                        from flask import url_for as _url_for
+                        _dl = _url_for('batch.download_batch_result', task_id=task_id)
+                    except Exception:
+                        _dl = f'/batch_result/{task_id}'
+                    chat_payload = json.dumps({
+                        'report': report,
+                        'download_url': _dl,
+                        'file_count': len(all_file_data),
+                    }, ensure_ascii=False)
+                    chat_content = '<!-- CLEARANCE_REPORT -->' + chat_payload
+                    try:
+                        cur.execute(
+                            "INSERT INTO chat_messages (thread_id, role, content, thinking, timestamp) "
+                            "VALUES (%s, 'assistant', %s, NULL, NOW())",
+                            (thread_id, chat_content))
+                    except Exception as _ce:
+                        logger.warning(f"Failed to persist clearance chat message: {_ce}")
                 conn.commit()
 
         from flask import url_for

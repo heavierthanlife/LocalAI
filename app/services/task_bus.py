@@ -68,8 +68,13 @@ class TaskBus:
 
     # ── Publish side (called from Celery worker) ──
 
-    def start(self):
-        """Mark task as running, publish initial metadata."""
+    def start(self, extra: dict = None):
+        """Mark task as running, publish initial metadata.
+
+        ``extra`` (optional) adds arbitrary fields to the Redis hash metadata
+        (e.g. ``thread_id`` for the origin chat thread). Redis hashes accept
+        new fields freely — no schema migration needed.
+        """
         r = _get_redis()
         if not r:
             return
@@ -84,6 +89,8 @@ class TaskBus:
             'started_at': now,
             'result': '',
         }
+        if extra:
+            meta.update({k: v for k, v in extra.items() if v is not None})
         pipe = r.pipeline()
         pipe.hset(META_PREFIX + self.task_id, mapping=meta)
         pipe.expire(META_PREFIX + self.task_id, META_TTL)

@@ -332,3 +332,63 @@ def test_agent_prompt_file_not_test_override():
         "agent_prompt.json must not hold the leftover 'Test prompt' override"
     assert len(saved.strip()) > 100, \
         "agent_prompt.json should hold the real (long) default prompt"
+
+
+# ── FIX-2026-08-28-006: clearance results move into chat (toolbar tab area removed) ──
+def test_clearance_toolbar_results_removed():
+    """index.html must no longer contain the clearance results tab area."""
+    with open('templates/index.html', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'clearanceResults' not in content, \
+        "toolbar #clearanceResults area must be removed (results move to chat)"
+    assert 'clearance-tab-btn' not in content, \
+        "clearance tab buttons must be removed from the toolbar"
+    assert 'clearanceDownloadLink' not in content, \
+        "toolbar clearance download link must be removed"
+    # Tool stays: file select, run button, progress
+    assert 'runClearanceBtn' in content, "clearance run button must remain"
+    assert 'clearanceProgress' in content, "clearance progress must remain"
+
+
+def test_clearance_chat_persistence_backend():
+    """clearance_engine must persist the result as a CLEARANCE_REPORT chat message."""
+    with open('app/services/clearance_engine.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'CLEARANCE_REPORT' in content, \
+        "clearance_engine must mark the persisted message with CLEARANCE_REPORT"
+    assert 'INSERT INTO chat_messages' in content, \
+        "clearance_engine must INSERT into chat_messages (role=assistant)"
+    assert "role, content, thinking, timestamp" in content, \
+        "INSERT must target the chat_messages columns"
+
+
+def test_clearance_chat_marker_handled():
+    """chat.js renderAssistantMessageLegacy must handle the CLEARANCE_REPORT marker."""
+    with open('static/js/chat.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert "includes('CLEARANCE_REPORT')" in content, \
+        "chat.js must detect the CLEARANCE_REPORT marker"
+
+
+def test_clearance_chat_render_functions():
+    """app.js must expose chat-rendering helpers for clearance."""
+    with open('static/js/app.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'buildClearanceReportHtml' in content, \
+        "app.js must build clearance report HTML"
+    assert 'appendClearanceToChat' in content, \
+        "app.js must append clearance results into the chat"
+    assert '_attachClearanceHandlers' in content, \
+        "app.js must attach scoped clearance handlers (no inline onclick/CSP break)"
+    assert 'renderClearanceResults' not in content, \
+        "old renderClearanceResults (toolbar) must be removed"
+
+
+def test_taskbus_extra_metadata():
+    """TaskBus.start() must accept extra metadata (e.g. thread_id) via Redis hash."""
+    with open('app/services/task_bus.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'def start(self, extra' in content, \
+        "TaskBus.start must accept an extra metadata dict"
+    assert 'extra.items()' in content, \
+        "TaskBus.start must merge extra metadata into the hash"

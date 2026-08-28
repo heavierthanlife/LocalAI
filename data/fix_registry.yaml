@@ -332,3 +332,32 @@ fixes:
       - type: grep_not
         file: app/services/prompt_safety.py
         pattern: "_VL_CONSISTENCY_PROMPT"
+
+  - id: FIX-2026-08-28-006
+    title: "Clearance results display in chat (toolbar tab area removed, no info loss)"
+    severity: medium
+    rationale: >
+      Clearance (清标) results were shown in toolbar tabs that only covered 4 of
+      the 10 report sections (九 image sampling and 十 audit supplement had no UI).
+      Fix moves the results into the chat as an assistant answer (full 10 sections,
+      collapsible, heat-matrix + clickable cells via scoped handlers), persists them
+      as a CLEARANCE_REPORT-marked chat_messages row (reusing the existing DB
+      transaction), adds thread-aware sidebar-click targeting via TaskBus thread_id
+      metadata, and removes the toolbar results/tabs/download area (download stays in
+      the sidebar task modal + chat bubble). Route preservation: 371/371.
+    checks:
+      - type: grep_not
+        file: templates/index.html
+        pattern: "clearanceResults"
+      - type: grep
+        file: app/services/clearance_engine.py
+        pattern: "CLEARANCE_REPORT"
+      - type: grep
+        file: static/js/chat.js
+        pattern: "CLEARANCE_REPORT"
+      - type: grep
+        file: static/js/app.js
+        pattern: "_attachClearanceHandlers"
+      - type: grep
+        file: app/services/task_bus.py
+        pattern: "def start.self, extra"

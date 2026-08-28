@@ -958,7 +958,30 @@
 
         const answerDiv = document.createElement('div');
         answerDiv.className = 'assistant-answer';
-        if (assistantMsg && assistantMsg.includes('COMPARE_REPORT')) {
+        if (assistantMsg && assistantMsg.includes('CLEARANCE_REPORT')) {
+            // Stored clearance report: marker + JSON. Rebuild rich HTML from the report.
+            let payload = assistantMsg.replace(/^<!--.*?-->/, '').trim();
+            try {
+                const parsed = JSON.parse(payload);
+                const report = parsed.report || parsed || {};
+                const dlUrl = parsed.download_url || '';
+                let html = '';
+                if (typeof buildClearanceReportHtml === 'function') {
+                    html = buildClearanceReportHtml({ report: report, download_url: dlUrl }, dlUrl);
+                } else {
+                    html = '<p>清标报告已生成，刷新后展示。</p>';
+                }
+                answerDiv.innerHTML = html;
+                answerDiv.classList.add('comparison-report');
+                if (typeof _attachClearanceHandlers === 'function') {
+                    const cross = (report.cross_comparison || {}).pairs || [];
+                    _attachClearanceHandlers(answerDiv, cross, report._files || []);
+                }
+            } catch (err) {
+                console.error('CLEARANCE_REPORT parse failed:', err);
+                answerDiv.innerHTML = md.render(asciiTableToMarkdown(assistantMsg));
+            }
+        } else if (assistantMsg && assistantMsg.includes('COMPARE_REPORT')) {
             let htmlContent = assistantMsg.replace(/^<!--.*?-->/, '').trim();
             answerDiv.innerHTML = htmlContent;
             answerDiv.classList.add('comparison-report');

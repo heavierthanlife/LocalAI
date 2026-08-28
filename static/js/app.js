@@ -8378,18 +8378,25 @@
                     const result = (typeof d.result === 'object') ? d.result : {};
                     _showTaskResultModal(d, result);
 
-                    // Then best-effort render into the clearance panel
-                    if (result.report && typeof renderClearanceResults === 'function') {
+                    // Then append into the chat (thread-aware):
+                    // same thread → append directly; different/missing thread → warn only.
+                    if (result.report && typeof appendClearanceToChat === 'function') {
                         try {
-                            const details = document.getElementById('clearanceTools');
-                            if (details) details.open = true;
-                            const resultsDiv = document.getElementById('clearanceResults');
-                            const downloadLink = document.getElementById('clearanceDownloadLink');
-                            if (resultsDiv) {
-                                renderClearanceResults({ report: result.report, download_url: result.download_url }, resultsDiv, downloadLink);
+                            const activeThread = sessionStorage.getItem('currentThreadId') || '';
+                            const taskThread = d.thread_id || '';
+                            if (taskThread && activeThread && taskThread === activeThread) {
+                                appendClearanceToChat(result.report, result.download_url || '');
+                            } else if (!taskThread || !activeThread) {
+                                // No reliable thread context — still show in current chat
+                                // (best-effort; the modal always carries the download link).
+                                appendClearanceToChat(result.report, result.download_url || '');
+                            } else {
+                                if (typeof showToast === 'function') {
+                                    showToast('该清标结果属于另一会话，已在弹窗中展示摘要与下载', 'info', 4000);
+                                }
                             }
                         } catch (err) {
-                            console.error('[TASK] renderClearanceResults failed:', err);
+                            console.error('[TASK] appendClearanceToChat failed:', err);
                         }
                     }
                     return;
@@ -8788,12 +8795,10 @@
         var progDiv = document.getElementById('clearanceProgress');
         var progText = document.getElementById('clearanceProgressText');
         var progBar = document.getElementById('clearanceProgressBar');
-        var resultsDiv = document.getElementById('clearanceResults');
         var optCompliance = document.getElementById('optCompliance');
         var optAI = document.getElementById('optAIReview');
         var hint = document.getElementById('clearanceHint');
         var stationBtn = document.getElementById('clearanceFileStationBtn');
-        var downloadLink = document.getElementById('clearanceDownloadLink');
 
         if (!selectBtn || !runBtn || !fileInput) return;
 
@@ -8934,23 +8939,6 @@
             }
         };
 
-        // Tab switching
-        var tabBtns = document.querySelectorAll('.clearance-tab-btn');
-        var tabPanels = document.querySelectorAll('.clearance-tab-panel');
-        tabBtns.forEach(function(btn) {
-            btn.onclick = function() {
-                var target = btn.getAttribute('data-tab');
-                tabBtns.forEach(function(b) {
-                    b.style.background = b === btn ? '#8e44ad' : 'transparent';
-                    b.style.color = b === btn ? '#fff' : '';
-                    b.style.border = b === btn ? 'none' : '1px solid var(--card-border)';
-                });
-                tabPanels.forEach(function(p) {
-                    p.style.display = (p.id === 'clearanceTab' + target.charAt(0).toUpperCase() + target.slice(1)) ? 'block' : 'none';
-                });
-            };
-        });
-
         runBtn.onclick = function() {
             if (selectedFiles.length < 2) { alert('请至少选择 2 份投标文件'); return; }
             _showClearanceInfoModal();
@@ -9022,7 +9010,6 @@
 
         async function _runClearanceSubmit() {
             runBtn.disabled = true;
-            resultsDiv.style.display = 'none';
             progDiv.style.display = 'block';
             progText.textContent = '正在提交清标...';
             progBar.style.width = '5%';
@@ -9077,7 +9064,9 @@
                 var statusData = await statusCheck.json();
                 if (statusData.success && statusData.completed && statusData.result) {
                     progDiv.style.display = 'none';
-                    renderClearanceResults(statusData.result, resultsDiv, downloadLink);
+                    if (typeof appendClearanceToChat === 'function') {
+                        appendClearanceToChat(statusData.result.report || {}, statusData.result.download_url || '');
+                    }
                     runBtn.disabled = false;
                     return;
                 }
@@ -9093,13 +9082,14 @@
                         } else if (evt.event === 'complete') {
                             sse.close();
                             progDiv.style.display = 'none';
-                            renderClearanceResults(evt.result || {}, resultsDiv, downloadLink);
+                            if (typeof appendClearanceToChat === 'function') {
+                                appendClearanceToChat((evt.result || {}).report || {}, (evt.result || {}).download_url || '');
+                            }
                             runBtn.disabled = false;
                         } else if (evt.event === 'error') {
                             sse.close();
                             progDiv.style.display = 'none';
-                            resultsDiv.innerHTML = '<p style="color:#e74c3c;">清标失败: ' + (evt.message || '未知错误') + '</p>';
-                            resultsDiv.style.display = 'block';
+                            if (typeof showToast === 'function') showToast('清标失败: ' + (evt.message || '未知错误'), 'error', 5000);
                             runBtn.disabled = false;
                         }
                     } catch (_) {}
@@ -9107,14 +9097,12 @@
                 sse.onerror = function() {
                     sse.close();
                     progDiv.style.display = 'none';
-                    resultsDiv.innerHTML = '<p style="color:#e74c3c;">连接中断，请重试</p>';
-                    resultsDiv.style.display = 'block';
+                    if (typeof showToast === 'function') showToast('清标连接中断，请重试', 'error', 5000);
                     runBtn.disabled = false;
                 };
             } catch (err) {
                 progDiv.style.display = 'none';
-                resultsDiv.innerHTML = '<p style="color:#e74c3c;">网络错误: ' + err.message + '</p>';
-                resultsDiv.style.display = 'block';
+                if (typeof showToast === 'function') showToast('清标网络错误: ' + (err.message || '未知错误'), 'error', 5000);
                 runBtn.disabled = false;
             }
         };
@@ -9122,49 +9110,175 @@
         updateComplianceHint();
     }
 
-    function renderClearanceResults(result, panel, downloadLinkEl) {
+    function buildClearanceReportHtml(result, downloadUrl) {
         var report = result.report || {};
         var cross = report.cross_comparison || {};
         var compliance = report.compliance;
         var ai = report.ai_review;
+        var html = '';
 
-        if (downloadLinkEl && result.download_url) {
-            downloadLinkEl.innerHTML = '<a href="' + result.download_url + '" download style="color:#16a34a;text-decoration:none;">📥 下载报告 (DOCX+PDF)</a>';
+        // ── Download link (chat-bubble) ──
+        if (downloadUrl) {
+            html += '<div style="margin-bottom:10px;">';
+            html += '<a href="' + downloadUrl + '" data-clearance-download="1" download style="color:#16a34a;text-decoration:none;font-weight:600;">📥 下载报告 (DOCX+PDF)</a>';
+            html += '</div>';
         }
 
-        // ── Tab: 指标分析 ──
-        var indPanel = document.getElementById('clearanceTabIndicators');
-        if (indPanel) indPanel.innerHTML = _renderIndicatorsTab(report);
+        // ── 一、指标分析 ──
+        html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析</summary>';
+        html += '<div style="padding-top:4px;">' + _renderIndicatorsTab(report) + '</div></details>';
 
-        // ── Tab: 横向对比 ──
-        var crossPanel = document.getElementById('clearanceTabCross');
-        if (crossPanel) crossPanel.innerHTML = _renderCrossTab(cross, report._files || []);
-
-        // ── Tab: 合规审查 ──
-        var compTabBtn = document.querySelector('.clearance-tab-btn[data-tab="compliance"]');
-        var compPanel = document.getElementById('clearanceTabCompliance');
-        if (compPanel) {
-            if (compliance && !compliance.skipped) {
-                compPanel.innerHTML = _renderComplianceTab(compliance);
-            } else {
-                compPanel.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p>';
-                if (compTabBtn) compTabBtn.style.display = 'none';
-            }
+        // ── 二、横向对比 ──
+        if (cross && (cross.pairs || []).length) {
+            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 横向对比</summary>';
+            html += '<div style="padding-top:4px;">' + _renderCrossTab(cross, report._files || []) + '</div></details>';
         }
 
-        // ── Tab: AI 评审 ──
-        var aiTabBtn = document.querySelector('.clearance-tab-btn[data-tab="ai"]');
-        var aiPanel = document.getElementById('clearanceTabAI');
-        if (aiPanel) {
-            if (ai && ai.per_file && ai.per_file.length) {
-                aiPanel.innerHTML = _renderAITab(ai);
-            } else {
-                aiPanel.innerHTML = '<p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p>';
-                if (aiTabBtn) aiTabBtn.style.display = 'none';
-            }
+        // ── 三、合规审查 ──
+        if (compliance && !compliance.skipped) {
+            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚖️ 合规审查</summary>';
+            html += '<div style="padding-top:4px;">' + _renderComplianceTab(compliance) + '</div></details>';
+        } else {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚖️ 合规审查</summary>';
+            html += '<div style="padding-top:4px;"><p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p></div></details>';
         }
 
-        panel.style.display = 'block';
+        // ── 四、AI 评审 ──
+        if (ai && ai.per_file && ai.per_file.length) {
+            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🤖 AI 评审</summary>';
+            html += '<div style="padding-top:4px;">' + _renderAITab(ai) + '</div></details>';
+        } else {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🤖 AI 评审</summary>';
+            html += '<div style="padding-top:4px;"><p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p></div></details>';
+        }
+
+        // ── 五、图片随机抽检说明（九）──
+        if (report.image_sampling && report.image_sampling.length) {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🖼️ 图片随机抽检说明</summary>';
+            html += '<div style="padding-top:4px;">' + _renderImageSamplingTab(report.image_sampling) + '</div></details>';
+        }
+
+        // ── 六、全量审计补充检查（十）──
+        if (report.audit_supplement && report.audit_supplement.per_file && report.audit_supplement.per_file.length) {
+            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🛡️ 全量审计补充检查</summary>';
+            html += '<div style="padding-top:4px;">' + _renderAuditSupplementTab(report.audit_supplement) + '</div></details>';
+        }
+
+        return html;
+    }
+
+    function _renderImageSamplingTab(sampling) {
+        var html = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">随机抽取部分图片进行视觉校验，检测可能被忽略的图纸/印章/数据差异。</div>';
+        (sampling || []).forEach(function(sf) {
+            html += '<details style="margin-bottom:6px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">🖼️ ' + _clearanceEscape(sf.filename || '') + ' (' + (sf.samples || []).length + '张)</summary>';
+            (sf.samples || []).forEach(function(s) {
+                html += '<div style="font-size:0.66rem;border:1px solid var(--card-border);border-radius:6px;padding:4px 8px;margin:4px 0;">';
+                html += '<b>#' + (s.seq || '') + '</b> 位置: ' + _clearanceEscape(s.chapter || '') + '<br>';
+                html += '前文: ' + _clearanceEscape((s.prev || '').substring(0, 10)) + ' | 后文: ' + _clearanceEscape((s.next || '').substring(0, 10)) + '<br>';
+                html += '识别: ' + _clearanceEscape((s.desc || '').substring(0, 120));
+                html += '</div>';
+            });
+            html += '</details>';
+        });
+        return html;
+    }
+
+    function _renderAuditSupplementTab(au) {
+        var html = '';
+        (au.per_file || []).forEach(function(pf) {
+            var tl = pf.timeline || {};
+            var st = pf.style || {};
+            var ru = pf.rules || {};
+            html += '<details style="margin-bottom:6px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">🛡️ ' + _clearanceEscape(pf.filename || '') + '</summary>';
+            html += '<div style="font-size:0.66rem;padding:4px 8px;">';
+            if (st.score != null) html += '风格分析: <b>' + (st.score || 0).toFixed(1) + '</b> 分 (' + _clearanceEscape(st.findings && st.findings.formality_label || '') + ')<br>';
+            if (ru.count != null) html += '自规则提取: <b>' + (ru.count || 0) + '</b> 条 · 评分 ' + (ru.score || 0).toFixed(1) + '<br>';
+            if (tl.skipped) html += '时间线合规: ' + _clearanceEscape(tl.note || '跳过') + '<br>';
+            else if (tl.score != null) html += '时间线合规: <b>' + (tl.score || 0).toFixed(1) + '</b> 分<br>';
+            html += '</div></details>';
+        });
+        return html;
+    }
+
+    function _attachClearanceHandlers(container, pairs, files) {
+        // Scoped matrix-dimension switcher + click delegation (no inline onclick,
+        // safe for innerHTML round-trip and CSP).
+        if (!container) return;
+        var btns = container.querySelectorAll('.cm-matrix-btn');
+        btns.forEach(function(b) {
+            b.onclick = function() {
+                var name = b.getAttribute('data-m');
+                container.querySelectorAll('.cm-matrix-btn').forEach(function(x) {
+                    x.style.background = (x === b ? '#8e44ad' : 'transparent');
+                    x.style.color = (x === b ? '#fff' : '');
+                });
+                container.querySelectorAll('.cm-matrix').forEach(function(m) {
+                    m.style.display = (m.getAttribute('data-name') === name) ? 'block' : 'none';
+                });
+            };
+        });
+        // matrix cell click -> pair detail modal
+        var allPairs = pairs || [];
+        var allFiles = files || [];
+        container.querySelectorAll('.cm-matrix td[data-i]').forEach(function(td) {
+            td.onclick = function() {
+                var i = this.getAttribute('data-i');
+                var j = this.getAttribute('data-j');
+                if (i == null || j == null) return;
+                i = Number(i); j = Number(j);
+                var p = allPairs.find(function(x) { return x.i === i && x.j === j; }) ||
+                    allPairs.find(function(x) { return x.i === j && x.j === i; });
+                if (!p) return;
+                _showPairDetail(p, allFiles);
+            };
+        });
+        // download link -> fetch+Blob (works on self-signed HTTPS)
+        var dl = container.querySelector('a[data-clearance-download="1"]');
+        if (dl) {
+            dl.addEventListener('click', function(e) {
+                e.preventDefault();
+                _downloadClearanceReport(dl.getAttribute('href'));
+            });
+        }
+    }
+
+    function _downloadClearanceReport(url) {
+        fetch(url, { credentials: 'include' })
+            .then(function(res) { return res.ok ? res.blob() : Promise.reject(new Error('HTTP ' + res.status)); })
+            .then(function(blob) {
+                var blobUrl = URL.createObjectURL(blob);
+                var tmp = document.createElement('a');
+                tmp.href = blobUrl;
+                tmp.download = '串通投标线索分析报告.zip';
+                document.body.appendChild(tmp);
+                tmp.click();
+                setTimeout(function() { URL.revokeObjectURL(blobUrl); tmp.remove(); }, 1000);
+            })
+            .catch(function(err) { showToast('下载失败: ' + (err.message || '网络错误'), 'error', 5000); });
+    }
+
+    function appendClearanceToChat(report, downloadUrl, threadId) {
+        var html = buildClearanceReportHtml({ report: report, download_url: downloadUrl }, downloadUrl);
+        var cross = (report || {}).cross_comparison || {};
+        var pairs = cross.pairs || [];
+        var files = (report || {})._files || [];
+
+        var group = document.createElement('div');
+        group.className = 'message-group';
+        group.id = 'msg-clearance-' + Date.now();
+        var wrapper = document.createElement('div');
+        wrapper.className = 'assistant-wrapper';
+        var answerDiv = document.createElement('div');
+        answerDiv.className = 'assistant-answer comparison-report';
+        answerDiv.innerHTML = html;
+        _attachClearanceHandlers(answerDiv, pairs, files);
+        wrapper.appendChild(answerDiv);
+        group.appendChild(wrapper);
+        var messagesDiv = document.getElementById('chatMessages');
+        if (messagesDiv) {
+            messagesDiv.appendChild(group);
+            scrollToBottom(true);
+        }
     }
 
     function _renderIndicatorsTab(report) {
@@ -9367,35 +9481,9 @@
             html += '</table></details>';
         }
 
-        // Matrix dimension switcher + click delegation (deferred to after insert)
-        setTimeout(function() {
-            var btns = document.querySelectorAll('.cm-matrix-btn');
-            btns.forEach(function(b) {
-                b.onclick = function() {
-                    var name = b.getAttribute('data-m');
-                    document.querySelectorAll('.cm-matrix-btn').forEach(function(x) {
-                        x.style.background = (x === b ? '#8e44ad' : 'transparent');
-                        x.style.color = (x === b ? '#fff' : '');
-                    });
-                    document.querySelectorAll('.cm-matrix').forEach(function(m) {
-                        m.style.display = (m.getAttribute('data-name') === name) ? 'block' : 'none';
-                    });
-                };
-            });
-            // click on matrix cell -> pair detail modal
-            var cells = document.querySelectorAll('#clearanceTabCross td.cm-cell-click, .cm-matrix td');
-            document.querySelectorAll('.cm-matrix td[style*="cursor:pointer"], .cm-matrix td').forEach(function(td) {
-                td.onclick = function() {
-                    var i = this.getAttribute('data-i');
-                    var j = this.getAttribute('data-j');
-                    if (i == null || j == null) return;
-                    var p = pairs.find(function(x) { return x.i === Number(i) && x.j === Number(j); }) ||
-                        pairs.find(function(x) { return x.i === Number(j) && x.j === Number(i); });
-                    if (!p) return;
-                    _showPairDetail(p, files);
-                };
-            });
-        }, 0);
+        // Matrix/interaction handlers are attached scoped by _attachClearanceHandlers
+        // (called from appendClearanceToChat), not via global selectors, so multiple
+        // clearance bubbles in chat don't conflict and handlers survive innerHTML.
 
         return html;
     }
