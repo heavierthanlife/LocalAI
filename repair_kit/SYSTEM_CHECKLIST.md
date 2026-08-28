@@ -109,7 +109,7 @@ _(16/17 verified automatically)_
 
 ## REDIS
 
-_(6/6 verified automatically)_
+_(7/7 verified automatically)_
 
 - [x] Celery app file
 - [x] Celery task modules registered
@@ -117,6 +117,7 @@ _(6/6 verified automatically)_
 - [x] Nightly trainer module
 - [x] REDIS_URL/HOST env set
 - [x] Flask session configured
+- [x] Credit task registry Redis-backed
 
 ## RATELIMIT
 
@@ -183,8 +184,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 113 |
+| [x] Pass | 114 |
 | [?] Manual | 4 |
-| **Total** | **117** |
+| **Total** | **118** |
 
-**Verification rate**: 113/117 auto-verified (96%)
+**Verification rate**: 114/118 auto-verified (96%)

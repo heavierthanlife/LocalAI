@@ -495,14 +495,16 @@ def auto_cleanup_memory():
         except Exception:
             pass
 
-        # Clean stale credit_tasks (>24h old)
+        # Clean stale credit_tasks (>24h old for in-memory fallback; Redis uses TTL)
         try:
-            import app.globals as g
-            stale_tasks = [tid for tid, info in list(g.credit_tasks.items())
-                          if info.get('status') in ('completed', 'error')
-                          and now - info.get('finished_at', 0) > 86400]
-            for tid in stale_tasks:
-                del g.credit_tasks[tid]
+            from app.services.credit_task_registry import (
+                list_task_ids as _credit_list, get_task as _credit_get,
+                delete_task as _credit_delete,
+            )
+            for tid in _credit_list():
+                info = _credit_get(tid) or {}
+                if info.get('status') in ('completed', 'error') and now - info.get('finished_at', 0) > 86400:
+                    _credit_delete(tid)
         except Exception:
             pass
 

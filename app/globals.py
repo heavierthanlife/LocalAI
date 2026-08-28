@@ -17,7 +17,8 @@ _semantic_model = None
 _semantic_model_load_failed = False
 
 # ---------------- Credit Tasks ----------------
-_credit_tasks_lock = Lock()
+# (credit task state now lives in app.services.credit_task_registry — Redis-backed,
+#  so it survives across gunicorn workers. See FIX-2026-08-28-003.)
 
 # ---------------- Task Locking ----------------
 user_active_tasks = {}
@@ -27,9 +28,6 @@ TASK_TIMEOUT_SECONDS = 600
 # ---------------- Download Tokens ----------------
 download_tokens = defaultdict(int)
 download_tokens_lock = Lock()
-
-# ---------------- Credit Tasks Storage ----------------
-credit_tasks = {}
 
 # Agent system prompt - loaded from disk at startup, persisted on admin edit
 import os as _os

@@ -6,8 +6,11 @@ from flask import Blueprint, request, jsonify, session, send_file, render_templa
 from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, CREDIT_REPORTS_DIR, PROJECT_FILES_ROOT, to_rel_path, resolve_path
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
-import app.globals as g
-from app.globals import _credit_tasks_lock, credit_tasks
+from app.services.credit_task_registry import (
+    set_task as _credit_set, get_task as _credit_get,
+    patch_task as _credit_patch, task_exists as _credit_exists,
+    delete_task as _credit_delete,
+)
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 from app.services.session_manager import get_user_id
 
@@ -74,21 +77,20 @@ def start_credit_check():
     with current_app.app_context():
         download_url = url_for('download_credit_report', task_id=task_id, _external=True)
 
-    with _credit_tasks_lock:
-        credit_tasks[task_id] = {
-            'status': 'running',
-            'progress': 0,
-            'total': len(companies),
-            'captcha_needed': False,
-            'captcha_image': None,
-            'captcha_task': None,
-            'captcha_solution': None,
-            'reload_captcha': False,
-            'download_url': download_url,
-            'error': None,
-            'waiting': False,
-            'resume': False
-        }
+    _credit_set(task_id, {
+        'status': 'running',
+        'progress': 0,
+        'total': len(companies),
+        'captcha_needed': False,
+        'captcha_image': None,
+        'captcha_task': None,
+        'captcha_solution': None,
+        'reload_captcha': False,
+        'download_url': download_url,
+        'error': None,
+        'waiting': False,
+        'resume': False
+    })
 
     threading.Thread(target=_run_credit_check,
                      args=(task_id, companies, urls, user_id, True),
@@ -112,11 +114,11 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
                 if checker._is_captcha_present():
                     captcha_img = checker.get_captcha_element_screenshot()
                     if captcha_img:
-                        with _credit_tasks_lock:
-                            credit_tasks[task_id]['captcha_needed'] = True
-                            credit_tasks[task_id]['captcha_image'] = captcha_img.getvalue()
-                            credit_tasks[task_id]['captcha_solution'] = None
-                            credit_tasks[task_id]['reload_captcha'] = False
+                        _credit_patch(task_id,
+                                      captcha_needed=True,
+                                      captcha_image=captcha_img.getvalue(),
+                                      captcha_solution=None,
+                                      reload_captcha=False)
 
                         # Wait for user to solve CAPTCHA via modal
                         captcha_start = time.time()
@@ -124,61 +126,51 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
                         while True:
                             if time.time() - captcha_start > captcha_timeout:
                                 logger.warning(f"CAPTCHA wait timed out for task {task_id}")
-                                with _credit_tasks_lock:
-                                    credit_tasks[task_id]['status'] = 'error'
-                                    credit_tasks[task_id]['error'] = '验证码等待超时'
+                                _credit_patch(task_id, status='error', error='验证码等待超时')
                                 return
-                            with _credit_tasks_lock:
-                                solution = credit_tasks[task_id].get('captcha_solution')
-                                reload_flag = credit_tasks[task_id].get('reload_captcha', False)
+                            task_state = _credit_get(task_id) or {}
+                            solution = task_state.get('captcha_solution')
+                            reload_flag = task_state.get('reload_captcha', False)
 
                             if solution is not None:
                                 break
                             if reload_flag:
-                                with _credit_tasks_lock:
-                                    credit_tasks[task_id]['reload_captcha'] = False
+                                _credit_patch(task_id, reload_captcha=False)
                                 # Refresh the CAPTCHA image on the page
                                 checker.refresh_captcha()
                                 time.sleep(1)
                                 new_img = checker.get_captcha_element_screenshot()
                                 if new_img:
-                                    with _credit_tasks_lock:
-                                        credit_tasks[task_id]['captcha_image'] = new_img.getvalue()
+                                    _credit_patch(task_id, captcha_image=new_img.getvalue())
                             time.sleep(1)
 
                         # Submit the CAPTCHA solution
-                        with _credit_tasks_lock:
-                            solution = credit_tasks[task_id]['captcha_solution']
+                        task_state = _credit_get(task_id) or {}
+                        solution = task_state.get('captcha_solution')
                         checker.submit_captcha(solution)
 
                         # Clear CAPTCHA flags
-                        with _credit_tasks_lock:
-                            credit_tasks[task_id]['captcha_needed'] = False
-                            credit_tasks[task_id]['captcha_image'] = None
+                        _credit_patch(task_id, captcha_needed=False, captcha_image=None)
                         time.sleep(3)   # wait for page to reload
 
                 # Wait for user to confirm results
                 if manual_mode:
-                    with _credit_tasks_lock:
-                        credit_tasks[task_id]['waiting'] = True
-                        credit_tasks[task_id]['resume'] = False
+                    _credit_patch(task_id, waiting=True, resume=False)
 
                     manual_start = time.time()
                     manual_timeout = 600  # 10 minutes max wait
                     while True:
                         if time.time() - manual_start > manual_timeout:
                             logger.warning(f"Manual confirm wait timed out for task {task_id}")
-                            with _credit_tasks_lock:
-                                credit_tasks[task_id]['waiting'] = False
+                            _credit_patch(task_id, waiting=False)
                             break
-                        with _credit_tasks_lock:
-                            resume = credit_tasks[task_id].get('resume', False)
+                        task_state = _credit_get(task_id) or {}
+                        resume = task_state.get('resume', False)
                         if resume:
                             break
                         time.sleep(1)
 
-                    with _credit_tasks_lock:
-                        credit_tasks[task_id]['waiting'] = False
+                    _credit_patch(task_id, waiting=False)
                 else:
                     time.sleep(3)   # fallback delay for full-auto (unused)
 
@@ -188,8 +180,7 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
                 logger.info(f"Screenshot captured for {company} at {url}")
 
             screenshots[company] = company_shots
-            with _credit_tasks_lock:
-                credit_tasks[task_id]['progress'] = idx + 1
+            _credit_patch(task_id, progress=idx + 1)
 
         # ========== Generate Word Document ==========
         doc = Document()
@@ -231,15 +222,12 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
                 conn.commit()
 
         # Mark task as completed
-        with _credit_tasks_lock:
-            credit_tasks[task_id]['status'] = 'completed'
+        _credit_patch(task_id, status='completed')
         logger.info(f"Credit check task {task_id} finished successfully")
 
     except Exception as e:
         logger.error(f"Credit check task {task_id} failed: {e}", exc_info=True)
-        with _credit_tasks_lock:
-            credit_tasks[task_id]['status'] = 'error'
-            credit_tasks[task_id]['error'] = str(e)
+        _credit_patch(task_id, status='error', error=str(e))
     finally:
         checker.close()
 
@@ -247,49 +235,44 @@ def _run_credit_check(task_id, companies, urls, user_id, manual_mode=True):
 def credit_check_status(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
-    with _credit_tasks_lock:
-        task = credit_tasks.get(task_id)
-        if not task:
-            return jsonify({"error": "Task not found"}), 404
-        # Make a copy to release lock quickly
-        result = {
-            'status': task['status'],
-            'progress': task['progress'],
-            'total': task['total'],
-            'captcha_needed': task.get('captcha_needed', False),
-            'download_url': task.get('download_url'),
-            'error': task.get('error'),
-            'waiting': task.get('waiting', False)
-        }
+    task = _credit_get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    result = {
+        'status': task['status'],
+        'progress': task['progress'],
+        'total': task['total'],
+        'captcha_needed': task.get('captcha_needed', False),
+        'download_url': task.get('download_url'),
+        'error': task.get('error'),
+        'waiting': task.get('waiting', False)
+    }
     return jsonify(result)
 
 @credit_bp.route('/credit_check_resume/<task_id>', methods=['POST'])
 def credit_check_resume(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
-    with _credit_tasks_lock:
-        if task_id in credit_tasks:
-            credit_tasks[task_id]['resume'] = True
+    if _credit_exists(task_id):
+        _credit_patch(task_id, resume=True)
     return jsonify({"status": "ok"})
 
 @credit_bp.route('/get_captcha_image/<task_id>')
 def get_captcha_image(task_id):
     if session.get('consent_value', 0) != 1:
         return "Not authorized", 401
-    with _credit_tasks_lock:
-        task = credit_tasks.get(task_id)
-        if not task or not task.get('captcha_needed') or not task.get('captcha_image'):
-            return "No captcha image", 404
-        img_bytes = task['captcha_image']
+    task = _credit_get(task_id)
+    if not task or not task.get('captcha_needed') or not task.get('captcha_image'):
+        return "No captcha image", 404
+    img_bytes = task['captcha_image']
     return send_file(BytesIO(img_bytes), mimetype='image/png')
 
 @credit_bp.route('/reload_captcha/<task_id>', methods=['POST'])
 def reload_captcha(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
-    with _credit_tasks_lock:
-        if task_id in credit_tasks:
-            credit_tasks[task_id]['reload_captcha'] = True
+    if _credit_exists(task_id):
+        _credit_patch(task_id, reload_captcha=True)
     return jsonify({"status": "reloading"})
 
 @credit_bp.route('/solve_captcha/<task_id>', methods=['POST'])
@@ -299,9 +282,8 @@ def solve_captcha(task_id):
     data = request.get_json()
 
     solution = data.get('solution', '')
-    with _credit_tasks_lock:
-        if task_id in credit_tasks:
-            credit_tasks[task_id]['captcha_solution'] = solution
+    if _credit_exists(task_id):
+        _credit_patch(task_id, captcha_solution=solution)
     return jsonify({"status": "ok"})
 
 @credit_bp.route('/download_credit_report/<task_id>')

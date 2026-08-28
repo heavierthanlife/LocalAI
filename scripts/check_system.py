@@ -321,6 +321,10 @@ _add('security', 'Graph API requires login', 'PASS' if graph_auth else 'FAIL')
 pin_fail_closed, _ = _grep_file('app/__init__.py', r'app_env == "production" and not admin_pin')
 _add('security', 'Admin PIN fail-closed in production', 'PASS' if pin_fail_closed else 'FAIL')
 
+# Credit task registry Redis-backed (M4 fix)
+credit_reg, _ = _grep_file('app/services/credit_task_registry.py', r'def set_task')
+_add('redis', 'Credit task registry Redis-backed', 'PASS' if credit_reg else 'FAIL')
+
 # ===========================================================================
 # 9. Admin Features
 # ===========================================================================

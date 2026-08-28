@@ -4816,5 +4816,4 @@ def submit_ingest_feedback():
 
 
 # ======================== Credit Check Routes ========================
-credit_tasks = {}  # in‑memory store for running tasks
 

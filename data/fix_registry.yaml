@@ -259,3 +259,21 @@ fixes:
       - type: grep
         file: docker-compose.yml
         pattern: "APP_ENV=production"
+
+  - id: FIX-2026-08-28-003
+    title: "credit_tasks must be Redis-backed (cross-worker task registry)"
+    severity: high
+    rationale: >
+      The credit-check task registry lived in a process-local dict (app.globals.
+      credit_tasks). Under multiple gunicorn workers the start POST could land on
+      worker A while status/captcha/solve requests hit workers B/C/D, causing
+      spurious 404s and CAPTCHA handshake deadlocks. Fix adds a Redis-backed
+      registry (app/services/credit_task_registry.py) with graceful in-memory
+      fallback, and migrates credit.py + cleanup_tasks.py to it.
+    checks:
+      - type: grep
+        file: app/services/credit_task_registry.py
+        pattern: "def set_task"
+      - type: grep_not
+        file: app/routes/credit.py
+        pattern: "credit_tasks\\["

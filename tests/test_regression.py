@@ -195,3 +195,42 @@ def test_compose_sets_app_env_production():
         "docker-compose app service must set APP_ENV=production"
     assert 'ADMIN_PIN=${ADMIN_PIN:-}' in content, \
         "compose must not default ADMIN_PIN to 123456"
+
+
+# ── FIX-2026-08-28-003: credit_tasks must be Redis-backed (cross-worker) ──
+def test_credit_task_registry_roundtrip(mock_redis):
+    """Credit task state must survive set→get→patch across a Redis-backed registry."""
+    from app.services import credit_task_registry as reg
+    reg.set_task('t-reg-1', {
+        'status': 'running', 'progress': 0, 'total': 2,
+        'captcha_image': b'\x89PNG\r\n\x1a\n', 'captcha_solution': None,
+        'waiting': False, 'reload_captcha': False, 'download_url': 'http://x/r',
+    })
+    t = reg.get_task('t-reg-1')
+    assert t is not None, "get_task must return the stored task"
+    assert t['status'] == 'running'
+    assert t['captcha_image'] == b'\x89PNG\r\n\x1a\n', \
+        "captcha_image bytes must round-trip through Redis"
+    assert t.get('captcha_solution') in (None, ''), \
+        "None captcha_solution must be preserved as falsy"
+
+    reg.patch_task('t-reg-1', progress=5, waiting=True, captcha_solution='abcd')
+    t2 = reg.get_task('t-reg-1')
+    assert t2['progress'] == 5
+    assert t2['waiting'] is True
+    assert t2['captcha_solution'] == 'abcd'
+
+    assert reg.task_exists('t-reg-1') is True
+    assert 't-reg-1' in reg.list_task_ids()
+    reg.delete_task('t-reg-1')
+    assert reg.task_exists('t-reg-1') is False
+
+
+def test_credit_routes_no_inmemory_registry():
+    """credit.py must not reference the old process-local credit_tasks dict."""
+    with open('app/routes/credit.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'credit_tasks[' not in content, \
+        "credit.py must not write to the in-memory credit_tasks dict"
+    assert '_credit_tasks_lock' not in content, \
+        "credit.py must not use the process-local credit_tasks lock"
