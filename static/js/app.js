@@ -8790,6 +8790,8 @@
         var selectBtn = document.getElementById('selectClearanceFilesBtn');
         var tenderInput = document.getElementById('clearanceTenderInput');
         var tenderBtn = document.getElementById('selectClearanceTenderBtn');
+        var openInfoInput = document.getElementById('clearanceOpenInfoInput');
+        var openInfoBtn = document.getElementById('selectClearanceOpenInfoBtn');
         var runBtn = document.getElementById('runClearanceBtn');
         var fileNames = document.getElementById('clearanceFileNames');
         var progDiv = document.getElementById('clearanceProgress');
@@ -8843,6 +8845,8 @@
         // ── Pre-upload: stream each file to /upload_file, collect file_ids ──
         var uploadedFileIds = [];   // [{id, name, size}]
         var tenderFileId = null;
+        var openInfoFile = null;
+        var openInfoFileId = null;
         var uploading = false;
 
         function _fmtSize(bytes) {
@@ -8878,6 +8882,7 @@
             runBtn.disabled = true;
             uploadedFileIds = [];
             tenderFileId = null;
+            openInfoFileId = null;
             try {
                 var imgExts = ['.pdf', '.docx', '.doc', '.docm', '.pptx', '.pptm'];
                 for (var i = 0; i < selectedFiles.length; i++) {
@@ -8894,6 +8899,11 @@
                     fileNames.textContent = '上传招标文件: ' + tenderFile.name + '...';
                     var tr = await _uploadOne(tenderFile);
                     tenderFileId = tr.id;
+                }
+                if (openInfoFile) {
+                    fileNames.textContent = '上传开标信息表: ' + openInfoFile.name + '...';
+                    var or = await _uploadOne(openInfoFile);
+                    openInfoFileId = or.id;
                 }
                 var imgFiles = selectedFiles.filter(function(f) {
                     var ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
@@ -8938,6 +8948,17 @@
                 _preUploadFiles();
             }
         };
+        if (openInfoBtn && openInfoInput) {
+            openInfoBtn.onclick = function() { openInfoInput.click(); };
+            openInfoInput.onchange = function() {
+                openInfoFile = openInfoInput.files.length ? openInfoInput.files[0] : null;
+                if (openInfoFile) {
+                    var hintEl = document.getElementById('clearanceHint');
+                    if (hintEl) hintEl.textContent = '📑 开标信息表: ' + openInfoFile.name + '（将填充开标表与相关指标）';
+                    if (uploadedFileIds.length > 0) _preUploadFiles();
+                }
+            };
+        }
 
         runBtn.onclick = function() {
             if (selectedFiles.length < 2) { alert('请至少选择 2 份投标文件'); return; }
@@ -8977,6 +8998,7 @@
             modal.innerHTML = ''
                 + '<div style="font-size:0.85rem;font-weight:700;margin-bottom:6px;">基本信息填写（可选）</div>'
                 + '<div style="font-size:0.68rem;color:#9ca3af;margin-bottom:10px;">不填写的字段报告中显示为 "—"</div>'
+                + '<div id="ciCriteriaPreview" style="display:none;margin-bottom:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:0.68rem;color:#166534;"></div>'
                 + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:14px;">'
                 + fieldsHtml
                 + '</div>'
@@ -8986,6 +9008,46 @@
                 + '</div>';
             document.body.appendChild(backdrop);
             document.body.appendChild(modal);
+
+            // 评审标准预览（决定 2）：从招标文件自动提取，预填 budget/time，供人工确认
+            (async function() {
+                if (!tenderFileId) return;
+                try {
+                    var fd2 = new FormData();
+                    fd2.append('tender_file_id', tenderFileId);
+                    var r2 = await fetch('/clearance/preview_criteria', {
+                        method: 'POST', body: fd2, credentials: 'include'
+                    });
+                    var d2 = await r2.json();
+                    if (!r2.ok || !d2.success || d2.error) return;
+                    var prev = document.getElementById('ciCriteriaPreview');
+                    if (!prev) return;
+                    var c = d2;
+                    var lines = [];
+                    if (c.budget_price) {
+                        lines.push('💰 预算价/控制价: ' + (c.budget_price / 10000).toFixed(2) + ' 万元');
+                        var bEl = modal.querySelector('#ci_award_amount');
+                        if (bEl && !bEl.value.trim()) bEl.value = (c.budget_price / 10000).toFixed(2) + '万元';
+                    }
+                    if (c.plan_open_time) {
+                        lines.push('🗓 计划开标时间: ' + c.plan_open_time);
+                        var tEl = modal.querySelector('#ci_bid_open_time');
+                        if (tEl && !tEl.value.trim()) tEl.value = c.plan_open_time;
+                    }
+                    if (c.eval_method) {
+                        lines.push('⚖ 评标办法: ' + c.eval_method);
+                        var mEl = modal.querySelector('#ci_eval_method');
+                        if (mEl && !mEl.value.trim()) mEl.value = c.eval_method;
+                    }
+                    if (c.score_points && c.score_points.length) {
+                        lines.push('📊 评分点: ' + c.score_points.slice(0, 4).join('、'));
+                    }
+                    if (lines.length) {
+                        prev.innerHTML = '✅ 已从招标文件自动提取（可修改）：<br>' + lines.join('<br>');
+                        prev.style.display = 'block';
+                    }
+                } catch (_) {}
+            })();
 
             var submitWithInfo = async function(collectFields) {
                 var infoFields = collectFields();
@@ -9027,6 +9089,7 @@
                     // Pre-uploaded path: submit ids only (no binary body)
                     uploadedFileIds.forEach(function(u) { formData.append('file_ids', u.id); });
                     if (tenderFileId) formData.append('tender_file_id', tenderFileId);
+                    if (openInfoFileId) formData.append('open_info_file_id', openInfoFileId);
                 } else {
                     selectedFiles.forEach(function(f) { formData.append('files', f); });
                     if (tenderFile) formData.append('tender_file', tenderFile);

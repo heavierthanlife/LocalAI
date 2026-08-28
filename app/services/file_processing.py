@@ -367,6 +367,11 @@ def keyword_overlap_similarity(text1, text2):
     kw2 = set(extract_keywords(text2, 20))
     if not kw1 and not kw2:
         return 0.0
+    # Guard against template/boilerplate-only texts: if either side has too few
+    # distinguishing keywords, a high Jaccard is spurious (both sides just share
+    # generic 招标 boilerplate). Return a low floor instead of an inflated value.
+    if len(kw1) < 4 or len(kw2) < 4:
+        return 0.05
     inter = len(kw1 & kw2)
     union = len(kw1 | kw2)
     return inter / union if union > 0 else 0.0

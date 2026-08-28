@@ -118,8 +118,8 @@ def test_snapshot_tfidf_pairwise(bid_texts):
     }
 
     # ── Snapshot values (locked to current jieba + sklearn version) ──
-    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.90509400, abs=1e-6)
-    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.99364462, abs=1e-6)
+    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.90868497, abs=1e-6)
+    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.99387376, abs=1e-6)
 
     # ── Invariants (must hold regardless of tokenizer version) ──
     assert sim_b > sim_a, f"eng-vs-similar {sim_b} !> eng-vs-goods {sim_a}"

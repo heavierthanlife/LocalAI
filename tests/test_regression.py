@@ -425,3 +425,95 @@ def test_clearance_status_precheck_tolerates_404():
         "app.js must only parse the status body when statusCheck.ok"
     assert 'statusData = {}' in content, \
         "app.js must tolerate a failed/404 status fetch"
+
+
+# ── FIX-2026-08-28-009: 清标报告生产级升级 — 三节渲染 + 文本相似 + 开标表 ──
+def test_section3_indicator_tables_rendered():
+    """document_analysis_svc section 三 must render per-indicator tables (B1 dead-code fix)."""
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    # The 'continue' dead-code bug: _add_heading for each category must be
+    # reachable (not inside an if-not-group: continue block).
+    assert '_add_heading(doc, f\'{prefix}{cat}\', H2)' in content, \
+        "section 三 category heading must be reachable code"
+    assert '_add_heading(doc, f\'{sub_no}、{ind["name"]}\', H2)' in content, \
+        "per-indicator heading must be reachable code"
+    # Verify the render loop is not dead: the 'if not group: continue' must be
+    # immediately followed by the heading (single-level indent), not the whole loop.
+    idx = content.index('if not group:')
+    after = content[idx:idx + 80]
+    assert 'continue\n        _add_heading' in after, \
+        "continue must not swallow the indicator rendering loop (B1)"
+
+
+def test_text_sim_tfidf_wired():
+    """Clearance + indicator text-sim paths must precompute and pass the TF-IDF matrix."""
+    with open('app/services/clearance_engine.py', 'r', encoding='utf-8') as f:
+        c = f.read()
+    assert '_precompute_tfidf_for_files' in c, \
+        "clearance cross-comparison must precompute TF-IDF"
+    assert 'tfidf_matrix=tfidf_matrix' in c, \
+        "clearance must pass tfidf_matrix to compute_all_pairs"
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        d = f.read()
+    assert '_precompute_tfidf_for_files' in d, \
+        "indicator text_sim checker must precompute TF-IDF"
+
+
+def test_indicators_triggered_is_count():
+    """suspected_units.indicators_triggered must be a real count, not a boolean."""
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'int(triggered_count > 0)' not in content, \
+        "indicators_triggered must not be int(boolean)"
+    assert 'su[\'indicators_triggered\'] = count' in content, \
+        "indicators_triggered must be computed as a per-file count"
+
+
+def test_openinfo_service_parses():
+    """clearance_openinfo must parse 开标信息表 and extract 评审标准."""
+    from app.services.clearance_openinfo import (
+        parse_open_info_file, extract_eval_criteria, compute_open_info_indicators,
+    )
+    # eval criteria extraction from a tender text
+    tender = ("本工程预算价1500万元，计划开标时间2026年9月1日，采用综合评估法，"
+              "技术分40分、商务分30分、价格分30分。")
+    ec = extract_eval_criteria(tender)
+    assert ec['budget_price'] == 15000000, f"budget_price wrong: {ec['budget_price']}"
+    assert ec['plan_open_time'] and '2026' in ec['plan_open_time']
+    assert ec['eval_method'] == '综合评估法'
+    # open-info indicators with contact/phone dup + expert scores
+    open_info = {
+        'rows': [
+            {'bidder': 'A公司', 'contact': '张三', 'phone': '13800000001',
+             'bid_price': '10000000', 'winner': 'A公司', 'remark': ''},
+            {'bidder': 'B公司', 'contact': '张三', 'phone': '13800000001',
+             'bid_price': '12000000', 'winner': '', 'remark': ''},
+        ]
+    }
+    res = compute_open_info_indicators([{'filename': 'A公司.docx'}, {'filename': 'B公司.docx'}],
+                                       open_info, ec)
+    assert 'contact_person_same' in res, "contact_person_same must be computed"
+    assert res['contact_person_same']['score'] > 0, "dup contact must score > 0"
+    assert 'contact_phone_abnormal' in res, "contact_phone_abnormal must be computed"
+    assert res['contact_phone_abnormal']['score'] > 0, "dup phone must score > 0"
+
+
+def test_clearance_route_accepts_open_info():
+    """clearance.py must accept open_info_file_id and preview_criteria endpoint."""
+    with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'open_info_file_id' in content, \
+        "clearance route must accept open_info_file_id"
+    assert 'preview_criteria' in content, \
+        "clearance route must expose /clearance/preview_criteria"
+
+
+def test_openinfo_upload_ui():
+    """index.html must have the 开标信息表 upload slot."""
+    with open('templates/index.html', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'clearanceOpenInfoInput' in content, \
+        "index.html must include a 开标信息表 upload input"
+    assert '选择开标信息表' in content, \
+        "index.html must label the 开标信息表 upload button"

@@ -24,7 +24,7 @@ from app.services.indicator_defs import INDICATOR_DEFS, rule_text
 logger = logging.getLogger(__name__)
 
 
-def _run_checker(name, file_data, user_id, thread_id):
+def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
     """Run a single checker with try-except, returns dict or None."""
     try:
         if name == 'skip':
@@ -32,10 +32,16 @@ def _run_checker(name, file_data, user_id, thread_id):
             return {'skipped': True, 'error': '需外部数据源（交易平台/评标系统数据）'}
 
         if name == 'text_sim':
+            from app.services.batch_compare_svc import _precompute_tfidf_for_files
+            tfidf_matrix = None
+            try:
+                _vec, tfidf_matrix = _precompute_tfidf_for_files(file_data, template_text=tender_text)
+            except Exception as e:
+                logger.warning(f"text_sim tfidf precompute failed: {e}")
             pairs, risk_matrix = compute_all_pairs(file_data, {
                 'text_sim': True, 'key_info': False,
                 'file_attr': False, 'image_sim': False
-            })
+            }, tfidf_matrix=tfidf_matrix, template_text=tender_text)
             max_risk = max(p['risk'] for p in pairs) if pairs else 0
             max_sim = max(p['sim'] for p in pairs) if pairs else 0
             return {
@@ -80,13 +86,17 @@ def _run_checker(name, file_data, user_id, thread_id):
         return {'error': str(e), 'skipped': True}
 
 
-def run_analysis(file_data, user_id=None, thread_id=None):
+def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
+                 open_info=None, eval_criteria=None):
     """Run all checkers, build a structured report matching the example format.
 
     Args:
         file_data: list of dicts with {'filename', 'text', 'metadata', 'images'}
         user_id: optional user identifier
         thread_id: optional thread identifier
+        tender_text: 招标文件全文（用于 text_sim 模板去除 + 评审标准提取）
+        open_info: 结构化开标信息表 dict (from clearance_openinfo.parse_open_info_file)
+        eval_criteria: 结构化评审标准 dict (from clearance_openinfo.extract_eval_criteria)
 
     Returns:
         dict with basic_info, suspected_units, indicators, personnel_summary
@@ -98,8 +108,17 @@ def run_analysis(file_data, user_id=None, thread_id=None):
     checker_data = {}
     for ind in INDICATOR_DEFS:
         checker_data[ind['checker']] = _run_checker(
-            ind['checker'], file_data, user_id, thread_id
+            ind['checker'], file_data, user_id, thread_id, tender_text=tender_text
         )
+
+    # OPEN_INFO / TENDER indicators (activate skipped indicators with new inputs)
+    open_info_results = {}
+    try:
+        if open_info or eval_criteria:
+            from app.services.clearance_openinfo import compute_open_info_indicators
+            open_info_results = compute_open_info_indicators(file_data, open_info, eval_criteria)
+    except Exception as e:
+        logger.warning(f"OPEN_INFO indicators failed: {e}")
 
     # Build pairs and risk matrix from text_sim
     text_data = checker_data.get('text_sim', {})
@@ -150,16 +169,30 @@ def run_analysis(file_data, user_id=None, thread_id=None):
                 if file_data[i]['filename'] == pb.get('filename'):
                     file_scores[i] += pb.get('risk_score', 0) * 0.1
 
-    # Build suspected units
+    # Boost file scores from OPEN_INFO findings (details reference bidder names)
+    for oid, oi in open_info_results.items():
+        score = oi.get('score', 0)
+        if score <= 0:
+            continue
+        for d in oi.get('details', []):
+            if not isinstance(d, dict):
+                continue
+            for i in range(n):
+                fname = file_data[i]['filename']
+                joined = ' '.join(str(v) for v in d.values())
+                if fname in joined:
+                    file_scores[i] += min(score * 0.1, 5.0)
+
+    # Build suspected units — computed AFTER the indicators loop so the
+    # per-file triggered count is a real count of indicators that fired,
+    # not a boolean (see FIX-2026-08-28-009).
     suspected_units = []
-    triggered_count = 0
     for i in range(n):
         score = round(file_scores[i], 1)
         if score > 0:
-            triggered_count += 1
             suspected_units.append({
                 'name': file_data[i]['filename'],
-                'indicators_triggered': int(triggered_count > 0),
+                'indicators_triggered': 0,  # filled after indicators are built
                 'score': score,
             })
 
@@ -287,6 +320,14 @@ def run_analysis(file_data, user_id=None, thread_id=None):
             skipped = True
             result_text = '○ 需外部数据源（交易平台/评标系统数据）'
 
+        # OPEN_INFO / TENDER indicators: override with real computed results
+        oi = open_info_results.get(ind['id'])
+        if oi:
+            score = oi.get('score', 0)
+            result_text = oi.get('result', result_text)
+            details = oi.get('details', [])
+            skipped = False
+
         rr = ind.get('rule_ref', {})
         indicators.append({
             'id': ind['id'],
@@ -317,6 +358,27 @@ def run_analysis(file_data, user_id=None, thread_id=None):
                 })
 
     total_score = round(sum(ind['score'] for ind in indicators), 1)
+
+    # Fill per-file indicator trigger counts: an indicator fired for a file if
+    # its details reference that file by name, or it's a non-skipped pairwise
+    # finding whose pair names include the file.
+    for su in suspected_units:
+        fname = su['name']
+        count = 0
+        for ind in indicators:
+            if ind.get('skipped'):
+                continue
+            det = ind.get('details') or []
+            referenced = False
+            for d in det:
+                if isinstance(d, dict):
+                    vals = ' '.join(str(v) for v in d.values())
+                    if fname in vals:
+                        referenced = True
+                        break
+            if referenced:
+                count += 1
+        su['indicators_triggered'] = count
 
     return {
         '_pairs': pairs,
@@ -493,69 +555,69 @@ def _build_standard_sections(doc, report):
         group = [ind for ind in indicators if ind['category'] == cat]
         if not group:
             continue
-            _add_heading(doc, f'{prefix}{cat}', H2)
-            for si, ind in enumerate(group):
-                sub_no = f'3.{gi + 1}.{si + 1}'
-                _add_heading(doc, f'{sub_no}、{ind["name"]}', H2)
+        _add_heading(doc, f'{prefix}{cat}', H2)
+        for si, ind in enumerate(group):
+            sub_no = f'3.{gi + 1}.{si + 1}'
+            _add_heading(doc, f'{sub_no}、{ind["name"]}', H2)
 
-                t = _add_table(doc, 6, 4)
-                _set_cell(t.cell(0, 0), '指标名称', bold=True)
-                _merge_row(t, 0, 1, 3)
-                _set_cell(t.cell(0, 1), ind['name'])
+            t = _add_table(doc, 6, 4)
+            _set_cell(t.cell(0, 0), '指标名称', bold=True)
+            _merge_row(t, 0, 1, 3)
+            _set_cell(t.cell(0, 1), ind['name'])
 
-                _set_cell(t.cell(1, 0), '指标类别', bold=True)
-                _set_cell(t.cell(1, 1), ind['category'])
-                _set_cell(t.cell(1, 2), '指标得分', bold=True)
-                _set_cell(t.cell(1, 3), f"{ind.get('score', 0)} 分")
+            _set_cell(t.cell(1, 0), '指标类别', bold=True)
+            _set_cell(t.cell(1, 1), ind['category'])
+            _set_cell(t.cell(1, 2), '指标得分', bold=True)
+            _set_cell(t.cell(1, 3), f"{ind.get('score', 0)} 分")
 
-                _set_cell(t.cell(2, 0), '针对问题', bold=True)
-                _merge_row(t, 2, 1, 3)
-                _set_cell(t.cell(2, 1), ind.get('problem', ''))
+            _set_cell(t.cell(2, 0), '针对问题', bold=True)
+            _merge_row(t, 2, 1, 3)
+            _set_cell(t.cell(2, 1), ind.get('problem', ''))
 
-                _set_cell(t.cell(3, 0), '分析规则', bold=True)
-                _merge_row(t, 3, 1, 3)
-                rule_text_val = ind.get('rule', '')
-                rule_ref = ind.get('rule_ref', {})
-                law_text = ind.get('rule_text', '')
-                if law_text:
-                    rule_text_val += f"\n规则依据：{rule_ref.get('label', '')} {law_text}"
-                _set_cell(t.cell(3, 1), rule_text_val)
+            _set_cell(t.cell(3, 0), '分析规则', bold=True)
+            _merge_row(t, 3, 1, 3)
+            rule_text_val = ind.get('rule', '')
+            rule_ref = ind.get('rule_ref', {})
+            law_text = ind.get('rule_text', '')
+            if law_text:
+                rule_text_val += f"\n规则依据：{rule_ref.get('label', '')} {law_text}"
+            _set_cell(t.cell(3, 1), rule_text_val)
 
-                _set_cell(t.cell(4, 0), '分析结果', bold=True)
-                _merge_row(t, 4, 1, 3)
-                result_run = _set_cell(t.cell(4, 1), ind.get('result', ''))
-                result_text = _safe(ind.get('result', ''))
-                if '▲' in result_text or '●' in result_text:
-                    result_run.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
-                elif '√' in result_text:
-                    result_run.font.color.rgb = RGBColor(0x16, 0xA3, 0x4A)
-                elif '○' in result_text:
-                    result_run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B)
+            _set_cell(t.cell(4, 0), '分析结果', bold=True)
+            _merge_row(t, 4, 1, 3)
+            result_run = _set_cell(t.cell(4, 1), ind.get('result', ''))
+            result_text = _safe(ind.get('result', ''))
+            if '▲' in result_text or '●' in result_text:
+                result_run.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+            elif '√' in result_text:
+                result_run.font.color.rgb = RGBColor(0x16, 0xA3, 0x4A)
+            elif '○' in result_text:
+                result_run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B)
 
-                _set_cell(t.cell(5, 0), '指标详情', bold=True)
-                details = ind.get('details', [])
-                if details and not ind.get('skipped', False):
-                    _merge_row(t, 5, 1, 3)
-                    detail_cell = t.cell(5, 1)
-                    detail_cell.text = ''
-                    dp = detail_cell.paragraphs[0]
-                    if isinstance(details[0], dict):
-                        for d in details[:10]:
-                            rp = dp
-                            for k, v in list(d.items())[:4]:
-                                rp = detail_cell.add_paragraph()
-                                rn = rp.add_run(f'{k}: {_safe(v)}')
-                                rn.font.size = Pt(FINE)
-                            if len(details) > 10:
-                                rp = detail_cell.add_paragraph()
-                                rn = rp.add_run(f'…（共{len(details)}项）')
-                                rn.font.size = Pt(FINE)
-                                break
-                    else:
-                        rn = dp.add_run(_safe(details[0]))
-                        rn.font.size = Pt(FINE)
+            _set_cell(t.cell(5, 0), '指标详情', bold=True)
+            details = ind.get('details', [])
+            if details and not ind.get('skipped', False):
+                _merge_row(t, 5, 1, 3)
+                detail_cell = t.cell(5, 1)
+                detail_cell.text = ''
+                dp = detail_cell.paragraphs[0]
+                if isinstance(details[0], dict):
+                    for d in details[:10]:
+                        rp = dp
+                        for k, v in list(d.items())[:4]:
+                            rp = detail_cell.add_paragraph()
+                            rn = rp.add_run(f'{k}: {_safe(v)}')
+                            rn.font.size = Pt(FINE)
+                        if len(details) > 10:
+                            rp = detail_cell.add_paragraph()
+                            rn = rp.add_run(f'…（共{len(details)}项）')
+                            rn.font.size = Pt(FINE)
+                            break
                 else:
-                    _merge_row(t, 5, 1, 3)
+                    rn = dp.add_run(_safe(details[0]))
+                    rn.font.size = Pt(FINE)
+            else:
+                _merge_row(t, 5, 1, 3)
 
     # ── Section 4: 关系人员汇总 ──
     doc.add_page_break()
@@ -586,16 +648,45 @@ def _build_standard_sections(doc, report):
     # ── Section 5: 开标信息表 ──
     _add_heading(doc, '五、开标信息表', H1, bold=True)
     files = report.get('_files', [])
-    bid_table = _add_table(doc, len(files) + 1, 15)
+    open_info = report.get('open_info') or {}
+    open_rows = open_info.get('rows', []) if isinstance(open_info, dict) else []
+    # 用开标表行数，若缺失则退化为投标文件数
+    row_count = max(len(open_rows), len(files))
+    bid_table = _add_table(doc, row_count + 1, 15)
     headers = ['序号', '开标时间', '投标单位', '联系人', '联系电话', '文件下载IP', '标书上传时间',
                '标书上传IP', '解密状态', '解密IP', '文件码', '加密锁', '报价方式', '投标报价', '备注']
     for j, hdr in enumerate(headers):
         _set_cell(bid_table.cell(0, j), hdr, bold=True, size=8)
-    for fi, fname in enumerate(files):
-        _set_cell(bid_table.cell(fi + 1, 0), str(fi + 1), size=8)
-        _set_cell(bid_table.cell(fi + 1, 2), _safe(fname), size=8)
-        for j in (1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
-            _set_cell(bid_table.cell(fi + 1, j), '', size=8)
+
+    def _fmt_price(v):
+        if v is None or v == '':
+            return ''
+        try:
+            num = float(str(v).replace(',', ''))
+            return f'{num / 10000:.2f}万元' if abs(num) >= 10000 else f'{num:.2f}元'
+        except (ValueError, TypeError):
+            return _safe(str(v))
+
+    for fi in range(row_count):
+        oi = open_rows[fi] if fi < len(open_rows) else {}
+        fname = str(oi.get('bidder', '') or (files[fi] if fi < len(files) else ''))
+        cells = {
+            0: str(fi + 1),
+            1: _safe(oi.get('open_time', '')),
+            2: _safe(fname),
+            3: _safe(oi.get('contact', '')),
+            4: _safe(oi.get('phone', '')),
+            12: _safe(oi.get('price_mode', '')),
+            13: _fmt_price(oi.get('bid_price')),
+            14: _safe(oi.get('remark', '')),
+        }
+        for j in range(15):
+            _set_cell(bid_table.cell(fi + 1, j), cells.get(j, ''), size=8)
+    if not open_rows and files:
+        note = doc.add_paragraph()
+        rn = note.add_run('（开标时间/联系人/报价等数据需导入开标信息表；IP/文件码/加密锁为交易平台字段，当前系统不采集）')
+        rn.font.size = Pt(FINE)
+        rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
     doc.add_paragraph()
 

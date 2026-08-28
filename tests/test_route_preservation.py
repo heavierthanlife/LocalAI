@@ -29,7 +29,7 @@ def _current_routes(app):
     return routes
 
 
-@pytest.mark.parametrize('expected_len', [381])
+@pytest.mark.parametrize('expected_len', [382])
 def test_route_count_stable(app, expected_len):
     """Total non-static route count must match the pre-refactor snapshot."""
     assert len(_current_routes(app)) == expected_len

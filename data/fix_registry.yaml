@@ -388,3 +388,35 @@ fixes:
       - type: grep
         file: static/js/app.js
         pattern: "statusCheck.ok"
+
+  - id: FIX-2026-08-28-009
+    title: "清标报告生产级升级 — 三节渲染/文本相似/开标信息表激活指标"
+    severity: high
+    rationale: >
+      Reference template comparison showed the mimic report was a draft:
+      (B1) section 三 (指标详情分析) never rendered any indicator tables —
+      a `continue` placed before the render loop made it dead code; (B2) text
+      similarity was always 0 because the TF-IDF matrix was never precomputed
+      in the clearance path; (B3) suspected-unit indicator counts were booleans.
+      Fix adds: per-indicator section-三 tables, TF-IDF wiring (with tender
+      template removal), real indicator counts, a clearance_openinfo service that
+      parses an uploaded 开标信息表 (Excel/CSV/JSON) and extracts 评审标准 from the
+      tender, activating 11 OPEN_INFO + 3 TENDER indicators, quote accuracy via
+      the 开标投标报价 column, and a preview_criteria endpoint for manual confirm.
+      Platform/IP indicators stay as explicit skips (technically infeasible).
+    checks:
+      - type: grep
+        file: app/services/document_analysis_svc.py
+        pattern: "sub_no}、{ind"
+      - type: grep
+        file: app/services/clearance_engine.py
+        pattern: "_precompute_tfidf_for_files"
+      - type: grep
+        file: app/services/clearance_openinfo.py
+        pattern: "def compute_open_info_indicators"
+      - type: grep
+        file: app/routes/clearance.py
+        pattern: "preview_criteria"
+      - type: grep_not
+        file: app/services/document_analysis_svc.py
+        pattern: "int.triggered_count > 0"

@@ -28,9 +28,12 @@ def _now_str():
 
 
 # ── 维度 1: 指标分析（纵向）────────────────────────────────────────
-def _run_indicator_analysis(file_data, user_id, thread_id):
+def _run_indicator_analysis(file_data, user_id, thread_id, tender_text=None,
+                            open_info=None, eval_criteria=None):
     from app.services.document_analysis_svc import run_analysis
-    report = run_analysis(file_data, user_id, thread_id)
+    report = run_analysis(file_data, user_id, thread_id,
+                          tender_text=tender_text, open_info=open_info,
+                          eval_criteria=eval_criteria)
     return {
         'basic_info': report['basic_info'],
         'suspected_units': report['suspected_units'],
@@ -42,18 +45,27 @@ def _run_indicator_analysis(file_data, user_id, thread_id):
 
 
 # ── 维度 2: 横向对比（横向）────────────────────────────────────────
-def _run_cross_comparison(file_data):
+def _run_cross_comparison(file_data, tender_text=None):
     from app.services.batch_orchestrator import (
         compute_all_pairs, build_key_info_matches, build_attr_details,
         cluster_order_by_risk, detect_gangs,
     )
+    from app.services.batch_compare_svc import _precompute_tfidf_for_files
     check_items = {
         'text_sim': True,
         'key_info': True,
         'file_attr': True,
         'image_sim': False,
     }
-    pairs, risk_matrix = compute_all_pairs(file_data, check_items)
+    # Precompute TF-IDF once so text similarity actually runs (was silently 0).
+    # Pass the tender doc as template_text so its boilerplate is stripped first.
+    tfidf_matrix = None
+    try:
+        _vec, tfidf_matrix = _precompute_tfidf_for_files(file_data, template_text=tender_text)
+    except Exception as e:
+        logger.warning(f"TF-IDF precompute failed, text sim will be 0: {e}")
+    pairs, risk_matrix = compute_all_pairs(
+        file_data, check_items, tfidf_matrix=tfidf_matrix, template_text=tender_text)
     filenames = [fd['filename'] for fd in file_data]
     n = len(filenames)
 
@@ -243,10 +255,12 @@ def _run_audit_supplement(file_data):
 
 # ── 主编排入口 ─────────────────────────────────────────────────────
 def run_clearance(file_data, tender_text, tender_name, options, user_id=None, thread_id=None, info_overrides=None,
-                  progress_cb=None):
+                  progress_cb=None, open_info=None, eval_criteria=None):
     """执行清标全维度分析，返回合并后的报告 dict。
 
     info_overrides: dict with keys like bid_number, bid_open_time, etc.
+    open_info:      structured 开标信息表 (parsed) or None.
+    eval_criteria:  structured 评审标准 (extracted from tender) or None.
     progress_cb: optional callable(percent:int, message:str) — heartbeat per
                  finished dimension so long stalls are visible in the sidebar.
     """
@@ -264,9 +278,11 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
     futures = {}
     with ThreadPoolExecutor(max_workers=4) as pool:
         if options.get('indicator_analysis', True):
-            futures['indicators'] = pool.submit(_run_indicator_analysis, file_data, user_id, thread_id)
+            futures['indicators'] = pool.submit(
+                _run_indicator_analysis, file_data, user_id, thread_id,
+                tender_text, open_info, eval_criteria)
         if options.get('cross_comparison', True):
-            futures['cross'] = pool.submit(_run_cross_comparison, file_data)
+            futures['cross'] = pool.submit(_run_cross_comparison, file_data, tender_text)
         if options.get('compliance_check', False) and tender_text:
             futures['compliance'] = pool.submit(_run_compliance_check, tender_text, tender_name, file_data)
         if options.get('ai_review', True):
@@ -312,6 +328,8 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
         'compliance': results.get('compliance'),
         'ai_review': results.get('ai'),
         'audit_supplement': results.get('audit'),
+        'open_info': open_info,
+        'eval_criteria': eval_criteria,
     }
 
     # 预警级别按最终总分（含合规严重违规加权）
@@ -335,12 +353,15 @@ from celery_app import celery as _celery_app
 @_celery_app.task(bind=True, name='clearance_task', max_retries=1,
                   soft_time_limit=2400, time_limit=2700)
 def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, tender_spec,
-                        options, user_id, thread_id, task_id, project_id=None, info_overrides=None):
+                        options, user_id, thread_id, task_id, project_id=None, info_overrides=None,
+                        open_info=None, eval_criteria=None):
     """Celery task: full clearance analysis → DOCX + PDF → ZIP → DB.
 
     file_data:  pre-extracted dicts (legacy small uploads)
     file_specs: [{'abs_path','filename'}] — extracted here in the worker,
                 page-by-page, so Flask never touches the big files.
+    open_info:      structured 开标信息表 dict (from clearance_openinfo).
+    eval_criteria:  structured 评审标准 dict (from clearance_openinfo).
     """
     from app.services.task_bus import TaskBus
     from app.services.document_analysis_svc import build_clearance_docx, convert_docx_to_pdf
@@ -397,7 +418,8 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
         bus.progress(65, '正在执行指标分析与横向对比...')
         report = run_clearance(all_file_data, tender_text, tender_name, options,
                                user_id=user_id, thread_id=thread_id, info_overrides=info_overrides,
-                               progress_cb=lambda pct, msg: bus.progress(pct, msg))
+                               progress_cb=lambda pct, msg: bus.progress(pct, msg),
+                               open_info=open_info, eval_criteria=eval_criteria)
 
         # ── 图片随机抽检说明（九章）──
         sampling = take_image_sampling_log()

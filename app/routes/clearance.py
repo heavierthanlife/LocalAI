@@ -10,6 +10,7 @@ Endpoints:
 """
 import json
 import logging
+import os
 import uuid
 
 from flask import Blueprint, Response, request, session
@@ -106,6 +107,25 @@ def run_clearance_route():
             tender_text = ttext
             tender_name = tender_file.filename
 
+    # 开标信息表（可选）— pre-uploaded id; 结构化解析（Excel/CSV/JSON）
+    open_info = None
+    eval_criteria = None
+    open_fid = request.form.get('open_info_file_id')
+    if open_fid:
+        oinfo = resolve_file(open_fid, user_id=user_id)
+        if oinfo and os.path.exists(oinfo['abs_path']):
+            from app.services.clearance_openinfo import parse_open_info_file, extract_eval_criteria
+            open_info = parse_open_info_file(oinfo['abs_path'], oinfo['filename'])
+            if not open_info.get('parsed'):
+                logger.warning(f"开标信息表解析失败: {open_info.get('error')}")
+                open_info = None
+            else:
+                logger.info(f"开标信息表解析: {len(open_info.get('rows', []))} 行")
+    # 评审标准：从招标文件自动提取（供预览 + 人工确认）
+    if tender_text:
+        from app.services.clearance_openinfo import extract_eval_criteria
+        eval_criteria = extract_eval_criteria(tender_text)
+
     # 分析维度选项
     try:
         options = json.loads(request.form.get('options', '{}') or '{}')
@@ -141,11 +161,51 @@ def run_clearance_route():
     celery.send_task(
         'clearance_task',
         args=[file_data, resolved, tender_text, tender_name, tender_spec,
-              options, user_id, thread_id, task_id, project_id, info_overrides],
+              options, user_id, thread_id, task_id, project_id, info_overrides,
+              open_info, eval_criteria],
         task_id=task_id,
     )
 
     return ok({'task_id': task_id, 'file_count': len(file_data) + len(resolved)})
+
+
+@clearance_bp.route('/preview_criteria', methods=['POST'])
+def preview_criteria():
+    """从招标文件提取评审标准供前端预览（决定 2：预览不合格可手动编辑或上传表格）。
+
+    Request: tender_file_id (pre-uploaded) or tender_file (direct upload).
+    Returns: {budget_price, plan_open_time, eval_method, score_points,
+              objective_rules, confidence, error}
+    """
+    if session.get('consent_value', 0) != 1:
+        return err("请先登录", "AUTH_REQUIRED", 401)
+    user_id = get_user_id()
+    if not user_id:
+        return err("Not logged in", "AUTH_REQUIRED", 401)
+
+    tender_text = None
+    tender_fid = request.form.get('tender_file_id')
+    if tender_fid:
+        from app.services.file_store import resolve as resolve_file
+        tinfo = resolve_file(tender_fid, user_id=user_id)
+        if tinfo and os.path.exists(tinfo['abs_path']):
+            from app.services.file_processing import extract_text_from_path
+            ttext, _ = extract_text_from_path(tinfo['abs_path'], tinfo['filename'])
+            if ttext and not ttext.startswith("["):
+                tender_text = ttext
+    tender_file = request.files.get('tender_file')
+    if not tender_text and tender_file and tender_file.filename:
+        from app.services.file_processing import extract_text_from_file
+        ttext, _ = extract_text_from_file(tender_file)
+        if ttext and not ttext.startswith("["):
+            tender_text = ttext
+
+    if not tender_text:
+        return ok({'error': '未提供招标文件，无法提取评审标准'})
+
+    from app.services.clearance_openinfo import extract_eval_criteria
+    criteria = extract_eval_criteria(tender_text)
+    return ok(criteria)
 
 
 @clearance_bp.route('/status/<task_id>', methods=['GET'])

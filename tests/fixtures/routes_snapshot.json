@@ -1185,6 +1185,12 @@
   "methods": [
    "POST"
   ],
+  "rule": "/clearance/preview_criteria"
+ },
+ {
+  "methods": [
+   "POST"
+  ],
   "rule": "/clearance/run"
  },
  {
