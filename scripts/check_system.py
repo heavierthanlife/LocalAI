@@ -331,7 +331,9 @@ _add('redis', 'Credit task registry Redis-backed', 'PASS' if credit_reg else 'FA
 admin_panel, _ = _grep_file('app/routes/admin.py', r'Blueprint|admin|overview|dashboard')
 _add('admin', 'Admin blueprint registered', 'PASS' if admin_panel else 'FAIL')
 
-db_tables_route, _ = _grep_file('app/routes/admin.py', r'db_tables|table_list|GET.*tables')
+# Admin family is split across admin.py + admin_* sub-modules; scan the whole dir.
+db_tables_route = _grep_dir('app/routes', r'admin_(knowledge_lab|ops|regeneration)\.py|admin_bp\.route\(.?/admin/db_tables')
+db_tables_route = db_tables_route or _grep_file('app/routes/admin.py', r'db_tables|table_list|GET.*tables')[0]
 _add('admin', 'Admin DB tables overview', 'PASS' if db_tables_route else 'FAIL')
 
 runtime_cfg, _ = _grep_file('app/services/runtime_config.py', r'get|set|save|load')
@@ -340,7 +342,8 @@ _add('admin', 'Runtime config service', 'PASS' if runtime_cfg else 'FAIL')
 user_mgmt, _ = _grep_file('app/routes/admin.py', r'user.*list|user.*add|user.*disable')
 _add('admin', 'Admin user management', 'PASS' if user_mgmt else 'FAIL')
 
-audit_log_route, _ = _grep_file('app/routes/admin.py', r'audit_log|audit.*log')
+audit_log_route = _grep_dir('app/routes', r'admin_bp\.route\(.?/admin/audit_log')
+audit_log_route = audit_log_route or _grep_file('app/routes/admin.py', r'audit_log|audit.*log')[0]
 _add('admin', 'Admin audit log view', 'PASS' if audit_log_route else 'FAIL')
 
 # ===========================================================================
