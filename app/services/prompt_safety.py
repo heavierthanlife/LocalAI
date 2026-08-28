@@ -266,14 +266,6 @@ def build_rag_priority_rules() -> str:
 
 # ── VL cross-check helper ──────────────────────────────────────────────
 
-_VL_CONSISTENCY_PROMPT = (
-    "Compare these two descriptions of the same image. "
-    "Are they describing the same key elements (objects, people, text, numbers)? "
-    "If there are contradictions in FACTS (numbers, names, quantities), list them. "
-    "If there are minor wording differences but same meaning, say CONSISTENT. "
-    "Reply in Chinese, keep it under 100 chars: CONSISTENT or list contradictions."
-)
-
 def vl_cross_check(desc1: str, desc2: str) -> dict:
     """Compare two VL descriptions for consistency. Returns {consistent: bool, note: str}.
 

@@ -298,3 +298,37 @@ fixes:
       - type: grep_not
         file: app/services/anonymous.py
         pattern: "FileLock"
+
+  - id: FIX-2026-08-28-005
+    title: "Prompt system — language consistency, guard dedup, dead-code removal"
+    severity: medium
+    rationale: >
+      Auditor review found (a) English prompts in an all-Chinese system
+      (JUDGE_PROMPT, STRUCTURED_PROMPT), (b) a generic "答疑助手" main prompt and a
+      stale 'Test prompt' override in data/agent_prompt.json that had replaced the
+      real default, (c) call_llm appending the anti-hallucination guard twice when
+      the system_prompt already embeds it, and (d) four dead prompt constants.
+      Fix: localize prompts to Chinese, upgrade the main prompt to a bidding-domain
+      expert identity, restore the real default into agent_prompt.json, dedup the
+      guard in call_llm, and delete dead code (BID_COMPARISON_SYSTEM,
+      build_bid_analysis_prompt, WIKI_LINT_SYSTEM_PROMPT, WIKI_UPDATE_INDEX_PROMPT,
+      _VL_CONSISTENCY_PROMPT).
+    checks:
+      - type: grep
+        file: app/services/judge_review.py
+        pattern: "你是一名严格的中文质量审查员"
+      - type: grep_not
+        file: app/services/judge_review.py
+        pattern: "You are a quality reviewer"
+      - type: grep
+        file: app/services/llm_provider.py
+        pattern: "guard not in system_prompt"
+      - type: grep_not
+        file: app/services/analysis_prompts.py
+        pattern: "BID_COMPARISON_SYSTEM"
+      - type: grep_not
+        file: app/services/wiki_prompts.py
+        pattern: "WIKI_LINT_SYSTEM_PROMPT"
+      - type: grep_not
+        file: app/services/prompt_safety.py
+        pattern: "_VL_CONSISTENCY_PROMPT"

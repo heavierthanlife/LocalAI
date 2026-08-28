@@ -257,3 +257,78 @@ def test_anonymous_uses_db_not_json_file():
         "anonymous.py must use the DB connection pool"
     assert 'FileLock' not in content, \
         "anonymous.py must not use file locks for history persistence"
+
+
+# ── FIX-2026-08-28-005: prompt system — language consistency + dedup + dead code ──
+def test_judge_prompt_is_chinese():
+    """JUDGE_PROMPT must be Chinese (all-else-Chinese system consistency)."""
+    with open('app/services/judge_review.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert '你是一名严格的中文质量审查员' in content, \
+        "JUDGE_PROMPT must be Chinese"
+    assert 'You are a quality reviewer' not in content, \
+        "JUDGE_PROMPT must not remain English"
+    assert 'You are a strict quality reviewer' not in content, \
+        "duplicate-role English SystemMessage must be removed"
+
+
+def test_structured_prompt_is_chinese():
+    """ingest_pipeline STRUCTURED_PROMPT must be Chinese."""
+    with open('app/services/ingest_pipeline.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert '你是一名专业的采购/招投标文档分析员' in content, \
+        "STRUCTURED_PROMPT must be Chinese"
+    assert 'You are a procurement document analyst' not in content, \
+        "STRUCTURED_PROMPT must not remain English"
+
+
+def test_main_agent_prompt_domain_expert():
+    """The default agent prompt must position as a bidding-domain expert, not generic 答疑助手."""
+    with open('app/globals.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert '中联招标智能助手' in content, \
+        "main prompt must identify as 中联招标智能助手"
+    assert '你是一个答疑助手' not in content, \
+        "main prompt must not be the generic 答疑助手"
+    # tool constraint must be generic, not hardcoding get_date/bocha_search
+    assert '使用系统提供的工具' in content, \
+        "tool constraint must be generic (auto-adapts to added tools)"
+
+
+def test_call_llm_guard_dedup():
+    """call_llm must not append the safety guard twice."""
+    with open('app/services/llm_provider.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'guard not in system_prompt' in content, \
+        "call_llm must dedup the safety guard (guard not in system_prompt)"
+
+
+def test_dead_prompts_removed():
+    """Dead prompt constants must not exist."""
+    with open('app/services/analysis_prompts.py', 'r', encoding='utf-8') as f:
+        a = f.read()
+    assert 'BID_COMPARISON_SYSTEM' not in a, \
+        "BID_COMPARISON_SYSTEM is dead code and must be removed"
+    assert 'build_bid_analysis_prompt' not in a, \
+        "build_bid_analysis_prompt is dead code and must be removed"
+    with open('app/services/wiki_prompts.py', 'r', encoding='utf-8') as f:
+        w = f.read()
+    assert 'WIKI_LINT_SYSTEM_PROMPT' not in w, \
+        "WIKI_LINT_SYSTEM_PROMPT is dead code and must be removed"
+    assert 'WIKI_UPDATE_INDEX_PROMPT' not in w, \
+        "WIKI_UPDATE_INDEX_PROMPT is dead code and must be removed"
+    with open('app/services/prompt_safety.py', 'r', encoding='utf-8') as f:
+        p = f.read()
+    assert '_VL_CONSISTENCY_PROMPT' not in p, \
+        "_VL_CONSISTENCY_PROMPT is dead code and must be removed"
+
+
+def test_agent_prompt_file_not_test_override():
+    """data/agent_prompt.json must not contain the broken 'Test prompt' override."""
+    import json
+    with open('data/agent_prompt.json', 'r', encoding='utf-8') as f:
+        saved = json.load(f).get('prompt', '')
+    assert saved.strip() != 'Test prompt', \
+        "agent_prompt.json must not hold the leftover 'Test prompt' override"
+    assert len(saved.strip()) > 100, \
+        "agent_prompt.json should hold the real (long) default prompt"

@@ -89,52 +89,6 @@ WIKI_EXTRACT_USER_PROMPT = """请读取以下源文档，提取其中的 wiki �
 请按照系统提示的 JSON 格式输出提取结果，包含更新、新建页面和索引更新。""" + _SAFETY
 
 
-WIKI_LINT_SYSTEM_PROMPT = """你是一个 wiki 质量审查员。请检查当前 wiki 的结构健康度，识别以下四类问题：
-
-【检查维度】
-1. **孤立页面（orphan）**：没有任何其他 wiki 页面通过 `[[wikilink]]` 链接到该页面
-2. **矛盾声明（contradiction）**：不同页面之间对同一事实的描述存在矛盾
-3. **缺失链接（missing_link）**：页面内容中提到了概念或实体名称，但该名称有对应的 wiki 页面却没有使用 `[[wikilink]]` 链接
-4. **陈旧内容（stale）**：页面包含明确的时效性信息（日期、政策、标准号等）但未标注已过时
-
-【输出格式】
-返回一个 JSON 数组，每个元素为：
-{{
-  "type": "orphan|contradiction|missing_link|stale",
-  "page_path": "问题所在的页面路径",
-  "description": "问题的具体描述",
-  "suggestion": "建议的修复方案"
-}}
-
-注意：
-- 仅根据 wiki 页面内容本身判断，不参考外部知识
-- 对于矛盾声明，必须引用两个页面的原文作为依据
-- 不要误报——如果页面内容正确且链接完备，不需要报告""" + _SAFETY
-
-
-WIKI_UPDATE_INDEX_PROMPT = """你是 wiki 首页的维护者。请根据当前 index.md 的内容和新页面信息，更新 index.md。
-
-【当前 index.md】
----
-{current_index}
----
-
-【新增页面信息】
-{new_pages_info}
-
-请执行以下操作：
-1. 检查新增页面是否已在 index.md 的目录条目中列出
-2. 如果未列出，在新页面对应的分类下添加条目
-3. 如果当前 index.md 缺少合适的分类，可以新增分类
-4. 保持现有的分类结构和格式不变
-
-【输出要求】
-- 只输出完整的 index.md 内容（包含 YAML frontmatter，如果原 index.md 有的话）
-- 不要添加任何多余的解释、说明或 markdown 代码块标记
-- 不要修改已有条目的内容，除非需要修复明显的错误
-- 新增条目的格式应与现有条目保持一致""" + _SAFETY
-
-
 # ── Entity extraction prompts ──
 
 WIKI_ENTITY_EXTRACT_SYSTEM = """你是一个专业的文档分析员，负责从文档中识别关键实体。

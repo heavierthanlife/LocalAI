@@ -229,7 +229,8 @@ def call_llm(
     )
     safe_user = sanitize_for_prompt(user_prompt, 'user_query')
     safe_user = wrap_user_content(safe_user, 'USER_QUERY')
-    safe_system = system_prompt + build_safe_system_guard()
+    guard = build_safe_system_guard()
+    safe_system = system_prompt + guard if system_prompt and guard not in system_prompt else system_prompt
 
     # Try industry-specific model first, fall back to default
     llm = None

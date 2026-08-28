@@ -18,6 +18,7 @@ from PIL import Image
 import fitz  # PyMuPDF for PDF
 
 from app.config import DATA_DIR
+from app.services.prompt_safety import build_safe_system_guard
 
 logger = logging.getLogger(__name__)
 
@@ -329,9 +330,9 @@ def reject_kb_chunk(task_id: str, chunk_index: int) -> bool:
 
 # ── Pipeline D: AI Structured Document Extraction ──
 
-STRUCTURED_PROMPT = """You are a procurement document analyst. Extract structured data from the following Chinese bidding/procurement document text.
+STRUCTURED_PROMPT = """你是一名专业的采购/招投标文档分析员。请从以下中文招投标文档文本中提取结构化数据。
 
-Identify and extract these fields if present (return JSON only, no explanation):
+请识别并提取以下字段（如存在；只输出 JSON，不要解释）：
 {
   "document_type": "bidding_announcement | evaluation_report | contract | qualification | other",
   "project_name": "...",
@@ -339,18 +340,17 @@ Identify and extract these fields if present (return JSON only, no explanation):
   "procurement_agency": "...",
   "bid_opening_date": "...",
   "evaluation_method": "comprehensive_scoring | lowest_price | other",
-  "budget_amount_cny": number or null,
+  "budget_amount_cny": number 或 null,
   "bid_sections": ["section1", "section2"],
   "key_requirements": ["req1", "req2"],
-  "winning_bidder": "..." or null,
-  "winning_amount_cny": number or null,
+  "winning_bidder": "..." 或 null,
+  "winning_amount_cny": number 或 null,
   "contract_parties": ["partyA", "partyB"],
   "deadline_date": "...",
-  "summary": "1-2 sentence summary"
+  "summary": "1-2 句摘要"
 }
 
-If a field is not found, use null. Only output valid JSON. Do NOT wrap in ```json fences. Do NOT add commentary. Only output the JSON object."""
-from app.services.prompt_safety import build_safe_system_guard
+如果找不到某字段，使用 null。只输出合法 JSON，不要用 ```json 代码块包裹，不要附加任何说明。仅输出 JSON 对象。"""
 STRUCTURED_PROMPT += build_safe_system_guard()
 
 

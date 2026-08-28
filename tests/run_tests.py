@@ -117,12 +117,9 @@ def _():
 @test("analysis_prompts imports cleanly")
 def _():
     from app.services.analysis_prompts import (
-        BID_COMPARISON_SYSTEM, WORK_REPORT_SYSTEM,
-        build_bid_analysis_prompt, build_work_report_prompt
+        WORK_REPORT_SYSTEM, build_work_report_prompt
     )
-    assert isinstance(BID_COMPARISON_SYSTEM, str) and len(BID_COMPARISON_SYSTEM) > 50
     assert isinstance(WORK_REPORT_SYSTEM, str) and len(WORK_REPORT_SYSTEM) > 50
-    assert callable(build_bid_analysis_prompt)
     assert callable(build_work_report_prompt)
 
 

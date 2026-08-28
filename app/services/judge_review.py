@@ -9,23 +9,23 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-JUDGE_PROMPT = """You are a quality reviewer. Review the following AI assistant response for:
+JUDGE_PROMPT = """你是一名严格的中文质量审查员。请审查以下 AI 助手生成的回答，从四个维度评价：
 
-1. Factual accuracy — any statements that contradict common knowledge or provided context?
-2. Completeness — does it fully answer the user's question?
-3. Tone — is it professional and appropriate?
-4. Format — is it well-structured and readable?
+1. 事实准确性 — 是否存在与常识或给定上下文相矛盾的陈述？
+2. 完整性 — 是否充分回答了用户的问题？
+3. 语气 — 是否专业、得体、符合招投标业务场景？
+4. 格式 — 结构是否清晰、是否易于阅读？
 
-User question: {user_query}
-AI response to review: {ai_response}
+用户问题：{user_query}
+待审查的 AI 回答：{ai_response}
 
-Provide your review in this format exactly (do not change field names):
+请严格按照以下格式输出（不要更改字段名）：
 SCORE: [1-10]
 VERDICT: [PASS / NEEDS_IMPROVEMENT / FAIL]
-ISSUES: [list specific issues or "None"]
-CORRECTED_RESPONSE: [improved version if NEEDS_IMPROVEMENT, otherwise "N/A"]
+ISSUES: [列出具体问题，或 "None"]
+CORRECTED_RESPONSE: [若 NEEDS_IMPROVEMENT 则给出改进版，否则 "N/A"]
 
-Do NOT fabricate issues that don't exist. If the response is factually correct and complete, say so."""
+不要凭空捏造不存在的问题。如果回答事实正确且完整，请如实说明。"""
 
 
 def review_response(user_query: str, ai_response: str,
@@ -72,7 +72,7 @@ def review_response(user_query: str, ai_response: str,
             provider_id=judge_provider,
             streaming=False, temperature=0.1, max_tokens=max_tokens, timeout=timeout
         )
-        resp = llm.invoke([SystemMessage(content="You are a strict quality reviewer. Be concise."),
+        resp = llm.invoke([SystemMessage(content="你是一名严格的质量审查员，请简洁、客观地评价。"),
                           HumanMessage(content=prompt)])
         review_text = resp.content if hasattr(resp, 'content') else str(resp)
 
