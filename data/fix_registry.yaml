@@ -224,3 +224,38 @@ fixes:
       - type: grep_not
         file: app/services/law_monitor.py
         pattern: "cur if .cur. in dir"
+
+  - id: FIX-2026-08-28-001
+    title: "/api/graph endpoints require login + project-membership check"
+    severity: critical
+    rationale: >
+      All five /api/graph endpoints (collusion/compliance/law-impact/citation/types)
+      had zero authentication, exposing bidder collusion and compliance data to
+      anonymous callers and allowing any logged-in user to read any project's graph
+      via arbitrary project_id (IDOR). Fix applies login_required to all routes and
+      _require_project_access (admin bypass, others must be project members) on
+      project_id-bearing routes.
+    checks:
+      - type: grep
+        file: app/routes/graph.py
+        pattern: "@login_required"
+      - type: grep
+        file: app/routes/graph.py
+        pattern: "_require_project_access"
+
+  - id: FIX-2026-08-28-002
+    title: "Admin PIN fails closed in production (no weak 123456 default)"
+    severity: high
+    rationale: >
+      When APP_ENV=production and neither ADMIN_PIN nor ADMIN_PASSWORD_HASH is set,
+      create_app now raises instead of silently using the weak default 123456.
+      Development keeps the 123456 fallback but logs a prominent warning.
+      docker-compose sets APP_ENV=production and ADMIN_PIN default to empty so a
+      missing PIN is never masked.
+    checks:
+      - type: grep
+        file: app/__init__.py
+        pattern: "app_env == .production. and not admin_pin"
+      - type: grep
+        file: docker-compose.yml
+        pattern: "APP_ENV=production"

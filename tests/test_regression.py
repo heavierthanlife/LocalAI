@@ -141,3 +141,57 @@ def test_law_monitor_no_stale_cursor():
         "law_monitor.py must pass a live cursor to _compute_impact (not closed cursor)"
     assert "cur if 'cur' in dir()" not in content, \
         "law_monitor.py must not use stale cursor fallback pattern"
+
+
+# ── FIX-2026-08-28-001: /api/graph endpoints require login ──
+def test_graph_endpoints_require_login(app):
+    """Anonymous callers must be rejected; logged-in user must be allowed."""
+    client = app.test_client()
+
+    # Anonymous (no session) → rejected
+    r = client.get('/api/graph/types')
+    assert r.status_code == 403, "Anonymous /api/graph/types must be rejected (403)"
+
+    # Simulate a logged-in admin session (bypasses DB-backed /login)
+    with client.session_transaction() as sess:
+        sess['user_id'] = 'test-admin'
+        sess['consent_value'] = 1
+        sess['username'] = 'admin'
+        sess['role'] = 'admin'
+        sess['is_auditor'] = True
+
+    r = client.get('/api/graph/types')
+    assert r.status_code == 200, f"Authed /api/graph/types must succeed: {r.status_code}"
+
+
+def test_graph_source_has_login_required():
+    """graph.py must keep login_required on every route."""
+    with open('app/routes/graph.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert content.count('@login_required') == 5, \
+        "graph.py must decorate all 5 endpoints with @login_required"
+    assert '_require_project_access' in content, \
+        "graph.py must enforce project-membership (IDOR) check"
+
+
+# ── FIX-2026-08-28-002: admin PIN fail-closed in production ──
+def test_admin_pin_production_fail_closed():
+    """APP_ENV=production without ADMIN_PIN/ADMIN_PASSWORD_HASH must refuse to start."""
+    with open('app/__init__.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'app_env == "production" and not admin_pin' in content, \
+        "create_app must fail closed in production when ADMIN_PIN is missing"
+    assert 'requires ADMIN_PIN or ADMIN_PASSWORD_HASH' in content, \
+        "fail-closed error must mention ADMIN_PIN / ADMIN_PASSWORD_HASH"
+    assert 'weak default' in content, \
+        "development fallback must log a weak-default warning"
+
+
+def test_compose_sets_app_env_production():
+    """docker-compose must set APP_ENV=production (so prod is fail-closed)."""
+    with open('docker-compose.yml', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'APP_ENV=production' in content, \
+        "docker-compose app service must set APP_ENV=production"
+    assert 'ADMIN_PIN=${ADMIN_PIN:-}' in content, \
+        "compose must not default ADMIN_PIN to 123456"

@@ -32,7 +32,9 @@ services:
       # App config
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-change-me-in-production}
       - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:-change-me-in-production}
-      - ADMIN_PIN=${ADMIN_PIN:-123456}
+      - APP_ENV=production
+      # ADMIN_PIN must be set in .env — production refuses to start without it
+      - ADMIN_PIN=${ADMIN_PIN:-}
       - LLM_TIMEOUT=120
       - WORKERS=4
       # Search

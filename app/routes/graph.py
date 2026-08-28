@@ -4,16 +4,39 @@ from flask import Blueprint, request, session
 from app.services.graph_protocol import GraphNode, GraphEdge, to_graph_response
 from app.utils.helpers import ok, err
 from app.database import get_db_connection
+from app.routes.admin import login_required, is_admin, get_user_role_in_project
 
 graph_bp = Blueprint('graph', __name__, url_prefix='/api/graph')
 
 
+def _require_project_access(project_id):
+    """Return an error response if the current user cannot access the project.
+
+    Admin/manager bypass the membership check; other logged-in users must have
+    a role in the project (prevents IDOR across projects).
+    """
+    user_id = session.get('user_id')
+    if is_admin():
+        return None
+    if not user_id:
+        return err("Not logged in", "AUTH_REQUIRED", 401)
+    role = get_user_role_in_project(project_id, user_id)
+    if role is None:
+        return err("无权访问该项目", "FORBIDDEN", 403)
+    return None
+
+
 @graph_bp.route('/collusion')
+@login_required
 def collusion_graph():
     project_id = request.args.get('project_id', '').strip()
     threshold = float(request.args.get('threshold', 0.5))
     if not project_id:
         return err('project_id is required', 'MISSING_PARAM', 400)
+
+    access_err = _require_project_access(project_id)
+    if access_err:
+        return access_err
 
     task_ids = _get_project_task_ids(project_id)
     if not task_ids:
@@ -33,10 +56,15 @@ def collusion_graph():
 
 
 @graph_bp.route('/compliance')
+@login_required
 def compliance_graph():
     project_id = request.args.get('project_id', '').strip()
     if not project_id:
         return err('project_id is required', 'MISSING_PARAM', 400)
+
+    access_err = _require_project_access(project_id)
+    if access_err:
+        return access_err
 
     task_ids = _get_project_task_ids(project_id)
     nodes = {}
@@ -52,6 +80,7 @@ def compliance_graph():
 
 
 @graph_bp.route('/law-impact')
+@login_required
 def law_impact_graph():
     law_id = request.args.get('law_id', '').strip()
     depth = int(request.args.get('depth', 3))
@@ -75,12 +104,16 @@ def law_impact_graph():
 
 
 @graph_bp.route('/citation')
+@login_required
 def citation_graph():
     root_path = request.args.get('path', '').strip()
     project_id = request.args.get('project_id', type=int)
     depth = int(request.args.get('depth', 2))
 
     if project_id and not root_path:
+        access_err = _require_project_access(str(project_id))
+        if access_err:
+            return access_err
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
@@ -107,6 +140,7 @@ def citation_graph():
 
 
 @graph_bp.route('/types')
+@login_required
 def graph_types():
     return ok({
         'types': [

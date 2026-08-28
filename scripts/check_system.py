@@ -313,6 +313,14 @@ _add('security', 'Admin permission checks', 'PASS' if admin_required else 'FAIL'
 _type_whitelist, _ = _grep_file('app/services/file_processing.py', r'allowed_file|ALLOWED_EXTENSIONS')
 _add('security', 'File upload type whitelist', 'PASS' if _type_whitelist else 'FAIL')
 
+# Graph endpoints require login (C5 fix)
+graph_auth, _ = _grep_file('app/routes/graph.py', r'@login_required')
+_add('security', 'Graph API requires login', 'PASS' if graph_auth else 'FAIL')
+
+# Admin PIN fails closed in production (C6 fix)
+pin_fail_closed, _ = _grep_file('app/__init__.py', r'app_env == "production" and not admin_pin')
+_add('security', 'Admin PIN fail-closed in production', 'PASS' if pin_fail_closed else 'FAIL')
+
 # ===========================================================================
 # 9. Admin Features
 # ===========================================================================

@@ -104,11 +104,25 @@ def create_app():
     # Rate limiting — init with Flask app
     limiter.init_app(app)
 
-    # Admin password — auto-generate from ADMIN_PIN if not explicitly set
+    # Admin password — auto-generate from ADMIN_PIN if not explicitly set.
+    # Production (APP_ENV=production) fails closed: no ADMIN_PIN / ADMIN_PASSWORD_HASH
+    # means the app refuses to start rather than silently using the weak default.
     ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
     if not ADMIN_PASSWORD_HASH:
         from werkzeug.security import generate_password_hash
-        admin_pin = os.getenv("ADMIN_PIN", "123456")
+        app_env = os.getenv("APP_ENV", "development").lower()
+        admin_pin = os.getenv("ADMIN_PIN")
+        if app_env == "production" and not admin_pin:
+            raise RuntimeError(
+                "APP_ENV=production requires ADMIN_PIN or ADMIN_PASSWORD_HASH. "
+                "Set one in the environment before starting the app."
+            )
+        if not admin_pin:
+            app.logger.warning(
+                "ADMIN_PIN not set — using the weak default '123456' for development. "
+                "Set ADMIN_PIN (or ADMIN_PASSWORD_HASH) before deploying."
+            )
+            admin_pin = "123456"
         ADMIN_PASSWORD_HASH = generate_password_hash(admin_pin)
     app.config['ADMIN_PASSWORD_HASH'] = ADMIN_PASSWORD_HASH
 

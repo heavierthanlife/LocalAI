@@ -130,7 +130,7 @@ _(2/5 verified automatically)_
 
 ## SECURITY
 
-_(8/8 verified automatically)_
+_(10/10 verified automatically)_
 
 - [x] SECRET_KEY set in env
 - [x] .env file exists
@@ -140,6 +140,8 @@ _(8/8 verified automatically)_
 - [x] Session signing enabled
 - [x] Admin permission checks
 - [x] File upload type whitelist
+- [x] Graph API requires login
+- [x] Admin PIN fail-closed in production
 
 ## ADMIN
 
@@ -181,8 +183,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 111 |
+| [x] Pass | 113 |
 | [?] Manual | 4 |
-| **Total** | **115** |
+| **Total** | **117** |
 
-**Verification rate**: 111/115 auto-verified (96%)
+**Verification rate**: 113/117 auto-verified (96%)
