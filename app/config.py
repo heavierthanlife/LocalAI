@@ -72,8 +72,12 @@ LOGGING_CONFIG = {
     'root': {'level': 'DEBUG', 'handlers': ['console', 'file']},
 }
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # Wrap stdout/stderr with UTF-8 to avoid GBK decode crashes on emoji/logs.
+    # Guard for objects without a .buffer (e.g. StringIO under test tooling).
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
