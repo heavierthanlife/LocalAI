@@ -1,3 +1,4 @@
+"""Batch ingest of source documents into the project wiki."""
 import os, logging, json
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple

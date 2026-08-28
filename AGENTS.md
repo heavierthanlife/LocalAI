@@ -60,6 +60,7 @@ Every feature upgrade must include regression verification:
 - **Actual schema**: `app/database.py:init_postgres_tables()` — idempotent `CREATE TABLE IF NOT EXISTS`
 - **Migrations tool**: `python scripts/manage_db.py [check|migrate|rollback|history|snapshot]`
 - New migration files go in `migrations/` with `.sql` + `.rollback.sql` pairs
+- **Anonymous chat history**: `anon_chat_messages(thread_id PK, messages JSONB, updated_at)` — PostgreSQL-backed, atomic UPSERT append via `app/services/anonymous.py` (replaced per-thread JSON files)
 
 ## Key conventions
 

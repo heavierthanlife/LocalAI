@@ -1,3 +1,4 @@
+"""Bid template CRUD, version snapshot, and .docx import/export."""
 # ── Bid Template Service ──
 # CRUD + version snapshot + .docx import/export
 

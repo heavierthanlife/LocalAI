@@ -1,3 +1,4 @@
+"""Law version management: listing, activation, and diff computation."""
 # ── Law Version Service ──
 # Handles law version management: listing, activation, diff computation
 

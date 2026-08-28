@@ -49,6 +49,9 @@ stdout.txt
 stderr.txt
 localai-run*.log
 pycorrector-*.tar.gz
+# 本地证书/驱动 — 不入库, 缺失时自动回退 (run.py adhoc SSL, webdriver-manager 自动下载)
+cert/
+msedgedriver.exe
 .playwright-mcp/
 data/pytest_err.txt
 data/pet_command.json

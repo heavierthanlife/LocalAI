@@ -1,3 +1,4 @@
+"""Compute structured diffs between bid_template_versions."""
 # ── Template Diff Service ──
 # Computes structured diffs between bid_template_versions
 

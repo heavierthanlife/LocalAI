@@ -185,11 +185,12 @@ def _run_table_creation(cur: "PgCursor"):
             meta_data JSONB DEFAULT '{}', original_name TEXT, UNIQUE (thread_id, filename)
         )
     """)
-    # Migrate existing integer columns to bigint to support files > 2GB
+    # Migrate existing integer columns to bigint to support files > 2GB.
+    # Only swallow "column does not exist" (fresh-schema no-op); real errors surface.
     cur.execute("""
         DO $$ BEGIN
             ALTER TABLE user_files ALTER COLUMN size_bytes TYPE BIGINT;
-        EXCEPTION WHEN others THEN NULL;
+        EXCEPTION WHEN undefined_column THEN NULL;
         END $$;
     """)
     cur.execute("""
@@ -199,7 +200,7 @@ def _run_table_creation(cur: "PgCursor"):
             BEGIN ALTER TABLE user_files ADD COLUMN IF NOT EXISTS meta_data JSONB DEFAULT '{}'; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE user_files ADD COLUMN IF NOT EXISTS original_expires_at TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END;
             BEGIN ALTER TABLE user_files ADD COLUMN IF NOT EXISTS original_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
-            BEGIN ALTER TABLE user_files ALTER COLUMN expires_at DROP DEFAULT; EXCEPTION WHEN others THEN NULL; END;
+            BEGIN ALTER TABLE user_files ALTER COLUMN expires_at DROP DEFAULT; EXCEPTION WHEN undefined_column THEN NULL; END;
         END $$;
     """)
     cur.execute("UPDATE user_files SET original_name = filename WHERE original_name IS NULL")

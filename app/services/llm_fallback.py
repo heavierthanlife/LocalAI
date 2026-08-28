@@ -1,4 +1,4 @@
-﻿"""LLM provider fallback chain with circuit breaker.
+"""LLM provider fallback chain with circuit breaker.
 
 Auto-fallback across ordered providers on failure.
 Circuit breaker uses exponential backoff per (provider, model) pair.
