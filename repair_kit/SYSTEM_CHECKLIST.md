@@ -20,9 +20,9 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(28/28 verified automatically)_
+_(31/31 verified automatically)_
 
-- [x] Route module files exist: 27
+- [x] Route module files exist: 30
 - [x] Route: admin.py
 - [x] Route: admin_knowledge_lab.py
 - [x] Route: admin_ops.py
@@ -32,6 +32,9 @@ _(28/28 verified automatically)_
 - [x] Route: batch.py
 - [x] Route: cases.py
 - [x] Route: chat.py
+- [x] Route: chat_config.py
+- [x] Route: chat_files.py
+- [x] Route: chat_sessions.py
 - [x] Route: clearance.py
 - [x] Route: compliance.py
 - [x] Route: credit.py
@@ -193,8 +196,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 123 |
+| [x] Pass | 126 |
 | [?] Manual | 4 |
-| **Total** | **127** |
+| **Total** | **130** |
 
-**Verification rate**: 123/127 auto-verified (96%)
+**Verification rate**: 126/130 auto-verified (96%)
