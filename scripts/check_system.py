@@ -352,7 +352,7 @@ _add('integration', 'Chat send endpoint', 'PASS' if chat_send_found else 'FAIL')
 rag_found = _grep_dir('app/services', r'retrieve|RAG|rag_retrieve')
 _add('integration', 'RAG retrieval', 'PASS' if rag_found else 'FAIL')
 
-knowledge_search, _ = _grep_file('app/routes/knowledge.py', r'search|retrieve|query')
+knowledge_search = _grep_dir('app/routes', r'knowledge_lab/(list|search)|company_kb/search|search_company_kb|search_knowledge')
 _add('integration', 'Knowledge lab search', 'PASS' if knowledge_search else 'FAIL')
 
 wiki_routes, _ = _grep_file('app/routes/wiki.py', r'Blueprint|create|edit|search')

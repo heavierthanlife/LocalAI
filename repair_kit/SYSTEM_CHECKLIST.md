@@ -20,9 +20,9 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(19/19 verified automatically)_
+_(25/25 verified automatically)_
 
-- [x] Route module files exist: 18
+- [x] Route module files exist: 24
 - [x] Route: admin.py
 - [x] Route: audit.py
 - [x] Route: auth.py
@@ -35,6 +35,12 @@ _(19/19 verified automatically)_
 - [x] Route: document_analysis.py
 - [x] Route: graph.py
 - [x] Route: knowledge.py
+- [x] Route: knowledge_company_kb.py
+- [x] Route: knowledge_ingest.py
+- [x] Route: knowledge_notebook.py
+- [x] Route: knowledge_shared.py
+- [x] Route: knowledge_style.py
+- [x] Route: knowledge_training.py
 - [x] Route: projects.py
 - [x] Route: tasks.py
 - [x] Route: templates.py
@@ -184,8 +190,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 114 |
+| [x] Pass | 120 |
 | [?] Manual | 4 |
-| **Total** | **118** |
+| **Total** | **124** |
 
-**Verification rate**: 114/118 auto-verified (96%)
+**Verification rate**: 120/124 auto-verified (96%)
