@@ -58,4 +58,18 @@ data/current_state.yaml
 data/test_out*.txt
 test.txt
 data/user_laws/
+# JSON 全局排除改为定向规则 — 保留已跟踪的配置/夹具 JSON (见 ! 否定)
 *.json
+!skills-lock.json
+!static/manifest.json
+!data/laws/_seed_summary.json
+!data/laws/extended_laws.json
+!data/laws/regions.json
+!data/laws/seed_laws.json
+!data/runtime_config.json
+!data/runtime_config_factory.json
+!data/skill_audit_cache.json
+!tests/mock_data/llm/*.json
+!tests/fixtures/*.json
+!tools/skill-mcp/package.json
+!tools/skill-mcp/package-lock.json
