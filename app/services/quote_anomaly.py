@@ -20,6 +20,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from itertools import chain
 from typing import Optional
 
 import numpy as np
@@ -145,41 +146,49 @@ _PERCENT = re.compile(
     re.IGNORECASE,
 )
 _CN_PRICE = re.compile(
-    r'(?P<cn>[零一二两三四五六七八九壹贰叁肆伍陆柒捌玖拾佰仟万亿]+(?:万|亿)?)'
+    # cn 组要求至少含一个数字字符（排除独立匹配 "万"/"亿" → 假 10000/1e8），
+    # 保留 拾佰仟 位值字符以支持 壹佰贰拾万元 类写法
+    r'(?P<cn>(?:[零一二两三四五六七八九壹贰叁肆伍陆柒捌玖拾佰仟]+[万亿]?|[万亿](?=[零一二两三四五六七八九壹贰叁肆伍陆柒捌玖]))+)'
     r'\s*(?P<unit>元|万元|元人民币|万人民币元|亿元)',
     re.IGNORECASE,
 )
 
 
 def extract_prices(text: str) -> list[float]:
-    """Extract numeric prices from bid text (Arabic + Chinese numerals)."""
-    prices = []
-    for m in _DECIMAL_ARABIC.finditer(text):
-        try:
-            val = float(m.group('num').replace(',', ''))
-            unit = m.group('unit') or ''
-            if '万' in unit:
-                val *= 10000
-            elif '亿' in unit:
-                val *= 100000000
-            if val > 0 and val < 1e12:
-                prices.append(val)
-        except (ValueError, IndexError):
-            continue
+    """Extract numeric prices from bid text (Arabic + Chinese numerals).
 
-    for m in _CN_PRICE.finditer(text):
+    Dedupes by (value, span) across both _DECIMAL_ARABIC and _CN_PRICE so the
+    same price is never double-counted (FIX-011).
+    """
+    prices = []
+    seen = set()
+
+    for m in chain(_DECIMAL_ARABIC.finditer(text), _CN_PRICE.finditer(text)):
         try:
-            val = _cn_to_arabic(m.group('cn'))
-            if val is None:
+            if m.groupdict().get('num'):
+                val = float(m.group('num').replace(',', ''))
+                unit = m.group('unit') or ''
+                if '万' in unit:
+                    val *= 10000
+                elif '亿' in unit:
+                    val *= 100000000
+            elif m.groupdict().get('cn'):
+                val = _cn_to_arabic(m.group('cn'))
+                if val is None:
+                    continue
+                unit = m.group('unit') or ''
+                if '万' in unit:
+                    val *= 10000
+                elif '亿' in unit:
+                    val *= 100000000
+            else:
                 continue
-            unit = m.group('unit') or ''
-            if '万' in unit:
-                val *= 10000
-            elif '亿' in unit:
-                val *= 100000000
             if val > 0 and val < 1e12:
-                prices.append(val)
-        except Exception:
+                key = (round(val, 2), m.span())
+                if key not in seen:
+                    seen.add(key)
+                    prices.append(val)
+        except (ValueError, IndexError, TypeError):
             continue
     return prices
 
@@ -233,6 +242,8 @@ class QuoteAnomalyResult:
     abnormal_drop_flag: bool = False
     clustering_flag: bool = False
     progression_type: str = ''
+    tailing_digits_flag: bool = False
+    tailing_digits_info: dict = field(default_factory=dict)
     benford_deviation: float = 0.0
     risk_score: float = 0.0
     details: list[str] = field(default_factory=list)
@@ -386,6 +397,28 @@ def _detect_progression(prices: list[float], tolerance: float = 0.02) -> tuple[b
     return False, '', []
 
 
+def _detect_tailing_digits(prices: list[float], threshold: float = 0.8, digits: int = 2) -> tuple[bool, dict]:
+    """CSDN 模型第一信号：报价尾数（后 digits 位）相同比例 ≥ threshold → 串标嫌疑。
+
+    Returns: (flag, {'rate': float, 'digit': str, 'count': int, 'total': int}).
+    """
+    if len(prices) < 3:
+        return False, {}
+    tails = []
+    for p in prices:
+        if p and p > 0:
+            s = str(int(p))
+            # 取整数部分后 digits 位（如 1234567 → '67'；1000000 → '00'）
+            tails.append(s[-digits:] if len(s) >= digits else s)
+    if len(tails) < 3:
+        return False, {}
+    digit, count = Counter(tails).most_common(1)[0]
+    rate = count / len(tails)
+    if rate >= threshold:
+        return True, {'rate': round(rate, 2), 'digit': digit, 'count': count, 'total': len(tails)}
+    return False, {}
+
+
 def check_quote_anomaly(
     text: str,
     doc_name: str = "",
@@ -474,6 +507,15 @@ def check_quote_anomaly(
         result.details.append(f"报价呈{label}规律分布（{len(pidx)} 个报价），存在定向陪标嫌疑")
         result.matched_prices['progression'] = [prices[i] for i in pidx]
 
+    # 报价尾数相同（CSDN 第一信号：尾数相同比例 ≥80%）
+    tail_flag, tail_info = _detect_tailing_digits(prices)
+    result.tailing_digits_flag = tail_flag
+    result.tailing_digits_info = tail_info
+    if tail_flag:
+        result.details.append(
+            f"报价尾数高度一致（尾数 {tail_info['digit']} 占 {tail_info['rate']:.0%}，"
+            f"{tail_info['count']}/{tail_info['total']}），存在围标嫌疑")
+
     # Benford's Law (Nigrini 分级 + 卡方 + Z 检验)
     benford_res = _benford_deviation(prices, min_samples=cfg['min_benford'])
     result.benford_deviation = benford_res['mad']
@@ -502,6 +544,8 @@ def check_quote_anomaly(
         score += 20.0
     if result.progression_type:
         score += 25.0
+    if result.tailing_digits_flag:
+        score += 15.0
     if result.cv < cfg['cv_low']:
         score += 15.0
     if result.benford_deviation > cfg['benford']:
@@ -554,6 +598,8 @@ def compare_bidders_quotes(
             'abnormal_drop_flag': res.abnormal_drop_flag,
             'clustering_flag': res.clustering_flag,
             'progression_type': res.progression_type,
+            'tailing_digits_flag': res.tailing_digits_flag,
+            'tailing_digits_info': res.tailing_digits_info,
             'benford_deviation': res.benford_deviation,
             'prices': res.prices[:20],
             'percentages': res.percentages[:20],
@@ -569,6 +615,7 @@ def compare_bidders_quotes(
     cross_clustering, cross_clusters = _detect_clustering(main_prices, min_cluster_size=cfg['min_cluster'],
                                                           bandwidth_factor=cfg['bandwidth'])
     cross_progression, cross_prog_type, _ = _detect_progression(main_prices)
+    cross_tailing, cross_tailing_info = _detect_tailing_digits(main_prices)
 
     result = {
         'per_bidder': per_bidder,
@@ -578,6 +625,8 @@ def compare_bidders_quotes(
         'cross_clustering_indices': cross_clusters,
         'cross_progression': cross_progression,
         'cross_progression_type': cross_prog_type,
+        'cross_tailing_digits': cross_tailing,
+        'cross_tailing_info': cross_tailing_info,
         'max_risk_score': max(pb['risk_score'] for pb in per_bidder) if per_bidder else 0,
         'avg_cv': float(np.mean([pb['cv'] for pb in per_bidder])) if per_bidder else 0,
     }

@@ -622,3 +622,39 @@ def test_benford_dict_consumed_in_quote():
     assert res is not None
     assert hasattr(res, 'benford_deviation')  # float kept for compatibility
     assert hasattr(res, 'progression_type')   # new field present
+
+
+# ── FIX-2026-08-31-011: 报价尾数检测 + extract_prices 修复 ──
+def test_tailing_digits_detection():
+    """CSDN 第一信号：报价尾数相同比例 ≥80% → 触发串标信号。"""
+    from app.services.quote_anomaly import _detect_tailing_digits
+    ok, info = _detect_tailing_digits([1000000, 1100000, 1200000])  # 全尾 '00'
+    assert ok, "3 个同尾数报价应触发"
+    assert info['rate'] == 1.0 and info['digit'] == '00'
+    ok2, _ = _detect_tailing_digits([1234567, 2345678, 3456789])  # 混合尾数
+    assert not ok2, "混合尾数不应触发"
+
+
+def test_extract_prices_non_cn_guardrail():
+    """extract_prices 必须正确处理非中文格式（审计强制 guardrail）。"""
+    from app.services.quote_anomaly import extract_prices
+    assert extract_prices("USD 1,234,567.89") == [1234567.89]
+    assert extract_prices("EUR 999.00") == [999.00]
+    assert extract_prices("1000000") == [1000000.0]
+
+
+def test_extract_prices_no_wan_dup():
+    """'1000万元' 只产 10M，不得附带虚假 10000（_CN_PRICE 独立匹配万 bug）。"""
+    from app.services.quote_anomaly import extract_prices
+    prices = extract_prices('投标报价：1000万元，1100万元，1200万元，1300万元。')
+    assert prices == [10000000.0, 11000000.0, 12000000.0, 13000000.0], f"got {prices}"
+    assert 10000 not in prices, "不得出现虚假 10000 尾数"
+
+
+def test_tailing_digits_wired_into_quote():
+    """check_quote_anomaly 必须输出 tailing_digits_flag 并计入风险分。"""
+    from app.services.quote_anomaly import check_quote_anomaly
+    res = check_quote_anomaly('报价：1000000元，1100000元，1200000元，1300000元。', doc_name='t')
+    assert res.tailing_digits_flag is True, "同尾数报价应触发 flag"
+    assert res.tailing_digits_info['rate'] == 1.0
+    assert hasattr(res, 'tailing_digits_flag')

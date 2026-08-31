@@ -460,3 +460,20 @@ fixes:
       - type: grep_not
         file: app/services/document_analysis_svc.py
         pattern: "int.triggered_count > 0"
+
+  - id: FIX-2026-08-31-011
+    title: "报价尾数检测 + extract_prices 修复（CSDN 第一信号）"
+    severity: high
+    rationale: >
+      CSDN 围标串标模型第一信号"报价尾数相同比例 ≥80%"缺失；且 extract_prices 的
+      _CN_PRICE 正则会独立匹配"万/亿"产生虚假 10000/1e8 值，污染报价规律/尾数检测。
+      Fix: (a) _CN_PRICE 要求 cn 组至少含一个数字字符；(b) extract_prices 双路去重；
+      (c) 新增 _detect_tailing_digits（尾数相同比例 ≥0.8）；(d) 接入 risk +15 与
+      per_bidder/cross 输出。非中文格式回归 guardrail 通过。
+    checks:
+      - type: grep
+        file: app/services/quote_anomaly.py
+        pattern: "_detect_tailing_digits"
+      - type: grep
+        file: app/services/quote_anomaly.py
+        pattern: "tailing_digits_flag"
