@@ -517,3 +517,108 @@ def test_openinfo_upload_ui():
         "index.html must include a 开标信息表 upload input"
     assert '选择开标信息表' in content, \
         "index.html must label the 开标信息表 upload button"
+
+
+# ── FIX-2026-08-28-010: 清标评分计量 — 权重复合指数 + 行业信号 ──
+def test_weighted_total_score_composite():
+    """total_score must be a 0-100 weighted composite, not a raw sum."""
+    from app.services.document_analysis_svc import _weighted_total_score, INDICATOR_WEIGHTS
+    # All-skip → 0
+    assert _weighted_total_score([]) == 0.0
+    # Single indicator at cap → weight-normalized 100
+    inds = [{'id': 'same_machine_code', 'score': 30, 'skipped': False}]  # cap 30
+    assert _weighted_total_score(inds) == 100.0
+    # Half cap → 50
+    inds = [{'id': 'same_machine_code', 'score': 15, 'skipped': False}]
+    assert _weighted_total_score(inds) == 50.0
+    # text_sim 三指标去重：tech_section_similar / cross_file_code_same 不单独贡献
+    inds = [
+        {'id': 'same_file_code', 'score': 15, 'skipped': False},
+        {'id': 'tech_section_similar', 'score': 30, 'skipped': False},
+        {'id': 'cross_file_code_same', 'score': 30, 'skipped': False},
+    ]
+    # 去重后仅 same_file_code 贡献 → 与单指标 same_file_code 相同
+    assert _weighted_total_score(inds) == _weighted_total_score(
+        [{'id': 'same_file_code', 'score': 15, 'skipped': False}]), \
+        "text_sim duplicates must not inflate the composite"
+
+
+def test_risk_scorer_new_weights_and_gate():
+    """RiskScorer must use 0.375/0.375/0.25 weights + ≥80% text gate."""
+    from app.services.batch_orchestrator import RiskScorer
+    assert RiskScorer.WEIGHTS['key_info'] == 0.375
+    assert RiskScorer.WEIGHTS['file_attr'] == 0.375
+    assert RiskScorer.WEIGHTS['text_sim'] == 0.25
+    assert RiskScorer.WEIGHTS['image_sim'] == 0.0
+    # text <80% gate → contributes 0
+    assert RiskScorer.compute(0, 0, 70, 0) == 0.0
+    # text ≥80% → contributes 0.25 * 80 = 20
+    assert RiskScorer.compute(0, 0, 80, 0) == 20.0
+
+
+def test_warning_threshold_order_and_scale():
+    """warning_level must check >=60 first (correct order, composite scale)."""
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert '● 高度预警' in content and '◆ 中等预警' in content
+    idx = content.find('● 高度预警')
+    assert idx != -1
+    # The high-warning branch must reference >= 60 and appear before medium's >= 30
+    high_idx = content.find("total_score >= 60")
+    med_idx = content.find("total_score >= 30")
+    assert high_idx != -1 and med_idx != -1, "both composite thresholds must exist"
+    assert high_idx < med_idx, "high warning (>=60) must be checked before medium (>=30)"
+
+
+def test_quote_tailing_progression():
+    """quote_anomaly must detect arithmetic/geometric price progression."""
+    from app.services.quote_anomaly import _detect_progression
+    ok, ptype, idxs = _detect_progression([100, 120, 140, 160])
+    assert ok and ptype == 'arithmetic'
+    ok, ptype, _ = _detect_progression([100, 130, 169])
+    assert ok and ptype == 'geometric'
+    ok, _, _ = _detect_progression([100, 150, 220])
+    assert not ok
+
+
+def test_benford_nigrini_grading():
+    """_benford_deviation must return Nigrini grades, not a bare float."""
+    from app.services.quote_anomaly import _benford_deviation
+    res = _benford_deviation([10.5, 11.2, 9.8, 12.1, 10.0, 11.5, 9.2, 10.8, 11.9, 8.7,
+                              10.3, 11.1, 9.5, 12.0, 10.6, 11.4, 9.9, 10.2, 11.8, 8.9,
+                              10.7, 11.3, 9.4, 12.2, 10.1], min_samples=20)
+    assert isinstance(res, dict), "benford must return a dict"
+    assert 'grade' in res and 'mad' in res and 'z_scores' in res
+
+
+def test_score_analyzer_kendall_w():
+    """score_analyzer Kendall W: consistent panel → 1.0, random → low."""
+    from app.services.score_analyzer import kendall_w, grubbs_test
+    m1 = [[85, 80, 75, 70, 65, 60], [86, 81, 74, 69, 64, 59], [84, 79, 76, 71, 66, 61]]
+    assert kendall_w(m1) == pytest.approx(1.0, abs=1e-6)
+    m2 = [[85, 60, 70, 55, 90, 45], [70, 85, 55, 60, 50, 75], [60, 75, 85, 90, 55, 70]]
+    assert kendall_w(m2) < 0.5
+    assert grubbs_test([10, 11, 10.5, 50, 11]) == 3
+
+
+def test_community_detection():
+    """relationship_extractor must detect communities from a relationship graph."""
+    from app.services.relationship_extractor import _detect_communities, DetectedRelationship
+    rels = [
+        DetectedRelationship('A公司', 'B公司', 'shared_person', 'p', 0.9, 'e', 'personnel_company', risk_flag=True),
+        DetectedRelationship('B公司', 'C公司', 'shared_person', 'p', 0.8, 'e', 'personnel_company', risk_flag=True),
+        DetectedRelationship('D公司', 'E公司', 'shared_contact', 'c', 0.5, 'e', 'company_company', risk_flag=False),
+    ]
+    comms = _detect_communities(rels)
+    assert len(comms) == 2, "should detect 2 communities"
+    assert any(c['member_count'] == 3 and c['risk'] for c in comms), "risk cluster missing"
+
+
+def test_benford_dict_consumed_in_quote():
+    """check_quote_anomaly must handle the new structured benford result."""
+    from app.services.quote_anomaly import check_quote_anomaly
+    text = "报价合计：1000万元，1100万元，1200万元，1300万元。另附详细清单若干。"
+    res = check_quote_anomaly(text, doc_name='test')
+    assert res is not None
+    assert hasattr(res, 'benford_deviation')  # float kept for compatibility
+    assert hasattr(res, 'progression_type')   # new field present

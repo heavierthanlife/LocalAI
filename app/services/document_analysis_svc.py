@@ -11,7 +11,6 @@ from io import BytesIO
 from docx.oxml.ns import qn
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
 
 from celery_app import celery as celery_app
 
@@ -22,6 +21,79 @@ from app.services.batch_orchestrator import (
 from app.services.indicator_defs import INDICATOR_DEFS, rule_text
 
 logger = logging.getLogger(__name__)
+
+# ── 权重复合指数 (FIX-010)：每指标权重 × 归一化得分 → 0-100 复合指数 ──
+# 触发类权重最高，报价规律/专家一致性次之，基础/扩展类低。skip 指标权重 0。
+INDICATOR_WEIGHTS = {
+    # 触发指标
+    'same_machine_code': 0.10, 'same_file_code': 0.10, 'same_dongle': 0.10,
+    'tech_section_similar': 0.10, 'contact_person_same': 0.08,
+    'economic_error_similar': 0.08, 'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
+    'download_ip_same': 0.10, 'cross_file_code_same': 0.06,
+    'cross_contact_same': 0.06,
+    # 核心指标
+    'tender_query': 0.06, 'candidate_give_up': 0.08,
+    'subjective_expert_spread': 0.08, 'low_win_rate': 0.05, 'high_win_rate': 0.05,
+    'bidder_count_abnormal': 0.08, 'upload_interval_abnormal': 0.06,
+    'subjective_expert_units': 0.08, 'specific_expert_score': 0.06,
+    'clique_expert_scoring': 0.08, 'clique_expert_consistency': 0.08,
+    'objective_score_abnormal': 0.05, 'high_price_abnormal': 0.15,
+    'extension_abnormal': 0.05, 'tender_fail_abnormal': 0.04,
+    'waste_rate_abnormal': 0.06, 'download_no_bid': 0.05, 'no_show_abnormal': 0.05,
+    'expert_deviation_abnormal': 0.08,
+    # 基础指标
+    'cross_bid_ip': 0.06, 'cross_decrypt_ip': 0.06, 'cross_machine_code': 0.06,
+    'bidder_agent_contact': 0.06, 'expert_tenderer_closeness': 0.04,
+    'expert_agent_closeness': 0.04, 'cross_download_ip': 0.06,
+    'cross_dongle': 0.06, 'tech_seal_check': 0.06,
+    'expert_bidder_closeness': 0.06, 'bad_expert_score': 0.04,
+    # 扩展指标
+    'tech_score_abnormal': 0.05, 'commercial_score_abnormal': 0.05,
+    'quote_proportional_float': 0.15, 'contact_phone_abnormal': 0.08,
+}
+DEFAULT_INDICATOR_WEIGHT = 0.03
+
+# 每指标得分上限（归一化用）；超过视为已触发
+INDICATOR_SCORE_CAPS = {
+    'same_machine_code': 30, 'same_file_code': 30, 'same_dongle': 30,
+    'tech_section_similar': 30, 'contact_person_same': 40, 'economic_error_similar': 15,
+    'bid_ip_same': 30, 'decrypt_ip_same': 30, 'download_ip_same': 30,
+    'cross_file_code_same': 30, 'cross_contact_same': 40,
+    'candidate_give_up': 45, 'high_price_abnormal': 30, 'waste_rate_abnormal': 40,
+    'bidder_count_abnormal': 30, 'expert_deviation_abnormal': 35,
+    'subjective_expert_spread': 35, 'subjective_expert_units': 35,
+    'clique_expert_scoring': 30, 'clique_expert_consistency': 30,
+    'contact_phone_abnormal': 30, 'quote_proportional_float': 30,
+    'tech_score_abnormal': 35, 'commercial_score_abnormal': 35,
+    'extension_abnormal': 10,
+}
+DEFAULT_SCORE_CAP = 30.0
+
+
+def _weighted_total_score(indicators: list[dict]) -> float:
+    """0-100 权重复合指数：Σ(w_i × min(score_i/cap_i, 1)) / Σ(w_i) × 100.
+
+    text_sim 三指标去重：same_file_code 全计，tech_section_similar /
+    cross_file_code_same 按 0.3× 衰减（避免同一次相似度被计 3 次）。
+    """
+    # text_sim 指标去重：same_file_code 代表 text_sim 维度，
+    # tech_section_similar / cross_file_code_same 不再单独贡献（避免同一次相似度计 3 次）
+    text_sim_primary = 'same_file_code'
+    num = 0.0
+    den = 0.0
+    for ind in indicators:
+        if ind.get('skipped'):
+            continue
+        iid = ind.get('id', '')
+        if iid in ('tech_section_similar', 'cross_file_code_same'):
+            continue  # 去重：由 same_file_code 代表
+        w = INDICATOR_WEIGHTS.get(iid, DEFAULT_INDICATOR_WEIGHT)
+        cap = INDICATOR_SCORE_CAPS.get(iid, DEFAULT_SCORE_CAP)
+        s = float(ind.get('score', 0) or 0)
+        norm = min(s / cap, 1.0) if cap > 0 else 0.0
+        num += w * norm
+        den += w
+    return round(num / den * 100, 1) if den > 0 else 0.0
 
 
 def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
@@ -297,15 +369,26 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
         elif ind['checker'] == 'quote':
             qr = quote_data.get('result', {})
             per_bidder = qr.get('per_bidder', [])
+            cross_prog = qr.get('cross_progression', False)
+            cross_prog_type = qr.get('cross_progression_type', '')
             if per_bidder:
                 max_qr = qr.get('max_risk_score', 0)
                 suspicious = [pb for pb in per_bidder if pb.get('risk_score', 0) > 10]
                 score = min(max_qr, 20)
-                if suspicious:
-                    result_text = f"▲ 发现{suspicious}个投标单位报价疑义。最高风险评分{max_qr:.1f}。"
+                if cross_prog:
+                    # 等比浮动异常（quote_proportional_float）激活
+                    label = '等差' if cross_prog_type == 'arithmetic' else '等比'
+                    score = max(score, min(max_qr + 15, 30))
+                    result_text = f"▲ 各投标报价呈{label}规律分布，存在定向陪标嫌疑。最高风险评分{max_qr:.1f}。"
                     details = [{'bidder': pb.get('filename', ''), 'risk': f'{pb.get("risk_score", 0):.1f}',
                                'cv': f'{pb.get("cv", 0):.4f}',
-                               'flags': ', '.join([k for k in ['same_rate_flag', 'abnormal_drop_flag', 'clustering_flag']
+                               'progression': cross_prog_type or '—'}
+                              for pb in per_bidder]
+                elif suspicious:
+                    result_text = f"▲ 发现{len(suspicious)}个投标单位报价疑义。最高风险评分{max_qr:.1f}。"
+                    details = [{'bidder': pb.get('filename', ''), 'risk': f'{pb.get("risk_score", 0):.1f}',
+                               'cv': f'{pb.get("cv", 0):.4f}',
+                               'flags': ', '.join([k for k in ['same_rate_flag', 'abnormal_drop_flag', 'clustering_flag', 'progression_type']
                                                    if pb.get(k)] or ['正常'])}
                               for pb in per_bidder]
                 else:
@@ -357,7 +440,8 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                     'title': p.get('title', ''),
                 })
 
-    total_score = round(sum(ind['score'] for ind in indicators), 1)
+    # 0-100 权重复合指数 (FIX-010)，替代裸加总
+    total_score = _weighted_total_score(indicators)
 
     # Fill per-file indicator trigger counts: an indicator fired for a file if
     # its details reference that file by name, or it's a non-skipped pairwise
@@ -388,8 +472,8 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             'bidder_count': n,
             'analysis_date': _ts,
             'total_score': total_score,
-            'warning_level': '◆ 中等预警' if total_score > 20 else (
-                '● 高度预警' if total_score > 50 else '◇ 正常'
+            'warning_level': (
+                '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
             ),
         },
         'suspected_units': suspected_units,

@@ -68,13 +68,28 @@ def _get_seed_laws() -> list[dict]:
 def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
     """Select applicable law articles based on rule categories and keywords.
 
-    Uses keyword matching to find relevant laws.
+    Dual-channel: first try semantic search (ChromaDB + embedding) when available,
+    then merge with keyword-based scoring. Falls back to keyword-only if semantic
+    unavailable.
     """
     all_laws = _get_seed_laws()
     if not all_laws:
         return []
 
-    # Build keywords from rules
+    # ── Channel 1: semantic law search (ChromaDB) ──
+    semantic_hits = []
+    try:
+        from app.services.law_semantic import semantic_law_search
+        # Build a composite query from rule keywords/categories
+        cat_text = ' '.join(rule.get('category', '') for rule in rules)
+        desc_text = ' '.join((rule.get('description', '') or '')[:100] for rule in rules[:5])
+        query = (cat_text + ' ' + desc_text).strip()
+        if query:
+            semantic_hits = semantic_law_search(query, top_k=max_laws)
+    except Exception as e:
+        logger.debug(f"Semantic law search unavailable, falling back to keyword: {e}")
+
+    # ── Channel 2: keyword-based scoring (existing) ──
     rule_keywords = set()
     category_to_law_map = {
         "qualification": ["资质", "资格", "条件", "能力"],
@@ -83,11 +98,9 @@ def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
         "rejection": ["否决", "废标", "无效", "不通过"],
         "prohibition": ["禁止", "不得", "串通", "围标", "弄虚作假"],
     }
-
     for rule in rules:
         cat = rule.get("category", "")
         rule_keywords.update(category_to_law_map.get(cat, []))
-        # Also add keywords from rule description
         desc = rule.get("description", "") + rule.get("original_text", "")
         for kw in ["资质", "业绩", "证书", "标准", "质量", "报价", "保证金",
                     "串标", "围标", "虚假", "废标", "否决", "转包", "分包",
@@ -95,7 +108,6 @@ def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
             if kw in desc:
                 rule_keywords.add(kw)
 
-    # Score each law article
     scored = []
     for law in all_laws:
         score = 0
@@ -110,8 +122,38 @@ def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
         if score > 0:
             scored.append((score, law))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [law for _, law in scored[:max_laws]]
+    # ── Merge: semantic hits get a boost, keyword results kept ──
+    # Map semantic hits (which have law_name/article/text) to full seed-law shape
+    semantic_by_key = {}
+    for hit in semantic_hits:
+        key = (hit.get('short_name') or hit.get('law_name', ''), hit.get('article', ''))
+        semantic_by_key[key] = hit
+    scored_with_sem = []
+    seen = set()
+    for score, law in scored:
+        key = (law.get('short_name') or law.get('law_name', ''), law.get('article', ''))
+        seen.add(key)
+        if key in semantic_by_key:
+            # Semantic confirms → boost
+            scored_with_sem.append((score + 5, law))
+        else:
+            scored_with_sem.append((score, law))
+    # Add semantic-only hits not already in keyword results
+    for key, hit in semantic_by_key.items():
+        if key not in seen and hit.get('text'):
+            law = {
+                'law_name': hit.get('law_name', ''),
+                'short_name': hit.get('short_name', ''),
+                'category': hit.get('category', ''),
+                'article': hit.get('article', ''),
+                'text': hit.get('text', ''),
+                'tags': [],
+            }
+            scored_with_sem.append((6, law))
+            seen.add(key)
+
+    scored_with_sem.sort(key=lambda x: x[0], reverse=True)
+    return [law for _, law in scored_with_sem[:max_laws]]
 
 
 def _match_rule_to_text(rule: dict, bid_text: str) -> Optional[str]:

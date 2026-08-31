@@ -420,3 +420,43 @@ fixes:
       - type: grep_not
         file: app/services/document_analysis_svc.py
         pattern: "int.triggered_count > 0"
+
+  - id: FIX-2026-08-28-010
+    title: "清标评分计量升级 — 权重复合指数 + 行业信号 + bug 修复"
+    severity: high
+    rationale: >
+      Scoring audit (verified against code) found: (a) total_score was a raw sum of
+      heterogeneous capped scores (~209 max), uncalibrated; (b) warning thresholds
+      were reversed in the analysis path and uncalibrated to any scale; (c) text_sim
+      double-counted into 3 indicators; (d) RiskScorer had a dead 0.2 image weight
+      (scale 0-80) and no text-similarity gate; (e) industry-standard signals missing:
+      报价尾数/规律性, Benford Nigrini grading, expert-score panel analysis, relationship
+      community detection. Fix: 0-100 weighted composite index (INDICATOR_WEIGHTS +
+      score caps + text_sim dedup), RiskScorer 0.375/0.375/0.25 with ≥80% text gate,
+      composite warning thresholds (≥60/≥30), quote arithmetic/geometric progression,
+      Benford Nigrini MAD grades + chi-square + Z-scores, score_analyzer (Grubbs/Kendall W/
+      Spearman), relationship community detection, and 5 bug fixes (len(suspicious),
+      extension date, bidder_count_abnormal semantics, open_info allowed_file, task_bus
+      delete dead code, qn dup import, incremental upload).
+    checks:
+      - type: grep
+        file: app/services/document_analysis_svc.py
+        pattern: "_weighted_total_score"
+      - type: grep
+        file: app/services/batch_orchestrator.py
+        pattern: "TEXT_SIM_GATE"
+      - type: grep
+        file: app/services/quote_anomaly.py
+        pattern: "_detect_progression"
+      - type: grep
+        file: app/services/quote_anomaly.py
+        pattern: "Nigrini"
+      - type: grep
+        file: app/services/score_analyzer.py
+        pattern: "def kendall_w"
+      - type: grep
+        file: app/services/relationship_extractor.py
+        pattern: "_detect_communities"
+      - type: grep_not
+        file: app/services/document_analysis_svc.py
+        pattern: "int.triggered_count > 0"

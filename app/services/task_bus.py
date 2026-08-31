@@ -228,7 +228,6 @@ class TaskBus:
         pipe.zrem(TASK_REGISTRY, task_id)
         pipe.delete(META_PREFIX + task_id)
         pipe.execute()
-        existed = r.exists(META_PREFIX + task_id) == 0
         return True
 
     @staticmethod

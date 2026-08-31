@@ -8847,6 +8847,8 @@
         var tenderFileId = null;
         var openInfoFile = null;
         var openInfoFileId = null;
+        var _lastTenderName = '';
+        var _lastOpenInfoName = '';
         var uploading = false;
 
         function _fmtSize(bytes) {
@@ -8880,30 +8882,50 @@
         async function _preUploadFiles() {
             uploading = true;
             runBtn.disabled = true;
-            uploadedFileIds = [];
-            tenderFileId = null;
-            openInfoFileId = null;
             try {
                 var imgExts = ['.pdf', '.docx', '.doc', '.docm', '.pptx', '.pptm'];
+                // ── Incremental upload: only upload bid files not already uploaded
+                //    (match by name+size to detect changes). Keeps existing file ids.
+                var existingByKey = {};
+                (uploadedFileIds || []).forEach(function(u) {
+                    existingByKey[u.name + '|' + (u.size || '')] = u;
+                });
+                var newIds = [];
                 for (var i = 0; i < selectedFiles.length; i++) {
                     var f = selectedFiles[i];
+                    var key = f.name + '|' + f.size;
+                    if (existingByKey[key]) {
+                        newIds.push(existingByKey[key]);  // reuse
+                        continue;
+                    }
                     fileNames.textContent = '上传中 (' + (i + 1) + '/' + selectedFiles.length + '): '
                         + f.name + ' [' + _fmtSize(f.size) + '] — 0%';
                     var res = await _uploadOne(f, function(pct) {
                         fileNames.textContent = '上传中 (' + (i + 1) + '/' + selectedFiles.length + '): '
                             + f.name + ' [' + _fmtSize(f.size) + '] — ' + pct + '%';
                     });
-                    uploadedFileIds.push(res);
+                    newIds.push(res);
                 }
-                if (tenderFile) {
+                uploadedFileIds = newIds;
+                // Tender / open-info: re-upload only if a (new) file is selected.
+                // Track last uploaded names to avoid redundant re-uploads.
+                if (tenderFile && tenderFile.name !== _lastTenderName) {
                     fileNames.textContent = '上传招标文件: ' + tenderFile.name + '...';
                     var tr = await _uploadOne(tenderFile);
                     tenderFileId = tr.id;
+                    _lastTenderName = tenderFile.name;
+                } else if (!tenderFile) {
+                    tenderFileId = null;
+                    _lastTenderName = '';
                 }
-                if (openInfoFile) {
+                if (openInfoFile && openInfoFile.name !== _lastOpenInfoName) {
                     fileNames.textContent = '上传开标信息表: ' + openInfoFile.name + '...';
                     var or = await _uploadOne(openInfoFile);
                     openInfoFileId = or.id;
+                    _lastOpenInfoName = openInfoFile.name;
+                } else if (!openInfoFile) {
+                    openInfoFileId = null;
+                    _lastOpenInfoName = '';
                 }
                 var imgFiles = selectedFiles.filter(function(f) {
                     var ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
@@ -9358,7 +9380,7 @@
 
         html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
         html += '<strong>投标单位:</strong> ' + (info.bidder_count||0);
-        html += ' | <strong>综合评分:</strong> <span style="color:' + ((info.total_score||0) > 50 ? '#e74c3c' : (info.total_score||0) > 20 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>综合评分:</strong> <span style="color:' + ((info.total_score||0) >= 60 ? '#e74c3c' : (info.total_score||0) >= 30 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
         html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
         html += '</div>';
 
@@ -9671,7 +9693,7 @@
         // Basic info
         html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
         html += '<strong>投标单位:</strong> ' + info.bidder_count;
-        html += ' | <strong>综合评分:</strong> <span style="color:' + (info.total_score > 50 ? '#e74c3c' : info.total_score > 20 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>综合评分:</strong> <span style="color:' + (info.total_score >= 60 ? '#e74c3c' : info.total_score >= 30 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
         html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
         if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">📥 下载DOCX报告</a>';
         html += '</div>';

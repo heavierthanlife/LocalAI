@@ -232,6 +232,7 @@ class QuoteAnomalyResult:
     same_rate_flag: bool = False
     abnormal_drop_flag: bool = False
     clustering_flag: bool = False
+    progression_type: str = ''
     benford_deviation: float = 0.0
     risk_score: float = 0.0
     details: list[str] = field(default_factory=list)
@@ -249,10 +250,15 @@ def _coefficient_of_variation(values: list[float]) -> float:
     return float(arr.std(ddof=1) / abs(mean))
 
 
-def _benford_deviation(values: list[float], min_samples: int = 20) -> float:
-    """Return mean absolute deviation of leading-digit distribution from Benford's Law."""
+def _benford_deviation(values: list[float], min_samples: int = 20) -> dict:
+    """Benford's Law analysis: MAD + Nigrini grade + chi-square + leading-digit Z-scores.
+
+    Returns a dict (or a MAD-only float fallback if insufficient data):
+        {'mad': float, 'grade': str, 'chisq': float|None, 'z_scores': dict, 'samples': int}
+    Nigrini MAD grades: <0.006 合规 / 0.006-0.012 可接受 / 0.012-0.015 勉强可接受 / >0.015 不符合.
+    """
     if len(values) < min_samples:
-        return 0.0
+        return {'mad': 0.0, 'grade': '数据不足', 'chisq': None, 'z_scores': {}, 'samples': len(values)}
     leading = []
     for v in values:
         if v <= 0:
@@ -261,12 +267,39 @@ def _benford_deviation(values: list[float], min_samples: int = 20) -> float:
         if 1 <= first <= 9:
             leading.append(first)
     if not leading:
-        return 0.0
+        return {'mad': 0.0, 'grade': '无有效数据', 'chisq': None, 'z_scores': {}, 'samples': len(leading)}
     counts = Counter(leading)
     total = len(leading)
     benford = [np.log10(1 + 1 / d) for d in range(1, 10)]
     observed = [counts.get(d, 0) / total for d in range(1, 10)]
-    return float(np.mean(np.abs(np.array(observed) - np.array(benford))))
+    mad = float(np.mean(np.abs(np.array(observed) - np.array(benford))))
+
+    if mad < 0.006:
+        grade = '合规'
+    elif mad < 0.012:
+        grade = '可接受'
+    elif mad < 0.015:
+        grade = '勉强可接受'
+    else:
+        grade = '不符合'
+
+    # Chi-square test + per-digit Z-scores (Nigrini)
+    chisq = None
+    z_scores = {}
+    if total >= min_samples:
+        try:
+            from scipy import stats as _s
+            expected = [benford[i] * total for i in range(9)]
+            observed_counts = [counts.get(d, 0) for d in range(1, 10)]
+            chisq = float(_s.chisquare(observed_counts, f_exp=expected).statistic)
+            for i, d in enumerate(range(1, 10)):
+                exp = benford[i] * total
+                if exp > 0:
+                    z_scores[d] = float((observed_counts[i] - exp) / np.sqrt(exp * (1 - benford[i])))
+        except Exception:
+            pass
+
+    return {'mad': mad, 'grade': grade, 'chisq': chisq, 'z_scores': z_scores, 'samples': total}
 
 
 def _detect_same_rate(values: list[float], threshold: float = 0.05) -> tuple[bool, list[tuple[int, int, float]]]:
@@ -323,6 +356,34 @@ def _detect_abnormal_drop(prices: list[float], reference_price: float | None = N
         if drop >= drop_threshold:
             drops.append((idx, float(drop)))
     return len(drops) > 0, drops
+
+
+def _detect_progression(prices: list[float], tolerance: float = 0.02) -> tuple[bool, str, list[tuple[int, float]]]:
+    """Detect 等差/等比 报价规律（定向陪标信号）。
+
+    若 ≥3 个报价近似构成等差或等比序列（公差/公比一致），视为可疑。
+    Returns: (found, progression_type('arithmetic'|'geometric'|''), flagged_indices).
+    """
+    arr = [p for p in prices if p and p > 0]
+    n = len(arr)
+    if n < 3:
+        return False, '', []
+
+    # 等差：相邻差近似一致
+    diffs = [arr[i + 1] - arr[i] for i in range(n - 1)]
+    if diffs and all(d > 0 for d in diffs):
+        d0 = diffs[0]
+        if all(abs(d - d0) / max(abs(d0), 1e-9) < tolerance for d in diffs[1:]):
+            return True, 'arithmetic', list(range(n))
+
+    # 等比：相邻比近似一致
+    ratios = [arr[i + 1] / arr[i] for i in range(n - 1)]
+    if ratios and all(r > 1.0001 for r in ratios):
+        r0 = ratios[0]
+        if all(abs(r - r0) / abs(r0) < tolerance for r in ratios[1:]):
+            return True, 'geometric', list(range(n))
+
+    return False, '', []
 
 
 def check_quote_anomaly(
@@ -405,12 +466,26 @@ def check_quote_anomaly(
         result.details.append(f"发现 {len(clusters)} 个报价/费率聚类（≥{cfg['min_cluster']}个报价密集聚集）")
         result.matched_prices['clustering'] = [values[i] for c in clusters for i in c]
 
-    # Benford's Law
-    result.benford_deviation = _benford_deviation(prices, min_samples=cfg['min_benford'])
-    if result.benford_deviation > cfg['benford']:
-        result.details.append(f"价格首位数字分布偏离本福特定律（偏差={result.benford_deviation:.3f}），建议人工复核")
+    # 等差/等比 报价规律（定向陪标）
+    prog, ptype, pidx = _detect_progression(prices, tolerance=cfg.get('progression_tolerance', 0.02))
+    result.progression_type = ptype
+    if prog:
+        label = '等差' if ptype == 'arithmetic' else '等比'
+        result.details.append(f"报价呈{label}规律分布（{len(pidx)} 个报价），存在定向陪标嫌疑")
+        result.matched_prices['progression'] = [prices[i] for i in pidx]
+
+    # Benford's Law (Nigrini 分级 + 卡方 + Z 检验)
+    benford_res = _benford_deviation(prices, min_samples=cfg['min_benford'])
+    result.benford_deviation = benford_res['mad']
+    if benford_res['grade'] in ('不符合', '勉强可接受'):
+        extra = ''
+        if benford_res.get('z_scores'):
+            top_z = sorted(benford_res['z_scores'].items(), key=lambda kv: abs(kv[1]), reverse=True)[:3]
+            extra = '；显著首位: ' + ', '.join(f'{d}(Z={z:.1f})' for d, z in top_z)
+        result.details.append(
+            f"价格首位分布不符本福特（MAD={benford_res['mad']:.3f}，{benford_res['grade']}{extra}），建议人工复核")
     else:
-        result.details.append(f"本福特偏差={result.benford_deviation:.3f}")
+        result.details.append(f"本福特偏差={benford_res['mad']:.3f}（{benford_res['grade']}）")
 
     # Daxie cross-validation
     if daxie_mismatches:
@@ -425,6 +500,8 @@ def check_quote_anomaly(
         score += 30.0
     if result.clustering_flag:
         score += 20.0
+    if result.progression_type:
+        score += 25.0
     if result.cv < cfg['cv_low']:
         score += 15.0
     if result.benford_deviation > cfg['benford']:
@@ -476,6 +553,7 @@ def compare_bidders_quotes(
             'same_rate_flag': res.same_rate_flag,
             'abnormal_drop_flag': res.abnormal_drop_flag,
             'clustering_flag': res.clustering_flag,
+            'progression_type': res.progression_type,
             'benford_deviation': res.benford_deviation,
             'prices': res.prices[:20],
             'percentages': res.percentages[:20],
@@ -490,6 +568,7 @@ def compare_bidders_quotes(
     cross_same_rate, cross_pairs = _detect_same_rate(main_prices, threshold=st)
     cross_clustering, cross_clusters = _detect_clustering(main_prices, min_cluster_size=cfg['min_cluster'],
                                                           bandwidth_factor=cfg['bandwidth'])
+    cross_progression, cross_prog_type, _ = _detect_progression(main_prices)
 
     result = {
         'per_bidder': per_bidder,
@@ -497,6 +576,8 @@ def compare_bidders_quotes(
         'cross_same_rate_pairs': cross_pairs,
         'cross_clustering': cross_clustering,
         'cross_clustering_indices': cross_clusters,
+        'cross_progression': cross_progression,
+        'cross_progression_type': cross_prog_type,
         'max_risk_score': max(pb['risk_score'] for pb in per_bidder) if per_bidder else 0,
         'avg_cv': float(np.mean([pb['cv'] for pb in per_bidder])) if per_bidder else 0,
     }

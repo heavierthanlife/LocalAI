@@ -51,19 +51,25 @@ class RiskScorer:
     """
 
     WEIGHTS = {
-        "key_info": 0.3,
-        "file_attr": 0.3,
-        "text_sim": 0.2,
-        "image_sim": 0.2,
+        "key_info": 0.375,
+        "file_attr": 0.375,
+        "text_sim": 0.25,
+        "image_sim": 0.0,   # image similarity disabled in clearance (images=[])
     }
+
+    # text_sim only contributes when cosine similarity ≥ this gate (avoids
+    # template/boilerplate overlap being scored as collusion)
+    TEXT_SIM_GATE = 0.80
 
     @classmethod
     def compute(cls, key_info_pct: float, file_attr_val: float,
                 text_sim_pct: float, img_sim_val: float) -> float:
+        # text_sim only counts if it clears the ≥80% gate (template-overlap guard)
+        text_eff = text_sim_pct if text_sim_pct >= cls.TEXT_SIM_GATE * 100 else 0.0
         return (
             cls.WEIGHTS["key_info"] * key_info_pct +
             cls.WEIGHTS["file_attr"] * file_attr_val +
-            cls.WEIGHTS["text_sim"] * text_sim_pct +
+            cls.WEIGHTS["text_sim"] * text_eff +
             cls.WEIGHTS["image_sim"] * img_sim_val
         )
 

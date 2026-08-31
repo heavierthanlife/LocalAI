@@ -113,7 +113,13 @@ def run_clearance_route():
     open_fid = request.form.get('open_info_file_id')
     if open_fid:
         oinfo = resolve_file(open_fid, user_id=user_id)
-        if oinfo and os.path.exists(oinfo['abs_path']):
+        if not oinfo:
+            return err(f"开标信息表不存在或无权访问: file_id={open_fid}", "NOT_FOUND", 404)
+        # 仅允许解析器支持的类型 (Excel/CSV/JSON)；allowed_file 白名单不含这些 → 单独校验
+        _open_ext = (oinfo.get('filename', '') or '').lower().rsplit('.', 1)[-1]
+        if _open_ext not in ('xlsx', 'xls', 'csv', 'json'):
+            return err(f"开标信息表仅支持 xlsx/xls/csv/json，收到 .{_open_ext}", "VALIDATION_ERROR", 400)
+        if os.path.exists(oinfo['abs_path']):
             from app.services.clearance_openinfo import parse_open_info_file, extract_eval_criteria
             open_info = parse_open_info_file(oinfo['abs_path'], oinfo['filename'])
             if not open_info.get('parsed'):

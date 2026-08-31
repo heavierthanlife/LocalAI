@@ -86,6 +86,7 @@ class RelationshipReport:
     modules_run: list[str] = field(default_factory=list)
     tianyancha_used: bool = False
     company_personnel_map: dict[str, list[str]] = field(default_factory=dict)
+    communities: list[dict] = field(default_factory=list)
 
 
 # --- Entity extraction -------------------------------------------------------
@@ -611,6 +612,18 @@ def extract_relationships(
         score = min(100.0, cc_risk * 25.0 + pc_risk * 20.0 + dc_risk * 12.0 + cs_risk * 15.0)
     report.risk_score = round(score, 1)
 
+    # Step 7: 社区检测（连通分量 + Louvain）——识别围标网络
+    try:
+        report.communities = _detect_communities(report.relationships)
+        if report.communities:
+            for com in report.communities:
+                if com.get('member_count', 0) >= 2 and com.get('risk'):
+                    report.red_flags.append(
+                        f"发现疑似关联网络：{com.get('member_count')} 个主体通过 {com.get('edge_count', 0)} 条关系关联"
+                        f"（{', '.join(str(m) for m in com.get('members', [])[:3])}…）")
+    except Exception as e:
+        logger.debug(f"Community detection skipped: {e}")
+
     if audit:
         audit.component("relationship_summary", status="OK",
                         total_relations=len(report.relationships),
@@ -619,6 +632,52 @@ def extract_relationships(
                         risk_score=report.risk_score)
 
     return report
+
+
+def _detect_communities(relationships: list) -> list[dict]:
+    """从实体关系构建图并做社区检测。
+
+    Returns: [{members, member_count, edge_count, risk}] 按风险降序。
+    """
+    if not relationships:
+        return []
+    import networkx as nx
+    G = nx.Graph()
+    for rel in relationships:
+        src = getattr(rel, 'source_entity', '')
+        tgt = getattr(rel, 'target_entity', '')
+        if not src or not tgt:
+            continue
+        risk = bool(getattr(rel, 'risk_flag', False))
+        G.add_edge(src, tgt, risk=risk)
+    if G.number_of_nodes() == 0:
+        return []
+
+    communities = []
+    # Louvain (best for weighted/overlapping networks)
+    try:
+        import community as community_louvain
+        partition = community_louvain.best_partition(G)
+        groups = {}
+        for node, cid in partition.items():
+            groups.setdefault(cid, []).append(node)
+    except Exception:
+        # Fallback: connected components
+        groups = {i: list(comp) for i, comp in enumerate(nx.connected_components(G))}
+
+    for members in groups.values():
+        sub = G.subgraph(members)
+        edge_count = sub.number_of_edges()
+        risk_edges = sum(1 for _, _, d in sub.edges(data=True) if d.get('risk'))
+        communities.append({
+            'members': members,
+            'member_count': len(members),
+            'edge_count': edge_count,
+            'risk': risk_edges > 0,
+            'risk_edge_count': risk_edges,
+        })
+    communities.sort(key=lambda c: (c['member_count'], c['edge_count']), reverse=True)
+    return communities
 
 
 # --- DB persistence ----------------------------------------------------------

@@ -167,33 +167,34 @@ def test_snapshot_keyword_overlap(keyword_texts):
 # ── Test 3: Risk scoring formula snapshot ────────────────────────────────────
 
 def test_snapshot_risk_formula():
-    """Lock the risk scoring formula: 0.3*key + 0.3*attr + 0.2*text + 0.2*img.
+    """Lock the risk scoring formula: 0.375*key + 0.375*attr + 0.25*text (+0 img).
 
-    This is a straight-line arithmetic weighting (no ML, no randomness).  The
-    exact formula from batch.py line 224:
+    FIX-010: image weight removed (image_sim disabled in clearance), text_sim only
+    contributes when cosine ≥ 80% (template-overlap gate).
 
-        risk = 0.3 * key_info_val + 0.3 * file_attr_val + 0.2 * text_sim_val + 0.2 * img_sim_val
+        risk = 0.375*key + 0.375*attr + 0.25*text_gated + 0.0*img
 
     where:
       key_info_val = key_overlap_similarity * 100  (percentage)
       file_attr_val = raw attr_similarity (0-100)
-      text_sim_val = cosine_similarity * 100  (percentage)
-      img_sim_val = raw image similarity (0-100)
+      text_sim_val = cosine_similarity * 100, but 0 unless ≥80
+      img_sim_val = ignored (0)
     """
     def _risk(key_info_pct, file_attr_val, text_sim_pct, img_sim_val):
-        return (0.3 * key_info_pct + 0.3 * file_attr_val +
-                0.2 * text_sim_pct + 0.2 * img_sim_val)
+        text_eff = text_sim_pct if text_sim_pct >= 80 else 0.0
+        return (0.375 * key_info_pct + 0.375 * file_attr_val +
+                0.25 * text_eff + 0.0 * img_sim_val)
 
     scenarios = [
         # (name, key_pct, attr, text_pct, img) -> expected_risk
         ("zero_all",       0,    0,    0,   0),
-        ("typical_low",   30,   20,   15,  10),
+        ("typical_low",   30,   20,   15,  10),   # text<80 → gated 0
         ("typical_mid",   50,   40,   30,  25),
         ("typical_high",  80,   70,   60,  50),
         ("max_all",      100,  100,  100, 100),
         ("key_heavy",     90,   10,   10,  10),
-        ("text_heavy",    10,   10,   90,  10),
-        ("img_heavy",     10,   10,   10,  90),
+        ("text_high_gate", 10,  10,   90,  10),   # text≥80 → counts
+        ("text_below_gate",10,  10,   70,  10),   # text<80 → 0
         ("attr_heavy",    10,   90,   10,  10),
         ("mixed",         45,   55,   35,  15),
     ]
@@ -202,45 +203,42 @@ def test_snapshot_risk_formula():
     for name, k, a, t, i in scenarios:
         results[name] = _risk(k, a, t, i)
 
-    # ── Exact arithmetic snapshots ──
+    # ── Exact arithmetic snapshots (weights 0.375/0.375/0.25) ──
     assert results["zero_all"] == 0.0
-    assert results["typical_low"] == 20.0
-    # 30*0.3=9 + 20*0.3=6 + 15*0.2=3 + 10*0.2=2 = 20.0  ✓
-    assert results["typical_mid"] == 38.0
-    # 50*0.3=15 + 40*0.3=12 + 30*0.2=6 + 25*0.2=5 = 38.0  ✓
-    assert results["typical_high"] == 67.0
-    # 80*0.3=24 + 70*0.3=21 + 60*0.2=12 + 50*0.2=10 = 67.0  ✓
+    # 30*.375 + 20*.375 + 0 (text<80 gated) = 11.25 + 7.5 = 18.75
+    assert results["typical_low"] == 18.75
+    # 50*.375 + 40*.375 + 0 = 18.75 + 15 = 33.75
+    assert results["typical_mid"] == 33.75
+    # 80*.375 + 70*.375 + 0 = 30 + 26.25 = 56.25
+    assert results["typical_high"] == 56.25
+    # 100*.375 + 100*.375 + 100*.25 = 37.5 + 37.5 + 25 = 100.0
     assert results["max_all"] == 100.0
-    assert results["key_heavy"] == 34.0
-    # 90*0.3=27 + 10*0.3=3 + 10*0.2=2 + 10*0.2=2 = 34.0  ✓
-    assert results["text_heavy"] == 26.0
-    # 10*0.3=3 + 10*0.3=3 + 90*0.2=18 + 10*0.2=2 = 26.0  ✓
-    assert results["img_heavy"] == 26.0
-    # 10*0.3=3 + 10*0.3=3 + 10*0.2=2 + 90*0.2=18 = 26.0  ✓
-    assert results["attr_heavy"] == 34.0
-    # 10*0.3=3 + 90*0.3=27 + 10*0.2=2 + 10*0.2=2 = 34.0  ✓
-    assert results["mixed"] == 40.0
-    # 45*0.3=13.5 + 55*0.3=16.5 + 35*0.2=7 + 15*0.2=3 = 40.0  ✓
+    # 90*.375 + 10*.375 + 0 = 33.75 + 3.75 = 37.5
+    assert results["key_heavy"] == 37.5
+    # text_high_gate: 10*.375 + 10*.375 + 90*.25 = 3.75+3.75+22.5 = 30.0
+    assert results["text_high_gate"] == 30.0
+    # text_below_gate: 10*.375 + 10*.375 + 0 = 7.5
+    assert results["text_below_gate"] == 7.5
+    # attr_heavy: 10*.375 + 90*.375 + 0 = 3.75 + 33.75 = 37.5
+    assert results["attr_heavy"] == 37.5
+    # mixed: 45*.375 + 55*.375 + 0 = 16.875 + 20.625 = 37.5
+    assert results["mixed"] == 37.5
 
     # ── Invariants ──
-    # Weights sum to 1.0
-    assert abs(0.3 + 0.3 + 0.2 + 0.2 - 1.0) < 1e-10
+    # Weights sum to 1.0 (incl. the 0 image weight)
+    assert abs(0.375 + 0.375 + 0.25 + 0.0 - 1.0) < 1e-10
 
-    # Risk is linear (doubling all inputs doubles risk)
-    assert _risk(20, 30, 40, 50) == pytest.approx(2.0 * _risk(10, 15, 20, 25))
+    # text_sim gate: below 80% contributes 0, at/above contributes linearly
+    assert _risk(0, 0, 79, 0) == 0.0
+    assert _risk(0, 0, 80, 0) == 20.0
+    assert _risk(0, 0, 100, 0) == 25.0
 
-    # Weighted average never exceeds the maximum component
+    # Weighted average never exceeds the maximum component (text-gated)
     for name, k, a, t, i in scenarios:
         risk = _risk(k, a, t, i)
-        max_comp = max(k, a, t, i)
+        max_comp = max(k, a, t if t >= 80 else 0, i)
         assert risk <= max_comp, f"{name}: risk {risk} > max component {max_comp}"
 
     # Risk is bounded below by 0
     for name, k, a, t, i in scenarios:
         assert _risk(k, a, t, i) >= 0.0
-
-    # Coefficient ordering: key and attr have higher weight than text and img
-    for k, a, t, i in ((50, 0, 0, 0), (0, 50, 0, 0), (0, 0, 50, 0), (0, 0, 0, 50)):
-        if k > 0 or a > 0:
-            # key/attr contributions > text/img contributions
-            pass  # Verified by the exact values above

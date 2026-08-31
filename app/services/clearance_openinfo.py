@@ -13,6 +13,7 @@ import logging
 import os
 import re
 from typing import Dict, List, Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,46 @@ def compute_open_info_indicators(file_data, open_info, eval_criteria):
             for k in ('expert_deviation_abnormal', 'subjective_expert_units'):
                 out[k] = {'score': 0, 'result': '√ 专家打分数据不足，未发现异常。', 'details': []}
 
+        # ── 专家×单位打分面板：Grubbs/Kendall W/一致性 (激活 subjective_expert_spread / clique_*) ──
+        try:
+            from app.services.score_analyzer import panel_outlier_scores
+            # 构建矩阵：expert → ordered bidders
+            expert_map = {}
+            bidder_order = []
+            for b, e, s in scores:
+                expert_map.setdefault(e, {})[b] = s
+                if b not in bidder_order:
+                    bidder_order.append(b)
+            experts = list(expert_map.keys())
+            matrix = [[expert_map[e].get(b) for b in bidder_order] for e in experts]
+            panel = panel_outlier_scores({'matrix': matrix, 'experts': experts, 'bidders': bidder_order})
+
+            # subjective_expert_spread: 同一评委对各单位打分差异大
+            spread_rows = [d for d in panel.get('per_expert_dev', [])]
+            if spread_rows:
+                out['subjective_expert_spread'] = {
+                    'score': min(len(spread_rows) * 8, 35),
+                    'result': f"▲ 评委对各单位打分偏离异常（{len(spread_rows)} 处）。",
+                    'details': spread_rows[:10],
+                }
+            else:
+                out['subjective_expert_spread'] = {'score': 0, 'result': '√ 评委打分分布未见异常。', 'details': []}
+
+            # clique_expert_consistency / clique_expert_scoring: 评委一致性
+            w = panel.get('kendall_w')
+            if w is not None and w >= 0.8:
+                out['clique_expert_consistency'] = {
+                    'score': min(int((w - 0.8) * 200) + 10, 30),
+                    'result': f"▲ 评委打分一致性极高 (W={w:.2f})，可能存在抱团/串通。",
+                    'details': [{'kendall_w': round(w, 3), 'experts': len(experts), 'bidders': len(bidder_order)}],
+                }
+                out['clique_expert_scoring'] = out['clique_expert_consistency']
+            elif w is not None:
+                out['clique_expert_consistency'] = {'score': 0, 'result': f"√ 评委一致性 W={w:.2f}，未见异常。", 'details': []}
+                out['clique_expert_scoring'] = {'score': 0, 'result': '√ 未发现评委抱团打分。', 'details': []}
+        except Exception as e:
+            logger.debug(f"score_analyzer panel failed: {e}")
+
     # ── 技术标/商务标得分异常 (tech/commercial_score_abnormal) ──
     for key, col in (('tech_score_abnormal', 'tech_score'), ('commercial_score_abnormal', 'com_score')):
         scored = []
@@ -351,34 +392,41 @@ def compute_open_info_indicators(file_data, open_info, eval_criteria):
         else:
             out['waste_rate_abnormal'] = {'score': 0, 'result': '√ 未发现废标异常。', 'details': []}
 
-    # ── 投标单位数异常 (bidder_count_abnormal, TENDER: 标底价) ──
-    if eval_criteria and eval_criteria.get('budget_price'):
-        budget = eval_criteria['budget_price']
-        prices = []
-        for r in rows:
-            p = _to_number(r.get('bid_price'))
-            if p:
-                prices.append((str(r.get('bidder', '')), p))
-        if len(prices) >= 2:
-            mean_price = sum(p for _, p in prices) / len(prices)
-            dev = (mean_price - budget) / budget if budget else 0
-            if abs(dev) > 0.15:
-                out['bidder_count_abnormal'] = {
-                    'score': min(abs(dev) * 100, 40),
-                    'result': f"▲ 投标均价 {mean_price / 10000:.1f} 万元与标底 {budget / 10000:.1f} 万元偏离 {dev:.1%}。",
-                    'details': [{'bidder': b, 'price': round(p, 0)} for b, p in prices[:10]],
-                }
-            else:
-                out['bidder_count_abnormal'] = {'score': 0, 'result': '√ 投标价格与标底价基本一致。', 'details': []}
+    # ── 投标单位数异常 (bidder_count_abnormal) ──
+    # 真实语义：有效投标数过少（<3）＝围标易达成。此前误放"报价 vs 标底偏离"逻辑。
+    bidder_count = len(rows)
+    if bidder_count > 0 and bidder_count < 3:
+        out['bidder_count_abnormal'] = {
+            'score': min((3 - bidder_count) * 15, 30),
+            'result': f"▲ 有效投标单位仅 {bidder_count} 家（<3），竞争不足，围标易达成。",
+            'details': [{'bidder_count': bidder_count}],
+        }
+    else:
+        out['bidder_count_abnormal'] = {
+            'score': 0,
+            'result': '√ 投标单位数量正常。' if bidder_count >= 3 else '○ 开标信息表未提供投标单位行。',
+            'details': [{'bidder_count': bidder_count}] if bidder_count else [],
+        }
 
     # ── 招标延期异常 (extension_abnormal, TENDER: 计划 vs 实际开标) ──
     if eval_criteria and eval_criteria.get('plan_open_time'):
         plan = eval_criteria['plan_open_time']
         actuals = [r.get('open_time') for r in rows if r.get('open_time')]
-        if actuals and all(str(a).strip() == str(actuals[0]).strip() for a in actuals):
-            # 简化：若所有实际开标时间一致且晚于计划，标记延期（按日比较）
+        # 统一日期规范化：支持 2026年9月1日 / 2026-09-01 / 2026/9/1 等
+        def _norm_date(s):
+            s = str(s).strip()
+            for fmt in ('%Y年%m月%d日', '%Y-%m-%d', '%Y/%m/%d', '%Y-%m-%d %H:%M', '%Y年%m月%d日 %H:%M'):
+                try:
+                    return datetime.strptime(s, fmt)
+                except (ValueError, TypeError):
+                    continue
+            return None
+        plan_dt = _norm_date(plan)
+        if actuals and all(_norm_date(a) is not None for a in actuals):
             a = str(actuals[0])
-            if plan[:10] in ('',) or plan[:10] not in a:
+            a_dt = _norm_date(a)
+            # 实际开标时间与计划不一致 → 标记延期可能
+            if plan_dt is not None and a_dt is not None and a_dt.date() != plan_dt.date():
                 out['extension_abnormal'] = {
                     'score': 10,
                     'result': f"▲ 实际开标时间 {a} 与计划 {plan} 不一致，存在延期可能。",

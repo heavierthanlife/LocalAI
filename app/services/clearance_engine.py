@@ -332,15 +332,15 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
         'eval_criteria': eval_criteria,
     }
 
-    # 预警级别按最终总分（含合规严重违规加权）
+    # 合规严重违规加权（0-100 复合指数下，封顶 +20）
     comp = merged['compliance']
     if comp and not comp.get('skipped') and comp.get('per_file'):
         criticals = sum(p['summary'].get('critical', 0) for p in comp['per_file'])
         violations = sum(p['summary'].get('violation', 0) for p in comp['per_file'])
-        total_score += criticals * 5 + violations * 2
+        total_score += min(criticals * 5 + violations * 2, 20)
     merged['basic_info']['total_score'] = round(total_score, 1)
     merged['basic_info']['warning_level'] = (
-        '● 高度预警' if total_score > 50 else ('◆ 中等预警' if total_score > 20 else '◇ 正常')
+        '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
     )
 
     return merged
