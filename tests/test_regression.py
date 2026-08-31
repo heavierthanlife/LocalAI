@@ -658,3 +658,39 @@ def test_tailing_digits_wired_into_quote():
     assert res.tailing_digits_flag is True, "同尾数报价应触发 flag"
     assert res.tailing_digits_info['rate'] == 1.0
     assert hasattr(res, 'tailing_digits_flag')
+
+
+# ── FIX-2026-08-31-012: 清标基线快照校准 (工程类, 2 投标人) ──
+def test_clearance_baseline_scores():
+    """锁定工程类基线快照：权重微调不得使基线复合指数大幅漂移。
+
+    2 家投标人样本天然「竞争不足」，复合指数允许较高；此处主要防止未来改动
+    使 text_sim 等指标在无招标文件时错误评分（应跳过）。
+    """
+    import json
+    import os
+    snap = json.load(open(
+        os.path.join(os.path.dirname(__file__), 'fixtures', 'clearance_baseline', 'scores.json'),
+        encoding='utf-8'))
+    composite = snap['composite_score']
+    # 2 家样本允许中高，但必须 < 80（防极端误报）；且需带校准说明
+    assert 0 < composite < 80, f"2-bidder baseline composite {composite} out of sane range"
+    assert snap['meta']['n_bidders'] == 2
+    # text_sim 指标在无招标文件时应跳过（模板去除不可用）
+    for k in ('same_file_code', 'tech_section_similar', 'cross_file_code_same'):
+        assert snap['indicators'][k]['skipped'] is True, \
+            f"{k} 无招标文件时必须跳过（模板去除不可用）"
+
+
+def test_text_sim_skipped_without_tender():
+    """run_analysis 无招标文件时，text_sim 指标必须跳过（模板去除不可用）。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': 'a.docx', 'text': '招标公告 项目名称 XX 建设地点 XX 工期 730天 招标范围 施工', 'metadata': {}, 'images': []},
+        {'filename': 'b.docx', 'text': '招标公告 项目名称 XX 建设地点 XX 工期 700天 招标范围 施工', 'metadata': {}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')  # no tender_text
+    inds = {i['id']: i for i in report['indicators']}
+    for k in ('same_file_code', 'tech_section_similar', 'cross_file_code_same'):
+        assert inds[k]['skipped'] is True, f"{k} 必须跳过（无招标文件）"
+        assert inds[k]['score'] == 0, f"{k} 无招标文件时得分必须为 0"

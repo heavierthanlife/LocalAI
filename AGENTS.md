@@ -62,6 +62,17 @@ Every feature upgrade must include regression verification:
 - New migration files go in `migrations/` with `.sql` + `.rollback.sql` pairs
 - **Anonymous chat history**: `anon_chat_messages(thread_id PK, messages JSONB, updated_at)` — PostgreSQL-backed, atomic UPSERT append via `app/services/anonymous.py` (replaced per-thread JSON files)
 
+## 清标评分 (clearance scoring)
+
+- **权重复合指数**: `total_score` = 0-100 加权复合指数 (`document_analysis_svc._weighted_total_score`)，45 项 `INDICATOR_WEIGHTS` + 每指标 score cap + text_sim 三指标去重。预警阈值：≥60 高度 / ≥30 中等 / <30 正常。
+- **RiskScorer**: `0.375 key + 0.375 attr + 0.25 text`（图片权重 0.0，图片相似度未接入清标，仅图片描述抽检生效）。text_sim 需 ≥80% 相似度才计入（模板重叠门槛）。
+- **数据门槛（避免误报）**：
+  - `text_sim` 指标：无招标文件时**跳过**（无法做 `remove_template_content` 模板去除，高余弦是模板重叠非围标）。
+  - `quote` 指标：无结构化开标报价时，原始文本价格提取噪声大（日期/行项目被误当报价），结果仅作参考。
+  - `relationship`：正常投标天然共享项目名称/主体/人员 → 易误报，权重已调低。
+- **基线校准**：`tests/fixtures/clearance_baseline/` 含工程类脱敏文档（价格标金额已替换保留尾数）+ `scores.json` 快照 + `meta.json`（校准范围：仅工程类；`missing_types: [goods, services]` 待真实文档）。`test_clearance_baseline_scores` 锁快照防漂移。
+- **样本量免责**: 投标人 <5 时复合指数统计意义有限，报告应提示"样本量小，仅供参考"。
+
 ## Key conventions
 
 - **CSRF is opt-in** — disabled by default for JSON API routes via `WTF_CSRF_CHECK_DEFAULT=False`. Not needed for AJAX/JSON endpoints.

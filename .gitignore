@@ -74,5 +74,6 @@ data/user_laws/
 !data/skill_audit_cache.json
 !tests/mock_data/llm/*.json
 !tests/fixtures/*.json
+!tests/fixtures/clearance_baseline/*.json
 !tools/skill-mcp/package.json
 !tools/skill-mcp/package-lock.json

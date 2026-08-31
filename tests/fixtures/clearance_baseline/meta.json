@@ -1,0 +1,14 @@
+{
+  "doc_types": [
+    "engineering_bid_price",
+    "engineering_bid_tech",
+    "tender"
+  ],
+  "ground_truth_source": "土护降(监理)_清标分析结果_xlsx",
+  "missing_types": [
+    "goods",
+    "services"
+  ],
+  "calibration_date": "2026-08-31",
+  "note": "Weights calibrated on engineering class only; goods/services pending real docs"
+}

@@ -1,0 +1,252 @@
+{
+  "meta": {
+    "docs": [
+      "投标文件_价格标.docx",
+      "投标文件_商务技术标.docx"
+    ],
+    "n_bidders": 2,
+    "date": "2026-08-31",
+    "expected_level": "normal (composite < 30)"
+  },
+  "composite_score": 44.7,
+  "warning_level": "◆ 中等预警",
+  "indicators": {
+    "same_machine_code": {
+      "score": 0.0,
+      "skipped": false,
+      "result": "√ 未发现文件属性雷同。"
+    },
+    "same_file_code": {
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（需招标文件做模板去除，文本相似度不作依据）"
+    },
+    "same_dongle": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "tech_section_similar": {
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（需招标文件做模板去除，文本相似度不作依据）"
+    },
+    "contact_person_same": {
+      "score": 3.5,
+      "skipped": false,
+      "result": "▲ 发现1组共享关键信息，共7个共同关键词。"
+    },
+    "economic_error_similar": {
+      "score": 15,
+      "skipped": false,
+      "result": "▲ 发现37处疑似错别字（其中严重0处）。"
+    },
+    "bid_ip_same": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "decrypt_ip_same": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "download_ip_same": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_file_code_same": {
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（需招标文件做模板去除，文本相似度不作依据）"
+    },
+    "cross_contact_same": {
+      "score": 3.5,
+      "skipped": false,
+      "result": "▲ 发现1组共享关键信息，共7个共同关键词。"
+    },
+    "tender_query": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "candidate_give_up": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "subjective_expert_spread": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "low_win_rate": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "high_win_rate": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "bidder_count_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "upload_interval_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "subjective_expert_units": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "specific_expert_score": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "clique_expert_scoring": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "clique_expert_consistency": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "objective_score_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "high_price_abnormal": {
+      "score": 20,
+      "skipped": false,
+      "result": "▲ 发现2个投标单位报价疑义。最高风险评分100.0。"
+    },
+    "extension_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "tender_fail_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "waste_rate_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "download_no_bid": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "no_show_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "expert_deviation_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_bid_ip": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_decrypt_ip": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_machine_code": {
+      "score": 0.0,
+      "skipped": false,
+      "result": "√ 未发现文件属性雷同。"
+    },
+    "bidder_agent_contact": {
+      "score": 30,
+      "skipped": false,
+      "result": "● 发现5个红色预警，6个实体，3个关系，风险评分65.0。"
+    },
+    "expert_tenderer_closeness": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "expert_agent_closeness": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_download_ip": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "cross_dongle": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "tech_seal_check": {
+      "score": 15,
+      "skipped": false,
+      "result": "▲ 发现37处疑似错别字（其中严重0处）。"
+    },
+    "expert_bidder_closeness": {
+      "score": 30,
+      "skipped": false,
+      "result": "● 发现5个红色预警，6个实体，3个关系，风险评分65.0。"
+    },
+    "bad_expert_score": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "tech_score_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "commercial_score_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    },
+    "quote_proportional_float": {
+      "score": 20,
+      "skipped": false,
+      "result": "▲ 发现2个投标单位报价疑义。最高风险评分100.0。"
+    },
+    "contact_phone_abnormal": {
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+    }
+  },
+  "suspected": [
+    {
+      "name": "投标文件_价格标.docx",
+      "indicators_triggered": 6,
+      "score": 23.5
+    },
+    {
+      "name": "投标文件_商务技术标.docx",
+      "indicators_triggered": 6,
+      "score": 30.0
+    }
+  ]
+}

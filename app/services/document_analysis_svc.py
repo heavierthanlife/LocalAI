@@ -27,29 +27,29 @@ logger = logging.getLogger(__name__)
 INDICATOR_WEIGHTS = {
     # 触发指标
     'same_machine_code': 0.10, 'same_file_code': 0.10, 'same_dongle': 0.10,
-    'tech_section_similar': 0.10, 'contact_person_same': 0.08,
-    'economic_error_similar': 0.08, 'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
+    'tech_section_similar': 0.10, 'contact_person_same': 0.04,
+    'economic_error_similar': 0.04, 'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
     'download_ip_same': 0.10, 'cross_file_code_same': 0.06,
-    'cross_contact_same': 0.06,
+    'cross_contact_same': 0.03,
     # 核心指标
     'tender_query': 0.06, 'candidate_give_up': 0.08,
     'subjective_expert_spread': 0.08, 'low_win_rate': 0.05, 'high_win_rate': 0.05,
     'bidder_count_abnormal': 0.08, 'upload_interval_abnormal': 0.06,
     'subjective_expert_units': 0.08, 'specific_expert_score': 0.06,
     'clique_expert_scoring': 0.08, 'clique_expert_consistency': 0.08,
-    'objective_score_abnormal': 0.05, 'high_price_abnormal': 0.15,
+    'objective_score_abnormal': 0.05, 'high_price_abnormal': 0.08,
     'extension_abnormal': 0.05, 'tender_fail_abnormal': 0.04,
     'waste_rate_abnormal': 0.06, 'download_no_bid': 0.05, 'no_show_abnormal': 0.05,
     'expert_deviation_abnormal': 0.08,
     # 基础指标
     'cross_bid_ip': 0.06, 'cross_decrypt_ip': 0.06, 'cross_machine_code': 0.06,
-    'bidder_agent_contact': 0.06, 'expert_tenderer_closeness': 0.04,
+    'bidder_agent_contact': 0.03, 'expert_tenderer_closeness': 0.04,
     'expert_agent_closeness': 0.04, 'cross_download_ip': 0.06,
-    'cross_dongle': 0.06, 'tech_seal_check': 0.06,
-    'expert_bidder_closeness': 0.06, 'bad_expert_score': 0.04,
+    'cross_dongle': 0.06, 'tech_seal_check': 0.03,
+    'expert_bidder_closeness': 0.03, 'bad_expert_score': 0.04,
     # 扩展指标
     'tech_score_abnormal': 0.05, 'commercial_score_abnormal': 0.05,
-    'quote_proportional_float': 0.15, 'contact_phone_abnormal': 0.08,
+    'quote_proportional_float': 0.10, 'contact_phone_abnormal': 0.08,
 }
 DEFAULT_INDICATOR_WEIGHT = 0.03
 
@@ -104,6 +104,10 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
             return {'skipped': True, 'error': '需外部数据源（交易平台/评标系统数据）'}
 
         if name == 'text_sim':
+            # 未提供招标文件时，无法去除招标模板 → 高余弦多是模板重叠，不是围标证据。
+            # 标记为占位（诚实不误报），避免正常投标被标为"文本相似异常"。
+            if not tender_text:
+                return {'skipped': True, 'error': '需招标文件做模板去除，文本相似度不作依据'}
             from app.services.batch_compare_svc import _precompute_tfidf_for_files
             tfidf_matrix = None
             try:
@@ -475,6 +479,8 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             'warning_level': (
                 '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
             ),
+            # 样本量太小 → 复合指数统计意义有限（P-D 免责声明）
+            'sample_note': f'本次共 {n} 家投标人，样本量小，复合指数仅供参考' if n < 5 else '',
         },
         'suspected_units': suspected_units,
         'indicators': indicators,
@@ -587,6 +593,13 @@ def _build_standard_sections(doc, report):
                 _set_cell(info_table.cell(ri, ci), row[ci], bold=(ci % 2 == 0))
 
     doc.add_paragraph()
+    # 样本量免责声明（P-D）：投标人 <5 时复合指数统计意义有限
+    sample_note = info.get('sample_note', '')
+    if sample_note:
+        p = doc.add_paragraph()
+        rn = p.add_run(sample_note)
+        rn.font.size = Pt(FINE)
+        rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
     # ── Section 2: 预警单位汇总 ──
     _add_heading(doc, '二、预警单位汇总', H1)

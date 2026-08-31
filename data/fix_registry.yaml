@@ -477,3 +477,24 @@ fixes:
       - type: grep
         file: app/services/quote_anomaly.py
         pattern: "tailing_digits_flag"
+
+  - id: FIX-2026-08-31-012
+    title: "清标基线校准 + text_sim 模板去除门槛 + 样本量免责"
+    severity: medium
+    rationale: >
+      基线快照（工程类 2 投标人脱敏文档）暴露正常投标被误标为中等预警：text_sim 高余弦
+      是招标模板重叠（无招标文件无法去除），relationship/quote 因项目上下文与原始文本
+      噪声误报。Fix: (a) 无招标文件时 text_sim 指标跳过（remove_template_content 不可用）；
+      (b) 下调 relationship/quote/typo/contact 等易误报指标权重；(c) 新增
+      tests/fixtures/clearance_baseline/ 快照 + test_clearance_baseline_scores 防漂移；
+      (d) 报告加样本量免责声明（N<5）。校准范围仅工程类；货物/服务待真实文档。
+    checks:
+      - type: grep
+        file: app/services/document_analysis_svc.py
+        pattern: "需招标文件做模板去除"
+      - type: grep
+        file: app/services/document_analysis_svc.py
+        pattern: "sample_note"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_clearance_baseline_scores"
