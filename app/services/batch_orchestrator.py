@@ -184,7 +184,11 @@ def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=N
 
 
 def build_key_info_matches(pairs):
-    """Post-process key info matches from pairs."""
+    """Post-process key info matches from pairs.
+
+    FIX-015 (D4): carry the pair matrix coordinates (i, j) through so the report
+    shows real coordinates instead of (-,-) from a mismatched index lookup.
+    """
     matches = []
     for p in pairs:
         kw1 = set(extract_keywords(p['text1'], 20))
@@ -192,6 +196,8 @@ def build_key_info_matches(pairs):
         matches.append({
             'name1': p['name1'],
             'name2': p['name2'],
+            'i': p.get('i', '-'),
+            'j': p.get('j', '-'),
             'common_keywords': list(kw1 & kw2)[:10],
         })
     return matches

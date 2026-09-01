@@ -321,9 +321,10 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 score = min(total * 0.5, 20)
                 result_text = f"▲ 发现{len(ki_matches)}组共享关键信息，共{total}个共同关键词。"
                 details = [{'pair': f'{ki["name1"]} ↔ {ki["name2"]}',
-                           '矩阵坐标': f'({pairs[i]["i"] if i < len(pairs) else "-"},{pairs[i]["j"] if i < len(pairs) else "-"})',
+                           # FIX-015 (D4): use ki's own coordinates (no more (-,-))
+                           '矩阵坐标': f'({ki.get("i", "-")},{ki.get("j", "-")})',
                            'keywords': ', '.join(ki.get('common_keywords', [])[:10])}
-                          for i, ki in enumerate(ki_matches[:10])]
+                          for ki in ki_matches[:10]]
             else:
                 result_text = "√ 未发现重点信息雷同。"
             if skipped:
@@ -366,17 +367,24 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
 
         elif ind['checker'] == 'relationship':
             report = rel_data.get('report')
+            # FIX-015 (D3): distinguish the two relationship indicators by what
+            # data source they depend on (agent list vs expert list). Without
+            # that external data, note the missing source honestly.
+            need_external = ind.get('id') in ('bidder_agent_contact', 'expert_bidder_closeness')
+            ext_note = ind.get('skip_reason', '')
             if report:
                 rs = report.risk_score if hasattr(report, 'risk_score') else 0
                 red = len(report.red_flags) if hasattr(report, 'red_flags') else 0
                 ents = len(report.entities) if hasattr(report, 'entities') else 0
                 rels = len(report.relationships) if hasattr(report, 'relationships') else 0
                 score = min(rs, 30)
+                if need_external and not ext_note:
+                    ext_note = f"（提示：需{ext_note or '外部名单数据'}，当前仅依据投标文件内关系）"
                 if red > 0:
-                    result_text = f"● 发现{red}个红色预警，{ents}个实体，{rels}个关系，风险评分{rs:.1f}。"
+                    result_text = f"● 发现{red}个红色预警，{ents}个实体，{rels}个关系，风险评分{rs:.1f}。{ext_note}"
                     details = [{'flag': f} for f in (report.red_flags if hasattr(report, 'red_flags') else [])[:10]]
                 else:
-                    result_text = f"√ 未发现高危关联，{ents}个实体，{rels}个关系，风险评分{rs:.1f}。"
+                    result_text = f"√ 未发现高危关联，{ents}个实体，{rels}个关系，风险评分{rs:.1f}。{ext_note}"
             else:
                 result_text = "√ 未发现关联关系。"
             if skipped:
@@ -754,16 +762,15 @@ def _build_standard_sections(doc, report):
     run.bold = True
     run.font.size = Pt(H2)
 
-    pt = _add_table(doc, len(personnel_list) + 1, 6)
-    for j, hdr in enumerate(['单位名称', '单位类型', '姓名', '身份证号', '联系电话', '人员类型']):
+    pt = _add_table(doc, len(personnel_list) + 1, 4)
+    # FIX-015 (D4): drop 身份证号/联系电话 empty shell columns (never populated)
+    for j, hdr in enumerate(['单位名称', '姓名', '职务', '人员类型']):
         _set_cell(pt.cell(0, j), hdr, bold=True)
     for pi, pe in enumerate(personnel_list):
         _set_cell(pt.cell(pi + 1, 0), _safe(pe.get('company', '')))
-        _set_cell(pt.cell(pi + 1, 1), '投标人')
-        _set_cell(pt.cell(pi + 1, 2), _safe(pe.get('person', '')))
-        _set_cell(pt.cell(pi + 1, 3), '')
-        _set_cell(pt.cell(pi + 1, 4), '')
-        _set_cell(pt.cell(pi + 1, 5), _safe(pe.get('title', '')))
+        _set_cell(pt.cell(pi + 1, 1), _safe(pe.get('person', '')))
+        _set_cell(pt.cell(pi + 1, 2), _safe(pe.get('title', '')))
+        _set_cell(pt.cell(pi + 1, 3), '投标人')
 
     doc.add_paragraph()
 

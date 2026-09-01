@@ -411,6 +411,8 @@ INDICATOR_DEFS = [
         'rule_ref': _rule_ref('002_tender_regs', '第四十一条', '招标投标法实施条例'),
         'checker': 'relationship',
         'local': True,
+        # FIX-015 (D3): distinct skip reason — needs agency contact list data
+        'skip_reason': '缺少招标代理机构联系人名单（外部数据）',
     },
     {
         'id': 'expert_tenderer_closeness',
@@ -471,6 +473,8 @@ INDICATOR_DEFS = [
         'rule_ref': _rule_ref('006_bid_eval_regs', '第十二条', '评标委员会和评标方法暂行规定'),
         'checker': 'relationship',
         'local': True,
+        # FIX-015 (D3): distinct skip reason — needs expert/评委 name list data
+        'skip_reason': '缺少评标专家名单（外部数据）',
     },
     {
         'id': 'bad_expert_score',

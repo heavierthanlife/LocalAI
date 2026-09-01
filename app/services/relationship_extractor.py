@@ -40,10 +40,14 @@ _PERSON_TITLE = re.compile(
 )
 _COMPANY_NAME_RE = re.compile(
     r'(?:(?:[一-鿿]{2,8}(?:市|省|区|县|镇|乡|村))?'
-    r'[一-鿿]{2,20}'
-    r'(?:有限公司|有限责任公司|股份有限公司|集团有限公司|集团|事务所|合伙企业|厂|'
-    r'分公司|子公司|办事处|代表处|中心|研究院|学院|学校|医院|合作社|'
+    r'(?:[一-鿿]{2,20}?'
+    r'(?:有限公司|有限责任公司|股份有限公司|集团有限公司|集团|事务所|合伙企业|'
+    r'分公司|子公司|办事处|代表处|研究院|学院|学校|医院|合作社|'
     r'总公司|母公司|控股公司))'
+    r'|'
+    # 中心/厂/部: require a leading proper-name char (公司-like), not a verb
+    r'(?:[一-鿿]{2,10}(?:中心|厂|部|站|处))'
+    r')'
 )
 _PERSON_NAME_RE = re.compile(
     r'(?:' + _PERSON_TITLE.pattern + r')'
@@ -54,6 +58,105 @@ _PERSON_NAME_RE = re.compile(
     r'\s*[：:]\s*'
     r'(?P<title>' + _PERSON_TITLE.pattern + r')'
 )
+
+# FIX-015 (D1): generic "company-looking" phrases that are NOT real companies.
+# These end in company suffixes but are common words / verbs + 中心, so the
+# regex would wrongly absorb them (e.g. 监控中心, 行政中心, 设备厂).
+_COMPANY_BLACKLIST = {
+    '监控中心', '行政中心', '设备厂', '管理部', '财务部', '行政部', '人事部',
+    '保安部', '保洁部', '维修部', '客服部', '项目部', '工程部', '经营部',
+    '技术部', '安全部', '质量部', '采购部', '销售部', '市场部', '总经办',
+    '总工办', '办公室', '档案室', '资料室', '化验室', '实验室', '机房',
+    '设备间', '水泵房', '配电室', '值班室', '会议室', '食堂', '门卫',
+    '物业中心', '服务中心', '指挥中心', '值班中心', '监控室',
+    '投标人', '招标人', '招标代理', '监督单位', '主管部门', '建设单位',
+    '施工单位', '监理单位', '设计单位', '勘察单位', '中标人', '采购人',
+    '项目业主', '发包人', '承包人', '投标单位', '招标单位',
+}
+
+# FIX-015 (D2): person-name field labels and generic tokens that the person
+# regex must NEVER capture as names (e.g. 身份证号码：总经理 → 份证号码).
+_PERSON_NAME_BLACKLIST = {
+    '身份证号码', '身份证号', '证件号码', '证件号', '授权代表', '项目经理',
+    '技术负责人', '安全负责人', '质量负责人', '法定代表人', '法人代表',
+    '总经理', '董事长', '联系人', '投标人', '招标人', '负责人', '职务',
+    '以下内容', '签字人', '被授权人', '委托人', '单位名称', '公司名称',
+    '项目名称', '招标编号', '项目编号', '注册号', '证书号', '电话',
+    '手机号', '邮箱', '地址', '开户行', '账号', '税号', '期限', '工期',
+    '合同期', '质保期', '保修期', '服务期', '交货期', '完成期', '有效期',
+    '本保函', '本工程', '本项目', '本次招标', '共计', '总计', '合计',
+    '金额', '大写', '小写', '人民币', '元整', '元人民币',
+    '所属人员', '相关人员', '工作人员', '全体人员', '下列人员', '以下人员',
+    '我方人员', '本单位', '我单位', '投标', '报名', '审核', '审批',
+}
+
+
+def _is_valid_company(name: str) -> bool:
+    """FIX-015 (D1): reject blacklisted / generic company-like phrases.
+
+    Robust heuristic: a real company name either contains an explicit company
+    marker (公司/集团/事务所/有限/股份/合伙/银行/学院/医院…) or is a SHORT
+    proper noun (≤5 chars). Long verb-phrases absorbed before a suffix
+    (实现调压站, 排水疏导及站, 文件及合同约定完成全部…) are rejected.
+    """
+    if not name or len(name) < 4:
+        return False
+    if name in _COMPANY_BLACKLIST:
+        return False
+    # Reject verb-prefixed absorption: 具体包括X, 代为催缴X, 向X, 我方X, 已X
+    if re.match(r'^(具体包括|代为|向|从|由|对|据|为|在|于|按照|根据|以及|并|和|与|我方|已|所|其|本|该|双方|专业|相关|有关)', name):
+        return False
+    # Strong company markers → definitely a company (company/group/firm/etc.)
+    if re.search(r'(公司|集团|事务所|有限|股份|合伙|信用社|航空|保险|工程有限公司|科技有限公司)', name):
+        return True
+    # Otherwise: only accept SHORT proper-noun-style names (≤5 chars ending in
+    # a plausible entity suffix) that contain no verb-clause markers.
+    if len(name) <= 5 and re.search(r'(中心|厂|部|站|处|所|院|社)$', name):
+        if re.search(r'(实现|疏导|毕业|做好|验收|变更|审核|确认|要求|约定|完成|履行|提交|服务|管理)', name):
+            return False
+        return True
+    return False
+
+
+def _is_valid_person(name: str) -> bool:
+    """FIX-015 (D2): reject field labels / generic tokens as person names."""
+    if not name or len(name) < 2 or len(name) > 4:
+        return False
+    if name in _PERSON_NAME_BLACKLIST:
+        return False
+    # Reject names that are partial field labels (e.g. regex captured
+    # "份证号码" from "身份证号码：总经理" — chars 2-5 of the label).
+    for label in _PERSON_NAME_BLACKLIST:
+        if len(label) >= 3 and name in label:
+            return False
+    # Reject company-short-name-like tokens (北京华信, 天津利博…) that the
+    # NAME：TITLE pattern wrongly captures as persons.
+    if re.search(r'(公司|集团|厂|中心|院|所|部|局|处|站|银行|保险|有限|股份)$', name):
+        return False
+    return True
+
+
+def _extract_with_regex(texts: list[str]) -> list[list[ExtractedEntity]]:
+    """Regex-based company and person extraction (offline fallback)."""
+    all_entities = []
+    for text in texts:
+        entities = []
+        for m in _COMPANY_NAME_RE.finditer(text):
+            name = m.group().strip()
+            if _is_valid_company(name):
+                entities.append(ExtractedEntity(
+                    text=name, entity_type="company",
+                    positions=[(m.start(), m.end())], confidence=0.85))
+        for m in _PERSON_NAME_RE.finditer(text):
+            name = m.group('name') or m.group('name2')
+            title = m.group('title') or m.group(1)
+            if name and _is_valid_person(name.strip()):
+                entities.append(ExtractedEntity(
+                    text=name.strip(), entity_type="person",
+                    positions=[(m.start(), m.end())],
+                    confidence=0.88 if title else 0.75))
+        all_entities.append(entities)
+    return all_entities
 
 
 # --- Data classes ---
@@ -131,36 +234,29 @@ def _extract_with_hanlp(texts: list[str]) -> list[list[ExtractedEntity]]:
     return all_entities
 
 
-def _extract_with_regex(texts: list[str]) -> list[list[ExtractedEntity]]:
-    """Regex-based company and person extraction (offline fallback)."""
-    all_entities = []
-    for text in texts:
-        entities = []
-        for m in _COMPANY_NAME_RE.finditer(text):
-            entities.append(ExtractedEntity(
-                text=m.group(), entity_type="company",
-                positions=[(m.start(), m.end())], confidence=0.85))
-        for m in _PERSON_NAME_RE.finditer(text):
-            name = m.group('name') or m.group('name2')
-            title = m.group('title') or m.group(1)
-            if name and len(name) >= 2:
-                entities.append(ExtractedEntity(
-                    text=name, entity_type="person",
-                    positions=[(m.start(), m.end())],
-                    confidence=0.88 if title else 0.75))
-        all_entities.append(entities)
-    return all_entities
-
-
 def _merge_entities(all_entities: list[list[ExtractedEntity]]) -> list[ExtractedEntity]:
-    """Merge duplicate entities across texts, keeping highest confidence."""
+    """Merge duplicate entities across texts, keeping highest confidence.
+
+    FIX-015 (D2): after merging, drop person entities that are substrings of a
+    company entity (e.g. "北京华信" is the short name of "北京华信建设工程有限公司",
+    not a person).
+    """
     seen = {}
     for ent_list in all_entities:
         for ent in ent_list:
             key = (ent.text, ent.entity_type)
             if key not in seen or ent.confidence > seen[key].confidence:
                 seen[key] = ent
-    return list(seen.values())
+
+    merged = list(seen.values())
+    companies = {e.text for e in merged if e.entity_type == 'company'}
+    result = []
+    for e in merged:
+        if e.entity_type == 'person' and companies:
+            if any(e.text in comp for comp in companies):
+                continue
+        result.append(e)
+    return result
 
 
 # --- Module 1: Company-company relationships ---------------------------------
@@ -267,10 +363,18 @@ def _detect_personnel_relationships(
         doc_companies = [e.text for e in ent_list if e.entity_type == "company"]
 
         # Extract persons with their titles
+        # FIX-015 (D2): apply _is_valid_person so field labels and company short
+        # names aren't recorded as people in the personnel map. Also reject any
+        # name that is a substring of a detected company in this document.
         for m in _PERSON_NAME_RE.finditer(text):
             name = m.group('name') or m.group('name2')
             title_match = m.group('title') or m.group(1)
-            if not name or len(name) < 2:
+            if not name:
+                continue
+            name = name.strip()
+            if not _is_valid_person(name):
+                continue
+            if doc_companies and any(name in comp for comp in doc_companies):
                 continue
             title = title_match.strip() if title_match else "未知职务"
             doc_name = file_name
@@ -600,8 +704,13 @@ def extract_relationships(
                         relations=len(cs_rels), flags=len(cs_flags))
 
     # Step 6: Aggregated risk score (0-100)
+    # FIX-015 (D3): normalize by document count and entity volume so a handful
+    # of shared generic entities in 3 docs doesn't saturate at 100. The score
+    # is also damped when entity extraction quality is low (few entities).
     score = 0.0
     risk_rels = [r for r in report.relationships if r.risk_flag]
+    n_docs = max(len(texts), 1)
+    n_entities = len(report.entities) if report.entities else 0
     if risk_rels:
         # Company-company risk relations are highest weight
         cc_risk = sum(1 for r in risk_rels if r.module == "company_company")
@@ -609,7 +718,11 @@ def extract_relationships(
         dc_risk = sum(1 for r in risk_rels if r.module == "doc_doc")
         cs_risk = sum(1 for r in risk_rels if r.module == "collusion")
 
-        score = min(100.0, cc_risk * 25.0 + pc_risk * 20.0 + dc_risk * 12.0 + cs_risk * 15.0)
+        raw = cc_risk * 25.0 + pc_risk * 20.0 + dc_risk * 12.0 + cs_risk * 15.0
+        # Normalize: raw score is scaled down by doc count and entity volume so
+        # 2-3 docs with sparse/generic entities don't peg at 100.
+        scale = min(1.0, n_docs / 3.0) * min(1.0, n_entities / 5.0)
+        score = min(100.0, raw * (0.5 + 0.5 * scale))
     report.risk_score = round(score, 1)
 
     # Step 7: 社区检测（连通分量 + Louvain）——识别围标网络
