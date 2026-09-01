@@ -498,3 +498,28 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_clearance_baseline_scores"
+
+  - id: FIX-2026-09-01-013
+    title: "中文停用词过滤 — 消除招标模板重叠导致的文本相似误报"
+    severity: high
+    rationale: >
+      无中文停用词表时，常见招投标词（招标/投标/项目/资质/安全生产许可证/评标/评分…）
+      在所有投标文档中高频出现（df=2, idf=1.0），TF-IDF 无法抑制 → 正常投标（共享招标
+      模板）cosine 高达 0.98 被误判为围标。Fix: (a) 新增 stop_words.py DEFAULT_STOP_WORDS
+      (~150 词); (b) tokenize_for_tfidf 默认过滤停用词; (c) _make_vectorizer / preprocess_
+      text_for_similarity / compute_similarity_with_numbers 全链路接入; (d) B轻量: 提供
+      template_text 时动态加入其 top-50 高频词。实证：围标(技术雷同) cosine 0.98 vs 正常
+      (技术不同) 0.74，≥80% 门槛可判别。更新 TF-IDF 与 keyword 快照值。
+    checks:
+      - type: grep
+        file: app/services/stop_words.py
+        pattern: "DEFAULT_STOP_WORDS"
+      - type: grep
+        file: app/services/text_utils.py
+        pattern: "DEFAULT_STOP_WORDS"
+      - type: grep
+        file: app/services/file_processing.py
+        pattern: "top_keywords.template_text"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_text_sim_stopwords_discrimination"

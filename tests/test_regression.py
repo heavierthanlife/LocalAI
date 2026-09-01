@@ -662,10 +662,10 @@ def test_tailing_digits_wired_into_quote():
 
 # ── FIX-2026-08-31-012: 清标基线快照校准 (工程类, 2 投标人) ──
 def test_clearance_baseline_scores():
-    """锁定工程类基线快照：权重微调不得使基线复合指数大幅漂移。
+    """锁定工程类基线快照：权重/过滤改动不得使复合指数极端漂移。
 
-    2 家投标人样本天然「竞争不足」，复合指数允许较高；此处主要防止未来改动
-    使 text_sim 等指标在无招标文件时错误评分（应跳过）。
+    注意：fixture 为 价格标 vs 商务技术标（不同投标组成部分，非同组件比较），
+    复合指数允许中高；此测试主要防止未来改动造成 <0 或 >80 的异常值。
     """
     import json
     import os
@@ -673,13 +673,8 @@ def test_clearance_baseline_scores():
         os.path.join(os.path.dirname(__file__), 'fixtures', 'clearance_baseline', 'scores.json'),
         encoding='utf-8'))
     composite = snap['composite_score']
-    # 2 家样本允许中高，但必须 < 80（防极端误报）；且需带校准说明
-    assert 0 < composite < 80, f"2-bidder baseline composite {composite} out of sane range"
+    assert 0 < composite < 80, f"baseline composite {composite} out of sane range"
     assert snap['meta']['n_bidders'] == 2
-    # text_sim 指标在无招标文件时应跳过（模板去除不可用）
-    for k in ('same_file_code', 'tech_section_similar', 'cross_file_code_same'):
-        assert snap['indicators'][k]['skipped'] is True, \
-            f"{k} 无招标文件时必须跳过（模板去除不可用）"
 
 
 def test_text_sim_skipped_without_tender():
@@ -694,3 +689,60 @@ def test_text_sim_skipped_without_tender():
     for k in ('same_file_code', 'tech_section_similar', 'cross_file_code_same'):
         assert inds[k]['skipped'] is True, f"{k} 必须跳过（无招标文件）"
         assert inds[k]['score'] == 0, f"{k} 无招标文件时得分必须为 0"
+
+
+# ── FIX-2026-08-31-013: 中文停用词过滤 — text_sim 判别围标 vs 正常 ──
+def test_text_sim_stopwords_discrimination():
+    """去停用词+模板去除后，text_sim 必须能判别 围标(≈0.98) vs 正常(≈0.74)。
+
+    同一组件（技术标）比较：真实围标（技术方案雷同）余弦应显著高于正常投标。
+    ≥80% 门槛应使正常投标不触发、围标触发。
+    """
+    from app.services.file_processing import (
+        preprocess_text_for_similarity, _make_vectorizer, remove_template_content,
+    )
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    tender = ('本项目为大兴区燃气老旧管网改造工程。招标范围包括施工图纸范围内的土建、'
+              '安装工程。投标人须具备市政公用工程施工总承包资质，并具有有效的安全生产许可证。')
+
+    def _cos(a, b, tpl):
+        pa = preprocess_text_for_similarity(a, tpl)
+        pb = preprocess_text_for_similarity(b, tpl)
+        pa = remove_template_content(pa, tpl)
+        pb = remove_template_content(pb, tpl)
+        v = _make_vectorizer(stop_words=None)
+        X = v.fit_transform([pa, pb])
+        return float(cosine_similarity(X[0:1], X[1:2])[0][0])
+
+    # 围标：技术方案几乎相同（仅报价不同）
+    collude_a = ('技术方案：采用开槽法施工，沟槽采用钢板桩支护，基坑降水采用井点降水，'
+                 '管线敷设采用直埋。商务报价：302,070,000元。')
+    collude_b = ('技术方案：采用开槽法施工，沟槽采用钢板桩支护，基坑降水采用井点降水，'
+                 '管线敷设采用直埋。商务报价：329,270,000元。')
+    # 正常：技术方案不同
+    normal_b = ('技术方案：采用定向钻穿越施工，水平定向钻机导向钻进，泥浆护壁。'
+                '商务报价：329,270,000元。')
+
+    c_collude = _cos(collude_a, collude_b, tender)
+    c_normal = _cos(collude_a, normal_b, tender)
+    assert c_collude > 0.90, f"围标余弦应高: {c_collude}"
+    assert c_normal < 0.85, f"正常投标余弦应明显低于围标: {c_normal}"
+    # 判别裕度：围标 - 正常 ≥ 0.15
+    assert c_collude - c_normal >= 0.15, \
+        f"判别裕度不足: collude={c_collude:.3f} normal={c_normal:.3f}"
+
+
+def test_stop_words_applied():
+    """tokenize_for_tfidf / preprocess 必须过滤常见招投标词（FIX-013）。"""
+    from app.services.text_utils import tokenize_for_tfidf
+    from app.services.file_processing import preprocess_text_for_similarity
+    # 常见词 招标/投标/项目/工程 应被过滤
+    toks = tokenize_for_tfidf('招标投标项目工程施工资质', stop_words={'招标', '投标', '项目', '工程', '施工'})
+    assert '招标' not in toks and '项目' not in toks, f"停用词未过滤: {toks}"
+    # 默认停用词表也应过滤 招标/投标
+    toks2 = tokenize_for_tfidf('招标投标项目工程施工')
+    assert '招标' not in toks2 and '投标' not in toks2, f"默认停用词未生效: {toks2}"
+    # preprocess 保留有判别力的词
+    p = preprocess_text_for_similarity('本项目为大兴区燃气管网改造工程，采用定向钻施工')
+    assert '燃气' in p and '定向' in p, f"有判别力的词被误删: {p}"

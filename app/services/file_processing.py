@@ -288,35 +288,52 @@ SENSITIVE_PATTERNS = [
 
 
 # ── jieba-aware TfidfVectorizer helper ──
-def _make_vectorizer(**kwargs):
-    """Create a TfidfVectorizer with jieba Chinese tokenizer."""
+def _make_vectorizer(stop_words=None, **kwargs):
+    """Create a TfidfVectorizer with jieba Chinese tokenizer.
+
+    ``stop_words`` (set) is applied inside the tokenizer (not sklearn's stop_words,
+    which is English-oriented). None → use DEFAULT_STOP_WORDS (FIX-013).
+    English text uses the default analyzer.
+    """
     from app.services.text_utils import tokenize_for_tfidf, has_chinese
+    from app.services.stop_words import DEFAULT_STOP_WORDS
     from sklearn.feature_extraction.text import TfidfVectorizer
+
+    if stop_words is None:
+        stop_words = DEFAULT_STOP_WORDS
 
     def _tokenizer(raw_text):
         if has_chinese(raw_text):
-            return tokenize_for_tfidf(raw_text)
+            return tokenize_for_tfidf(raw_text, stop_words=stop_words)
         return raw_text  # English text: let default analyzer handle it
 
     return TfidfVectorizer(tokenizer=_tokenizer, token_pattern=None, **kwargs)
 
 
-def preprocess_text_for_similarity(text):
+def preprocess_text_for_similarity(text, template_text=None):
     """Preprocess text for similarity: strip noise, tokenize Chinese with jieba, filter.
 
     Chinese text: jieba segmentation → space-joined for TfidfVectorizer.
     English text: whitespace split with length filter.
+    FIX-013: filters high-frequency stop words; if template_text (招标文件) is
+    provided, its top-50 high-frequency words are added to the stop set.
     """
     if not text:
         return ""
-    from app.services.text_utils import tokenize_for_tfidf, has_chinese
+    from app.services.text_utils import tokenize_for_tfidf, has_chinese, top_keywords
+    from app.services.stop_words import DEFAULT_STOP_WORDS
+
+    stop_words = set(DEFAULT_STOP_WORDS)
+    if template_text and template_text.strip():
+        for w, _ in top_keywords(template_text, top_k=50):
+            stop_words.add(w)
 
     text = re.sub(r'[^\w\u4e00-\u9fff\s]', '', text)
     if has_chinese(text):
-        filtered = tokenize_for_tfidf(text, min_len=2)
+        filtered = tokenize_for_tfidf(text, min_len=2, stop_words=stop_words)
     else:
         words = text.split()
-        filtered = ' '.join(w for w in words if len(w) >= 3)
+        filtered = ' '.join(w for w in words if len(w) >= 3 and w.lower() not in stop_words)
     for pat in TECH_STD_PATTERNS:
         text = re.sub(pat, '', text, flags=re.IGNORECASE)
     text = re.sub(r'^目录|^第[一二三四五六七八九十]+章', '', text, flags=re.MULTILINE)
@@ -377,14 +394,14 @@ def keyword_overlap_similarity(text1, text2):
     return inter / union if union > 0 else 0.0
 
 def compute_similarity_with_numbers(text1, text2, template_text=None):
-    clean1 = preprocess_text_for_similarity(text1)
-    clean2 = preprocess_text_for_similarity(text2)
+    clean1 = preprocess_text_for_similarity(text1, template_text)
+    clean2 = preprocess_text_for_similarity(text2, template_text)
     if template_text:
         clean1 = remove_template_content(clean1, template_text)
         clean2 = remove_template_content(clean2, template_text)
     if not clean1.strip() or not clean2.strip():
         return 0.0, text1, text2, []
-    vectorizer = TfidfVectorizer(stop_words=None, lowercase=True)
+    vectorizer = _make_vectorizer(stop_words=None, lowercase=True)
     tfidf = vectorizer.fit_transform([clean1, clean2])
     sim = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
     escaped1 = html.escape(text1)

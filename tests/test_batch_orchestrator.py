@@ -117,9 +117,9 @@ def test_snapshot_tfidf_pairwise(bid_texts):
         "pair_b_eng_vs_similar": round(sim_b, 8),
     }
 
-    # ── Snapshot values (locked to current jieba + sklearn version) ──
-    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.90868497, abs=1e-6)
-    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.99387376, abs=1e-6)
+    # ── Snapshot values (locked to current jieba + sklearn + stop-word filter) ──
+    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.86620383, abs=1e-6)
+    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.98253900, abs=1e-6)
 
     # ── Invariants (must hold regardless of tokenizer version) ──
     assert sim_b > sim_a, f"eng-vs-similar {sim_b} !> eng-vs-goods {sim_a}"
@@ -158,10 +158,10 @@ def test_snapshot_keyword_overlap(keyword_texts):
         f"no_overlap {results['no_overlap']} !< slight_diff {results['slight_diff']}"
     )
 
-    # ── Snapshot values ──
-    assert results["near_identical"] == pytest.approx(0.81818182, abs=1e-6)
+    # ── Snapshot values (FIX-013 stop-word filtered) ──
+    assert results["near_identical"] == pytest.approx(0.80000000, abs=1e-6)
     assert results["slight_diff"] == pytest.approx(0.60000000, abs=1e-6)
-    assert results["no_overlap"] == pytest.approx(0.05263158, abs=1e-6)
+    assert results["no_overlap"] == pytest.approx(0.08571429, abs=1e-6)
 
 
 # ── Test 3: Risk scoring formula snapshot ────────────────────────────────────

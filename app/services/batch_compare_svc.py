@@ -6,7 +6,7 @@ from app.services.file_processing import preprocess_text_for_similarity, remove_
 def _precompute_tfidf_for_files(file_data, template_text=None):
     texts = []
     for fd in file_data:
-        clean = preprocess_text_for_similarity(fd['text'])
+        clean = preprocess_text_for_similarity(fd['text'], template_text)
         if template_text:
             clean = remove_template_content(clean, template_text)
         texts.append(clean)

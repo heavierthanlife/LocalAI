@@ -74,13 +74,19 @@ def posseg(text: str) -> list[tuple[str, str]] | None:
     return [(w.word, w.flag) for w in pseg.cut(text) if w.word.strip()]
 
 
-def tokenize_for_tfidf(text: str, min_len: int = 2) -> str:
+def tokenize_for_tfidf(text: str, min_len: int = 2, stop_words: set = None) -> str:
     """Segment text and return space-joined string for TfidfVectorizer.
 
-    Filters out single-character tokens (mostly punctuation/determiners).
-    This is designed as a drop-in ``tokenizer=`` callable for scikit-learn.
+    Filters out single-character tokens (mostly punctuation/determiners) and
+    high-frequency stop words (FIX-013) so shared tender boilerplate doesn't
+    inflate similarity. Defaults to the project's DEFAULT_STOP_WORDS.
     """
+    if stop_words is None:
+        from app.services.stop_words import DEFAULT_STOP_WORDS
+        stop_words = DEFAULT_STOP_WORDS
     words = [w for w in lcut(text) if len(w) >= min_len]
+    if stop_words:
+        words = [w for w in words if w not in stop_words]
     return ' '.join(words)
 
 

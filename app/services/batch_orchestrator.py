@@ -101,8 +101,8 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
 
     # Key info overlap
     if check_items.get('key_info', True):
-        t1 = preprocess_text_for_similarity(text1)
-        t2 = preprocess_text_for_similarity(text2)
+        t1 = preprocess_text_for_similarity(text1, template_text)
+        t2 = preprocess_text_for_similarity(text2, template_text)
         if template_text:
             t1 = remove_template_content(t1, template_text)
             t2 = remove_template_content(t2, template_text)
