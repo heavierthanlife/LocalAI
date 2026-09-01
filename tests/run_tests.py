@@ -42,7 +42,8 @@ def _():
     assert callable(call_llm), "call_llm not callable"
     assert callable(create_chat_model), "create_chat_model not callable"
     assert isinstance(PROVIDER_CONFIG, dict), "PROVIDER_CONFIG not dict"
-    assert len(PROVIDER_CONFIG) >= 3, f"expected >=3 providers, got {len(PROVIDER_CONFIG)}"
+    # FIX-016: active providers consolidated to openrouter + nvidia
+    assert len(PROVIDER_CONFIG) >= 2, f"expected >=2 providers, got {len(PROVIDER_CONFIG)}"
 
 
 @test("prompt_safety imports cleanly")
