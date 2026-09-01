@@ -547,3 +547,39 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_component_mismatch"
+
+  - id: FIX-2026-09-01-015
+    title: "P0 向量化 + typo/quote/relationship 校准"
+    severity: high
+    rationale: >
+      阶段 A (P0): _make_vectorizer._tokenizer 曾返回字符串被 sklearn 逐字符迭代,
+      产生单字垃圾特征, 污染全部相似度. 修复返回 list 后 判别力大幅提升
+      (围标 0.876 vs 正常 0.038, 裕度 0.84).
+      阶段 B (typo): 四层过触发 → 大写需阿拉伯配对/混淆词上下文守卫/ref-code 完整匹配/
+      domain 白名单/熔断 200. 价格标 322→0, 技术标 546→0 疑错字.
+      阶段 C (quote): extract_prices 上下文收紧 + 开标价注入 + risk 幅度加权 +
+      两指标独立判定. 修复 _cn_to_arabic 亿/万 组合解析.
+      阶段 D (relationship): 公司/人员正则黑名单 + risk 归一化 (100→28.5) +
+      personnel 表移除空壳列 + 修坐标.
+    checks:
+      - type: grep
+        file: app/services/file_processing.py
+        pattern: "tokenize_for_tfidf\\(raw_text, stop_words=stop_words\\).split"
+      - type: grep
+        file: app/services/typo_detector.py
+        pattern: "MAX_TYPO_FINDINGS"
+      - type: grep
+        file: app/services/typo_whitelist.py
+        pattern: "def is_allowed"
+      - type: grep
+        file: app/services/quote_anomaly.py
+        pattern: "def _is_price_like"
+      - type: grep
+        file: app/services/relationship_extractor.py
+        pattern: "def _is_valid_company"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_relationship_company_blacklist"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_clearance_baseline_classified_normal"
