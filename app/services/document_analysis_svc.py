@@ -180,6 +180,18 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     n = len(file_data)
     _ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
+    # FIX-015 (C2): if an open-info table provides authoritative bid prices,
+    # inject them into file_data BEFORE running checkers so the quote checker
+    # uses real totals instead of extract_prices garbage (quote_with_open_price
+    # was previously dead code).
+    ref_price = None
+    if open_info and open_info.get('rows'):
+        try:
+            from app.services.clearance_openinfo import quote_with_open_price
+            file_data, ref_price = quote_with_open_price(file_data, open_info, ref_price)
+        except Exception as e:
+            logger.warning(f"quote_with_open_price injection failed: {e}")
+
     # Run all checkers (each in try-except)
     checker_data = {}
     for ind in INDICATOR_DEFS:
@@ -371,24 +383,37 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 result_text = f"○ 跳过（{error_msg}）"
 
         elif ind['checker'] == 'quote':
+            # FIX-015 (C4): high_price_abnormal and quote_proportional_float
+            # now judge INDEPENDENTLY (they previously shared the same branch
+            # and produced identical output).
             qr = quote_data.get('result', {})
             per_bidder = qr.get('per_bidder', [])
             cross_prog = qr.get('cross_progression', False)
             cross_prog_type = qr.get('cross_progression_type', '')
-            if per_bidder:
-                max_qr = qr.get('max_risk_score', 0)
-                suspicious = [pb for pb in per_bidder if pb.get('risk_score', 0) > 10]
-                score = min(max_qr, 20)
+            is_progression_ind = (ind['id'] == 'quote_proportional_float')
+
+            if not per_bidder:
+                result_text = "√ 报价分析未发现异常。"
+            elif is_progression_ind:
+                # 等比/等差浮动异常：只看报价规律性
                 if cross_prog:
-                    # 等比浮动异常（quote_proportional_float）激活
                     label = '等差' if cross_prog_type == 'arithmetic' else '等比'
-                    score = max(score, min(max_qr + 15, 30))
-                    result_text = f"▲ 各投标报价呈{label}规律分布，存在定向陪标嫌疑。最高风险评分{max_qr:.1f}。"
+                    score = min(max(qr.get('max_risk_score', 0) + 15, 0), 30)
+                    result_text = f"▲ 各投标报价呈{label}规律分布，存在定向陪标嫌疑。最高风险评分{qr.get('max_risk_score', 0):.1f}。"
                     details = [{'bidder': pb.get('filename', ''), 'risk': f'{pb.get("risk_score", 0):.1f}',
                                'cv': f'{pb.get("cv", 0):.4f}',
                                'progression': cross_prog_type or '—'}
                               for pb in per_bidder]
-                elif suspicious:
+                else:
+                    score = 0.0
+                    result_text = "√ 各投标报价未见等比/等差规律浮动。"
+                    details = []
+            else:
+                # 高价投标异常：只看报价异常（same_rate/abnormal_drop/clustering/daxie）
+                max_qr = qr.get('max_risk_score', 0)
+                suspicious = [pb for pb in per_bidder if pb.get('risk_score', 0) > 10]
+                score = min(max_qr, 20)
+                if suspicious:
                     result_text = f"▲ 发现{len(suspicious)}个投标单位报价疑义。最高风险评分{max_qr:.1f}。"
                     details = [{'bidder': pb.get('filename', ''), 'risk': f'{pb.get("risk_score", 0):.1f}',
                                'cv': f'{pb.get("cv", 0):.4f}',
@@ -396,9 +421,9 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                                                    if pb.get(k)] or ['正常'])}
                               for pb in per_bidder]
                 else:
+                    score = 0.0
                     result_text = f"√ 报价分析未发现异常。平均CV: {qr.get('avg_cv', 0):.4f}。"
-            else:
-                result_text = "√ 报价分析未发现异常。"
+                    details = []
             if skipped:
                 result_text = f"○ 跳过（{error_msg}）"
 

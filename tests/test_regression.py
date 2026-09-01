@@ -810,3 +810,70 @@ def test_component_same():
                                {'text_sim': True, 'key_info': True, 'file_attr': True, 'image_sim': False})
     assert pair.get('component_mismatch') is False, "同组件不应标记 mismatch"
     assert pair['risk'] > 0, "同组件 text_sim 应正常参与风险计算"
+
+
+# ── FIX-2026-09-01-015 C5: quote fixtures (等差/等比/正常/垃圾) ──
+def _load_quote_scenarios():
+    import json
+    import os
+    return json.load(open(
+        os.path.join(os.path.dirname(__file__), 'fixtures', 'quote_fixtures', 'scenarios.json'),
+        encoding='utf-8'))
+
+
+def test_quote_arithmetic_progression_fixture():
+    """等差序列 fixture → cross_progression 触发且类型为 arithmetic。"""
+    from app.services.quote_anomaly import compare_bidders_quotes
+    data = _load_quote_scenarios()
+    sc = data['scenarios']['arithmetic']
+    docs = [{'filename': d['filename'], 'text': d['text'], 'metadata': {}, 'images': []}
+            for d in sc['docs']]
+    res = compare_bidders_quotes(docs)
+    assert res.get('cross_progression') is True, "等差序列应触发 cross_progression"
+    assert res.get('cross_progression_type') == 'arithmetic', \
+        f"等差类型错误: {res.get('cross_progression_type')}"
+
+
+def test_quote_geometric_progression_fixture():
+    """等比序列 fixture → cross_progression 触发且类型为 geometric。"""
+    from app.services.quote_anomaly import compare_bidders_quotes
+    data = _load_quote_scenarios()
+    sc = data['scenarios']['geometric']
+    docs = [{'filename': d['filename'], 'text': d['text'], 'metadata': {}, 'images': []}
+            for d in sc['docs']]
+    res = compare_bidders_quotes(docs)
+    assert res.get('cross_progression') is True, "等比序列应触发 cross_progression"
+    assert res.get('cross_progression_type') == 'geometric', \
+        f"等比类型错误: {res.get('cross_progression_type')}"
+
+
+def test_quote_normal_no_progression():
+    """正常分散报价 fixture → 不触发 cross_progression，且 risk 不饱和。"""
+    from app.services.quote_anomaly import compare_bidders_quotes
+    data = _load_quote_scenarios()
+    sc = data['scenarios']['normal']
+    docs = [{'filename': d['filename'], 'text': d['text'], 'metadata': {}, 'images': []}
+            for d in sc['docs']]
+    res = compare_bidders_quotes(docs)
+    assert res.get('cross_progression') is False, "正常报价不应触发规律信号"
+    # 正常报价不应全部 risk=100（C3 幅度加权 + C1 过滤后）
+    assert res.get('max_risk_score', 0) < 100, \
+        f"正常报价 max_risk 不应饱和 100: {res.get('max_risk_score')}"
+
+
+def test_quote_garbage_filtered():
+    """垃圾输入（年份/电话/标准号）→ extract_prices 过滤，只留真实报价。"""
+    from app.services.quote_anomaly import extract_prices
+    data = _load_quote_scenarios()
+    sc = data['scenarios']['noise_garbage']
+    for d in sc['docs']:
+        prices = extract_prices(d['text'])
+        # 电话/年份/标准号不得出现在价格列表
+        assert not any(abs(p - 69256688) < 1 for p in prices), f"电话被误当价格: {prices}"
+        assert not any(abs(p - 2026) < 1 for p in prices), f"年份被误当价格: {prices}"
+    # 两文档合计应含真实报价
+    all_p = []
+    for d in sc['docs']:
+        all_p.extend(extract_prices(d['text']))
+    for expected in sc['expect']['clean_prices']:
+        assert any(abs(p - expected) < 1 for p in all_p), f"缺少真实报价 {expected}: {all_p}"

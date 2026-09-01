@@ -37,7 +37,8 @@ _CN_NUM = {
     '陆': 6, '柒': 7, '捌': 8, '玖': 9, '拾': 10,
     '佰': 100, '仟': 1000, '万': 10000, '亿': 100000000,
 }
-_CN_UNIT = {'十': 10, '百': 100, '千': 1000, '万': 10000, '亿': 100000000}
+_CN_UNIT = {'十': 10, '百': 100, '千': 1000, '万': 10000, '亿': 100000000,
+            '拾': 10, '佰': 100, '仟': 1000}  # FIX-015 (C1): include 大写 units 拾佰仟
 
 # Daxie-only mapping for cross-referencing amounts (大写金额)
 _DAXIE_DIGIT = {'壹': 1, '贰': 2, '叁': 3, '肆': 4, '伍': 5,
@@ -47,7 +48,12 @@ _DAXIE_UNIT = {'拾': 10, '佰': 100, '仟': 1000, '万': 10000, '亿': 10000000
 
 
 def _cn_to_arabic(cn: str) -> Optional[float]:
-    """Convert common Chinese numerals to Arabic number."""
+    """Convert common Chinese numerals to Arabic number.
+
+    FIX-015 (C1): section-based parser handling 亿/万/仟/佰/拾 correctly:
+      壹仟壹佰万元 → 11000000  (not 11001)
+      壹佰贰拾叁万肆仟伍佰陆拾柒元捌角玖分 → 1234567.89
+    """
     if not cn:
         return None
     # Simple case: pure digits
@@ -57,37 +63,42 @@ def _cn_to_arabic(cn: str) -> Optional[float]:
         except ValueError:
             return None
 
-    unit = 1
-    result = 0.0
-    partial = 0.0
-    digits = []
-    for ch in reversed(cn):
-        if ch in _CN_NUM:
-            digit = _CN_NUM[ch]
-            if digit >= 10:
-                if partial == 0:
-                    partial = 1
-                result += partial * digit
-                partial = 0
-            else:
-                partial += digit
-        elif ch in _CN_UNIT:
+    total = 0.0      # folded result (亿/万 sections)
+    section = 0.0    # current section being built (below 万)
+    num = 0.0        # current digit group within section
+    has_unit = False
+    for ch in cn:
+        # Unit chars take precedence (拾佰仟万亿 appear in _CN_NUM too as digit
+        # values — must be treated as units, not digits).
+        if ch in _CN_UNIT:
             unit = _CN_UNIT[ch]
-            if partial == 0:
-                partial = 1
-            result += partial * unit
-            partial = 0
             if unit >= 10000:
-                unit = 1
+                # 万 / 亿 boundary: fold current section into total
+                total += (section + num) * unit
+                section = 0.0
+                num = 0.0
+            else:
+                # 拾/佰/仟: fold current digit into section
+                section += (num if num > 0 else 1) * unit
+                num = 0.0
+            has_unit = True
+        elif ch in _CN_NUM:
+            num = float(_CN_NUM[ch])
+        elif ch == '元':
+            section += num
+            num = 0.0
+        elif ch == '角':
+            section += num * 0.1
+            num = 0.0
+        elif ch == '分':
+            section += num * 0.01
+            num = 0.0
         elif ch.isdigit():
-            digits.append(ch)
+            num = float(ch)
         else:
             continue
-    if digits:
-        num_str = ''.join(reversed(digits))
-        result = float(num_str) * (unit if unit and unit < 10000 else 1)
-    result += partial
-    return result
+    total += section + num
+    return total if has_unit or total > 0 else None
 
 
 def parse_daxie_amount(text: str) -> list[dict]:
@@ -154,11 +165,80 @@ _CN_PRICE = re.compile(
 )
 
 
+# Price-context keywords that signal a number is a real bid amount.
+_PRICE_CONTEXT_KEYWORDS = (
+    '投标总价', '总报价', '投标报价', '报价', '总价', '合计', '金额', '小写',
+    '大写', '人民币', '投标价', '合同价', '中标价', '控制价', '限价',
+    '投标总报价', '含税', '不含税', '税前', '税后', '开标价', '评标价',
+    '价款', '预算价', '采购价', '成交价', '暂估价', '暂列金',
+)
+
+# Contexts that mean a number is NOT a price (year / phone / standard code).
+_NON_PRICE_CONTEXT = (
+    '招标编号', '项目编号', '采购编号', '合同编号', '文件编号', '编号',
+    '证书', '证号', '注册号', '身份证', '电话', '手机', '传真', '日期',
+    '年份', '年度', '标准', 'GB', 'ISO', 'QC', '证号', '号：', '编号：',
+)
+
+
+def _is_price_like(m: re.Match, text: str) -> bool:
+    """FIX-015 (C1): decide whether a matched number is a real price.
+
+    Keeps:
+      - numbers with an explicit currency unit (元/万元/¥/￥/USD/EUR/RMB)
+      - numbers near a price keyword (投标报价/总价/合计/大写/小写/金额…)
+      - bare numbers >= 6 digits (large amounts, e.g. 1000000)
+      - foreign-currency amounts (USD/EUR/RMB prefix)
+    Rejects:
+      - 4-5 digit bare numbers without unit/context (years 2026, phones, codes)
+      - numbers near non-price markers (编号/证书/电话/标准…)
+    """
+    num = m.group('num') or ''
+    unit = (m.group('unit') or '')
+    digits = num.replace(',', '')
+    try:
+        val = float(digits)
+    except (ValueError, TypeError):
+        return False
+
+    span_start = max(0, m.start() - 30)
+    span_end = min(len(text), m.end() + 10)
+    window = text[span_start:span_end]
+    before = text[max(0, m.start() - 15):m.start()]
+
+    # Explicit currency unit → definitely a price
+    if unit and any(u in unit for u in ('元', '万', '亿', '¥', '￥')):
+        return True
+    # Foreign currency prefix (USD/EUR/RMB/CNY) immediately before
+    if re.search(r'(?:USD|EUR|RMB|CNY|GBP)\s*$', before, re.IGNORECASE):
+        return True
+
+    # Near a price keyword → price
+    if any(k in window for k in _PRICE_CONTEXT_KEYWORDS):
+        return True
+    # Near a non-price marker → not a price
+    if any(k in window for k in _NON_PRICE_CONTEXT):
+        return False
+
+    # Bare number: keep only large amounts (>= 6 digits, i.e. >= 100,000),
+    # but reject bare 8-digit runs (landline phone pattern, e.g. 69256688)
+    # when no price keyword/unit is present. 6-7 digit bare numbers are kept
+    # (they are amounts like 1,000,000).
+    clean = digits.replace('.', '')
+    if len(clean) >= 6:
+        if len(clean) == 8 and not any(k in window for k in _PRICE_CONTEXT_KEYWORDS):
+            return False
+        return True
+    return False
+
+
 def extract_prices(text: str) -> list[float]:
     """Extract numeric prices from bid text (Arabic + Chinese numerals).
 
     Dedupes by (value, span) across both _DECIMAL_ARABIC and _CN_PRICE so the
     same price is never double-counted (FIX-011).
+    FIX-015 (C1): apply _is_price_like context filter so years, phones, standard
+    codes, and other non-price numbers don't flood the price list.
     """
     prices = []
     seen = set()
@@ -166,6 +246,8 @@ def extract_prices(text: str) -> list[float]:
     for m in chain(_DECIMAL_ARABIC.finditer(text), _CN_PRICE.finditer(text)):
         try:
             if m.groupdict().get('num'):
+                if not _is_price_like(m, text):
+                    continue
                 val = float(m.group('num').replace(',', ''))
                 unit = m.group('unit') or ''
                 if '万' in unit:
@@ -534,24 +616,37 @@ def check_quote_anomaly(
         result.details.append(f"发现 {len(daxie_mismatches)} 处大写金额与阿拉伯数字不一致")
         result.matched_prices['daxie_mismatch'] = [d['arabic_from_daxie'] for d in daxie_mismatches]
 
-    # Aggregate risk score (0-100)
+    # Aggregate risk score (0-100) — FIX-015 (C3): magnitude-weighted instead of
+    # a flat boolean sum, so a doc that merely has a few noisy numbers doesn't
+    # peg at 100. Each signal scales with its evidence strength.
     score = 0.0
-    if result.same_rate_flag:
-        score += 35.0
-    if result.abnormal_drop_flag:
-        score += 30.0
-    if result.clustering_flag:
-        score += 20.0
+    n_real = len(prices)
+    if result.same_rate_flag and same_rate_pairs:
+        # scale by how many pairs are suspicious out of possible
+        pairs_max = max(1, len(values) * (len(values) - 1) // 2)
+        score += 35.0 * min(len(same_rate_pairs) / pairs_max * 3, 1.0)
+    if result.abnormal_drop_flag and drops:
+        # scale by fraction of prices flagged as abnormal drops
+        score += 30.0 * min(len(drops) / max(len(prices), 1) * 3, 1.0)
+    if result.clustering_flag and clusters:
+        # scale by fraction of prices inside clusters
+        clustered_n = sum(len(c) for c in clusters)
+        score += 20.0 * min(clustered_n / max(len(values), 1) * 2.5, 1.0)
     if result.progression_type:
         score += 25.0
     if result.tailing_digits_flag:
-        score += 15.0
+        score += 15.0 * tail_info.get('rate', 1.0)
     if result.cv < cfg['cv_low']:
-        score += 15.0
+        # low CV (uniform quotes) — scale by how suspiciously low
+        score += 15.0 * min(1.0, (cfg['cv_low'] - result.cv) / cfg['cv_low'])
     if result.benford_deviation > cfg['benford']:
-        score += 10.0
+        score += 10.0 * min(1.0, result.benford_deviation / (cfg['benford'] * 3))
     if daxie_mismatches:
-        score += 15.0
+        score += 15.0 * min(len(daxie_mismatches) / 3.0, 1.0)
+    # Gate: with <3 real prices, the whole quote analysis is low-confidence —
+    # cap the score so a 1-2 price doc can't be declared "高价异常".
+    if n_real < 3:
+        score *= 0.4
     result.risk_score = min(score, 100.0)
 
     if audit:
