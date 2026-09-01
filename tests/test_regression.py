@@ -726,8 +726,9 @@ def test_text_sim_stopwords_discrimination():
 
     c_collude = _cos(collude_a, collude_b, tender)
     c_normal = _cos(collude_a, normal_b, tender)
-    assert c_collude > 0.90, f"围标余弦应高: {c_collude}"
-    assert c_normal < 0.85, f"正常投标余弦应明显低于围标: {c_normal}"
+    # FIX-015 (P0 vectorizer): word-level cosine. 围标（技术雷同，仅报价不同）显著高于正常。
+    assert c_collude > 0.80, f"围标余弦应高: {c_collude}"
+    assert c_normal < 0.50, f"正常投标余弦应明显低于围标: {c_normal}"
     # 判别裕度：围标 - 正常 ≥ 0.15
     assert c_collude - c_normal >= 0.15, \
         f"判别裕度不足: collude={c_collude:.3f} normal={c_normal:.3f}"

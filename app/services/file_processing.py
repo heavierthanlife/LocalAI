@@ -303,9 +303,13 @@ def _make_vectorizer(stop_words=None, **kwargs):
         stop_words = DEFAULT_STOP_WORDS
 
     def _tokenizer(raw_text):
+        # IMPORTANT (FIX-015): TfidfVectorizer.tokenizer must return a LIST of
+        # tokens. Returning a string makes sklearn iterate it char-by-char,
+        # producing single-char garbage features (' ', '员', '设', ...).
         if has_chinese(raw_text):
-            return tokenize_for_tfidf(raw_text, stop_words=stop_words)
-        return raw_text  # English text: let default analyzer handle it
+            return tokenize_for_tfidf(raw_text, stop_words=stop_words).split()
+        # English: produce a real token list (not the raw string)
+        return re.findall(r'[A-Za-z0-9_]+', raw_text)
 
     return TfidfVectorizer(tokenizer=_tokenizer, token_pattern=None, **kwargs)
 

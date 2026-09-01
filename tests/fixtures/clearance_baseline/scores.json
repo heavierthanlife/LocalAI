@@ -5,10 +5,10 @@
       "投标文件_商务技术标.docx"
     ],
     "n_bidders": 2,
-    "date": "2026-08-31",
-    "expected_level": "note: 2-bidder run is inherently competition-insufficient; weights calibrated for 3+ bidders <30"
+    "date": "2026-09-01",
+    "note": "FIX-015 P0 vectorizer rebuild (word-level TF-IDF)"
   },
-  "composite_score": 50.0,
+  "composite_score": 36.9,
   "warning_level": "◆ 中等预警",
   "indicators": {
     "same_machine_code": {
@@ -17,9 +17,9 @@
       "result": "√ 未发现文件属性雷同。"
     },
     "same_file_code": {
-      "score": 23.6,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现异常：投标文件_价格标.docx, 投标文件_商务技术标.docx 等1对组合存在高风险文本相似（最高23.6）"
+      "result": "√ 未发现显著文本相似异常。"
     },
     "same_dongle": {
       "score": 0.0,
@@ -27,14 +27,14 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "tech_section_similar": {
-      "score": 23.6,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现异常：投标文件_价格标.docx, 投标文件_商务技术标.docx 等1对组合存在高风险文本相似（最高23.6）"
+      "result": "√ 未发现显著文本相似异常。"
     },
     "contact_person_same": {
-      "score": 3.5,
+      "score": 0.5,
       "skipped": false,
-      "result": "▲ 发现1组共享关键信息，共7个共同关键词。"
+      "result": "▲ 发现1组共享关键信息，共1个共同关键词。"
     },
     "economic_error_similar": {
       "score": 15,
@@ -57,14 +57,14 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "cross_file_code_same": {
-      "score": 23.6,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现异常：投标文件_价格标.docx, 投标文件_商务技术标.docx 等1对组合存在高风险文本相似（最高23.6）"
+      "result": "√ 未发现显著文本相似异常。"
     },
     "cross_contact_same": {
-      "score": 3.5,
+      "score": 0.5,
       "skipped": false,
-      "result": "▲ 发现1组共享关键信息，共7个共同关键词。"
+      "result": "▲ 发现1组共享关键信息，共1个共同关键词。"
     },
     "tender_query": {
       "score": 0.0,
@@ -241,12 +241,12 @@
     {
       "name": "投标文件_价格标.docx",
       "indicators_triggered": 9,
-      "score": 35.3
+      "score": 20.5
     },
     {
       "name": "投标文件_商务技术标.docx",
       "indicators_triggered": 9,
-      "score": 41.8
+      "score": 27.0
     }
   ]
 }

@@ -70,8 +70,10 @@ class TypoFinding:
 class TypoReport:
     findings: list[TypoFinding] = field(default_factory=list)
     layers_run: list[str] = field(default_factory=list)
-    total_suspects: int = 0
+    total_suspects: int = 0       # warning + critical (real suspects, score-bearing)
+    info_count: int = 0           # info observations (ambiguous, non-scoring)
     critical_count: int = 0
+    truncated: bool = False       # FIX-015 (B5): set when findings hit the cap
     diff_text: str = ""         # populated when diff_review mode is enabled
 
 
@@ -99,10 +101,46 @@ _BIDDING_CONFUSION_PAIRS = {
     '其间': ['期间'],
 }
 
+# FIX-015 (B2): pairs that are near-synonyms in tender contexts — both spellings
+# are often legitimate, so flagging them as "warning" floods reports. Downgrade
+# to info (non-scoring).
+_AMBIGUOUS_PAIRS = {'权力', '权利', '制订', '制定', '期间', '其间', '形式', '形势', '交纳', '缴纳'}
+
+# FIX-015 (B2): context guards. When the word appears with these following
+# tokens, it's very likely the CORRECT spelling — skip the finding.
+_CONTEXT_GUARD_OK = {
+    '必须': ('条件', '办理', '遵守', '满足', '达到', '符合', '持有', '取得', '提交', '具有', '具有', '具备', '由', '向'),
+    '必需': ('品', '物资', '材料', '设备', '营养', '条件'),
+    '交纳': ('保证金', '款项', '费用', '款项'),
+    '缴纳': ('税款', '费用', '社保', '养老金'),
+    '截止': ('日期', '时间', '至', '前'),
+    '截至': ('至', '目前', '为止'),
+    '签定': ('合同', '协议', '合同书'),
+    '签订': ('合同', '协议', '意向书', '前', '后', '之日', '生效'),
+    '订金': ('支付', '预', '合同'),
+    '定金': ('支付', '收取', '合同'),
+    '启事': ('寻', '招领'),
+    '启示': ('启发', '给'),
+}
+
+# FIX-015 (B2): when the word is PRECEDED by these tokens, it is almost always
+# correct usage (e.g. 合同签订前 → 签订 correct).
+_CONTEXT_GUARD_BEFORE_OK = {
+    '签订': ('合同', '协议'),
+    '缴纳': ('税', '费'),
+    '交纳': ('保证', '履约'),
+    '截止': ('报名', '投标', '递交', '响应'),
+}
+
+# FIX-015 (B2): words that are NEVER typos in any tender context (field labels
+# and document headers) — hard skip.
+_HARD_SKIP_WORDS = {'以下', '内容', '职务', '身份证号码', '编号', '名称', '地址', '电话', '联系人'}
+
 
 def _detect_chinese_typos(text: str, config: dict) -> list[TypoFinding]:
     """Detect Chinese character typos using pycorrector + domain dictionary."""
     findings = []
+    from app.services.typo_whitelist import is_allowed
 
     # 1. Use pycorrector if available
     try:
@@ -122,6 +160,8 @@ def _detect_chinese_typos(text: str, config: dict) -> list[TypoFinding]:
                     continue
 
                 if orig and corr and orig != corr and score >= config['min_confidence']:
+                    if is_allowed(orig) or is_allowed(corr):
+                        continue  # FIX-015 (B4): domain term — never a typo
                     pos = text.find(orig)
                     findings.append(TypoFinding(
                         layer="chinese",
@@ -139,19 +179,42 @@ def _detect_chinese_typos(text: str, config: dict) -> list[TypoFinding]:
         logger.warning(f"pycorrector failed (non-blocking): {e}")
 
     # 2. Domain dictionary check (always runs, catches bidding-specific errors)
+    # FIX-015 (B2): apply context guards (skip correct usage), hard-skip field
+    # labels, downgrade ambiguous near-synonyms to info, and dedup per doc.
+    seen_positions = set()
     for wrong, correct_list in _BIDDING_CONFUSION_PAIRS.items():
         for m in re.finditer(re.escape(wrong), text):
-            # Check context: avoid flagging when it's clearly correct
-            context = text[max(0, m.start()-10):m.end()+20]
+            # Dedup: same doc + same position → single finding
+            if (wrong, m.start()) in seen_positions:
+                continue
+            # Hard-skip field labels / headers
+            if wrong in _HARD_SKIP_WORDS:
+                continue
+            # FIX-015 (B4): domain term — never a typo
+            if is_allowed(wrong):
+                continue
+            # Context guard: following tokens indicate correct usage
+            context = text[m.end():m.end() + 12]
+            guarded = _CONTEXT_GUARD_OK.get(wrong)
+            if guarded and any(context.startswith(g) for g in guarded):
+                continue
+            # Context guard: preceding tokens indicate correct usage
+            before = text[max(0, m.start()-4):m.start()]
+            guarded_before = _CONTEXT_GUARD_BEFORE_OK.get(wrong)
+            if guarded_before and any(before.endswith(g) for g in guarded_before):
+                continue
+            seen_positions.add((wrong, m.start()))
+            # Ambiguous near-synonyms → info (non-scoring), not warning
+            severity = "info" if wrong in _AMBIGUOUS_PAIRS else "warning"
             findings.append(TypoFinding(
                 layer="chinese",
                 suspect_text=wrong,
                 suggestions=correct_list,
                 confidence=0.75,
-                context_snippet=context,
+                context_snippet=text[max(0, m.start()-10):m.end()+20],
                 position_start=m.start(),
                 position_end=m.end(),
-                severity="warning",
+                severity=severity,
             ))
 
     return findings
@@ -260,64 +323,77 @@ def _detect_english_typos(text: str, config: dict) -> list[TypoFinding]:
 # --- Layer 3: Numeric / reference validation ---------------------------------
 
 # Chinese daxie numerals (大写金额) regex — must cover amounts like "壹佰贰拾叁万肆仟伍佰陆拾柒元捌角玖分"
+# FIX-015 (B1): the daxie must START with a digit numeral (壹-玖 / 零), so bare
+# unit-only runs like "万元"/"元整" (column headers) are never matched as amounts.
+_DAXIE_DIGITS = '零壹贰叁肆伍陆柒捌玖'
+_DAXIE_UNITS = '拾佰仟万亿角分元整'
 _DAXIE_AMOUNT_RE = re.compile(
     r'(?P<daxie>'
-    r'(?:壹|贰|叁|肆|伍|陆|柒|捌|玖|拾|佰|仟|万|亿|零|元|角|分|整)+'
+    r'[' + _DAXIE_DIGITS + ']'
+    r'[' + _DAXIE_DIGITS + _DAXIE_UNITS + ']*'
     r')'
 )
 
 _ARABIC_AMOUNT_RE = re.compile(
-    r'(?P<num>[\d,]+\.?\d*)\s*(?P<unit>万元|万|亿元|亿|元|万元整|元整)'
+    r'(?P<num>[\d,]+\.?\d*)\s*(?P<unit>万元|万|亿元|亿|元|万元整|元整|元人民币|人民币元)?'
 )
 
 # Document reference code patterns
+# FIX-015 (B3): use \b word boundaries so we match the FULL code token, not
+# substrings. Previously "COO" or "BOOK" inside text would trip the O/l check.
 _REF_CODE_PATTERNS = {
     'bid_ref': re.compile(r'(?:招标编号|项目编号|采购编号|ZFCG|ZC|GC|SG|JZ|'
-                          r'BID|TENDER)[：:\s]*([A-Z0-9\-_/]+)', re.IGNORECASE),
-    'contract_ref': re.compile(r'(?:合同编号|合同号|CONTRACT)[：:\s]*([A-Z0-9\-_/]+)', re.IGNORECASE),
-    'iso_ref': re.compile(r'(?:ISO|GB|GB/T|IEC)\s*[\d\-:]+', re.IGNORECASE),
+                          r'BID|TENDER)[：:\s]*\b([A-Z0-9][A-Z0-9\-_/]*[A-Z0-9])\b', re.IGNORECASE),
+    'contract_ref': re.compile(r'(?:合同编号|合同号|CONTRACT)[：:\s]*\b([A-Z0-9][A-Z0-9\-_/]*[A-Z0-9])\b', re.IGNORECASE),
+    'iso_ref': re.compile(r'\b(?:ISO|GB|GB/T|IEC)\s*[\d\-:]+', re.IGNORECASE),
     'money_upper': re.compile(r'[¥￥]\s*([\d,]+\.?\d*)'),
 }
 
 
 def _parse_daxie_to_number(daxie: str) -> Optional[float]:
-    """Parse Chinese uppercase amount to numeric value."""
+    """Parse Chinese uppercase amount to numeric value.
+
+    FIX-015 (B1): section-based parser. Handles 亿/万/仟/佰/拾 correctly:
+      叁亿零贰佰万 = 3×1e8 + 200×1e4 = 302,000,000
+      壹佰贰拾叁万肆仟伍佰陆拾柒元捌角玖分 = 1,234,567.89
+    """
     digit_map = {'壹':1,'贰':2,'叁':3,'肆':4,'伍':5,'陆':6,'柒':7,'捌':8,'玖':9,'零':0}
     unit_map = {'拾':10,'佰':100,'仟':1000,'万':10000,'亿':100000000}
 
-    result = 0.0
-    segment = 0.0
+    total = 0.0      # folded result (亿/万 sections already folded)
+    section = 0.0    # current section being built (below 万)
+    num = 0.0        # current digit group within section
     has_unit = False
     for ch in daxie:
         if ch in digit_map:
-            segment = digit_map[ch]
+            num = float(digit_map[ch])
         elif ch in unit_map:
-            if segment == 0:
-                segment = 1
             unit = unit_map[ch]
             if unit >= 10000:
-                result = (result + segment) * unit
-                segment = 0
+                # 万 / 亿 boundary: fold the current section into total
+                total += (section + num) * unit
+                section = 0.0
+                num = 0.0
             else:
-                segment *= unit
-                result += segment
-                segment = 0
+                # 拾/佰/仟: fold current digit into section
+                section += (num if num > 0 else 1) * unit
+                num = 0.0
             has_unit = True
         elif ch == '元':
-            result += segment
-            segment = 0
+            section += num
+            num = 0.0
         elif ch == '角':
-            result += segment * 0.1
-            segment = 0
+            section += num * 0.1
+            num = 0.0
         elif ch == '分':
-            result += segment * 0.01
-            segment = 0
+            section += num * 0.01
+            num = 0.0
         elif ch == '整':
             pass  # marker only
         else:
             continue
-    result += segment
-    return result if has_unit or result > 0 else None
+    total += section + num
+    return total if has_unit or total > 0 else None
 
 
 def _detect_numeric_typos(text: str, config: dict) -> list[TypoFinding]:
@@ -335,8 +411,13 @@ def _detect_numeric_typos(text: str, config: dict) -> list[TypoFinding]:
             if daxie_val is None:
                 continue
 
-            # Find nearest Arabic amount
+            # Find nearest Arabic amount (within a reasonable window).
+            # FIX-015 (B1): only flag a daxie as an error when an Arabic
+            # counterpart exists nearby but does NOT match, OR when a daxie
+            # appears with no nearby Arabic at all (both are real mismatch
+            # signals). Previously every unpaired 大写 became a finding.
             nearest_arabic = None
+            nearest_arabic_dist = 10 ** 9
             for am in arabic_matches:
                 raw_num = am.group('num').replace(',', '')
                 try:
@@ -346,25 +427,46 @@ def _detect_numeric_typos(text: str, config: dict) -> list[TypoFinding]:
                         arabic_val *= 10000
                     elif '亿' in unit:
                         arabic_val *= 100000000
-                    if abs(arabic_val - daxie_val) < 0.01 * max(arabic_val, 1):
+                    dist = min(abs(dm.start() - am.start()), abs(dm.end() - am.end()))
+                    if dist < nearest_arabic_dist:
+                        nearest_arabic_dist = dist
                         nearest_arabic = arabic_val
-                        break
                 except ValueError:
                     continue
 
-            if nearest_arabic is None and daxie_val > 0:
+            # Only meaningful if an Arabic amount is near (within 40 chars);
+            # a standalone 大写 with no Arabic nearby is just the amount line
+            # header, not a typo signal.
+            if nearest_arabic is not None and nearest_arabic_dist <= 40:
+                if abs(nearest_arabic - daxie_val) >= 0.01 * max(nearest_arabic, 1):
+                    # Arabic present but mismatched → real daxie error
+                    findings.append(TypoFinding(
+                        layer="numeric",
+                        suspect_text=daxie_str,
+                        suggestions=[str(int(nearest_arabic)) if nearest_arabic == int(nearest_arabic) else f"{nearest_arabic:.2f}"],
+                        confidence=0.75,
+                        context_snippet=_get_context(text, daxie_str, 50),
+                        position_start=dm.start(),
+                        position_end=dm.end(),
+                        is_daxie_error=True,
+                        daxie_actual=daxie_str,
+                        daxie_expected=str(int(nearest_arabic)) if nearest_arabic == int(nearest_arabic) else f"{nearest_arabic:.2f}",
+                        severity="warning",
+                    ))
+            elif nearest_arabic is None:
+                # No Arabic counterpart in the whole doc → informational only
                 findings.append(TypoFinding(
                     layer="numeric",
                     suspect_text=daxie_str,
                     suggestions=[],
-                    confidence=0.70,
+                    confidence=0.45,
                     context_snippet=_get_context(text, daxie_str, 50),
                     position_start=dm.start(),
                     position_end=dm.end(),
                     is_daxie_error=True,
                     daxie_actual=daxie_str,
                     daxie_expected="",
-                    severity="warning",
+                    severity="info",
                 ))
 
     # 2. Reference code format validation
@@ -373,11 +475,17 @@ def _detect_numeric_typos(text: str, config: dict) -> list[TypoFinding]:
             code = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group()
             if not code:
                 continue
-            # Check for common typos in reference codes
+            # Check for common typos in reference codes.
+            # FIX-015 (B3): only flag O/l when the code is clearly a mixed
+            # alphanumeric code (has digits) — pure words like COO/BOOK or
+            # hex-like tokens are not typos. ISO/IEC/GB standards are exempt
+            # (their O/l are legitimate prefix letters, e.g. ISO9001).
             issues = []
-            if re.search(r'[Oo]', code):  # Letter O used instead of digit 0
+            is_standard = ref_type == 'iso_ref'
+            has_digit = re.search(r'[0-9]', code)
+            if has_digit and not is_standard and re.search(r'[Oo]', code):  # Letter O vs digit 0
                 issues.append("可能包含字母O代替数字0")
-            if re.search(r'[lL]', code):  # Letter l used instead of digit 1
+            if has_digit and not is_standard and re.search(r'[lL]', code):  # Letter l vs digit 1
                 issues.append("可能包含字母l代替数字1")
             if re.search(r'[一-鿿]', code):  # Chinese character in alphanumeric code
                 issues.append("引用编号中混合了中文字符")
@@ -485,7 +593,16 @@ def detect_typos(
                 audit.component("typo_layer", status="FAILED", layer="numeric",
                                 error=str(e)[:100])
 
-    report.total_suspects = len(report.findings)
+    # FIX-015 (B5): circuit breaker — a garbage/OCR doc can produce thousands of
+    # raw findings. Cap at MAX_TYPO_FINDINGS so the frontend/report never gets
+    # flooded, and surface the truncation via report.truncated.
+    MAX_TYPO_FINDINGS = 200
+    if len(report.findings) > MAX_TYPO_FINDINGS:
+        report.findings = report.findings[:MAX_TYPO_FINDINGS]
+        report.truncated = True
+
+    report.total_suspects = len([f for f in report.findings if f.severity in ("warning", "critical")])
+    report.info_count = len([f for f in report.findings if f.severity == "info"])
     report.critical_count = len([f for f in report.findings if f.severity == "critical"])
 
     # Generate diff text if diff review mode is enabled

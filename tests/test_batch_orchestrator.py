@@ -118,13 +118,15 @@ def test_snapshot_tfidf_pairwise(bid_texts):
     }
 
     # ── Snapshot values (locked to current jieba + sklearn + stop-word filter) ──
-    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.86620383, abs=1e-6)
-    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.98253900, abs=1e-6)
+    # FIX-015 (P0 vectorizer): tokenizer now returns a list, so TF-IDF is computed
+    # on real jieba words, not single-char garbage. Values recalibrated to word-level.
+    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.14624584, abs=1e-6)
+    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.77739505, abs=1e-6)
 
-    # ── Invariants (must hold regardless of tokenizer version) ──
+    # ── Invariants (word-level semantics, FIX-015) ──
     assert sim_b > sim_a, f"eng-vs-similar {sim_b} !> eng-vs-goods {sim_a}"
-    assert sim_b > 0.9, "engineering vs similar should have high cosine (>0.9)"
-    assert sim_a > 0.8, "engineering vs goods still share template structure (>0.8)"
+    assert sim_b > 0.7, "similar-domain bids should have substantial cosine (>0.7)"
+    assert sim_a < 0.5, "different-domain bids should have LOW cosine (<0.5)"
 
 
 # ── Test 2: Keyword overlap similarity snapshot ───────────────────────────────
@@ -158,10 +160,10 @@ def test_snapshot_keyword_overlap(keyword_texts):
         f"no_overlap {results['no_overlap']} !< slight_diff {results['slight_diff']}"
     )
 
-    # ── Snapshot values (FIX-013 stop-word filtered) ──
-    assert results["near_identical"] == pytest.approx(0.80000000, abs=1e-6)
-    assert results["slight_diff"] == pytest.approx(0.60000000, abs=1e-6)
-    assert results["no_overlap"] == pytest.approx(0.08571429, abs=1e-6)
+    # ── Snapshot values (FIX-013 stop-word filtered + FIX-015 word-level TF-IDF) ──
+    assert results["near_identical"] == pytest.approx(0.55555556, abs=1e-6)
+    assert results["slight_diff"] == pytest.approx(0.41176471, abs=1e-6)
+    assert results["no_overlap"] == pytest.approx(0.0, abs=1e-6)
 
 
 # ── Test 3: Risk scoring formula snapshot ────────────────────────────────────
