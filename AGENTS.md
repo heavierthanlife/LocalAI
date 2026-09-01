@@ -33,6 +33,24 @@ python tests/run_tests.py
 
 Tests that need a database are marked `@pytest.mark.db` and deselected by default (`-m "not db"`). To run them, set env vars (`PG_USER`, `PG_PASSWORD`, etc.) and pass `-m db`.
 
+### 容器内测试注意事项（Docker）
+
+容器镜像**不包含 pytest**（`.dockerignore` 排除 `tests/`）。容器内 E2E 验证方式：
+
+```bash
+# 1. 把改动的服务文件 + fixture 文档复制进运行中容器
+docker cp app/services/xxx.py localai-app:/app/app/services/xxx.py
+docker cp tests/fixtures/clearance_baseline/xxx.docx localai-app:/app/tests/fixtures/clearance_baseline/
+
+# 2. 写 Python 验证脚本，docker exec 运行（不依赖 pytest）
+docker exec localai-app python /tmp/verify.py
+```
+
+- 容器内跑 pytest：需临时 `docker exec localai-app pip install pytest`（不持久化）
+- 本地 `pytest` 仍是权威回归 gate；容器 E2E 用于验证运行时行为（清标 8 指标、复合指数、DOCX 报告）
+
+**可选依赖**：`pycorrector`（typo 中文层）、`hanlp`（relationship NER）、`pyspellchecker`/`symspellpy`（英文拼写）均标注在 `requirements.txt` 可选段，缺失时各层自动走后备（domain dict / regex），不影响核心功能。
+
 ## Regression Testing
 
 Every feature upgrade must include regression verification:

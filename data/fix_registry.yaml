@@ -523,6 +523,11 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_text_sim_stopwords_discrimination"
+      # FIX-013 B方案 grep_not: tokenize_for_tfidf 必须保留 min_len=2 默认
+      # （防单字垃圾 token 回归）
+      - type: grep_not
+        file: app/services/text_utils.py
+        pattern: "def tokenize_for_tfidf\\(text: str, min_len: int = None"
 
   - id: FIX-2026-09-01-014
     title: "自适应招标高频词(Y) + 异组件文本相似度守卫(Z-1)"
@@ -583,3 +588,13 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_clearance_baseline_classified_normal"
+      # FIX-015 B方案 grep_not 反向检查（防回退）
+      - type: grep_not
+        file: app/services/file_processing.py
+        pattern: "tokenize_for_tfidf\\(raw_text, stop_words=stop_words\\)(?!\\.split)"
+      - type: grep_not
+        file: app/services/quote_anomaly.py
+        pattern: "main_prices = \\[pb\\['prices'\\]\\[0\\]"
+      - type: grep_not
+        file: app/services/quote_anomaly.py
+        pattern: "result = \\(result \\+ segment\\) \\* unit"

@@ -702,8 +702,14 @@ def compare_bidders_quotes(
             'daxie_mismatches': res.daxie_mismatches,
         })
 
-    # Cross-bidder same-rate on the first/main price of each bidder
-    main_prices = [pb['prices'][0] if pb['prices'] else 0 for pb in per_bidder]
+    # Cross-bidder same-rate on the main price of each bidder.
+    # FIX-015 (C2 补完): use max(prices) instead of prices[0] — the first
+    # extracted price may be a sub-item/line price, not the bid total. The total
+    # is typically the largest value. (Open-bid-table authoritative price
+    # injection priority is a future enhancement.)
+    def _pick_main_price(prices):
+        return max(prices) if prices else 0.0
+    main_prices = [_pick_main_price(pb.get('prices', [])) for pb in per_bidder]
     cfg = _get_thresholds()
     st = same_rate_threshold if same_rate_threshold is not None else cfg['same_rate']
     cross_same_rate, cross_pairs = _detect_same_rate(main_prices, threshold=st)
