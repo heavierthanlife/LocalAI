@@ -75,5 +75,6 @@ data/user_laws/
 !tests/mock_data/llm/*.json
 !tests/fixtures/*.json
 !tests/fixtures/clearance_baseline/*.json
+!tests/fixtures/quote_fixtures/*.json
 !tools/skill-mcp/package.json
 !tools/skill-mcp/package-lock.json

@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "note": "FIX-015 C5 quote fixtures — 等差/等比/正常 three scenarios for extract_prices + quote risk calibration",
+    "created": "2026-09-01"
+  },
+  "scenarios": {
+    "arithmetic": {
+      "note": "等差序列：1000万/1100万/1200万/1300万 (公差100万) → 定向陪标规律信号",
+      "docs": [
+        {"filename": "a_bidder.docx", "text": "投标报价：1000万元整。大写：壹仟万元整。项目经理张三。"},
+        {"filename": "b_bidder.docx", "text": "投标报价：1100万元整。大写：壹仟壹佰万元整。项目经理李四。"},
+        {"filename": "c_bidder.docx", "text": "投标报价：1200万元整。大写：壹仟贰佰万元整。项目经理王五。"},
+        {"filename": "d_bidder.docx", "text": "投标报价：1300万元整。大写：壹仟叁佰万元整。项目经理赵六。"}
+      ],
+      "expect": {"cross_progression": true, "type": "arithmetic"}
+    },
+    "geometric": {
+      "note": "等比序列：100万/200万/400万/800万 (公比2) → 等比规律信号",
+      "docs": [
+        {"filename": "g1.docx", "text": "投标总报价：100万元。大写：壹佰万元整。"},
+        {"filename": "g2.docx", "text": "投标总报价：200万元。大写：贰佰万元整。"},
+        {"filename": "g3.docx", "text": "投标总报价：400万元。大写：肆佰万元整。"},
+        {"filename": "g4.docx", "text": "投标总报价：800万元。大写：捌佰万元整。"}
+      ],
+      "expect": {"cross_progression": true, "type": "geometric"}
+    },
+    "normal": {
+      "note": "正常分散报价：1000万/1250万/1420万/1680万 (无明显规律) → 无规律信号",
+      "docs": [
+        {"filename": "n1.docx", "text": "投标报价：1000万元整。大写：壹仟万元整。"},
+        {"filename": "n2.docx", "text": "投标报价：1250万元整。大写：壹仟贰佰伍拾万元整。"},
+        {"filename": "n3.docx", "text": "投标报价：1420万元整。大写：壹仟肆佰贰拾万元整。"},
+        {"filename": "n4.docx", "text": "投标报价：1680万元整。大写：壹仟陆佰捌拾万元整。"}
+      ],
+      "expect": {"cross_progression": false}
+    },
+    "noise_garbage": {
+      "note": "垃圾输入：年份/电话/标准号/暂估 混合 → 必须被 extract_prices 过滤",
+      "docs": [
+        {"filename": "noise1.docx", "text": "招标编号：TJ2026-BD-0123，日期2026年8月20日，联系电话：010-69256688，GB/T 15558 标准，工程费暂估2200000000元。"},
+        {"filename": "noise2.docx", "text": "合同编号：HT-2026-008，电话 69256689，ISO9001 认证，预算价 329,270,000 元。"}
+      ],
+      "expect": {"clean_prices": [2200000000.0, 329270000.0]}
+    }
+  }
+}
