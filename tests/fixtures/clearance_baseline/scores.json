@@ -8,8 +8,8 @@
     "date": "2026-09-01",
     "note": "FIX-015 P0 vectorizer rebuild (word-level TF-IDF)"
   },
-  "composite_score": 36.9,
-  "warning_level": "◆ 中等预警",
+  "composite_score": 17.4,
+  "warning_level": "◇ 正常",
   "indicators": {
     "same_machine_code": {
       "score": 0.0,
@@ -37,9 +37,9 @@
       "result": "▲ 发现1组共享关键信息，共1个共同关键词。"
     },
     "economic_error_similar": {
-      "score": 15,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现37处疑似错别字（其中严重0处）。"
+      "result": "√ 未发现文本质量问题。"
     },
     "bid_ip_same": {
       "score": 0.0,
@@ -129,7 +129,7 @@
     "high_price_abnormal": {
       "score": 20,
       "skipped": false,
-      "result": "▲ 发现2个投标单位报价疑义。最高风险评分100.0。"
+      "result": "▲ 发现2个投标单位报价疑义。最高风险评分90.0。"
     },
     "extension_abnormal": {
       "score": 0.0,
@@ -177,9 +177,9 @@
       "result": "√ 未发现文件属性雷同。"
     },
     "bidder_agent_contact": {
-      "score": 30,
+      "score": 28.5,
       "skipped": false,
-      "result": "● 发现5个红色预警，6个实体，3个关系，风险评分65.0。"
+      "result": "● 发现4个红色预警，2个实体，2个关系，风险评分28.5。缺少招标代理机构联系人名单（外部数据）"
     },
     "expert_tenderer_closeness": {
       "score": 0.0,
@@ -202,14 +202,14 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "tech_seal_check": {
-      "score": 15,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现37处疑似错别字（其中严重0处）。"
+      "result": "√ 未发现文本质量问题。"
     },
     "expert_bidder_closeness": {
-      "score": 30,
+      "score": 28.5,
       "skipped": false,
-      "result": "● 发现5个红色预警，6个实体，3个关系，风险评分65.0。"
+      "result": "● 发现4个红色预警，2个实体，2个关系，风险评分28.5。缺少评标专家名单（外部数据）"
     },
     "bad_expert_score": {
       "score": 0.0,
@@ -227,9 +227,9 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "quote_proportional_float": {
-      "score": 20,
+      "score": 0.0,
       "skipped": false,
-      "result": "▲ 发现2个投标单位报价疑义。最高风险评分100.0。"
+      "result": "√ 各投标报价未见等比/等差规律浮动。"
     },
     "contact_phone_abnormal": {
       "score": 0.0,
@@ -240,13 +240,13 @@
   "suspected": [
     {
       "name": "投标文件_价格标.docx",
-      "indicators_triggered": 9,
-      "score": 20.5
+      "indicators_triggered": 6,
+      "score": 11.1
     },
     {
       "name": "投标文件_商务技术标.docx",
-      "indicators_triggered": 9,
-      "score": 27.0
+      "indicators_triggered": 6,
+      "score": 12.3
     }
   ]
 }

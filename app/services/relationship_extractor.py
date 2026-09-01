@@ -95,9 +95,10 @@ def _is_valid_company(name: str) -> bool:
     """FIX-015 (D1): reject blacklisted / generic company-like phrases.
 
     Robust heuristic: a real company name either contains an explicit company
-    marker (公司/集团/事务所/有限/股份/合伙/银行/学院/医院…) or is a SHORT
-    proper noun (≤5 chars). Long verb-phrases absorbed before a suffix
-    (实现调压站, 排水疏导及站, 文件及合同约定完成全部…) are rejected.
+    marker (公司/集团/事务所/有限/股份/合伙/信用社/航空/保险) or is a proper
+    noun ending in an entity suffix WITHOUT verb-clause absorption markers.
+    Verb-phrases absorbed before a suffix (实现调压站, 排水疏导及站,
+    毕业学校, 文件及合同约定完成全部…) are rejected.
     """
     if not name or len(name) < 4:
         return False
@@ -106,14 +107,15 @@ def _is_valid_company(name: str) -> bool:
     # Reject verb-prefixed absorption: 具体包括X, 代为催缴X, 向X, 我方X, 已X
     if re.match(r'^(具体包括|代为|向|从|由|对|据|为|在|于|按照|根据|以及|并|和|与|我方|已|所|其|本|该|双方|专业|相关|有关)', name):
         return False
-    # Strong company markers → definitely a company (company/group/firm/etc.)
-    if re.search(r'(公司|集团|事务所|有限|股份|合伙|信用社|航空|保险|工程有限公司|科技有限公司)', name):
+    # Strong company markers → definitely a company
+    if re.search(r'(公司|集团|事务所|有限|股份|合伙|信用社|航空|保险|银行)', name):
         return True
-    # Otherwise: only accept SHORT proper-noun-style names (≤5 chars ending in
-    # a plausible entity suffix) that contain no verb-clause markers.
-    if len(name) <= 5 and re.search(r'(中心|厂|部|站|处|所|院|社)$', name):
-        if re.search(r'(实现|疏导|毕业|做好|验收|变更|审核|确认|要求|约定|完成|履行|提交|服务|管理)', name):
-            return False
+    # Reject verb-clause absorption before suffixes (实现调压站, 毕业学校,
+    # 排水疏导及站, 验收及变更处, 超出规定数量部 …).
+    if re.search(r'(实现|疏导|毕业|做好|验收|变更|审核|确认|要求|约定|完成|履行|提交|保证|作出|研读|的|及|明确|成立|组建|负责|编制|制定|包括|超出|规定|部分|业绩|以上|以下|相关|相应|上述|如下|其余|其他)', name):
+        return False
+    # Proper noun + entity suffix → accept (short or long)
+    if re.search(r'(中心|厂|部|站|处|所|院|社|学校|学院|研究院)$', name):
         return True
     return False
 

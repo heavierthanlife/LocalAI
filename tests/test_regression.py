@@ -877,3 +877,57 @@ def test_quote_garbage_filtered():
         all_p.extend(extract_prices(d['text']))
     for expected in sc['expect']['clean_prices']:
         assert any(abs(p - expected) < 1 for p in all_p), f"缺少真实报价 {expected}: {all_p}"
+
+
+# ── FIX-2026-09-01-015 D: relationship 实体提取校准 ──
+def test_relationship_company_blacklist():
+    """泛词/动词短语不得被当公司（D1）。"""
+    from app.services.relationship_extractor import _extract_with_regex
+    text = ('监控中心 行政中心 设备厂 实现调压站 毕业学校 '
+            '京清园科技创新服务中心 天津利博科技有限公司')
+    ents = _extract_with_regex([text])[0]
+    companies = [e.text for e in ents if e.entity_type == 'company']
+    assert '天津利博科技有限公司' in companies, "真实公司应被提取"
+    assert '京清园科技创新服务中心' in companies, "真实服务中心应被提取"
+    for garbage in ('监控中心', '行政中心', '设备厂', '实现调压站', '毕业学校'):
+        assert garbage not in companies, f"垃圾公司名未被过滤: {garbage}"
+
+
+def test_relationship_person_field_labels():
+    """字段标签/公司短名不得被当人员（D2）。"""
+    from app.services.relationship_extractor import _extract_with_regex
+    text = '联系人：王强 身份证号码：总经理 职务：董事长 北京华信建设工程有限公司：法人代表'
+    ents = _extract_with_regex([text])[0]
+    persons = [e.text for e in ents if e.entity_type == 'person']
+    assert '王强' in persons, "真实人名应被提取"
+    for garbage in ('份证号码', '职务', '北京华信'):
+        assert garbage not in persons, f"字段标签/短名被当人员: {garbage}"
+
+
+def test_relationship_risk_not_saturated():
+    """少量文档/泛实体时 risk_score 不得封顶 100（D3 归一化）。"""
+    from app.services.relationship_extractor import extract_relationships
+    docs = [
+        {'filename': 'a.docx', 'text': '投标人：天津利博科技有限公司 联系人：王强 项目经理：张三', 'metadata': {}, 'images': []},
+        {'filename': 'b.docx', 'text': '投标人：天津利博科技有限公司 联系人：王强 技术负责人：李四', 'metadata': {}, 'images': []},
+        {'filename': 'c.docx', 'text': '投标人：天津利博科技有限公司 联系人：王强 安全负责人：赵五', 'metadata': {}, 'images': []},
+    ]
+    report = extract_relationships(docs)
+    assert report.risk_score < 100, f"risk_score 不应封顶 100: {report.risk_score}"
+    # 跨文件共享同一公司是真实信号，但归一化后不应极端
+    assert 0 <= report.risk_score <= 100, "risk_score 应在 0-100 范围"
+
+
+def test_clearance_baseline_classified_normal():
+    """工程类基线（价格标 vs 技术标）经校准后应判为 正常（<30）。"""
+    import json
+    import os
+    snap = json.load(open(
+        os.path.join(os.path.dirname(__file__), 'fixtures', 'clearance_baseline', 'scores.json'),
+        encoding='utf-8'))
+    composite = snap['composite_score']
+    # FIX-015 校准后：正常基线复合指数应 <30（不再误报中等预警）
+    assert 0 < composite < 30, f"baseline composite {composite} 应 <30 (正常): 过度报警"
+    # typo 指标不再误报
+    assert snap['indicators']['economic_error_similar']['score'] == 0.0, \
+        "正常文档 typo 指标不应误报"
