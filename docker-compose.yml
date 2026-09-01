@@ -25,6 +25,7 @@ services:
       - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
       - MIMO_API_KEY=${MIMO_API_KEY:-}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       # Database
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       # Redis
@@ -119,6 +120,7 @@ services:
       - QWEN_API_KEY=${QWEN_API_KEY:-}
       - MIMO_API_KEY=${MIMO_API_KEY:-}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       - REDIS_URL=redis://redis:6379/0

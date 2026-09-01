@@ -34,15 +34,38 @@ def set_max_tokens():
 
 @chat_bp.route('/llm_providers', methods=['GET'])
 def list_llm_providers():
-    """Return available LLM providers and the currently active one."""
+    """Return available LLM providers and the currently active one.
+
+    FIX-016: includes per-provider model list (static config + daily free-model
+    catalog) so the frontend can build a fully dynamic selector.
+    """
     try:
-        from app.services.llm_provider import get_available_providers, get_active_provider
+        from app.services.llm_provider import get_available_providers, get_active_provider, PROVIDER_CONFIG
     except ImportError:
         return jsonify({"available": [], "active": None, "error": "llm_provider module not loaded"})
     active = get_active_provider()
+    providers = {}
+    for pid in get_available_providers():
+        cfg = PROVIDER_CONFIG.get(pid, {})
+        models = list(cfg.get('models', []))
+        # enrich with free-model catalog (whitelist-first)
+        try:
+            from app.services.llm_catalog import get_free_models
+            cat_models = get_free_models(pid, max_results=15)
+            if cat_models:
+                cat_ids = [m['id'] for m in cat_models]
+                # dedupe preserving static order, then append catalog extras
+                models = [m for m in models if m not in cat_ids] + cat_ids
+        except Exception:
+            pass
+        providers[pid] = {
+            'name': cfg.get('name', pid),
+            'models': models,
+        }
     return jsonify({
         "available": get_available_providers(),
         "active": active,
+        "providers": providers,
     })
 
 @chat_bp.route('/llm_providers/set', methods=['POST'])

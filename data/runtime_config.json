@@ -1,6 +1,6 @@
 {
-  "active_llm_provider": "mimo",
-  "active_llm_model": "mimo-v2.5",
-  "active_vl_provider": "mimo",
-  "active_vl_model": "mimo-v2.5"
+  "active_llm_provider": "",
+  "active_llm_model": "",
+  "active_vl_provider": "nvidia",
+  "active_vl_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
 }

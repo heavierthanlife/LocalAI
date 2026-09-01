@@ -786,33 +786,39 @@
             const res = await fetch('/llm_providers', { credentials: 'include' });
             if (!res.ok) throw new Error('Provider list unavailable');
             const data = await res.json();
-            const current = data.active || 'deepseek';
+            // FIX-016: dynamic provider list + models from backend (openrouter/nvidia)
+            const available = (data.available && data.available.length) ? data.available : Object.keys(data.providers || {});
+            const providersMeta = data.providers || {};
+            // static fallback for display names
+            const staticNames = { openrouter:'OpenRouter', nvidia:'NVIDIA NIM', deepseek:'DeepSeek', zhipu:'智谱AI', qwen:'通义千问', siliconflow:'硅基流动', mimo:'Mimo' };
+            const current = data.active || available[0] || 'openrouter';
             const currentModel = sessionStorage.getItem('llmModel') || '';
             let html = '<div style="margin-bottom:12px"><strong>🤖 AI 模型设置</strong></div>';
             html += '<label>服务商:</label>';
             html += '<select id="providerSelect" style="width:100%;margin-bottom:8px">';
-            for (const [id, name] of Object.entries(PROVIDER_NAMES)) {
-                const sel = id === current ? ' selected' : '';
-                html += `<option value="${id}"${sel}>${name}</option>`;
+            for (const pid of available) {
+                const nm = (providersMeta[pid] && providersMeta[pid].name) || staticNames[pid] || pid;
+                const sel = pid === current ? ' selected' : '';
+                html += `<option value="${pid}"${sel}>${nm}</option>`;
             }
             html += '</select>';
             html += '<label>模型:</label>';
             html += '<select id="modelSelect" style="width:100%;margin-bottom:8px">';
-            const models = PROVIDER_MODELS[current] || PROVIDER_MODELS['deepseek'];
+            const models = (providersMeta[current] && providersMeta[current].models) || [];
             for (const m of models) {
                 const sel = m === currentModel ? ' selected' : '';
                 html += `<option value="${m}"${sel}>${m}</option>`;
             }
             html += '</select>';
             html += '<button id="applyProviderBtn" class="file-btn" style="width:100%">应用模型设置</button>';
-            html += '<small id="providerStatus" style="color:#888">当前: ' + (PROVIDER_NAMES[current]||current) + '</small>';
+            html += '<small id="providerStatus" style="color:#888">当前: ' + ((providersMeta[current]&&providersMeta[current].name)||staticNames[current]||current) + '</small>';
             // Return HTML; event binding happens after insertion
             setTimeout(() => {
                 const provSel = document.getElementById('providerSelect');
                 const modelSel = document.getElementById('modelSelect');
                 if (provSel && modelSel) {
                     provSel.onchange = () => {
-                        const models = PROVIDER_MODELS[provSel.value] || [];
+                        const models = (providersMeta[provSel.value] && providersMeta[provSel.value].models) || [];
                         modelSel.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
                     };
                 }
@@ -828,7 +834,7 @@
                         });
                         const d = await r.json();
                         document.getElementById('providerStatus').textContent = d.success
-                            ? `✅ 已切换至 ${PROVIDER_NAMES[provider]} / ${model}`
+                            ? `✅ 已切换至 ${(providersMeta[provider]&&providersMeta[provider].name)||staticNames[provider]||provider} / ${model}`
                             : '❌ ' + (d.error || '设置失败');
                     } catch (e) {
                         document.getElementById('providerStatus').textContent = '❌ 设置失败';

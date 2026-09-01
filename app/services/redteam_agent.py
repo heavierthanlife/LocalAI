@@ -2,7 +2,6 @@
 import os
 import logging
 from flask import session
-from langchain_deepseek import ChatDeepSeek
 from langgraph.prebuilt import create_react_agent
 
 from .agent import get_date, bocha_search, _init_async_checkpointer
@@ -34,23 +33,33 @@ def get_redteam_agent(max_tokens=None):
         if _redteam_agent is not None and getattr(g, '_current_redteam_max_tokens', None) == max_tokens:
             return _redteam_agent
         
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            api_key = os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-        if not api_key:
-            raise ValueError("Missing DEEPSEEK_API_KEY or QWEN_API_KEY")
-        os.environ["DASHSCOPE_API_KEY"] = api_key
-        os.environ["DASHSCOPE_API_BASE"] = "https://api.deepseek.com/v1"
-        
-        llm = ChatDeepSeek(
-            model="deepseek-v4-pro",
-            api_key=api_key,
-            temperature=0.7,
-            max_tokens=max_tokens,
-            streaming=False,
-            request_timeout=int(os.getenv("LLM_TIMEOUT", "120")),
-            extra_body={"thinking": {"type": "disabled"}},
-        )
+        # FIX-016: use the free-model catalog (OpenRouter :free → NVIDIA NIM),
+        # matching agent.py's default resolution.
+        from app.services.llm_provider import create_chat_model
+        from app.services.llm_provider import get_active_provider as _active_prov
+        try:
+            from app.services.llm_catalog import get_default_model
+            auto_provider = _active_prov()
+            auto_model = get_default_model(auto_provider) if auto_provider else None
+        except Exception:
+            auto_provider, auto_model = None, None
+        try:
+            llm = create_chat_model(
+                provider_id=auto_provider,
+                model=auto_model,
+                streaming=False,
+                temperature=0.7,
+                max_tokens=max_tokens,
+                timeout=int(os.getenv("LLM_TIMEOUT", "120")),
+            )
+        except Exception as e:
+            logger.warning(f"RedTeam catalog default failed ({e}); using provider auto-detect")
+            llm = create_chat_model(
+                streaming=False, temperature=0.7,
+                max_tokens=max_tokens,
+                timeout=int(os.getenv("LLM_TIMEOUT", "120")),
+            )
+        logger.info(f"Red Team Agent using {auto_provider}/{auto_model}")
         
         if g._async_checkpointer is None:
             with g._async_checkpointer_lock:

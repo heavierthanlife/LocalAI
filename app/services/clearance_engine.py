@@ -16,7 +16,8 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 # ── 是否有可用 LLM（AI 评审跳过条件）──────────────────────────────
-_LLM_ENV_KEYS = ('DEEPSEEK_API_KEY', 'ZHIPU_API_KEY', 'QWEN_API_KEY', 'SILICONFLOW_API_KEY')
+# FIX-016: active providers are OpenRouter + NVIDIA NIM
+_LLM_ENV_KEYS = ('OPENROUTER_API_KEY', 'NVIDIA_API_KEY')
 
 
 def has_llm():

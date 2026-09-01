@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-mock-or-001",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "This is a mock response from OpenRouter :free pool."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 10,
+    "total_tokens": 60
+  }
+}

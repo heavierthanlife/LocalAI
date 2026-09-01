@@ -308,7 +308,8 @@ def _():
 @test("PROVIDER_CONFIG has all providers")
 def _():
     from app.services.llm_provider import PROVIDER_CONFIG
-    expected = {'deepseek', 'zhipu', 'qwen', 'siliconflow'}
+    # FIX-016: active providers are OpenRouter + NVIDIA NIM
+    expected = {'openrouter', 'nvidia'}
     actual = set(PROVIDER_CONFIG.keys())
     assert expected.issubset(actual), f"Missing providers: {expected - actual}"
 

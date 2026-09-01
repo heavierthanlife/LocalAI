@@ -15,18 +15,16 @@ fixes:
     status_note: >
       NVIDIA provider removed from llm_provider.py and llm_fallback.py.
       No nemotron references remain in the codebase. Fix no longer applicable.
+      [FIX-2026-09-01-016] NVIDIA NIM re-enabled as an active free provider —
+      the "no nemotron" invariant is VOID. checks removed.
     rationale: >
       The langchain_nvidia_ai_endpoints library's MODEL_TABLE uses full IDs
       like "nvidia/nemotron-3-ultra-550b-a55b". Without the prefix, the
       library cannot look up model capabilities and sends the raw name to
       the NVIDIA API, which returns 404 Not Found.
-    checks:
-      - type: grep_not
-        file: app/services/llm_provider.py
-        pattern: "nvidia/nemotron"
-      - type: grep_not
-        file: app/services/llm_fallback.py
-        pattern: "nvidia/nemotron"
+      [FIX-016] Superseded: NVIDIA now uses OpenAI-compatible ChatOpenAI
+      (not langchain_nvidia_ai_endpoints), and nemotron models are active.
+    checks: []
 
   - id: FIX-2026-07-15-002
     title: "Wiki frontend: ok() dict-spread means no .data wrapper — use .stats, .pages, .tree"
@@ -598,3 +596,44 @@ fixes:
       - type: grep_not
         file: app/services/quote_anomaly.py
         pattern: "result = \\(result \\+ segment\\) \\* unit"
+
+  - id: FIX-2026-09-01-016
+    title: "LLM 来源切换 OpenRouter + NVIDIA 动态免费池"
+    severity: high
+    rationale: >
+      用户决策：系统 LLM 首选 OpenRouter :free 池，NVIDIA NIM 作补充，二者每天
+      动态刷新免费模型列表；其余 5 个 provider（deepseek/zhipu/qwen/siliconflow/
+      mimo）注释保留。实现：llm_catalog.py 每日拉取两源 /models；固定白名单 +
+      动态兜底；修复 _create_chat_model_direct 缺失 bug（llm_fallback 曾引用
+      不存在的符号 → ImportError）；NVIDIA 回归测试反转；前端 provider/model 动态化。
+    checks:
+      - type: grep
+        file: app/services/llm_catalog.py
+        pattern: "def refresh_catalog"
+      - type: grep
+        file: app/services/llm_catalog.py
+        pattern: "WHITELIST"
+      - type: grep
+        file: app/services/llm_provider.py
+        pattern: "def _create_chat_model_direct"
+      - type: grep
+        file: app/services/llm_provider.py
+        pattern: "'openrouter'"
+      - type: grep
+        file: app/services/llm_provider.py
+        pattern: "'nvidia'"
+      - type: grep
+        file: app/services/llm_fallback.py
+        pattern: "catalog_chain"
+      - type: grep
+        file: app/services/vl_model.py
+        pattern: "nemotron-3-nano-omni-30b-a3b-reasoning"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_llm_provider_switch_active_sources"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_llm_create_chat_model_direct_exists"
+      - type: grep
+        file: app/routes/chat_config.py
+        pattern: "get_free_models"

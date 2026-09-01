@@ -13,8 +13,8 @@ VL_PROVIDER_CONFIG = {
         'name': 'NVIDIA',
         'env_key': 'NVIDIA_API_KEY',
         'base_url': 'https://integrate.api.nvidia.com/v1',
-        'default_model': 'nvidia/nvlm-d-72b',
-        'models': ['nvidia/nvlm-d-72b', 'nvidia/llama-3.2-nv-vision-34b'],
+        'default_model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+        'models': ['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'nvidia/nvlm-d-72b', 'nvidia/llama-3.2-nv-vision-34b'],
     },
     'mimo': {
         'name': 'Mimo',
@@ -34,7 +34,7 @@ VL_PROVIDER_CONFIG = {
 
 
 def _get_active_vl_config():
-    cfg = {'provider_id': 'nvidia', 'model': 'nvidia/nvlm-d-72b',
+    cfg = {'provider_id': 'nvidia', 'model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
            'api_key': '', 'base_url': '', 'api_key_valid': False}
     try:
         from app.services.runtime_config import get as rc_get

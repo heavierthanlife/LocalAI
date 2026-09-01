@@ -103,11 +103,11 @@ class TestFallbackChain:
         monkeypatch.setattr('app.services.llm_provider._create_chat_model_direct', mock_create)
         llm_fallback._circuit_state.clear()
         result = llm_fallback.create_chat_model_with_fallback(
-            provider_id='deepseek', model='deepseek-chat', streaming=False
+            provider_id='openrouter', model='nvidia/nemotron-3-ultra-550b-a55b:free', streaming=False
         )
         assert result is not None
         assert len(calls) == 1
-        assert calls[0] == ('deepseek', 'deepseek-chat')
+        assert calls[0] == ('openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free')
 
     def test_active_provider_tracking(self, monkeypatch):
         from app.services import llm_fallback
@@ -126,9 +126,15 @@ class TestFallbackChain:
 
     def test_missing_api_key_skips_provider(self, monkeypatch):
         from app.services import llm_fallback
+        # FIX-016: active providers are openrouter/nvidia
         def mock_has_key(pid):
-            return pid == 'deepseek'
+            return pid == 'openrouter'
         monkeypatch.setattr(llm_fallback, '_has_api_key', mock_has_key)
+        # isolate from catalog network calls
+        monkeypatch.setattr('app.services.llm_catalog.get_fallback_chain', lambda: [
+            {'provider': 'openrouter', 'model': 'nvidia/nemotron-3-ultra-550b-a55b:free'},
+            {'provider': 'nvidia', 'model': 'nvidia/nemotron-3-ultra-550b-a55b'},
+        ])
         calls = []
         def mock_create(provider_id=None, model=None, **kwargs):
             calls.append((provider_id, model))
@@ -137,8 +143,8 @@ class TestFallbackChain:
         llm_fallback._circuit_state.clear()
         result = llm_fallback.create_chat_model_with_fallback(streaming=False)
         assert result is not None
-        assert any(p == 'deepseek' for p, _ in calls)
-        assert not any(p == 'zhipu' for p, _ in calls)
+        assert any(p == 'openrouter' for p, _ in calls)
+        assert not any(p == 'nvidia' for p, _ in calls)
 
     def test_circuit_breaker_marks_on_creation_failure(self, monkeypatch):
         from app.services import llm_fallback
@@ -156,7 +162,10 @@ class TestFallbackChain:
             assert info["failures"] >= 1
 
     def test_get_fallback_chain_default(self, monkeypatch):
-        from app.services.llm_fallback import get_fallback_chain, DEFAULT_CHAIN
+        from app.services.llm_fallback import get_fallback_chain
+        # FIX-016: no admin config + catalog unavailable → falls back to DEFAULT_CHAIN
         monkeypatch.setattr('app.services.runtime_config.get', lambda k, d=None: d)
+        monkeypatch.setattr('app.services.llm_catalog.get_fallback_chain', lambda: [])
         chain = get_fallback_chain()
-        assert chain == DEFAULT_CHAIN
+        assert chain[0][0] == 'openrouter', f"chain should start with openrouter: {chain}"
+        assert 'nvidia' in [p for p, _ in chain]

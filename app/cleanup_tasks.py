@@ -552,5 +552,11 @@ try:
         with get_db_connection() as conn:
             return compile_skills(conn)
 
+    @celery_app.task(name='app.cleanup_tasks.refresh_llm_catalog_task')
+    def refresh_llm_catalog_task():
+        """Daily (FIX-016): refresh the free LLM model catalog from OpenRouter + NVIDIA."""
+        from app.services.llm_catalog import refresh_catalog
+        return refresh_catalog()
+
 except Exception:
     pass

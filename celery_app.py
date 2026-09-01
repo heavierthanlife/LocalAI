@@ -76,6 +76,10 @@ celery.conf.update(
             'task': 'app.services.nightly_trainer.run_nightly_training',
             'schedule': crontab(hour=2, minute=0),  # 2:00 AM daily (off-work hours)
         },
+        'refresh-llm-catalog': {
+            'task': 'app.cleanup_tasks.refresh_llm_catalog_task',
+            'schedule': crontab(hour=2, minute=30),  # 2:30 AM daily
+        },
     },
 )
 

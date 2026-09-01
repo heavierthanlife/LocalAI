@@ -50,6 +50,7 @@ def mock_llm_http(httpx_mock):
         "dashscope.aliyuncs.com": "qwen_chat.json",
         "api.siliconflow.cn": "siliconflow_chat.json",
         "integrate.api.nvidia.com": "nvidia_chat.json",
+        "openrouter.ai": "openrouter_chat.json",
     }
     for base_url, file_name in providers.items():
         data = _load_mock(file_name)

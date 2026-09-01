@@ -1238,7 +1238,12 @@ def get_runtime_config_schema():
     from app.services.llm_provider import PROVIDER_CONFIG
     all_models = ['auto']
     model_labels = {'auto': '自动(服务商默认)'}
+    # FIX-016: dynamic provider options from PROVIDER_CONFIG (openrouter/nvidia)
+    provider_options = ['auto']
+    provider_labels = {'auto': '自动检测'}
     for pid, cfg in PROVIDER_CONFIG.items():
+        provider_options.append(pid)
+        provider_labels[pid] = cfg['name']
         for m in cfg.get('models', []):
             label = f"{m} ({cfg['name']})"
             all_models.append(m)
@@ -1247,8 +1252,8 @@ def get_runtime_config_schema():
     schema = {
         # ── LLM ──
         "active_llm_provider":        {"label": "LLM 服务商", "unit": "", "type": "select", "group": "LLM/AI Model", "is_llm": True, "is_not_factory": True,
-                                         "options": ["auto", "deepseek", "zhipu", "qwen", "siliconflow", "mimo"],
-                                         "option_labels": {"auto": "自动检测", "deepseek": "DeepSeek", "zhipu": "智谱AI", "qwen": "Qwen", "siliconflow": "硅基流动", "mimo": "Mimo"}},
+                                         "options": provider_options,
+                                         "option_labels": provider_labels},
         "active_llm_model":           {"label": "LLM 模型", "unit": "", "type": "select", "group": "LLM/AI Model", "is_llm": True, "is_not_factory": True,
                                          "options": all_models,
                                          "option_labels": model_labels},

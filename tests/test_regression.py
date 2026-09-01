@@ -6,12 +6,12 @@ If any test fails, the corresponding fix has been accidentally undone.
 import pytest
 
 
-# ── FIX-2026-07-15-001: NVIDIA provider removed (superseded) ──
-def test_nvidia_provider_removed():
-    from app.services.llm_provider import get_available_providers
-    providers = get_available_providers()
-    assert 'nvidia' not in providers, \
-        "NVIDIA provider was removed from codebase; should not appear in available providers"
+# ── FIX-2026-09-01-016: NVIDIA provider re-enabled (FIX-016 supersedes the old removal) ──
+def test_nvidia_provider_configured():
+    """FIX-016: NVIDIA NIM is now an active free provider; must appear in PROVIDER_CONFIG."""
+    from app.services.llm_provider import PROVIDER_CONFIG
+    assert 'nvidia' in PROVIDER_CONFIG, "NVIDIA NIM provider config missing"
+    assert 'openrouter' in PROVIDER_CONFIG, "OpenRouter provider config missing"
 
 
 # ── FIX-2026-07-15-002: Wiki frontend no .data wrapper (superseded, check no stale patterns) ──
@@ -931,3 +931,37 @@ def test_clearance_baseline_classified_normal():
     # typo 指标不再误报
     assert snap['indicators']['economic_error_similar']['score'] == 0.0, \
         "正常文档 typo 指标不应误报"
+
+
+# ── FIX-2026-09-01-016: LLM 来源切换 OpenRouter + NVIDIA ──
+def test_llm_provider_switch_active_sources():
+    """FIX-016: PROVIDER_CONFIG 必须含 openrouter + nvidia，且不含已注释的旧 provider。"""
+    from app.services.llm_provider import PROVIDER_CONFIG
+    assert 'openrouter' in PROVIDER_CONFIG, "OpenRouter provider 缺失"
+    assert 'nvidia' in PROVIDER_CONFIG, "NVIDIA NIM provider 缺失"
+    # 旧 provider 应从活跃配置移除（注释保留）
+    assert 'deepseek' not in PROVIDER_CONFIG, "deepseek 不应在活跃 provider 列表"
+    assert 'zhipu' not in PROVIDER_CONFIG and 'mimo' not in PROVIDER_CONFIG, \
+        "旧 provider 不应在活跃列表"
+
+
+def test_llm_create_chat_model_direct_exists():
+    """FIX-016: _create_chat_model_direct 必须存在（llm_fallback 依赖，曾缺失 ImportError）。"""
+    from app.services.llm_provider import _create_chat_model_direct
+    assert callable(_create_chat_model_direct)
+
+
+def test_llm_catalog_whitelist():
+    """FIX-016: llm_catalog 白名单含 OpenRouter 主力免费模型 + NVIDIA 兜底。"""
+    from app.services.llm_catalog import WHITELIST
+    assert 'nvidia/nemotron-3-ultra-550b-a55b:free' in WHITELIST['openrouter'], \
+        "OpenRouter 文本主力白名单缺失"
+    assert 'nvidia/nemotron-3-ultra-550b-a55b' in WHITELIST['nvidia'], \
+        "NVIDIA 兜底白名单缺失"
+
+
+def test_llm_fallback_chain_catalog():
+    """FIX-016: fallback 链应从 catalog 构建且首选 openrouter。"""
+    from app.services.llm_fallback import get_fallback_chain, DEFAULT_CHAIN
+    chain = get_fallback_chain()
+    assert chain and chain[0][0] == 'openrouter', f"fallback 链应以 openrouter 开头: {chain}"

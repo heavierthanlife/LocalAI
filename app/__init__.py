@@ -236,6 +236,21 @@ def _setup_scheduler(app):
     scheduler.add_job(func=cleanup_tasks.auto_cleanup_stale_reviews,
                       trigger="interval", hours=24,
                       id="auto_stale_review_cleanup")
+    # Daily (FIX-016): refresh free LLM model catalog from OpenRouter + NVIDIA
+    try:
+        from app.services.llm_catalog import refresh_catalog as _refresh_llm_catalog
+        def run_llm_catalog_refresh():
+            import logging
+            log = logging.getLogger(__name__)
+            try:
+                cat = _refresh_llm_catalog()
+                log.info(f"LLM catalog refreshed: {len(cat.get('models', []))} free models")
+            except Exception as e:
+                log.warning(f"LLM catalog refresh skipped: {e}")
+        scheduler.add_job(func=run_llm_catalog_refresh, trigger="interval", hours=24,
+                          id="auto_refresh_llm_catalog")
+    except ImportError:
+        pass
     # Weekly skill audit: analyze duplicates, unused, promote candidates
     try:
         from app.services.skill_auditor import analyze_all_skills as weekly_skill_audit

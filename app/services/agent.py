@@ -12,7 +12,6 @@ import aiosqlite
 from flask import session
 
 from langchain.agents import create_agent
-from langchain_deepseek import ChatDeepSeek
 from langchain.tools import tool
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -222,7 +221,7 @@ def get_agent(max_tokens=None):
 
         # Check if admin selected a different model via runtime_config
         provider_id = None
-        model_id = "deepseek-v4-pro"  # default
+        model_id = None  # FIX-016: default resolved from free-model catalog
         try:
             from app.services.runtime_config import get as rc_get
             rc_provider = rc_get('active_llm_provider', '')
@@ -246,24 +245,32 @@ def get_agent(max_tokens=None):
             )
             logger.info(f"Agent using admin-selected model: {provider_id}/{model_id}")
         else:
-            # Fall back to hardcoded DeepSeek V4 Pro
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            if not api_key:
-                api_key = os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-            if not api_key:
-                raise ValueError("Missing DEEPSEEK_API_KEY or QWEN_API_KEY")
-            os.environ["DASHSCOPE_API_KEY"] = api_key
-            os.environ["DASHSCOPE_API_BASE"] = "https://api.deepseek.com/v1"
-            llm = ChatDeepSeek(
-                model="deepseek-v4-pro",
-                api_key=api_key,
-                temperature=0.7,
-                max_tokens=max_tokens,
-                streaming=False,
-                request_timeout=int(os.getenv("LLM_TIMEOUT", "120")),
-                extra_body={"thinking": {"type": "disabled"}},
-            )
-            logger.info("Agent using default DeepSeek V4 Pro")
+            # FIX-016: default to free-model catalog (OpenRouter :free → NVIDIA NIM)
+            from app.services.llm_provider import create_chat_model
+            from app.services.llm_provider import get_active_provider as _active_prov
+            try:
+                from app.services.llm_catalog import get_default_model
+                auto_provider = _active_prov()
+                auto_model = get_default_model(auto_provider) if auto_provider else None
+            except Exception:
+                auto_provider, auto_model = None, None
+            try:
+                llm = create_chat_model(
+                    provider_id=auto_provider,
+                    model=auto_model,
+                    streaming=False,
+                    temperature=0.7,
+                    max_tokens=max_tokens,
+                    timeout=int(os.getenv("LLM_TIMEOUT", "120")),
+                )
+            except Exception as e:
+                logger.warning(f"Agent catalog default failed ({e}); using provider auto-detect")
+                llm = create_chat_model(
+                    streaming=False, temperature=0.7,
+                    max_tokens=max_tokens,
+                    timeout=int(os.getenv("LLM_TIMEOUT", "120")),
+                )
+            logger.info(f"Agent using catalog default: {auto_provider}/{auto_model}")
         if g._async_checkpointer is None:
             with g._async_checkpointer_lock:
                 if g._async_checkpointer is None:

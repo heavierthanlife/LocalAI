@@ -913,9 +913,10 @@
             for (const item of groups[gn]) {
                 const labelStyle = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
                 if (item.type === 'ordered-list') {
-                    const chain = Array.isArray(item.value) ? item.value : [['zhipu','glm-4.5-air'],['nvidia','nemotron-3-ultra-550b-a55b'],['deepseek','deepseek-v4-flash'],['deepseek','deepseek-v4-pro']];
+                    // FIX-016: default chain = OpenRouter :free → NVIDIA NIM
+                    const chain = Array.isArray(item.value) ? item.value : [['openrouter','nvidia/nemotron-3-ultra-550b-a55b:free'],['openrouter','z-ai/glm-5.2:free'],['nvidia','nvidia/nemotron-3-ultra-550b-a55b']];
                     const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    const provLabels = {auto:'自动检测',deepseek:'DeepSeek',zhipu:'智谱AI',qwen:'Qwen',siliconflow:'硅基流动',nvidia:'NVIDIA'};
+                    const provLabels = {auto:'自动检测',openrouter:'OpenRouter',nvidia:'NVIDIA NIM'};
                     let chainHtml = `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;margin-bottom:4px;" title="${escapeHtml(item.label)}">
                         <label style="${labelStyle}">${item.label}${nfMark}</label>
                     </div>
@@ -1071,10 +1072,11 @@
             const container = document.querySelector('[data-key="llm_fallback_chain"][data-type="ordered-list"]');
             if (!container) return;
             const rows = container.querySelectorAll('.chain-row');
-            const now = Array.from(rows).map(r => [r.querySelector('.chain-provider')?.value || 'zhipu', r.querySelector('.chain-model')?.value || 'glm-4.5-air']);
+            // FIX-016: default chain = OpenRouter :free → NVIDIA NIM
+            const now = Array.from(rows).map(r => [r.querySelector('.chain-provider')?.value || 'openrouter', r.querySelector('.chain-model')?.value || 'nvidia/nemotron-3-ultra-550b-a55b:free']);
             const orig = _rcData['llm_fallback_chain'];
             const nowStr = JSON.stringify(now);
-            _rcDirty['llm_fallback_chain'] = (nowStr !== JSON.stringify(orig ?? [['zhipu','glm-4.5-air']])) ? now : undefined;
+            _rcDirty['llm_fallback_chain'] = (nowStr !== JSON.stringify(orig ?? [['openrouter','nvidia/nemotron-3-ultra-550b-a55b:free']])) ? now : undefined;
             if (_rcDirty['llm_fallback_chain'] === undefined) delete _rcDirty['llm_fallback_chain'];
             const modDot = document.getElementById('rcModifiedDot');
             if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
@@ -1113,7 +1115,7 @@
                     clone.dataset.index = chainContainer.querySelectorAll('.chain-row').length;
                     const provSel = clone.querySelector('.chain-provider');
                     const modSel = clone.querySelector('.chain-model');
-                    if (provSel) provSel.value = 'zhipu';
+                    if (provSel) provSel.value = 'openrouter';
                     if (modSel) { modSel.dataset.current = ''; modSel.value = ''; }
                     populateChainModels(clone);
                     chainContainer.insertBefore(clone, addBtn);

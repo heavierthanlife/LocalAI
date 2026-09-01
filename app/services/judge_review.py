@@ -47,7 +47,7 @@ def review_response(user_query: str, ai_response: str,
         return None
 
     try:
-        from app.services.llm_provider import PROVIDER_CONFIG, get_available_providers
+        from app.services.llm_provider import PROVIDER_CONFIG, get_available_providers, get_active_provider
         import os
 
         available = get_available_providers()
@@ -55,14 +55,17 @@ def review_response(user_query: str, ai_response: str,
             logger.debug("Judge review skipped: only 1 LLM provider available")
             return None
 
-        # Pick a different provider than the primary (DeepSeek)
+        # FIX-016: pick a DIFFERENT provider than the active one (so judge is
+        # independent of the generator — cross-provider sanity check).
+        primary = get_active_provider()
         judge_provider = None
         for pid in available:
-            if pid != 'deepseek':
+            if pid != primary:
                 judge_provider = pid
                 break
         if not judge_provider:
             judge_provider = available[0]  # fallback
+        logger.info(f"Judge review using independent provider: {judge_provider} (primary={primary})")
 
         from app.services.llm_provider import create_chat_model
         from langchain_core.messages import SystemMessage, HumanMessage

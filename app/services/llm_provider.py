@@ -1,7 +1,11 @@
-"""Multi-provider LLM routing (adapted from douban-ai-analyzer background.js).
+"""Multi-provider LLM routing.
 
-Supports: DeepSeek (default), Zhipu, Qwen, SiliconFlow.
-All providers use OpenAI-compatible chat completions API.
+Active providers (FIX-016): OpenRouter (:free model pool) + NVIDIA NIM.
+Both use OpenAI-compatible chat completions API.
+
+Legacy providers (deepseek/zhipu/qwen/siliconflow/mimo) are COMMENTED OUT
+but preserved for reference — user decided to consolidate on the two free
+sources. See `data/fix_registry.yaml` FIX-2026-09-01-016.
 """
 import os
 import logging
@@ -10,43 +14,63 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ── Provider definitions ──
+# Active: OpenRouter (:free pool) + NVIDIA NIM. Model lists are refreshed daily
+# from each provider's /models endpoint (see app/services/llm_catalog.py).
 PROVIDER_CONFIG = {
-    'deepseek': {
-        'name': 'DeepSeek',
-        'env_key': 'DEEPSEEK_API_KEY',
-        'base_url': 'https://api.deepseek.com',
-        'default_model': 'deepseek-v4-pro',
-        'models': ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
+    'openrouter': {
+        'name': 'OpenRouter',
+        'env_key': 'OPENROUTER_API_KEY',
+        'base_url': 'https://openrouter.ai/api/v1',
+        'default_model': 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'models': ['nvidia/nemotron-3-ultra-550b-a55b:free', 'z-ai/glm-5.2:free', 'thinkingmachines/inkling:free'],
     },
-    'zhipu': {
-        'name': '智谱AI',
-        'env_key': 'ZHIPU_API_KEY',
-        'base_url': 'https://open.bigmodel.cn/api/paas/v4',
-        'default_model': 'glm-4.5-air',
-        'models': ['glm-4.5-air', 'glm-4-flash', 'glm-4-plus', 'glm-4-air', 'glm-4-long'],
-    },
-    'qwen': {
-        'name': '通义千问',
-        'env_key': 'QWEN_API_KEY',
-        'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        'default_model': 'qwen3.7-plus',
-        'models': ['qwen3.7-plus', 'qwen-max', 'qwen-plus', 'qwen-turbo'],
-    },
-    'siliconflow': {
-        'name': '硅基流动',
-        'env_key': 'SILICONFLOW_API_KEY',
-        'base_url': 'https://api.siliconflow.cn/v1',
-        'default_model': 'Qwen/Qwen2.5-7B-Instruct',
-        'models': ['Qwen/Qwen2.5-7B-Instruct', 'deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
-    },
-    'mimo': {
-        'name': 'Mimo',
-        'env_key': 'MIMO_API_KEY',
-        'base_url': 'https://token-plan-cn.xiaomimimo.com/v1',
-        'default_model': 'mimo-v2.5-pro',
-        'models': ['mimo-v2.5-pro', 'mimo-v2.5'],
+    'nvidia': {
+        'name': 'NVIDIA NIM',
+        'env_key': 'NVIDIA_API_KEY',
+        'base_url': 'https://integrate.api.nvidia.com/v1',
+        'default_model': 'nvidia/nemotron-3-ultra-550b-a55b',
+        'models': ['nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'nvidia/nemotron-3-super-120b-a12b'],
     },
 }
+
+# ── Legacy providers (COMMENTED OUT — preserved for reference) ──
+# _LEGACY_PROVIDER_CONFIG = {
+#     'deepseek': {
+#         'name': 'DeepSeek',
+#         'env_key': 'DEEPSEEK_API_KEY',
+#         'base_url': 'https://api.deepseek.com',
+#         'default_model': 'deepseek-v4-pro',
+#         'models': ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
+#     },
+#     'zhipu': {
+#         'name': '智谱AI',
+#         'env_key': 'ZHIPU_API_KEY',
+#         'base_url': 'https://open.bigmodel.cn/api/paas/v4',
+#         'default_model': 'glm-4.5-air',
+#         'models': ['glm-4.5-air', 'glm-4-flash', 'glm-4-plus', 'glm-4-air', 'glm-4-long'],
+#     },
+#     'qwen': {
+#         'name': '通义千问',
+#         'env_key': 'QWEN_API_KEY',
+#         'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+#         'default_model': 'qwen3.7-plus',
+#         'models': ['qwen3.7-plus', 'qwen-max', 'qwen-plus', 'qwen-turbo'],
+#     },
+#     'siliconflow': {
+#         'name': '硅基流动',
+#         'env_key': 'SILICONFLOW_API_KEY',
+#         'base_url': 'https://api.siliconflow.cn/v1',
+#         'default_model': 'Qwen/Qwen2.5-7B-Instruct',
+#         'models': ['Qwen/Qwen2.5-7B-Instruct', 'deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
+#     },
+#     'mimo': {
+#         'name': 'Mimo',
+#         'env_key': 'MIMO_API_KEY',
+#         'base_url': 'https://token-plan-cn.xiaomimimo.com/v1',
+#         'default_model': 'mimo-v2.5-pro',
+#         'models': ['mimo-v2.5-pro', 'mimo-v2.5'],
+#     },
+# }
 
 
 def get_available_providers() -> list[str]:
@@ -79,6 +103,39 @@ def get_provider_config(provider_id: Optional[str] = None) -> dict:
     )
 
 
+def _create_chat_model_direct(
+    provider_id: Optional[str] = None,
+    model: Optional[str] = None,
+    streaming: bool = False,
+    temperature: float = 0.7,
+    max_tokens: int = 1600,
+    timeout: int = 120,
+):
+    """Build a LangChain ChatModel directly from a provider id + model.
+
+    FIX-016: this function exists so llm_fallback can build models directly
+    (previously referenced a non-existent symbol → runtime ImportError).
+    Both active providers (openrouter/nvidia) use OpenAI-compatible ChatOpenAI.
+    """
+    cfg = get_provider_config(provider_id)
+    api_key = os.getenv(cfg['env_key'], '').strip()
+    if not api_key:
+        raise RuntimeError(f"API key for {cfg['name']} not set ({cfg['env_key']}).")
+    final_model = model or cfg['default_model']
+    base_url = cfg['base_url']
+    logger.info(f"Creating LLM: provider={cfg['name']}, model={final_model}, streaming={streaming}")
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(
+        model=final_model,
+        api_key=api_key,
+        base_url=base_url,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        streaming=streaming,
+        request_timeout=timeout,
+    )
+
+
 def create_chat_model(
     provider_id: Optional[str] = None,
     model: Optional[str] = None,
@@ -90,50 +147,18 @@ def create_chat_model(
     """Create a LangChain-compatible ChatModel for the given provider.
 
     Args:
-        provider_id: One of 'deepseek','zhipu','qwen','siliconflow'. Auto-detect if None.
+        provider_id: One of 'openrouter','nvidia'. Auto-detect if None.
         model: Model name. Uses provider default if None.
         streaming: Enable token streaming.
         temperature: Sampling temperature.
         max_tokens: Max output tokens.
         timeout: Request timeout in seconds.
     """
-    cfg = get_provider_config(provider_id)
-    api_key = os.getenv(cfg['env_key'], '').strip()
-    if not api_key:
-        raise RuntimeError(f"API key for {cfg['name']} not set ({cfg['env_key']}).")
-
-    final_model = model or cfg['default_model']
-    base_url = cfg['base_url']
-
-    logger.info(f"Creating LLM: provider={cfg['name']}, model={final_model}, streaming={streaming}")
-
-    if cfg['name'] == 'DeepSeek':
-        # Use langchain-deepseek's native class (better integration)
-        from langchain_deepseek import ChatDeepSeek
-        extra = {}
-        if 'pro' in final_model.lower():
-            extra['thinking'] = {'type': 'disabled'}
-        return ChatDeepSeek(
-            model=final_model,
-            api_key=api_key,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            streaming=streaming,
-            request_timeout=timeout,
-            extra_body=extra if extra else None,
-        )
-    else:
-        # Use OpenAI-compatible ChatOpenAI for all other providers
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=final_model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            streaming=streaming,
-            request_timeout=timeout,
-        )
+    return _create_chat_model_direct(
+        provider_id=provider_id, model=model,
+        streaming=streaming, temperature=temperature,
+        max_tokens=max_tokens, timeout=timeout,
+    )
 
 
 # ── Quick API key helpers (for /send endpoint fallback) ──

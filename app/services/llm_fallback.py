@@ -13,9 +13,9 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 DEFAULT_CHAIN = [
-    ("zhipu", "glm-4.5-air"),
-    ("deepseek", "deepseek-v4-flash"),
-    ("deepseek", "deepseek-v4-pro"),
+    ("openrouter", "nvidia/nemotron-3-ultra-550b-a55b:free"),
+    ("openrouter", "z-ai/glm-5.2:free"),
+    ("nvidia", "nvidia/nemotron-3-ultra-550b-a55b"),
 ]
 
 _circuit_state: dict[str, dict] = {}
@@ -91,6 +91,14 @@ def get_fallback_chain() -> list[tuple[str, str]]:
                 return validated
     except Exception as e:
         logger.debug(f"Failed to read fallback chain from config: {e}")
+    # FIX-016: default to the daily-refreshed free-model catalog (whitelist-first)
+    try:
+        from app.services.llm_catalog import get_fallback_chain as catalog_chain
+        cat = catalog_chain()
+        if cat:
+            return [(c['provider'], c['model']) for c in cat]
+    except Exception as e:
+        logger.debug(f"Failed to build catalog fallback chain: {e}")
     return list(DEFAULT_CHAIN)
 
 
