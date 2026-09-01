@@ -896,14 +896,23 @@ def build_clearance_docx(report, info_overrides=None):
             at = _add_table(doc, len(pairs) + 1, 7)
             for j, hdr in enumerate(['投标单位1', '投标单位2', '风险度', '文本相似度', '关键信息重合', '文件属性雷同', '矩阵坐标']):
                 _set_cell(at.cell(0, j), hdr, bold=True, size=9)
+            has_mismatch = any(p.get('component_mismatch') for p in pairs)
             for ri, p in enumerate(pairs):
                 _set_cell(at.cell(ri + 1, 0), _safe(p.get('name1', '')), size=9)
                 _set_cell(at.cell(ri + 1, 1), _safe(p.get('name2', '')), size=9)
                 _set_cell(at.cell(ri + 1, 2), f"{p.get('risk', 0):.1f}", size=9)
-                _set_cell(at.cell(ri + 1, 3), f"{p.get('sim', 0):.1f}%", size=9)
+                sim_txt = f"{p.get('sim', 0):.1f}%"
+                if p.get('component_mismatch'):
+                    sim_txt = '异组件(不计)'
+                _set_cell(at.cell(ri + 1, 3), sim_txt, size=9)
                 _set_cell(at.cell(ri + 1, 4), f"{p.get('key_sim', 0):.1f}%", size=9)
                 _set_cell(at.cell(ri + 1, 5), '是' if p.get('attr_same') else '否', size=9)
                 _set_cell(at.cell(ri + 1, 6), f"({p.get('i', '-')},{p.get('j', '-')})", size=9)
+            if has_mismatch:
+                note = doc.add_paragraph()
+                rn = note.add_run('注：【异组件】比对（如价格标↔技术标）的结构性条款重叠不作串标依据，文本相似度已不计入风险。')
+                rn.font.size = Pt(FINE)
+                rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
             doc.add_paragraph()
 
         # 6c. 关键信息匹配表

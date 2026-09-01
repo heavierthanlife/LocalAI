@@ -66,7 +66,8 @@ Every feature upgrade must include regression verification:
 
 - **权重复合指数**: `total_score` = 0-100 加权复合指数 (`document_analysis_svc._weighted_total_score`)，45 项 `INDICATOR_WEIGHTS` + 每指标 score cap + text_sim 三指标去重。预警阈值：≥60 高度 / ≥30 中等 / <30 正常。
 - **RiskScorer**: `0.375 key + 0.375 attr + 0.25 text`（图片权重 0.0，图片相似度未接入清标，仅图片描述抽检生效）。text_sim 需 ≥80% 相似度才计入（模板重叠门槛）。
-- **中文停用词**（FIX-013）：`app/services/stop_words.py` `DEFAULT_STOP_WORDS`（~150 招投标/功能词）在 `tokenize_for_tfidf` 默认过滤；`preprocess_text_for_similarity(text, template_text)` 提供招标文件时动态并入其 top-50 高频词（B轻量）。实证判别：围标(技术雷同) cosine≈0.98 vs 正常(技术不同)≈0.74。
+- **中文停用词**（FIX-013/014）：`app/services/stop_words.py` `DEFAULT_STOP_WORDS`（~150 招投标/功能词）在 `tokenize_for_tfidf` 默认过滤；`preprocess_text_for_similarity(text, template_text)` 自适应并入招标文件 top-k 高频词（k=min(200,max(50,len//500)), TF≥2 守卫）。实证判别：围标(技术雷同) cosine≈0.98 vs 正常(技术不同)≈0.77。
+- **异组件守卫**（FIX-014）：`_detect_component` 识别 价格标/技术标/商务标；异组件 pair（如 价格标↔技术标）text_sim/key_sim 归零并标记 `component_mismatch`（结构性条款重叠不作串标依据）。
 - **数据门槛（避免误报）**：
   - `text_sim` 指标：无招标文件时**跳过**（无法做 `remove_template_content` 模板去除，高余弦是模板重叠非围标）。
   - `quote` 指标：无结构化开标报价时，原始文本价格提取噪声大（日期/行项目被误当报价），结果仅作参考。

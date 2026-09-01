@@ -746,3 +746,66 @@ def test_stop_words_applied():
     # preprocess 保留有判别力的词
     p = preprocess_text_for_similarity('本项目为大兴区燃气管网改造工程，采用定向钻施工')
     assert '燃气' in p and '定向' in p, f"有判别力的词被误删: {p}"
+
+
+# ── FIX-2026-09-01-014: 自适应招标高频词(Y) + 异组件守卫(Z-1) ──
+def test_tender_stopwords_adaptive():
+    """长招标文件应自适应扩容高频词并入停用集（Y），同组件正常投标降至 <0.80 门槛。"""
+    from app.services.file_processing import (
+        preprocess_text_for_similarity, _make_vectorizer, remove_template_content,
+    )
+    from sklearn.metrics.pairwise import cosine_similarity
+    # 长招标文件（>5000 字 → k 扩容）
+    tender = ('本项目为大兴区燃气老旧管网改造工程，招标范围包括施工图纸范围内的土建、安装工程。'
+              '投标人须具备市政公用工程施工总承包资质，并具有有效的安全生产许可证。评标采用综合评分法。' * 40)
+    ta = '技术方案：采用开槽法施工，沟槽钢板桩支护，基坑井点降水，管线直埋敷设。项目经理张三。'
+    tb = '技术方案：采用定向钻穿越施工，泥浆护壁导向钻进。项目经理李四。'
+    pa = preprocess_text_for_similarity(ta, tender); pb = preprocess_text_for_similarity(tb, tender)
+    pa = remove_template_content(pa, tender); pb = remove_template_content(pb, tender)
+    v = _make_vectorizer(); X = v.fit_transform([pa, pb])
+    cos = float(cosine_similarity(X[0:1], X[1:2])[0][0])
+    assert cos < 0.80, f"同组件正常投标应 <0.80 门槛: {cos}"
+
+
+def test_tender_stopwords_tf_guard():
+    """TF=1 的独特词不得并入停用集（防止误杀技术参数，Y 的 TF≥2 守卫）。"""
+    from app.services.file_processing import preprocess_text_for_similarity
+    # 招标文件含一个只出现 1 次的关键技术词，不应被过滤
+    tender = '本项目燃气改造工程。投标人资格：压力管道GB1级资质。技术标准：NB/T 47013 无损检测。' * 3
+    text = '技术方案采用 NB/T 47013 无损检测标准，燃气管道施工。'
+    p = preprocess_text_for_similarity(text, tender)
+    # '检测' 若多次出现会被停用，但独特参数词应保留；至少 '燃气' 应保留
+    assert '燃气' in p, f"独特词被误并入停用集: {p}"
+
+
+def test_component_mismatch():
+    """异组件（价格标↔技术标）→ component_mismatch=True + 文本相似度归零。"""
+    from app.services.batch_orchestrator import compute_single_pair, _detect_component
+    assert _detect_component('投标文件_价格标.docx', '') == 'price'
+    assert _detect_component('投标文件_商务技术标.docx', '') == 'tech'
+    assert _detect_component('engineering.docx', '') == 'unknown'
+    fd = [
+        {'filename': '投标文件_价格标.docx', 'text': '价格标 报价 302,070,000元 投标报价声明函 项目名称',
+         'metadata': {}, 'images': []},
+        {'filename': '投标文件_商务技术标.docx', 'text': '技术标 技术方案 施工组织设计 商务部分',
+         'metadata': {}, 'images': []},
+    ]
+    pair = compute_single_pair(fd, 0, 1,
+                               {'text_sim': True, 'key_info': True, 'file_attr': True, 'image_sim': False})
+    assert pair.get('component_mismatch') is True, "异组件必须标记 mismatch"
+    assert pair['risk'] == 0.0, f"异组件 text_sim 归零后 risk 应为 0: {pair['risk']}"
+
+
+def test_component_same():
+    """同组件（技术标↔技术标）→ 不标记 mismatch，text_sim 正常参与。"""
+    from app.services.batch_orchestrator import compute_single_pair
+    fd = [
+        {'filename': '投标文件_技术标A.docx', 'text': '技术标 技术方案 开槽法施工 沟槽支护',
+         'metadata': {}, 'images': []},
+        {'filename': '投标文件_技术标B.docx', 'text': '技术标 技术方案 定向钻施工 泥浆护壁',
+         'metadata': {}, 'images': []},
+    ]
+    pair = compute_single_pair(fd, 0, 1,
+                               {'text_sim': True, 'key_info': True, 'file_attr': True, 'image_sim': False})
+    assert pair.get('component_mismatch') is False, "同组件不应标记 mismatch"
+    assert pair['risk'] > 0, "同组件 text_sim 应正常参与风险计算"

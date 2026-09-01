@@ -325,8 +325,12 @@ def preprocess_text_for_similarity(text, template_text=None):
 
     stop_words = set(DEFAULT_STOP_WORDS)
     if template_text and template_text.strip():
-        for w, _ in top_keywords(template_text, top_k=50):
-            stop_words.add(w)
+        # 自适应 k（长招标文件提取更多高频词），并加 TF≥2 守卫：
+        # 只把反复重现的框架词并入停用集，避免误杀 TF=1 的独特技术参数
+        k = min(200, max(50, len(template_text) // 500))
+        for w, count in top_keywords(template_text, top_k=k, min_len=2):
+            if count >= 2:
+                stop_words.add(w)
 
     text = re.sub(r'[^\w\u4e00-\u9fff\s]', '', text)
     if has_chinese(text):

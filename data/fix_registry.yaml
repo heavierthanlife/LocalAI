@@ -523,3 +523,27 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_text_sim_stopwords_discrimination"
+
+  - id: FIX-2026-09-01-014
+    title: "自适应招标高频词(Y) + 异组件文本相似度守卫(Z-1)"
+    severity: high
+    rationale: >
+      方案 Y: 长招标文件 top-50 高频词不足以覆盖其专属名词 → 自适应 k =
+      min(200, max(50, len//500)) + TF≥2 守卫（避免误杀独特技术参数）。实证：
+      真实 EPCM 招标文件(49216字,k=98)下 同组件正常技术标 cosine 0.89→0.77 <0.80 门槛,
+      围标(技术雷同) 0.98 仍触发。
+      方案 Z-1: 异组件(价格标↔技术标)文本/关键词重叠无统计可比性 → 归零并标记
+      component_mismatch（避免 30×0.25=7.5 分虚假风险污染阈值）。
+    checks:
+      - type: grep
+        file: app/services/file_processing.py
+        pattern: "min.200, max.50, len.template_text"
+      - type: grep
+        file: app/services/batch_orchestrator.py
+        pattern: "_detect_component"
+      - type: grep
+        file: app/services/batch_orchestrator.py
+        pattern: "component_mismatch"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_component_mismatch"

@@ -78,6 +78,22 @@ class RiskScorer:
 # Pairwise comparison core
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _detect_component(filename: str, text: str = '') -> str:
+    """Detect bid-document component type from filename + leading text (FIX-014).
+
+    Returns 'price' / 'tech' / 'commercial' / 'unknown'.  Only used to guard
+    cross-component comparisons (价格标 vs 技术标 are not comparable via text).
+    """
+    s = (str(filename or '') + ' ' + (text[:300] if text else '')).lower()
+    if any(k in s for k in ('价格标', '报价', '商务报价', '报价表', '开标一览表')):
+        return 'price'
+    if any(k in s for k in ('技术标', '技术方案', '施工组织设计', '技术部分')):
+        return 'tech'
+    if any(k in s for k in ('商务标', '商务部分', '资格标', '资质文件')):
+        return 'commercial'
+    return 'unknown'
+
+
 def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
                         template_text=None):
     """Compute a single file-pair's similarity metrics."""
@@ -89,6 +105,11 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
     images2 = file_data[j]['images']
 
     from app.services.file_processing import image_similarity, file_attr_similarity
+
+    # Component guard (FIX-014): 异组件（价格标↔技术标）文本相似度无统计可比性 → 归零
+    comp1 = _detect_component(file_data[i].get('filename', ''), text1)
+    comp2 = _detect_component(file_data[j].get('filename', ''), text2)
+    component_mismatch = (comp1 != comp2 and comp1 != 'unknown' and comp2 != 'unknown')
 
     # Image similarity
     img_sim = image_similarity(images1, images2) if check_items.get('image_sim', True) else 0.0
@@ -121,6 +142,11 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
     file_attr_val = attr_sim
     img_sim_val = img_sim
 
+    if component_mismatch:
+        # Z-1: 异组件文本/关键词重叠均无统计可比性 → 归零（结构性条款重叠不作串标依据）
+        text_sim_val = 0.0
+        key_info_val = 0.0
+
     risk = RiskScorer.compute(key_info_val, file_attr_val, text_sim_val, img_sim_val)
 
     _, html1, html2, blocks = compute_similarity_with_numbers(text1, text2, template_text)
@@ -138,6 +164,8 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
         'html1': html1, 'html2': html2,
         'used_weights': {},
         'attr_same': 1 if meta1.get('author') and meta1['author'] == meta2.get('author') else 0,
+        'component_mismatch': component_mismatch,
+        'components': [comp1, comp2],
     }
 
 
