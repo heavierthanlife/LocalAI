@@ -16,11 +16,15 @@
 | 文件 | 内容 | 适用场景 |
 |---|---|---|
 | `AGENTS.md` | 架构、命令、环境变量、Gotchas | 首次部署、迁移、排障 |
-| `USER_MANUAL.md` | 管理员操作手册（中文） | 日常运维、功能操作 |
+| `USER_MANUAL.md` | 管理员/运维操作手册（中文） | 日常运维、功能操作 |
+| `ARCHITECTURE.md` | 深度架构（请求流/服务层/数据流） | 系统理解 |
+| `MANIFEST.md` | 项目清单（模块库/统计） | 快速定位代码 |
 | `.env.example` | 完整环境变量配置模板 | 重建 `.env` |
 | `CHANGELOG.md` | 变更历史（日期排序） | 想知道最近改了什么 |
-| `IMPROVEMENTS_SKIPPED.md` | 已评估但未采用的技术方案 | 技术选型决策追溯 |
-| `.audit/last-full-audit.md` | 安全/可靠性审计基线 | 安全审查、合规检查 |
+| `DECISIONS.md` | 技术决策 + 已评估未采用方案 | 技术选型追溯 |
+| `SECURITY.md` | 安全基线 + 审计发现 + Fix Registry | 安全审查、合规检查 |
+| `IMPROVEMENTS_SKIPPED.md` | 9 项已评估未采用的技术方案 | 技术选型决策追溯 |
+| `.audit/last-full-audit.md` | 早期安全/可靠性审计基线 | 安全审查、合规检查 |
 | `docs/superpowers/` | 功能规格说明书 | 功能实现细节、API 设计 |
 | `tests/test_smoke.py` | 快速冒烟测试（6项） | 不依赖数据库的快速验证 |
 | `scripts/manage_db.py` | 数据库迁移管理 | 迁移、回滚、历史查询 |

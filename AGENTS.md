@@ -2,6 +2,8 @@
 
 AI-powered bidding agency platform. Flask 3.1 / Python 3.12 / PostgreSQL 16 / Redis 7 / Celery 5.
 
+> **文档导航**：`README.md`（入口）· `MANIFEST.md`（模块清单）· `ARCHITECTURE.md`（深度架构）· `CHANGELOG.md`（变更历史）· `DECISIONS.md`（技术决策）· `SECURITY.md`（安全基线）· `USER_MANUAL.md`（运维手册）· `CONTRIBUTING.md`（开发流程）· 本文件为开发者/Agent 命令与约定指南。
+
 ## Quick start
 
 ```bash
