@@ -143,7 +143,7 @@
 | `file_cache.py` | 153 | 两级缓存（PG + 内存 LRU） |
 | `file_store.py` | 162 | 流式上传（8MB 分块，SHA256 去重） |
 | `file_generator.py` | 250 | Markdown→DOCX/XLSX/PPTX |
-| `ocr.py` | 87 | RapidOCR 线程安全单例 |
+| `ocr.py` | 87 | EasyOCR 线程安全单例（`OCR_GPU=auto` GPU 探测） |
 | `document_analysis_svc.py` | 1,288 | 文档深度分析（6 检查器，DOCX 报告） |
 | `text_utils.py` | — | 分词 / TF-IDF / top_keywords |
 

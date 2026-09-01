@@ -11,7 +11,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 ## 核心能力
 
 - **AI 智能对话**：LangGraph 代理 + 流式 SSE，多轮上下文，RAG 知识库检索，质问/红队模式
-- **文档全格式解析**：PDF/DOCX/XLSX/PPTX/扫描件 OCR（MinerU + RapidOCR）
+- **文档全格式解析**：PDF/DOCX/XLSX/PPTX/扫描件 OCR（MarkItDown + LibreOffice + PyMuPDF + EasyOCR）
 - **清标分析**：5 维度（指标分析 / 交叉比较 / 合规检查 / AI 审查 / 全量审计补充），0-100 权重复合评分
 - **串通投标检测**：TF-IDF 文本相似度 + 组件守卫 + 报价尾数/Benford 异常检测 + 关系网络
 - **合规检查**：法规库（24 部）+ 规则提取 + 语义检索 + 增量检查
@@ -27,7 +27,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 | 缓存/消息 | Redis 7 + Celery 5 | Broker + Beat 调度 |
 | AI/LLM | LangChain + LangGraph + DeepSeek/智谱/通义/SiliconFlow/Mimo | 5 供应商 + fallback 链 + 熔断器 |
 | 向量 | ChromaDB + sentence-transformers | 语义检索、RAG、知识库 |
-| 文档处理 | python-docx / PyMuPDF / openpyxl / MinerU / RapidOCR | 全格式提取 + OCR |
+| 文档处理 | python-docx / PyMuPDF / openpyxl / MarkItDown / EasyOCR | 全格式提取 + OCR |
 | 自动化 | Selenium + Edge/Chrome WebDriver | 企业信用查询 |
 | 前端 | 原生 JS SPA + Tiptap + markdown-it + DOMPurify | 流式聊天 + 文件管理 + 知识库 |
 | 调度 | APScheduler（进程内）/ Celery Beat（Docker） | 20+ 定时任务 |

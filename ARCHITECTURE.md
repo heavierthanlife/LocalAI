@@ -75,7 +75,7 @@
 - System prompt 从 `data/agent_prompt.json` 加载（支持在线编辑），自动追加安全防护
 
 ### 3. 文档解析 `file_processing.py`
-- 全格式提取：PDF（MinerU 优先）/ DOCX / XLSX / PPTX / 扫描件 OCR（RapidOCR）
+- 全格式提取：PDF（PyMuPDF/fitz）/ DOCX/XLSX/PPTX（MarkItDown + python-docx/openpyxl）/ 旧 .doc（LibreOffice）/ 扫描件 OCR（EasyOCR，`OCR_GPU=auto` 支持 GPU）
 - 文本相似度：TF-IDF cosine + 中文停用词 + 模板去除
 - VL 描述 + 熔断器
 - 21 处导入点（高耦合，审计决定保留不拆）

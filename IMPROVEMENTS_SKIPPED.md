@@ -1,8 +1,25 @@
 # Skipped Improvements Record
 
-> Session: 2026-07-03 ~ 2026-07-04
-> Status: **Historical record** — superseded by `data/unresolved.yaml` as active tracker.
-> Context: Full-stack audit, Red Team (质问模式) completion, document pipeline upgrade (EasyOCR→RapidOCR + MinerU), skill-to-app integration planning
+> **Session**: 2026-07-03 ~ 2026-07-04（原始记录）
+> **Status**: **Historical record** — superseded by `data/unresolved.yaml` as active tracker, and by `DECISIONS.md` for decision rationale.
+> **Context**: Full-stack audit, Red Team (质问模式) completion, document pipeline upgrade (EasyOCR→RapidOCR + MinerU), skill-to-app integration planning
+
+---
+
+> ## ⚠️ 2026-09-01 现实对齐更正
+>
+> 原始文档声称「已迁移到 MinerU + RapidOCR」，但经代码核验，**实际使用的文档管线是**：
+>
+> | 层 | 实际技术 | 证据 |
+> |---|---|---|
+> | 结构化提取 | **MarkItDown** 0.1.6 | `requirements.txt`；`file_processing.py` 11 处引用 |
+> | .doc 转换 | **LibreOffice/soffice** | `_convert_doc_via_soffice` 6 处 |
+> | PDF 流式提取 | **PyMuPDF (fitz)** | `file_processing.py` 17 处 |
+> | 扫描件 OCR | **EasyOCR** 1.7.2 | `ocr.py`（仍为 EasyOCR 单例，无 RapidOCR） |
+> | 归档/电子书依赖 | **未安装**（rarfile/py7zr/ebooklib/extract-msg 不在 requirements） | `requirements.txt` |
+>
+> **含义**：本清单中第 1-5 项的「参照系」（RapidOCR/MinerU 已在用）不成立。真实基线是
+> **EasyOCR + MarkItDown + LibreOffice + PyMuPDF**。下方各条已按真实基线重估。
 
 ---
 
@@ -10,13 +27,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — chose RapidOCR |
+| **Status** | Skipped — 现仍维持 EasyOCR（未采用 RapidOCR 亦未采用 PaddleOCR） |
 | **Dependencies** | `paddlepaddle` (~300MB), `paddleocr` |
 | **Hardware** | CPU usable, GPU recommended for speed |
 | **Pros** | 98% Chinese accuracy (highest), PP-Structure for table recognition, handwritten text support |
-| **Cons** | 300MB+ install, PaddlePaddle framework install often fails on Windows, 2-7x slower than RapidOCR on CPU |
+| **Cons** | 300MB+ install, PaddlePaddle framework install often fails on Windows, 2-7x slower on CPU |
 | **Dropped** | 2026-07-04 |
-| **Why** | RapidOCR uses same PP-OCRv4 model via ONNX, 93% accuracy is sufficient for printed bid documents, installs in 30MB, 2-7x faster on CPU. Table recognition deferred to MinerU. |
+| **2026-09-01 重估** | ⚠️ **仍未必要**。若想升级 OCR 精度，**RapidOCR（ONNX 30MB）仍是比 PaddleOCR 更轻的优先项**；PaddleOCR 安装难 + Windows 失败率高的结论不变。 |
 
 ---
 
@@ -24,13 +41,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — kept python-docx/pptx/openpyxl, added MinerU |
+| **Status** | Skipped — 保持 python-docx/pptx/openpyxl + MarkItDown |
 | **Dependencies** | `docling` (~1GB), `docling-serve` (optional FastAPI) |
 | **Hardware** | CPU usable, GPU optional |
 | **Pros** | Native DOCX/PPTX/XLSX support (IBM enterprise heritage), JSON layout coordinates, TableFormer table extraction, MIT license, LangChain/LlamaIndex native integration |
-| **Cons** | Chinese document support weak (trained on English), OmniDocBench ~82 vs MinerU ~95, API still maturing (2024 open-source) |
+| **Cons** | Chinese document support weak (trained on English), OmniDocBench ~82 vs MinerU ~95, API still maturing |
 | **Dropped** | 2026-07-04 |
-| **Why** | Chinese bidding documents need native Chinese layout understanding. MinerU dominates (95.69 OmniDocBench, Shanghai AI Lab). python-docx/pptx/openpyxl kept for Office read/write. |
+| **2026-09-01 重估** | ⚠️ **重估**。原「对比 MinerU」的参照已不成立（无 MinerU）。中文弱 + API 未成熟仍成立。MarkItDown 满足当前需求。 |
 
 ---
 
@@ -38,13 +55,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — chose MinerU |
+| **Status** | Skipped — 保持 PyMuPDF + EasyOCR |
 | **Dependencies** | `marker-pdf`, `surya-ocr` |
 | **Hardware** | CPU usable, GPU recommended (H100: 120 pages/sec) |
-| **Pros** | Fastest PDF→Markdown (0.18s/page serial, 120 pages/sec batched on H100), 95.67 heuristic accuracy on marker_benchmark, strong table extraction with `--use_llm` flag |
-| **Cons** | Chinese text support weak (Surya OCR optimized for English), GPL license (commercial needs separate license), no Office format support, struggles with scanned/degraded PDFs (32% accuracy) |
+| **Pros** | Fastest PDF→Markdown (0.18s/page serial, 120 pages/sec batched), 95.67 heuristic accuracy, strong table extraction |
+| **Cons** | Chinese text support weak (Surya OCR optimized for English), **GPL license (commercial needs separate license)**, no Office format support, struggles with scanned/degraded PDFs (32% accuracy) |
 | **Dropped** | 2026-07-04 |
-| **Why** | Chinese bidding documents are the primary use case. Chinese support is non-negotiable. GPL license risk for commercial deployment. |
+| **2026-09-01 重估** | ⚠️ **仍否决**。中文弱 + **GPL 商用风险**是硬否决，与参照系无关。 |
 
 ---
 
@@ -52,13 +69,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — kept custom pipeline |
+| **Status** | Skipped — 保持自研管线（MarkItDown + LibreOffice + PyMuPDF + EasyOCR） |
 | **Dependencies** | `unstructured`, `unstructured-client`, Poppler, Tesseract (system-level) |
-| **Hardware** | Docker image ~6.6GB, CPU usable, GPU optional |
-| **Pros** | 64+ file format support, best-in-class table extraction (0.820 accuracy, self-reported), lowest hallucination rate (0.051), 30+ metadata fields per chunk, LangChain/LlamaIndex native, FedRAMP authorized |
-| **Cons** | Massive install footprint (6.6GB Docker), complex local setup (Poppler + Tesseract system deps), OSS version accuracy reportedly dipped in recent versions, enterprise pricing at scale |
+| **Hardware** | Docker image ~6.6GB, CPU usable |
+| **Pros** | 64+ file format support, best-in-class table extraction, lowest hallucination rate, 30+ metadata fields, LangChain/LlamaIndex native |
+| **Cons** | Massive install footprint (6.6GB Docker), complex local setup, OSS accuracy dipped in recent versions, enterprise pricing at scale |
 | **Dropped** | 2026-07-04 |
-| **Why** | Overkill for current scale. MinerU + RapidOCR cover the needed formats. 6.6GB image too heavy for current deployment. Revisit if processing volume exceeds 100+ documents/day with mixed formats. |
+| **2026-09-01 重估** | ❌ **过时**。6.6GB 太重、当前规模（<100 文档/天）用不上。评估无变化。 |
 
 ---
 
@@ -66,13 +83,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Deferred — using MinerU pipeline (CPU) backend |
-| **Dependencies** | NVIDIA GPU ≥8GB VRAM, CUDA 12.x |
-| **Hardware** | RTX 3060/4060 minimum, RTX 3090 recommended |
-| **Pros** | MinerU hybrid/VLM backend: 0.4s/page (vs 3-8s CPU), OmniDocBench 95.69 (SOTA), VLM-powered layout understanding superior to pipeline |
-| **Cons** | $300-800 hardware cost, power consumption, Docker GPU passthrough setup |
-| **Dropped** | 2026-07-04 |
-| **Why** | Current deployment is CPU-only. MinerU pipeline backend on CPU is still faster than EasyOCR (3-8s vs 5-10s/page) with better accuracy. GPU purchase requires budget approval. |
+| **Status** | **Deferred → 已有一台 RTX 2080 Super 8GB 笔记本** |
+| **Dependencies** | NVIDIA GPU ≥8GB VRAM, CUDA |
+| **Hardware** | RTX 2080 Super (8GB) — 已有 ✅ |
+| **Pros** | GPU 加速 OCR/嵌入/微调；VLM 布局理解 |
+| **Cons** | 需要重装 CUDA 版 torch（当前项目装的是 `torch==2.12.1+cpu`，CUDA 不可用） |
+| **Dropped** | 2026-07-04（当时 CPU-only）；**2026-09-01 重估：值得启用** |
+| **Why** | 见下方「RTX 2080 Super 建议」。 |
 
 ---
 
@@ -80,13 +97,13 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — single user, plain text logs sufficient |
-| **Dependencies** | `structlog` (Python), Loki + Promtail (Docker containers, ~300MB RAM) |
-| **Hardware** | +300MB RAM for Loki + Promtail containers |
-| **Pros** | JSON structured logs queryable via LogQL in Grafana, unified metrics+logs dashboard, alert rules on log patterns, multi-instance log aggregation (needed if scaling beyond 1 instance) |
-| **Cons** | Additional Docker services to maintain, 300MB RAM overhead, learning curve for LogQL, zero benefit for single-instance single-user deployment |
+| **Status** | Skipped — 单用户，纯文本日志足够 |
+| **Dependencies** | `structlog` (Python), Loki + Promtail (Docker, ~300MB RAM) |
+| **Hardware** | +300MB RAM |
+| **Pros** | JSON structured logs queryable via LogQL in Grafana, unified metrics+logs dashboard, alert rules, multi-instance log aggregation |
+| **Cons** | Additional Docker services, 300MB RAM overhead, LogQL learning curve, zero benefit for single-instance single-user |
 | **Dropped** | 2026-07-04 |
-| **Why** | User is the only person reading logs. Plain text `logging` module with file rotation is sufficient. Revisit if deployment scales to multiple instances or multiple operators. |
+| **2026-09-01 重估** | ❌ **过时**。单用户单实例，除非未来多实例/多操作员才重估。 |
 
 ---
 
@@ -94,13 +111,12 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Scoped down — implementing 5 core smoke tests instead |
+| **Status** | Scoped down → 5 smoke tests（现已有 7 smoke + 64 regression + 批量快照） |
 | **Dependencies** | `playwright`, `pytest-playwright`, `pytest` |
-| **Hardware** | None additional (headless Chromium) |
 | **Pros** | Full regression coverage, CI-ready, catches frontend breakage before deployment |
-| **Cons** | 30+ tests require weekly maintenance as HTML/CSS changes, test selector brittleness, ~15min CI runtime, dedicated QA time needed |
+| **Cons** | 30+ tests require maintenance as HTML/CSS changes, selector brittleness, ~15min CI runtime |
 | **Dropped** | 2026-07-04 |
-| **Why** | Frontend recently underwent major restructuring. HTML selectors still stabilizing. 5 core smoke tests (login, chat, upload, project create, knowledge upload) give 80% coverage at 20% cost. Expand when frontend stabilizes. |
+| **2026-09-01 重估** | ⚠️ **部分价值 — 建议重估**。前端 app.js ~10k 行已稳定，全量测试已到 92/92。**Playwright 端到端现比 7 月更有价值**，但建议用 **5-8 条核心流程**（登录/上传/聊天/清标/下载）而非 30 条。 |
 
 ---
 
@@ -108,13 +124,9 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Deferred — restructuring plan approved but too large for current session |
+| **Status** | ✅ **已解决（2026-08-28 FIX-003）** |
 | **Dependencies** | None (pure refactor) |
-| **Hardware** | N/A |
-| **Pros** | 4571-line monolith → ~8 domain files, cleaner imports, easier maintenance, parallel development possible |
-| **Cons** | Risk of breaking route registrations, circular import hazards, ~4-6 hours of careful surgery |
-| **Dropped** | 2026-07-04 |
-| **Why** | Current structure works. Splitting is pure refactoring with no user-visible benefit. Defer until next major feature addition that would bloat the file further. |
+| **Why** | `admin.py` 已从 4,820 → **1,653** 行，拆分为 `admin_regeneration` / `admin_knowledge_lab` / `admin_ops` 子模块。**此条目作废**。 |
 
 ---
 
@@ -122,11 +134,42 @@
 
 | Field | Detail |
 |-------|--------|
-| **Status** | Skipped — themes not visually appealing enough |
-| **Dependencies** | None (CSS variables + JS selector) |
-| **Hardware** | N/A |
-| **Pros** | Ocean Depths, Sunset Boulevard, Forest Canopy, etc. — 10 professionally designed color/font combinations, cosmetic variety for users |
-| **Cons** | Theme designs evaluated as not meeting aesthetic bar for professional bidding system, themes designed for presentations/landing pages not data-heavy work tools |
-| **Dropped** | 2026-07-04 |
-| **Why** | User reviewed theme-showcase.pdf and found the themes not beautiful enough for the system. Light/dark toggle already sufficient. |
+| **Status** | Skipped — 主题美感未达专业招标系统标准 |
+| **Dependencies** | None |
+| **Why** | 用户评估后认为主题不够美观。L/D 切换已足够。**2026-09-01 重估**：无变化，保留不考虑。 |
 
+---
+
+## RTX 2080 Super (8GB) — 建议（2026-09-01 新增）
+
+用户有 **RTX 2080 Super 8GB** 笔记本。当前项目 torch 是 **CPU 版**（`torch==2.12.1+cpu`，`cuda.is_available()=False`），所以 GPU 完全未启用。以下是启用与价值排序：
+
+### 当前就能无代码改动受益的（推荐先做）
+
+| 收益点 | 现状 | 改法 | 价值 |
+|---|---|---|---|
+| **EasyOCR GPU 加速** | `ocr.py` 已支持 `OCR_GPU=auto` 探测 cuda，但 cuda 不可用 | 重装 CUDA torch | 中文扫描件 OCR 5-10x 快 |
+| **MiniLM 嵌入**（语义/RAG） | sentence-transformers CPU 推理 | 同上 | 语义搜索/RAG 提速 |
+| **LoRA 微调**（`run_lora_training.py`, Unsloth Qwen2.5-7B） | CPU 几乎不可行 | CUDA torch + unsloth cu121 | 8GB 可跑 Qwen 7B QLoRA（4bit） |
+
+### 启用方法
+
+```bash
+# 1. 卸载 CPU torch
+pip uninstall torch torchvision
+# 2. 装 CUDA 版（2080S 是 Ampere 前代 → cu121 兼容）
+pip install torch==2.12.1 torchvision==0.27.1 --index-url https://download.pytorch.org/whl/cu121
+# 3. 验证
+python -c "import torch; print(torch.cuda.is_available())"   # → True
+# 4. OCR 自动用 GPU（OCR_GPU 默认 auto）；LoRA 用 unsloth[cu121]
+```
+
+### 不建议的（8GB 显存不够或收益低）
+
+| 项 | 原因 |
+|---|---|
+| MinerU VLM 后端 | 8GB 勉强，VLM 布局理解收益对中文招标文档有限 |
+| 大模型本地推理（≥13B） | 8GB 只能 QLoRA 7B 或量化推理，日常 LLM 仍走云 API |
+| 本地 embedding 大模型 | MiniLM 已足够，不必上大模型 |
+
+**核心建议**：2080S 的最大价值 = **OCR GPU 加速 + LoRA 微调 Qwen2.5-7B**（Unsloth 官方支持 8GB QLoRA）。两者都只需重装 CUDA torch，无代码改动。

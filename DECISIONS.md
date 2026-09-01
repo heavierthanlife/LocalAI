@@ -2,14 +2,17 @@
 
 项目的架构决策（ADR）与已评估未采纳的技术方案，用于选型追溯。
 
+> **2026-09-01 更正**：此前文档声称采用 RapidOCR + MinerU，经代码核验实际管线为
+> **EasyOCR + MarkItDown + LibreOffice + PyMuPDF**。本表相关行已按实际更正。
+
 ---
 
 ## 1. 当前决策记录
 
 | 日期 | 决策 | 结论 | 理由 | 关联 |
 |---|---|---|---|---|
-| 2026-07-04 | OCR 引擎选型 | **RapidOCR**（弃 EasyOCR） | 同模型 ONNX 93% 精度，30MB vs 300MB，CPU 快 2-7x | `IMPROVEMENTS_SKIPPED` #1 |
-| 2026-07-04 | 文档解析器 | **MinerU**（弃 Docling/Marker/Unstructured） | 中文文档 OmniDocBench 95.69 领先；其余英文优化/GPL 风险/6.6GB 过重 | `IMPROVEMENTS_SKIPPED` #2/#3/#4 |
+| 2026-07-04 | OCR 引擎选型 | **保持 EasyOCR**（RapidOCR/PaddleOCR 均未采纳） | EasyOCR 1.7.2 满足中文印刷文档；`OCR_GPU=auto` 支持 GPU | `IMPROVEMENTS_SKIPPED` #1 |
+| 2026-07-04 | 文档解析器 | **MarkItDown + LibreOffice + PyMuPDF**（弃 Docling/Marker/Unstructured） | 中文文档适用；其余英文优化/GPL 风险/6.6GB 过重 | `IMPROVEMENTS_SKIPPED` #2/#3/#4 |
 | 2026-07-06 | 统一投标审计引擎 | 新增 `audit` blueprint + `audit_engine.py`，7 服务作库调用 | 一键全审 + 复合评分 + 持久历史 | `docs/superpowers/` |
 | 2026-08-27 | 全量审计合并入清标 | **摘除 `audit_bp` 注册**，功能并入清标 5 维度 | 避免重复入口；表保留供 graph/cases 依赖 | `20260827log.md` §10 |
 | 2026-08-28 | Prompt 语言 | JUDGE/STRUCTURED 中文化 | 领域术语一致性 | FIX-005 |
@@ -28,11 +31,11 @@
 
 | # | 方案 | 结论 | 关键理由 |
 |---|---|---|---|
-| 1 | PaddleOCR | 弃 → RapidOCR | 300MB 安装难、Windows 常失败、慢 |
-| 2 | Docling | 弃 → MinerU | 中文弱（英文训练）、API 未成熟 |
-| 3 | Marker | 弃 → MinerU | 中文弱、GPL 商用风险 |
+| 1 | PaddleOCR | 弃 → 保持 EasyOCR | 300MB 安装难、Windows 常失败、慢 |
+| 2 | Docling | 弃 → MarkItDown | 中文弱（英文训练）、API 未成熟 |
+| 3 | Marker | 弃 → PyMuPDF | 中文弱、GPL 商用风险 |
 | 4 | Unstructured.io | 弃 → 自研管线 | 6.6GB 过重、当前规模够用 |
-| 5 | GPU / MinerU VLM | 延后 | CPU-only 部署，GPU 需预算批准 |
+| 5 | GPU / MinerU VLM | 延后 → **已有 2080S，建议启用 GPU** | 重装 CUDA torch 即可，见 `IMPROVEMENTS_SKIPPED.md` §RTX 2080 Super |
 | 6 | structlog + Loki | 弃 → 纯文本日志 | 单用户单实例，300MB 开销不值 |
 | 7 | 30+ Playwright E2E | 收缩 → 5 冒烟 | 前端选择器未稳定，维护成本高 |
 | 8 | admin.py 全拆分 | 延后 | 纯重构无用户收益，风险高 |

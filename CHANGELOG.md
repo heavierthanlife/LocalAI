@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-01] — 文档现实对齐更正 + RTX 2080 Super 支持评估
+
+### 文档管线事实更正
+- 经代码核验，文档声称的「RapidOCR + MinerU」与代码不符。**实际管线 = MarkItDown 0.1.6 + LibreOffice/soffice + EasyOCR 1.7.2 + PyMuPDF (fitz)**，无 MinerU/RapidOCR，无 rarfile/py7zr/ebooklib/extract-msg
+- 更正：`CHANGELOG.md` 07-04/07-08、`DECISIONS.md`、`README.md`、`MANIFEST.md`、`ARCHITECTURE.md`、`IMPROVEMENTS_SKIPPED.md`
+- `IMPROVEMENTS_SKIPPED.md` 逐项按真实基线重估；#8 admin.py 拆分标记「已解决」
+
+### RTX 2080 Super 支持评估
+- 发现 torch 为 **CPU 版**（`2.12.1+cpu`，CUDA 不可用）→ GPU 完全未启用
+- 2080S (8GB) 最大价值：**EasyOCR GPU 加速 + LoRA 微调 Qwen2.5-7B**（Unsloth QLoRA 4bit），均只需重装 CUDA torch 无代码改动
+- `ocr.py` 的 `OCR_GPU=auto` 已支持自动探测
+
+---
+
 ## [2026-09-01] — 清标评分系列（FIX-010 ~ FIX-014）
 
 ### FIX-014 自适应招标高频词 + 异组件文本相似度守卫（方案 Y + Z-1）
@@ -157,8 +171,8 @@ All notable changes to 中联招标智能助手.
 ## [2026-07-08] — 统一文件管线 + 首次全审计
 
 ### Added
-- **统一文件处理管线**：单一 `FILE_TYPE_REGISTRY`（44 类型）、分层提取（MinerU→MarkItDown→格式特定→OCR→LibreOffice）、`allowed_file` 校验
-- 新增 4 个 pip 依赖：rarfile / py7zr / ebooklib / extract-msg
+- **统一文件处理管线**：单一 `FILE_TYPE_REGISTRY`（44 类型）、分层提取（MarkItDown→格式特定→OCR→LibreOffice）、`allowed_file` 校验
+  - **2026-09-01 更正**：实际无 MinerU 层；rarfile/py7zr/ebooklib/extract-msg 4 个依赖**未加入 requirements**（归档/电子书仍不受支持）
 
 ### Fixed（首次全审计 139 文件 / 5 发现）
 - **HIGH** bare `except: pass` → `except OSError` + logging（admin cleanup）
@@ -244,17 +258,19 @@ All notable changes to 中联招标智能助手.
 
 ## [2026-07-04] — Document pipeline upgrade: EasyOCR → RapidOCR + MinerU
 
-### Added
+> **⚠️ 2026-09-01 更正**：经代码核验，该升级**未实际落地为 RapidOCR/MinerU**。当前真实管线为 **MarkItDown + LibreOffice + PyMuPDF + EasyOCR**。以下为历史计划记录，供追溯；实际状态见 `IMPROVEMENTS_SKIPPED.md` §现实对齐。
+
+### Added (原计划)
 - MinerU (`_try_mineru`, `_strip_markdown`) as primary PDF/DOCX/PPTX/XLSX parser in `file_processing.py`
 - `_ocr_pdf_legacy` fallback in `ingest_pipeline.py`
 
-### Changed
-- `app/services/ocr.py`: EasyOCR → RapidOCR (ONNX, CPU-optimized, 30MB vs 300MB)
-- `extract_text_from_file`: MinerU tried first for structured formats, legacy code retained as fallback
-- `ingest_pipeline.py`: `_ocr_pdf` → MinerU, `_ocr_image` → RapidOCR (via updated OCRManager)
+### Changed (实际落地)
+- `app/services/ocr.py`: 仍为 **EasyOCR** 1.7.2（含 `OCR_GPU=auto` 探测，GPU 可用时自动启用）
+- `file_processing.py`: 结构化提取用 **MarkItDown** 0.1.6；`.doc` 转换用 **LibreOffice/soffice**；PDF 流式提取用 **PyMuPDF (fitz)**
+- `requirements.txt`: 无 rapidocr/mineru；rarfile/py7zr/ebooklib/extract-msg 未安装
 
 ### Removed
-- `easyocr` from `requirements.txt`; `ocr_manager`/`run_ocr` placeholders from `globals.py`
+- `easyocr` from `requirements.txt` → **未移除**（EasyOCR 仍在用，`ocr.py` 依赖）
 
 ---
 
