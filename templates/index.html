@@ -26,26 +26,26 @@
         <!-- ===== CHAT SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-chat-pane">
             <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">聊天</h3>
-            <button id="newChatBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;">💬 新对话</button>
-            <button id="grillChatBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#fef2f2; color:#991b1b; border-color:#fca5a5;" title="模拟挑剔供应商，拷问你的招标文件，帮你发现漏洞和不合理条款">🔥 质问模式</button>
-            <input type="text" id="sidebarSearch" placeholder="🔍 快速筛选..." style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #c8d0d8;margin-bottom:6px;font-size:0.8rem;">
+            <button id="newChatBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;"><span class="msi msi-sm" aria-hidden="true">chat</span> 新对话</button>
+            <button id="grillChatBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#fef2f2; color:#991b1b; border-color:#fca5a5;" title="模拟挑剔供应商，拷问你的招标文件，帮你发现漏洞和不合理条款"><span class="msi msi-sm" aria-hidden="true">local_fire_department</span> 质问模式</button>
+            <input type="text" id="sidebarSearch" placeholder="<span class="msi msi-sm" aria-hidden="true">search</span> 快速筛选..." style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid #c8d0d8;margin-bottom:6px;font-size:0.8rem;">
             <hr style="margin: 12px 0;">
-            <button id="openSearchModalBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;">🔍 搜索聊天记录</button>
+            <button id="openSearchModalBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;"><span class="msi msi-sm" aria-hidden="true">search</span> 搜索聊天记录</button>
             <h4 style="font-size:0.75rem;color:var(--card-muted);margin:8px 0 4px;">普通对话</h4>
             <ul class="history-list" id="historyList"><li style="color: #4a5a6b;">加载中...</li></ul>
-            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;display:none;" id="projChatHeader">📂 项目对话</h4>
+            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;display:none;" id="projChatHeader"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目对话</h4>
             <ul class="history-list" id="projectHistoryList" style="display:none;"></ul>
-            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;display:none;" id="todoHeader">📋 我的待办 (<span id="todoCount">0</span>/5)</h4>
+            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;display:none;" id="todoHeader"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 我的待办 (<span id="todoCount">0</span>/5)</h4>
             <ul class="history-list" id="todoList" style="display:none;"></ul>
-            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;" id="bgTasksHeader">⚡ 后台任务 (<span id="bgTaskCount">0</span>)</h4>
+            <h4 style="font-size:0.75rem;color:var(--card-muted);margin:12px 0 4px;" id="bgTasksHeader"><span class="msi msi-sm" aria-hidden="true">bolt</span> 后台任务 (<span id="bgTaskCount">0</span>)</h4>
             <ul class="history-list" id="bgTasksList" style="max-height:180px;overflow-y:auto;"></ul>
         </div>
 
         <!-- ===== PROJECTS SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-projects-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📂 项目</h3>
-            <button id="sidebarCreateProjectBtn" class="file-btn" style="width:100%; margin-bottom:6px; background:#bccfde; border-color:#8aa0b8;">➕ 新建项目</button>
-            <button id="sidebarMyFilesBtn" class="file-btn" style="width:100%; margin-bottom:6px;">📁 我的文件</button>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目</h3>
+            <button id="sidebarCreateProjectBtn" class="file-btn" style="width:100%; margin-bottom:6px; background:#bccfde; border-color:#8aa0b8;"><span class="msi msi-sm" aria-hidden="true">add</span> 新建项目</button>
+            <button id="sidebarMyFilesBtn" class="file-btn" style="width:100%; margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">folder</span> 我的文件</button>
             <hr style="margin: 12px 0;">
             <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;">项目列表</h4>
             <ul id="sidebarProjectsList" style="list-style:none; padding:0; font-size:0.8rem;"></ul>
@@ -53,81 +53,81 @@
 
         <!-- ===== KNOWLEDGE SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-knowledge-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📚 知识库</h3>
-            <button id="sidebarUploadKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;">📤 上传文件</button>
-            <button id="sidebarRefreshKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;">🔄 刷新</button>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识库</h3>
+            <button id="sidebarUploadKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">upload</span> 上传文件</button>
+            <button id="sidebarRefreshKnowledgeBtn" class="file-btn" style="width:100%; margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
             <div id="knowledgeSidebarStats" style="display:flex;gap:6px;margin-bottom:8px;"></div>
             <hr style="margin: 10px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">📁 我的知识库 (仅自己可见)</h4>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">folder</span> 我的知识库 (仅自己可见)</h4>
             <ul id="sidebarKnowledgeFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:120px; overflow-y:auto;"></ul>
             <hr style="margin: 10px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🏢 公司知识库 (全员可见)</h4>
-            <button id="sidebarUploadCompanyBtn" class="file-btn" style="width:100%; margin-bottom:6px;">📤 上传公司文件</button>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">domain</span> 公司知识库 (全员可见)</h4>
+            <button id="sidebarUploadCompanyBtn" class="file-btn" style="width:100%; margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">upload</span> 上传公司文件</button>
             <ul id="sidebarCompanyFiles" style="list-style:none; padding:0; font-size:0.78rem; max-height:100px; overflow-y:auto;"></ul>
             <hr style="margin: 10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:4px;">⏱️ 近期活动</h4>
             <div id="knowledgeSidebarActivity" style="font-size:0.65rem;"></div>
             <hr style="margin:10px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🔗 图谱中心</h4>
-            <button id="sidebarLawImpactGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;">🏛️ 法规影响图谱</button>
-            <button id="sidebarGlobalCitationGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;">📄 全局引用图谱</button>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">link</span> 图谱中心</h4>
+            <button id="sidebarLawImpactGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">account_balance</span> 法规影响图谱</button>
+            <button id="sidebarGlobalCitationGraphBtn" class="file-btn" style="width:100%;margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">description</span> 全局引用图谱</button>
         </div>
 
         <!-- ===== RECYCLE SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-recycle-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">🗑️ 回收站工具</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">delete</span> 回收站工具</h3>
             <div id="sidebarRecycleStats" style="font-size:0.78rem;color:var(--card-muted);margin-bottom:8px;"></div>
             <div id="sidebarRecycleFilters" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
                 <button class="recycle-filter active" data-source="all" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;">全部</button>
-                <button class="recycle-filter" data-source="chat" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;">💬 对话</button>
-                <button class="recycle-filter" data-source="user_file" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;">📁 文件</button>
-                <button class="recycle-filter" data-source="knowledge_lab" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;">🧪 知识库</button>
-                <button class="recycle-filter" data-source="company_kb" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;">🏢 公司</button>
+                <button class="recycle-filter" data-source="chat" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">chat</span> 对话</button>
+                <button class="recycle-filter" data-source="user_file" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">folder</span> 文件</button>
+                <button class="recycle-filter" data-source="knowledge_lab" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">science</span> 知识库</button>
+                <button class="recycle-filter" data-source="company_kb" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">domain</span> 公司</button>
             </div>
-            <button id="sidebarRestoreAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#22c55e; color:white; border-color:#16a34a;">♻️ 恢复筛选结果</button>
-            <button id="sidebarEmptyAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#ef4444; color:white; border-color:#dc2626;">🗑️ 清空筛选结果</button>
-            <p style="font-size:.65rem;color:var(--card-muted);margin-top:8px;">💡 超过15天的对话会自动归档删除</p>
+            <button id="sidebarRestoreAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#22c55e; color:white; border-color:#16a34a;"><span class="msi msi-sm" aria-hidden="true">recycling</span> 恢复筛选结果</button>
+            <button id="sidebarEmptyAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#ef4444; color:white; border-color:#dc2626;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清空筛选结果</button>
+            <p style="font-size:.65rem;color:var(--card-muted);margin-top:8px;"><span class="msi msi-sm" aria-hidden="true">lightbulb</span> 超过15天的对话会自动归档删除</p>
         </div>
 
         <!-- ===== STATS SECTION (Analytics tab) ===== -->
         <div class="sidebar-tab-pane" id="sidebar-stats-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📊 系统总览</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 系统总览</h3>
             <div id="sidebarStatsActivity" style="font-size:0.75rem;margin-bottom:10px;"></div>
             <hr style="margin:10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">系统资源</h4>
             <div id="sidebarStatsSystem" style="font-size:0.73rem;"></div>
-            <button id="sidebarExportStatsBtn" class="file-btn" style="width:100%;margin-top:10px;">📥 导出统计报告</button>
+            <button id="sidebarExportStatsBtn" class="file-btn" style="width:100%;margin-top:10px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出统计报告</button>
             <div id="sidebarUserRoles" style="display:none;margin-top:10px;"></div>
             <!-- Admin tool buttons (moved from projects sidebar) -->
             <div id="sidebarAdminExtras" style="display:none;">
                 <hr style="margin:12px 0;">
-                <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;">📊 管理工具</h4>
-                <button id="sidebarAuditLogBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📊 审计日志</button>
-                <button id="sidebarEditPromptBtn" class="file-btn" style="width:100%; margin-bottom:4px;">✏️ 编辑提示词</button>
-                <button id="sidebarWorkReportBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📊 工作报告</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;">🧹 维护</div>
-                <button id="sidebarClearCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;">🗑️ 清除缓存</button>
-                <button id="sidebarCleanupNowBtn" class="file-btn" style="width:100%; margin-bottom:4px;">🧹 清理数据</button>
-                <button id="sidebarSearchCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;">⚙️ 搜索缓存</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;">🧠 引擎</div>
-                <button id="sidebarRagStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;">🔍 RAG索引</button>
-                <button id="sidebarRagRebuildBtn" class="file-btn" style="width:100%; margin-bottom:4px;">🔨 重建索引</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;">📊 训练</div>
-                <button id="sidebarTrainingStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📈 训练统计</button>
-                <button id="sidebarTrainingExportBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📥 导出JSONL</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;">🔍 检测结果</div>
-                <button id="sidebarQuoteAnomalyResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;">💰 报价异常记录</button>
-                <button id="sidebarRelationshipResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;">🔗 关联关系记录</button>
-                <button id="sidebarTypoResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📝 错别字记录</button>
+                <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 管理工具</h4>
+                <button id="sidebarAuditLogBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 审计日志</button>
+                <button id="sidebarEditPromptBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">edit</span> 编辑提示词</button>
+                <button id="sidebarWorkReportBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 工作报告</button>
+                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 维护</div>
+                <button id="sidebarClearCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清除缓存</button>
+                <button id="sidebarCleanupNowBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 清理数据</button>
+                <button id="sidebarSearchCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">settings</span> 搜索缓存</button>
+                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">psychology</span> 引擎</div>
+                <button id="sidebarRagStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">search</span> RAG索引</button>
+                <button id="sidebarRagRebuildBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">hammer</span> 重建索引</button>
+                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 训练</div>
+                <button id="sidebarTrainingStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">trending_up</span> 训练统计</button>
+                <button id="sidebarTrainingExportBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出JSONL</button>
+                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">search</span> 检测结果</div>
+                <button id="sidebarQuoteAnomalyResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">payments</span> 报价异常记录</button>
+                <button id="sidebarRelationshipResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">link</span> 关联关系记录</button>
+                <button id="sidebarTypoResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">edit_note</span> 错别字记录</button>
                 <hr style="margin:12px 0;">
-                <button id="sidebarSystemCleanupBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#fef2f2; color:#dc2626; border-color:#fca5a5;">🧹 一键系统清理</button>
-                <button id="sidebarClearAllDataBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#7f1d1d; color:white; border-color:#991b1b;">⚠️ 清空全部数据</button>
+                <button id="sidebarSystemCleanupBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#fef2f2; color:#dc2626; border-color:#fca5a5;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 一键系统清理</button>
+                <button id="sidebarClearAllDataBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#7f1d1d; color:white; border-color:#991b1b;"><span class="msi msi-sm" aria-hidden="true">warning</span> 清空全部数据</button>
             </div>
         </div>
 
         <!-- ===== WIKI SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-wiki-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📖 法规参考</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 法规参考</h3>
             <div id="sidebarWikiStats" style="font-size:0.65rem;color:var(--card-muted);margin-bottom:6px;"></div>
             <div id="sidebarWikiBookmarks" style="margin-bottom:6px;"></div>
             <div id="sidebarWikiRecentViews" style="margin-bottom:6px;"></div>
@@ -137,21 +137,21 @@
 
         <!-- ===== TEMPLATES SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-templates-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📋 模板管理</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 模板管理</h3>
             <button id="sidebarTplCreateBtn" class="file-btn" style="width:100%;margin-bottom:6px;background:#27ae60;color:#fff;border-color:#16a34a;">+ 新建模板</button>
-            <button id="sidebarTplImportBtn" class="file-btn" style="width:100%;margin-bottom:6px;">📥 导入 .docx</button>
-            <button id="sidebarTplRefreshBtn" class="file-btn" style="width:100%;margin-bottom:6px;">🔄 刷新</button>
+            <button id="sidebarTplImportBtn" class="file-btn" style="width:100%;margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导入 .docx</button>
+            <button id="sidebarTplRefreshBtn" class="file-btn" style="width:100%;margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
             <hr style="margin: 10px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🏷️ 按类别筛选</h4>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">sell</span> 按类别筛选</h4>
             <div id="templatesSidebarCategories" style="margin-bottom:8px;display:flex;flex-wrap:wrap;"></div>
             <hr style="margin: 10px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">⭐ 最近使用</h4>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">star</span> 最近使用</h4>
             <ul id="templatesSidebarRecent" style="list-style:none;padding:0;font-size:0.75rem;"></ul>
         </div>
 
         <!-- ===== CASES SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-cases-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">📊 案例概况</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 案例概况</h3>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
                 <div style="flex:1;text-align:center;padding:4px;background:var(--bg-color);border-radius:6px;">
                     <div id="caseSidebarOpen" style="font-size:1rem;font-weight:700;color:#e67e22;">-</div>
@@ -163,54 +163,54 @@
                 </div>
             </div>
             <hr style="margin: 8px 0;">
-            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">🚨 待处理</h4>
+            <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">notifications_active</span> 待处理</h4>
             <div id="casesSidebarPending" style="font-size:0.7rem;"></div>
             <hr style="margin: 10px 0;">
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                <button id="sidebarCasesExportBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;">📥 导出报告</button>
-                <button id="sidebarCasesBatchResolveBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;background:#27ae60;color:#fff;border-color:#16a34a;">✅ 批量解决</button>
+                <button id="sidebarCasesExportBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出报告</button>
+                <button id="sidebarCasesBatchResolveBtn" class="file-btn" style="flex:1;font-size:0.62rem;padding:4px 6px;background:#27ae60;color:#fff;border-color:#16a34a;"><span class="msi msi-sm" aria-hidden="true">check_circle</span> 批量解决</button>
             </div>
         </div>
 
         <!-- ===== REVIEW SECTION (Review & Ingestion tab) ===== -->
         <div class="sidebar-tab-pane" id="sidebar-review-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">🔍 审核中心</h3>
-            <button id="sidebarIngestUploadBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;">📥 上传文档包</button>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">search</span> 审核中心</h3>
+            <button id="sidebarIngestUploadBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#bccfde; border-color:#8aa0b8;"><span class="msi msi-sm" aria-hidden="true">download</span> 上传文档包</button>
             <input type="file" id="sidebarIngestFileInput" accept=".zip" style="display:none;">
             <hr style="margin:10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">待处理</h4>
             <div id="sidebarReviewStatus" style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">点击审核标签页加载...</div>
             <hr style="margin:10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:6px;">快捷操作</h4>
-            <button id="sidebarViewStructuredBtn" class="file-btn" style="width:100%;margin-bottom:4px;">📑 查看结构化文档</button>
-            <button id="sidebarViewWorkloadBtn" class="file-btn" style="width:100%;margin-bottom:4px;">📈 工作量统计</button>
+            <button id="sidebarViewStructuredBtn" class="file-btn" style="width:100%;margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">table_rows</span> 查看结构化文档</button>
+            <button id="sidebarViewWorkloadBtn" class="file-btn" style="width:100%;margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">trending_up</span> 工作量统计</button>
         </div>
 
         <!-- ===== SKILL AUDIT SIDEBAR ===== -->
         <div class="sidebar-tab-pane" id="sidebar-audit-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">🧠 技能审计</h3>
-            <button id="sidebarRunAuditBtn" class="file-btn" style="width:100%;margin-bottom:4px;background:#bccfde;border-color:#8aa0b8;">🔍 运行分析</button>
-            <button id="sidebarAuditQuickMergeBtn" class="file-btn" style="width:100%;margin-bottom:4px;">🔗 快速合并</button>
-            <button id="sidebarAuditQuickArchiveBtn" class="file-btn" style="width:100%;margin-bottom:4px;background:#fef2f2;color:#dc2626;border-color:#fca5a5;">🗑️ 批量清理</button>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">psychology</span> 技能审计</h3>
+            <button id="sidebarRunAuditBtn" class="file-btn" style="width:100%;margin-bottom:4px;background:#bccfde;border-color:#8aa0b8;"><span class="msi msi-sm" aria-hidden="true">search</span> 运行分析</button>
+            <button id="sidebarAuditQuickMergeBtn" class="file-btn" style="width:100%;margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">link</span> 快速合并</button>
+            <button id="sidebarAuditQuickArchiveBtn" class="file-btn" style="width:100%;margin-bottom:4px;background:#fef2f2;color:#dc2626;border-color:#fca5a5;"><span class="msi msi-sm" aria-hidden="true">delete</span> 批量清理</button>
             <hr style="margin:10px 0;">
             <div id="sidebarAuditStats" style="font-size:.7rem;color:var(--card-muted);"></div>
         </div>
 
         <!-- ===== DB VIEW SECTION ===== -->
         <div class="sidebar-tab-pane" id="sidebar-db-pane" style="display:none;">
-            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;">🗄️ 数据工具</h3>
+            <h3 style="font-size: 0.9rem; margin: 0 0 0.5rem;"><span class="msi msi-sm" aria-hidden="true">database</span> 数据工具</h3>
             <select id="sidebarDbTableSelect" style="width:100%; margin-bottom:6px; padding:6px; border-radius:6px;"></select>
             <div id="sidebarDbTableInfo" style="font-size:0.73rem;color:var(--card-muted);margin-bottom:8px;"></div>
-            <button id="sidebarDbSchemaBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📋 查看表结构</button>
-            <button id="sidebarDbExportCsvBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📥 导出CSV</button>
-            <button id="sidebarDbExportJsonBtn" class="file-btn" style="width:100%; margin-bottom:4px;">📥 导出JSON</button>
+            <button id="sidebarDbSchemaBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 查看表结构</button>
+            <button id="sidebarDbExportCsvBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出CSV</button>
+            <button id="sidebarDbExportJsonBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出JSON</button>
             <hr style="margin:10px 0;">
             <h4 style="font-size:0.78rem;color:var(--card-muted);margin-bottom:4px;">表概览</h4>
             <div id="sidebarDbOverview" style="font-size:0.7rem;max-height:200px;overflow-y:auto;"></div>
         </div>
 
         <button class="account-sidebar-btn" id="accountSettingsBtn" aria-label="账户设置">
-            <span>⚙️</span> 账户设置
+            <span><span class="msi msi-sm" aria-hidden="true">settings</span></span> 账户设置
         </button>
     </div>
 </div>
@@ -218,7 +218,7 @@
 <div class="main">
     <div class="chat-app">
         <div class="chat-header">
-            <button class="toggle-sidebar-btn" id="toggleSidebarBtn" aria-label="切换侧边栏">☰</button>
+            <button class="toggle-sidebar-btn" id="toggleSidebarBtn" aria-label="切换侧边栏"><span class="msi msi-sm" aria-hidden="true">menu</span></button>
             <span style="flex:1; text-align:center;">中联招标智能助手 China United International Engineering AI Services</span>
             <div id="processingIndicator" style="display: none; font-size: 0.7rem; background: #5a7c9b; padding: 2px 8px; border-radius: 20px; color: white;">⏳ 处理中...</div>
             <div id="progressBar" style="display:none;position:fixed;top:0;left:0;right:0;height:3px;z-index:10001;">
@@ -230,20 +230,20 @@
                 <div id="floatingTaskBadge" style="width:36px;height:36px;border-radius:50%;background:#ef4444;color:white;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;box-shadow:0 2px 8px rgba(239,68,68,.4);animation:taskPulse 2s infinite;">0</div>
             </div>
             <div class="header-actions">
-                <button class="header-btn" id="dailyReportChatBtn" title="生成今日工作日报" style="background:#fef3c7;color:#92400e;">📊</button>
-                <button class="header-btn" id="exportChatBtn" title="导出对话 (Markdown)">📥</button>
-                <button class="header-btn" id="pwaInstallBtn" title="安装为桌面应用" style="display:none;">📱</button>
-                <button class="theme-toggle" id="themeToggleBtn" aria-label="切换主题">🌓</button>
+                <button class="header-btn" id="dailyReportChatBtn" title="生成今日工作日报" style="background:#fef3c7;color:#92400e;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span></button>
+                <button class="header-btn" id="exportChatBtn" title="导出对话 (Markdown)"><span class="msi msi-sm" aria-hidden="true">download</span></button>
+                <button class="header-btn" id="pwaInstallBtn" title="安装为桌面应用" style="display:none;"><span class="msi msi-sm" aria-hidden="true">smartphone</span></button>
+                <button class="theme-toggle" id="themeToggleBtn" aria-label="切换主题"><span class="msi msi-sm" aria-hidden="true">dark_mode</span></button>
             </div>
         </div>
 
         <!-- Main Tab Bar — 5 tabs + sub-tabs rendered dynamically -->
         <div id="tabBar" style="padding: 0 1rem; display:flex; align-items:center; gap:2px; position:relative;">
-            <button id="chatTabBtn" class="tab-btn active">💬 智能对话</button>
-            <button id="adminTabBtn" class="tab-btn">📂 项目管理</button>
-            <button id="knowledgeLabTabBtn" class="tab-btn">📚 知识中心</button>
-            <button id="recycleBinTabBtn" class="tab-btn">🗑️ 回收站</button>
-            <button id="analyticsTabBtn" class="tab-btn" style="font-size:0.7rem;">⚙️ 系统管理</button>
+            <button id="chatTabBtn" class="tab-btn active"><span class="msi msi-sm" aria-hidden="true">chat</span> 智能对话</button>
+            <button id="adminTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目管理</button>
+            <button id="knowledgeLabTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识中心</button>
+            <button id="recycleBinTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">delete</span> 回收站</button>
+            <button id="analyticsTabBtn" class="tab-btn" style="font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">settings</span> 系统管理</button>
         </div>
         <!-- Hidden placeholders for module compatibility -->
         <div id="wikiTabBtn" style="display:none"></div>
@@ -255,30 +255,30 @@
 
         <!-- Sub-tab bars (shown/hidden based on active main tab) -->
         <div class="sub-tab-bar" id="adminSubTabs" style="display:none; padding: 0 1rem;">
-            <button class="sub-tab-btn active" data-panel="adminPanel" data-sidebar="projects">📂 项目</button>
+            <button class="sub-tab-btn active" data-panel="adminPanel" data-sidebar="projects"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目</button>
             <button class="sub-tab-btn" data-panel="timelinePanel" data-sidebar="projects">⏱️ 时间线</button>
         </div>
         <div class="sub-tab-bar" id="knowledgeSubTabs" style="display:none; padding: 0 1rem;">
-            <button class="sub-tab-btn active" data-panel="knowledgeLabPanel" data-sidebar="knowledge">📁 知识库</button>
-            <button class="sub-tab-btn" data-panel="templatesPanel" data-sidebar="templates">📋 模板库</button>
-            <button class="sub-tab-btn" data-panel="casesPanel" data-sidebar="cases">📊 案例库</button>
-            <button class="sub-tab-btn" data-panel="wikiPanel" data-sidebar="wiki">📖 法规维基</button>
+            <button class="sub-tab-btn active" data-panel="knowledgeLabPanel" data-sidebar="knowledge"><span class="msi msi-sm" aria-hidden="true">folder</span> 知识库</button>
+            <button class="sub-tab-btn" data-panel="templatesPanel" data-sidebar="templates"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 模板库</button>
+            <button class="sub-tab-btn" data-panel="casesPanel" data-sidebar="cases"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 案例库</button>
+            <button class="sub-tab-btn" data-panel="wikiPanel" data-sidebar="wiki"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 法规维基</button>
         </div>
         <div class="sub-tab-bar" id="analyticsSubTabs" style="display:none; padding: 0 1rem;">
-            <button class="sub-tab-btn active" data-panel="analyticsPanel" data-sidebar="stats">⚙️ 配置</button>
-            <button class="sub-tab-btn" data-panel="reviewPanel" data-sidebar="review">📋 审计</button>
-            <button class="sub-tab-btn" data-panel="databasePanel" data-sidebar="db">🗄️ 数据库</button>
+            <button class="sub-tab-btn active" data-panel="analyticsPanel" data-sidebar="stats"><span class="msi msi-sm" aria-hidden="true">settings</span> 配置</button>
+            <button class="sub-tab-btn" data-panel="reviewPanel" data-sidebar="review"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 审计</button>
+            <button class="sub-tab-btn" data-panel="databasePanel" data-sidebar="db"><span class="msi msi-sm" aria-hidden="true">database</span> 数据库</button>
         </div>
 
         <!-- Chat Interface -->
         <div id="chatInterface" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
             <div id="grillModeBanner" style="display:none;background:linear-gradient(135deg,#fef2f2,#fff5f5);border:1px solid #fca5a5;border-radius:8px;padding:8px 14px;margin-bottom:4px;font-size:0.78rem;color:#991b1b;text-align:center;">
-                🔥 <strong>质问模式</strong> — AI正扮演挑剔供应商，对你的文件进行拷问
+                <span class="msi msi-sm" aria-hidden="true">local_fire_department</span> <strong>质问模式</strong> — AI正扮演挑剔供应商，对你的文件进行拷问
             </div>
             <div class="chat-messages" id="chatMessages"></div>
             <div class="float-buttons">
-                <button id="scrollTopBtn" class="float-btn" title="回到顶部">⬆️</button>
-                <button id="scrollBottomBtn" class="float-btn" title="跳到底部">⬇️</button>
+                <button id="scrollTopBtn" class="float-btn" title="回到顶部"><span class="msi msi-sm" aria-hidden="true">north</span>️</button>
+                <button id="scrollBottomBtn" class="float-btn" title="跳到底部"><span class="msi msi-sm" aria-hidden="true">south</span>️</button>
             </div>
 
             <!-- Quote bubble (collapsed by default, appears after quoting) -->
@@ -295,63 +295,63 @@
             <!-- Input row -->
             <div class="input-area" id="inputArea">
                 <textarea id="messageInput" rows="1" placeholder="输入您的问题..."></textarea>
-                <div class="file-btn" id="fileBtn" aria-label="上传文件">📄 附加文件</div>
-                <div class="file-btn" id="inputFileStationBtn">🗂️ 文件站</div>
-                <div class="file-btn" id="knowledgeBaseBtn">📚 知识库</div>
+                <div class="file-btn" id="fileBtn" aria-label="上传文件"><span class="msi msi-sm" aria-hidden="true">description</span> 附加文件</div>
+                <div class="file-btn" id="inputFileStationBtn"><span class="msi msi-sm" aria-hidden="true">folder_special</span> 文件站</div>
+                <div class="file-btn" id="knowledgeBaseBtn"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识库</div>
                 <input type="file" id="fileInput" style="display:none" multiple>
-                <button class="send-btn" id="sendBtn" aria-label="发送消息">发送 ➤</button>
+                <button class="send-btn" id="sendBtn" aria-label="发送消息">发送 <span class="msi msi-sm" aria-hidden="true">chevron_right</span></button>
             </div>
 
             <!-- Knowledge category filter pills -->
             <div id="categoryFilterBar" style="display:none;margin-top:6px;gap:6px;align-items:center;flex-wrap:wrap;font-size:0.75rem;">
-                <span style="color:var(--card-muted);">📂 分类筛选:</span>
+                <span style="color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 分类筛选:</span>
                 <span class="cat-pill active" data-cat="" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);background:var(--accent);color:white;">全部</span>
                 <span class="cat-pill" data-cat="规章" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">规章</span>
                 <span class="cat-pill" data-cat="模板" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">模板</span>
                 <span class="cat-pill" data-cat="项目经验" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">项目经验</span>
                 <span class="cat-pill" data-cat="专家意见" style="cursor:pointer;padding:2px 10px;border-radius:12px;border:1px solid var(--card-border);">专家意见</span>
-                <span id="catFilterClear" style="cursor:pointer;padding:2px 6px;color:var(--card-muted);display:none;">✕ 清除</span>
+                <span id="catFilterClear" style="cursor:pointer;padding:2px 6px;color:var(--card-muted);display:none;"><span class="msi msi-sm" aria-hidden="true">close</span> 清除</span>
             </div>
             <!-- Advanced tools: collapsed by default, ≤3 lines when expanded (excluding nested) -->
             <details id="advancedToolsDetails" style="margin-top:6px;font-size:0.75rem;color:var(--card-muted);">
-                <summary style="cursor:pointer;padding:2px 0;">🔧 高级工具</summary>
+                <summary style="cursor:pointer;padding:2px 0;"><span class="msi msi-sm" aria-hidden="true">build</span> 高级工具</summary>
 
             <!-- Row 1: Token + VL + Prompt Templates -->
             <div class="settings-row">
                 <div class="token-control">
-                    <span>🎛️ token输出（上限4800，下限100）</span>
+                    <span><span class="msi msi-sm" aria-hidden="true">tune</span> token输出（上限4800，下限100）</span>
                     <input type="number" id="maxTokensInput" min="100" max="4800" step="100" value="1600">
                     <button id="applyTokensBtn">应用</button>
                     <span id="tokenStatus" style="font-size:0.7rem;"></span>
                 </div>
                 <div class="settings-group">
                     <label>
-                        <input type="checkbox" id="analyzeImagesCheckbox" checked> 🖼️ 分析图片 (VL)
+                        <input type="checkbox" id="analyzeImagesCheckbox" checked> <span class="msi msi-sm" aria-hidden="true">image</span> 分析图片 (VL)
                     </label>
                     <label style="margin-left:8px;">
-                        <input type="checkbox" id="analyzeVideosCheckbox" checked> 📹 分析视频
+                        <input type="checkbox" id="analyzeVideosCheckbox" checked> <span class="msi msi-sm" aria-hidden="true">videocam</span> 分析视频
                     </label>
                 </div>
                 <div class="settings-group">
-                    <button id="promptTemplatesBtn" class="file-btn" title="提示词模板" style="font-size:0.78rem;">📋 模板</button>
+                    <button id="promptTemplatesBtn" class="file-btn" title="提示词模板" style="font-size:0.78rem;"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 模板</button>
                 </div>
             </div>
 
             <!-- Unified 清标 tool: merges Smart Compare + Doc Analysis + Compliance + AI Review -->
             <details id="clearanceTools" open style="margin-top:2px;border:1px solid var(--card-border);border-radius:6px;padding:2px 10px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.78rem;">📋 清标（横向对比 · 指标分析 · 合规审查 · AI 评审）</summary>
+                <summary style="font-weight:600;font-size:0.78rem;"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 清标（横向对比 · 指标分析 · 合规审查 · AI 评审）</summary>
                 <div style="padding:6px 0;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
                         <input type="file" id="clearanceFileInput" accept=".pdf,.docx,.doc,.xlsx,.xls,.txt" multiple style="display:none">
-                        <button id="selectClearanceFilesBtn" class="file-btn">📄 选择投标文件</button>
+                        <button id="selectClearanceFilesBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">description</span> 选择投标文件</button>
                         <input type="file" id="clearanceTenderInput" accept=".pdf,.docx,.doc,.txt" style="display:none">
-                        <button id="selectClearanceTenderBtn" class="file-btn">📋 选择招标文件</button>
+                        <button id="selectClearanceTenderBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 选择招标文件</button>
                         <input type="file" id="clearanceOpenInfoInput" accept=".xlsx,.xls,.csv,.json" style="display:none">
-                        <button id="selectClearanceOpenInfoBtn" class="file-btn">📑 选择开标信息表</button>
+                        <button id="selectClearanceOpenInfoBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">table_rows</span> 选择开标信息表</button>
                         <span id="clearanceFileNames" class="template-info"></span>
                     </div>
                     <div class="risk-row" style="margin-bottom:6px;flex-wrap:wrap;">
-                        <span>🔬 分析维度：</span>
+                        <span><span class="msi msi-sm" aria-hidden="true">science</span> 分析维度：</span>
                         <label><input type="checkbox" id="optCrossComparison" checked> 横向对比</label>
                         <label><input type="checkbox" id="optIndicators" checked> 指标分析</label>
                         <label><input type="checkbox" id="optCompliance" checked> 合规审查</label>
@@ -375,34 +375,34 @@
 
         <!-- Analytics Panel (Admin only: stats + config + assets) -->
         <div id="analyticsPanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
-            <h4 style="margin:0 0 8px 0;font-size:0.85rem;">⚙️ 配置与统计</h4>
+            <h4 style="margin:0 0 8px 0;font-size:0.85rem;"><span class="msi msi-sm" aria-hidden="true">settings</span> 配置与统计</h4>
             <div id="analyticsContent">
                 <p style="font-size:0.75rem;color:var(--card-muted);">加载中...</p>
             </div>
             <div id="analyticsAdminSections" style="display:none;margin-top:8px;">
                 <details id="rcDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">⚙️ 运行配置 <span id="rcModifiedDot" style="display:none;color:#f59e0b;font-size:0.65rem;">● 已修改</span></summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">settings</span> 运行配置 <span id="rcModifiedDot" style="display:none;color:#f59e0b;font-size:0.65rem;">● 已修改</span></summary>
                     <div id="runtimeConfigContent" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                     <div style="display:flex;gap:6px;margin-top:10px;">
-                        <button id="rcSaveAllBtn" class="file-btn" style="flex:1;background:#3b82f6;color:white;border-color:#2563eb;font-size:0.75rem;padding:6px;">💾 保存全部更改</button>
+                        <button id="rcSaveAllBtn" class="file-btn" style="flex:1;background:#3b82f6;color:white;border-color:#2563eb;font-size:0.75rem;padding:6px;"><span class="msi msi-sm" aria-hidden="true">save</span> 保存全部更改</button>
                         <button id="rcResetBtn" class="file-btn" style="background:#ef4444;color:white;border-color:#dc2626;font-size:0.75rem;padding:6px;">↺ 重置</button>
                     </div>
                     <div id="rcMsg" style="margin-top:6px;font-size:0.7rem;"></div>
                 </details>
                 <details id="assetDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📦 资产管理</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">inventory_2</span> 资产管理</summary>
                     <div id="assetManager" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="archiveDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📁 已归档会话</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">folder</span> 已归档会话</summary>
                     <div id="archivedSessionsAdmin" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="stylesDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">✍️ 写作风格</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">edit</span> 写作风格</summary>
                     <div id="styleManagerPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="skillAuditDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">🧠 技能审核</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">psychology</span> 技能审核</summary>
                     <div id="skillAuditContent" style="font-size:0.72rem;margin-top:6px;"><p>展开后加载...</p></div>
                 </details>
             </div>
@@ -411,13 +411,13 @@
         <!-- Wiki Panel -->
         <div id="wikiPanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-                <h4 style="margin:0 0 8px 0;font-size:0.85rem;">📖 知识库Wiki</h4>
+                <h4 style="margin:0 0 8px 0;font-size:0.85rem;"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识库Wiki</h4>
                 <span id="wikiStatsBadge" style="font-size:0.65rem;color:var(--card-muted);"></span>
             </div>
             <div id="wikiToolbar" style="display:flex;gap:6px;margin-bottom:8px;">
                 <input id="wikiSearchInput" type="text" placeholder="搜索Wiki..." style="flex:1;padding:6px 10px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;background:var(--card-bg);color:var(--text-color);">
-                <button id="wikiRefreshBtn" class="file-btn" style="font-size:0.72rem;">🔄 刷新</button>
-                <button id="wikiImportLegalBtn" class="file-btn" style="display:none;font-size:0.72rem;">📤 导入法规</button>
+                <button id="wikiRefreshBtn" class="file-btn" style="font-size:0.72rem;"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
+                <button id="wikiImportLegalBtn" class="file-btn" style="display:none;font-size:0.72rem;"><span class="msi msi-sm" aria-hidden="true">upload</span> 导入法规</button>
             </div>
             <div id="wikiContent" style="font-size:0.78rem;">
                 <p style="color:var(--card-muted);">加载中...</p>
@@ -451,29 +451,29 @@
 
         <!-- Review Panel (Admin + Auditor shared: ingestion + review + training) -->
         <div id="reviewPanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
-            <h4 style="margin:0 0 8px 0;font-size:0.85rem;">🔍 审核与摄入</h4>
+            <h4 style="margin:0 0 8px 0;font-size:0.85rem;"><span class="msi msi-sm" aria-hidden="true">search</span> 审核与摄入</h4>
             <div id="reviewContent">
                 <p style="font-size:0.75rem;color:var(--card-muted);">加载中...</p>
             </div>
             <div id="reviewSections" style="display:none;margin-top:8px;">
                 <details id="ingestDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📥 批量文档摄入</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">download</span> 批量文档摄入</summary>
                     <div id="ingestPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="trainingDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📊 训练数据</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 训练数据</summary>
                     <div id="trainingExportPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="ingestHistoryDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📋 摄入历史</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 摄入历史</summary>
                     <div id="ingestHistoryPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="structuredDocsDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📑 结构化文档</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">table_rows</span> 结构化文档</summary>
                     <div id="structuredDocsPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
                 <details id="workloadDetails" style="margin-bottom:6px;border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;background:var(--card-bg);">
-                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);">📈 审核工作量</summary>
+                    <summary style="font-weight:600;font-size:0.78rem;cursor:pointer;color:var(--card-muted);"><span class="msi msi-sm" aria-hidden="true">trending_up</span> 审核工作量</summary>
                     <div id="workloadPanel" style="font-size:0.72rem;margin-top:6px;">点击加载...</div>
                 </details>
             </div>
@@ -488,13 +488,13 @@
         <!-- Recycle Bin Panel -->
         <div id="recycleBinPanel" style="display: none; flex: 1; overflow-y: auto; padding: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="margin:0;">🗑️ 回收站（3天后自动清空）</h4>
+                <h4 style="margin:0;"><span class="msi msi-sm" aria-hidden="true">delete</span> 回收站（3天后自动清空）</h4>
                 <button id="emptyAllRecycleBtn" style="background:#e74c3c; color:white; border:none; border-radius:8px; padding:8px 16px;">清空全部</button>
             </div>
 
             <!-- Chat Section -->
             <details open class="recycle-section" style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;">💬 聊天文件 <span id="chatRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
+                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">chat</span> 聊天文件 <span id="chatRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
                 <div style="display:flex;gap:4px;margin:6px 0;">
                     <button class="restore-section-btn" data-section="chat" style="font-size:0.68rem;padding:2px 8px;">恢复全部</button>
                     <button class="empty-section-btn" data-section="chat" style="font-size:0.68rem;padding:2px 8px;">清空此区</button>
@@ -504,7 +504,7 @@
 
             <!-- KB Section -->
             <details open class="recycle-section" style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;">📚 知识库 + 技能 <span id="kbRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
+                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识库 + 技能 <span id="kbRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
                 <div style="display:flex;gap:4px;margin:6px 0;">
                     <button class="restore-section-btn" data-section="knowledge_lab" style="font-size:0.68rem;padding:2px 8px;">恢复全部</button>
                     <button class="empty-section-btn" data-section="knowledge_lab" style="font-size:0.68rem;padding:2px 8px;">清空此区</button>
@@ -516,7 +516,7 @@
 
             <!-- Project Section -->
             <details open class="recycle-section" style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
-                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;">📁 项目文件 <span id="projectRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
+                <summary style="font-weight:600;font-size:0.85rem;cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">folder</span> 项目文件 <span id="projectRecycleCount" style="font-size:0.7rem;color:var(--card-muted);"></span></summary>
                 <div style="display:flex;gap:4px;margin:6px 0;">
                     <button class="restore-section-btn" data-section="project_files" style="font-size:0.68rem;padding:2px 8px;">恢复全部</button>
                     <button class="empty-section-btn" data-section="project_files" style="font-size:0.68rem;padding:2px 8px;">清空此区</button>
@@ -528,7 +528,7 @@
 
         <!-- Admin Database Browser Panel -->
         <div id="databasePanel" style="display: none; flex-direction: column; overflow: hidden;">
-            <h4>🗄️ 仅管理员可见</h4>
+            <h4><span class="msi msi-sm" aria-hidden="true">database</span> 仅管理员可见</h4>
             <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                 <select id="dbTableSelect" style="padding: 6px; border-radius: 4px;">
                     <option value="">-- 选择表 --</option>
@@ -562,7 +562,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <!-- LEFT COLUMN: Personal Knowledge Lab -->
                 <div>
-                    <h4>📁 我的知识库 (仅自己可见)</h4>
+                    <h4><span class="msi msi-sm" aria-hidden="true">folder</span> 我的知识库 (仅自己可见)</h4>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <input type="file" id="labFileInput" style="display:none" multiple>
                         <select id="labCategorySelect">
@@ -575,8 +575,8 @@
                         </select>
                         <input type="text" id="labCustomCategory" placeholder="新分类名称"
                                style="display: none; width: 150px; padding: 4px;">
-                        <button id="uploadLabFileBtn" class="file-btn">📤 上传文件</button>
-                        <button id="refreshLabListBtn" class="file-btn">🔄 刷新</button>
+                        <button id="uploadLabFileBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">upload</span> 上传文件</button>
+                        <button id="refreshLabListBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
                     </div>
                     <div id="labFileList" style="margin-top: 16px; max-height: 60vh; overflow-y: auto;">
                         <!-- Personal files list -->
@@ -585,7 +585,7 @@
 
                 <!-- RIGHT COLUMN: Company Knowledge Base -->
                 <div>
-                    <h4>🏢 公司知识库 (全员可见)</h4>
+                    <h4><span class="msi msi-sm" aria-hidden="true">domain</span> 公司知识库 (全员可见)</h4>
                     <!-- Admin tools (only visible to admin) -->
                     <div id="adminCompanyTools" style="display: none; margin-bottom: 12px;">
                         <input type="file" id="companyFileInput" style="display:none" multiple>
@@ -599,7 +599,7 @@
                                 <option value="自定义">自定义</option>
                             </select>
                             <input type="text" id="companyCustomCategory" placeholder="新分类名称" style="display: none; width: 150px; padding: 4px;">
-                            <button id="uploadCompanyFileBtn" class="file-btn">📤 上传公司文件</button>
+                            <button id="uploadCompanyFileBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">upload</span> 上传公司文件</button>
                         </div>
                     </div>
                     <!-- Search & filter -->
@@ -608,7 +608,7 @@
                         <select id="companyKbCategoryFilter">
                             <option value="">所有分类</option>
                         </select>
-                        <button id="refreshCompanyKbBtn" class="file-btn">🔍 筛选</button>
+                        <button id="refreshCompanyKbBtn" class="file-btn"><span class="msi msi-sm" aria-hidden="true">search</span> 筛选</button>
                     </div>
                     <div id="companyKbList" style="max-height: 60vh; overflow-y: auto;">
                         <!-- Company files list -->
@@ -619,18 +619,18 @@
             <!-- NOTEBOOK: personal markdown notes -->
             <hr style="margin: 24px 0 16px;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                <h4 style="margin:0;">📓 我的笔记本</h4>
-                <button id="notebookNewBtn" class="file-btn" style="padding:2px 10px;font-size:0.7rem;">➕ 新建笔记</button>
-                <button id="notebookRefreshBtn" class="file-btn" style="padding:2px 10px;font-size:0.7rem;">🔄 刷新</button>
-                <input type="text" id="notebookSearch" placeholder="🔍 搜索笔记..." style="flex:1;max-width:200px;padding:2px 8px;font-size:0.7rem;border-radius:4px;border:1px solid var(--card-border);">
+                <h4 style="margin:0;"><span class="msi msi-sm" aria-hidden="true">note</span> 我的笔记本</h4>
+                <button id="notebookNewBtn" class="file-btn" style="padding:2px 10px;font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">add</span> 新建笔记</button>
+                <button id="notebookRefreshBtn" class="file-btn" style="padding:2px 10px;font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
+                <input type="text" id="notebookSearch" placeholder="<span class="msi msi-sm" aria-hidden="true">search</span> 搜索笔记..." style="flex:1;max-width:200px;padding:2px 8px;font-size:0.7rem;border-radius:4px;border:1px solid var(--card-border);">
             </div>
             <div id="notebookList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
             <div id="notebookEditor" style="display:none;margin-top:12px;">
                 <input id="notebookEditTitle" placeholder="笔记标题" style="width:100%;padding:6px;margin-bottom:6px;border-radius:4px;border:1px solid var(--card-border);font-size:0.85rem;">
                 <textarea id="notebookEditContent" rows="12" placeholder="使用Markdown编写笔记..." style="width:100%;padding:8px;border-radius:4px;border:1px solid var(--card-border);font-size:0.8rem;font-family:monospace;"></textarea>
                 <div style="display:flex;gap:6px;margin-top:6px;">
-                    <button id="notebookSaveBtn" class="file-btn" style="background:#3b82f6;color:white;border-color:#2563eb;">💾 保存</button>
-                    <button id="notebookSummarizeBtn" class="file-btn" style="background:#f59e0b;color:white;border-color:#d97706;">🤖 AI摘要</button>
+                    <button id="notebookSaveBtn" class="file-btn" style="background:#3b82f6;color:white;border-color:#2563eb;"><span class="msi msi-sm" aria-hidden="true">save</span> 保存</button>
+                    <button id="notebookSummarizeBtn" class="file-btn" style="background:#f59e0b;color:white;border-color:#d97706;"><span class="msi msi-sm" aria-hidden="true">smart_toy</span> AI摘要</button>
                     <button id="notebookCancelBtn" class="file-btn">取消</button>
                 </div>
                 <div id="notebookSummary" style="margin-top:8px;font-size:0.75rem;color:var(--card-muted);"></div>
@@ -639,9 +639,9 @@
             <!-- SKILLS OVERVIEW: all available skills for current user -->
             <hr style="margin: 24px 0 16px;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-                <h4 style="margin:0;">🧠 技能总览</h4>
+                <h4 style="margin:0;"><span class="msi msi-sm" aria-hidden="true">psychology</span> 技能总览</h4>
                 <span id="skillOverviewCount" style="font-size:0.8rem; color:var(--card-muted);"></span>
-                <button id="refreshSkillOverviewBtn" class="file-btn" style="padding:2px 10px; font-size:0.7rem;">🔄 刷新</button>
+                <button id="refreshSkillOverviewBtn" class="file-btn" style="padding:2px 10px; font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">refresh</span> 刷新</button>
             </div>
             <div id="skillOverviewList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:10px;"></div>
         </div>
@@ -651,7 +651,7 @@
             <div id="projectsListView">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h4>项目管理</h4>
-                    <button id="myFilesBtn" class="file-btn" style="background: #3498db; color: white;">📁 我的文件</button>
+                    <button id="myFilesBtn" class="file-btn" style="background: #3498db; color: white;"><span class="msi msi-sm" aria-hidden="true">folder</span> 我的文件</button>
                 </div>
                 <button id="createProjectBtn" style="background: #27ae60; color: white; border: none; border-radius: 8px; padding: 8px 16px; margin-bottom: 16px;">+ 新建项目</button>
                 <div id="projectsList">加载中...</div>
@@ -671,11 +671,11 @@
 {% if not consent_given %}
 <div id="consentModal" class="consent-overlay">
     <div class="consent-card">
-        <h3>📋 欢迎使用中联AI</h3>
+        <h3><span class="msi msi-sm" aria-hidden="true">list_alt</span> 欢迎使用中联AI</h3>
         <p style="font-size:0.8rem;color:var(--card-muted);margin-bottom:12px;">注册或登录以解锁全部功能。匿名使用支持AI对话和临时文件（关闭页面后清除）。</p>
         <div class="consent-options-container">
             <div class="consent-option-btn" id="consentCreateOption">
-                <div class="option-title">📝 创建账户</div>
+                <div class="option-title"><span class="msi msi-sm" aria-hidden="true">edit_note</span> 创建账户</div>
                 <div class="option-desc">注册后可跨设备同步聊天记录和文件。</div>
                 <form onsubmit="return false" id="createAccountForm" style="display:none;" class="consent-form-fields">
                     <input type="text" id="regUsername" placeholder="用户名 (5-18字符)" autocomplete="username" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
@@ -691,7 +691,7 @@
                 </form>
             </div>
             <div class="consent-option-btn" id="consentLoginOption">
-                <div class="option-title">🔑 登录已有账户</div>
+                <div class="option-title"><span class="msi msi-sm" aria-hidden="true">key</span> 登录已有账户</div>
                 <div class="option-desc">使用已有的用户名和PIN登录。</div>
                 <form onsubmit="return false" id="loginForm" style="display:none;" class="consent-form-fields">
                     <input type="text" id="loginUsername" placeholder="用户名" autocomplete="username" style="width:100%; margin-bottom:8px; padding:10px; border-radius:8px; border:1px solid #c8d0d8; font-size:16px;">
@@ -709,11 +709,11 @@
 <div id="fileStationModal" class="modal" style="display:none;">
     <div class="modal-content" style="width:90%; max-width:1000px;">
         <span class="close" id="closeFileStationModal">&times;</span>
-        <h4>🗂️ 文件站 - 文件保留3天 (单击选中文件，双击单个文件则直接加载)</h4>
+        <h4><span class="msi msi-sm" aria-hidden="true">folder_special</span> 文件站 - 文件保留3天 (单击选中文件，双击单个文件则直接加载)</h4>
         <div style="margin-bottom:15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <input type="file" id="stationFileInput" style="display:none" accept="*/*" multiple>
-            <button id="uploadToStationBtn" class="file-btn" style="background:#27ae60; color:white;">📤 上传至文件站</button>
-            <button id="loadSelectedBtn" class="file-btn" style="background:#2c3e50; color:white;">✅ 加载选中的文件</button>
+            <button id="uploadToStationBtn" class="file-btn" style="background:#27ae60; color:white;"><span class="msi msi-sm" aria-hidden="true">upload</span> 上传至文件站</button>
+            <button id="loadSelectedBtn" class="file-btn" style="background:#2c3e50; color:white;"><span class="msi msi-sm" aria-hidden="true">check_circle</span> 加载选中的文件</button>
             <span id="uploadStatus" style="margin-left:10px;"></span>
         </div>
         <div id="fileStationList" style="max-height:500px; overflow-y:auto;">
@@ -726,7 +726,7 @@
 <div id="knowledgeBaseModal" class="modal" style="display:none;">
     <div class="modal-content" style="width: 800px; max-width: 95%; max-height: 90vh; overflow-y: auto;">
         <span class="close" id="closeKnowledgeBaseModal">&times;</span>
-        <h3>📚 知识库</h3>
+        <h3><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识库</h3>
         <p>勾选以下文件，其内容将作为高优先级知识基准，随问题一同发送。</p>
         <div id="knowledgeFileList" style="max-height: 400px; overflow-y: auto;">
             <p>加载中...</p>
@@ -751,7 +751,7 @@
 <div id="searchModal" class="modal" style="display:none;">
     <div class="modal-content" style="width: 700px; max-width: 90%;">
         <span class="close" id="closeSearchModal">&times;</span>
-        <h3>🔍 搜索聊天记录</h3>
+        <h3><span class="msi msi-sm" aria-hidden="true">search</span> 搜索聊天记录</h3>
         <div style="margin-bottom: 15px;">
             <input type="text" id="searchQuery" placeholder="输入搜索关键词..." style="width: 100%; padding: 8px; margin-bottom: 10px;">
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
@@ -777,9 +777,9 @@
 
 <!-- Right-click context menu for project chat messages -->
 <div id="msgContextMenu" style="display:none;position:fixed;z-index:10000;background:white;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px 0;min-width:160px;">
-    <div class="ctx-item" data-action="todo" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;">📋 添加到待办</div>
-    <div class="ctx-item" data-action="quote" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;">💬 引用追问</div>
-    <div class="ctx-item" data-action="copy" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;">🔗 复制内容</div>
+    <div class="ctx-item" data-action="todo" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;"><span class="msi msi-sm" aria-hidden="true">list_alt</span> 添加到待办</div>
+    <div class="ctx-item" data-action="quote" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;"><span class="msi msi-sm" aria-hidden="true">chat</span> 引用追问</div>
+    <div class="ctx-item" data-action="copy" style="padding:8px 16px;cursor:pointer;font-size:0.8rem;display:flex;align-items:center;gap:6px;"><span class="msi msi-sm" aria-hidden="true">link</span> 复制内容</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js" crossorigin="anonymous"></script>

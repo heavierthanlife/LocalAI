@@ -8819,8 +8819,18 @@
         '🛠️': 'construction', '⏹': 'stop', '💭': 'chat', '↺': 'restart_alt',
         '⬇️': 'south', '⬇': 'south', '⬆️': 'north', '⬆': 'north',
         '✓': 'check', '√': 'check', '➤': 'chevron_right', '☰': 'menu',
-        '📝': 'edit_note',
+        '📝': 'edit_note', '🚨': 'notifications_active', '🌓': 'dark_mode',
+        '📏': 'straighten', '📐': 'architecture',
+        '🗑': 'delete', '🗄': 'database', '🗂': 'folder_special', '🖼': 'image',
+        '🏷': 'sell', '🏛': 'account_balance', '🎛': 'tune', '✍️': 'edit',
+        '✍': 'edit',
     };
+    // FIX-016 后续: 暴露给全站 JS 复用 (chat.js/review.js/knowledge-lab.js 等)
+    if (typeof window !== 'undefined') {
+        window.MSI = MSI;
+        window._icon = _icon;
+        window._iconMd = _iconMd;
+    }
     function _icon(name) {
         // name: Material Symbols ligature name or emoji (mapped)
         var glyph = MSI[name] || name;
