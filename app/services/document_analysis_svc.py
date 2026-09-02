@@ -461,6 +461,8 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             'result': result_text,
             'details': details,
             'skipped': skipped,
+            # FIX-016 后续: 结构化 severity 供前端 CSS 类着色（替代 emoji indexOf）
+            'severity': 'skip' if skipped else ('danger' if score >= 15 else ('warn' if score > 0 else 'ok')),
         })
 
     # Build personnel summary
