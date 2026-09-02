@@ -276,7 +276,7 @@
                     if (!legalFileInput.files.length) return;
                     const fileCount = legalFileInput.files.length;
                     const wikiContentEl = document.getElementById('wikiContent');
-                    wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">⏳ 正在导入 ' + fileCount + ' 个文件，请稍候...</p>';
+                    wikiContentEl.innerHTML = '<p style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 正在导入 ' + fileCount + ' 个文件，请稍候...</p>';
                     const formData = new FormData();
                     for (const f of legalFileInput.files) formData.append('files', f);
                     try {

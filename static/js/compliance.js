@@ -98,7 +98,7 @@ window.Compliance = {
             statusSpan.style.color = '#f39c12';
 
             resultsPanel.style.display = 'block';
-            resultsPanel.innerHTML = '<p style="font-size:0.75rem;color:var(--card-muted);">\u23f3 \u6b63\u5728\u8fdb\u884c\u5408\u89c4\u5ba1\u67e5\uff0c\u8bf7\u7a0d\u5019...</p>';
+            resultsPanel.innerHTML = '<p style="font-size:0.75rem;color:var(--card-muted);">' + _icon('hourglass_empty') + ' \u6b63\u5728\u8fdb\u884c\u5408\u89c4\u5ba1\u67e5\uff0c\u8bf7\u7a0d\u5019...</p>';
 
             let allResults = [];
             Compliance._taskIds = {};
@@ -252,7 +252,7 @@ window.Compliance = {
             for (const r of allResults) {
                 if (r.error) {
                     html += `<div style="margin:4px 0;padding:8px;background:#fdf2f2;border-radius:6px;font-size:0.72rem;">
-                        <strong style="color:#e74c3c;">\u274c ${r.filename}</strong>: ${r.error}</div>`;
+                        <strong style="color:#e74c3c;">' + _icon('cancel') + ' ${r.filename}</strong>: ${r.error}</div>`;
                     continue;
                 }
                 const s = r.summary || {};
@@ -266,9 +266,9 @@ window.Compliance = {
                     </div>
                     <div style="margin:4px 0;display:flex;gap:10px;font-size:0.68rem;color:var(--card-muted);">
                         <span>\u89c4\u5219: ${r.rule_count || 0}\u6761</span>
-                        <span style="color:#27ae60;">\u2705 ${s.pass||0}</span>
-                        <span style="color:#f39c12;">\u26a0\ufe0f ${s.warning||0}</span>
-                        <span style="color:#e67e22;">\u274c ${s.violation||0}</span>
+                        <span style="color:#27ae60;">' + _icon('check_circle') + ' ${s.pass||0}</span>
+                        <span style="color:#f39c12;">' + _icon('warning') + ' ${s.warning||0}</span>
+                        <span style="color:#e67e22;">' + _icon('cancel') + ' ${s.violation||0}</span>
                         <span style="color:#e74c3c;">\ud83d\uded1 ${s.critical||0}</span>
                     </div>`;
                 if (r.report_html) {
@@ -280,22 +280,22 @@ window.Compliance = {
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
                             <input type="radio" name="feedback-${fileIdx}" value="true_violation" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#e74c3c;">\u2705 \u786e\u5b9e\u8fdd\u89c4</span>
+                            <span style="color:#e74c3c;">' + _icon('check_circle') + ' \u786e\u5b9e\u8fdd\u89c4</span>
                         </label>
                         <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
                             <input type="radio" name="feedback-${fileIdx}" value="false_positive" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#f39c12;">\u274c AI\u8bef\u5224</span>
+                            <span style="color:#f39c12;">' + _icon('cancel') + ' AI\u8bef\u5224</span>
                         </label>
                         <label style="font-size:0.65rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
                             <input type="radio" name="feedback-${fileIdx}" value="not_matter" onchange="window.markFeedback(this, '${r.bid_name || r.filename}')">
-                            <span style="color:#7f8c8d;">\u2796 \u65e0\u5173\u7d27\u8981</span>
+                            <span style="color:#7f8c8d;">' + _icon('remove') + ' \u65e0\u5173\u7d27\u8981</span>
                         </label>
                     </div>
                     <input type="text" class="feedback-explain" data-filename="${r.bid_name || r.filename}"
                         placeholder="\u7b80\u8981\u8bf4\u660e\u539f\u56e0\uff08\u5fc5\u586b\uff09" style="display:none;width:100%;margin-top:4px;font-size:0.65rem;padding:3px 6px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);">
                     <button class="feedback-submit-btn" data-filename="${r.bid_name || r.filename}"
                         style="display:none;margin-top:4px;font-size:0.62rem;padding:2px 8px;background:#2980b9;color:#fff;border:none;border-radius:4px;cursor:pointer;">\u63d0\u4ea4\u53cd\u9988</button>
-                    <span class="feedback-saved" style="display:none;margin-left:8px;font-size:0.62rem;color:#27ae60;">\u2705 \u5df2\u4fdd\u5b58</span>
+                    <span class="feedback-saved" style="display:none;margin-left:8px;font-size:0.62rem;color:#27ae60;">' + _icon('check_circle') + ' \u5df2\u4fdd\u5b58</span>
                 </div>`;
                 html += '</div>';
             }
@@ -403,7 +403,7 @@ window.Compliance = {
     };
 
     function loadVersions(lawId, container) {
-        container.innerHTML = '<span style="font-size:0.7rem;color:var(--card-muted);">\u23f3 \u52a0\u8f7d\u7248\u672c...</span>';
+        container.innerHTML = '<span style="font-size:0.7rem;color:var(--card-muted);">' + _icon('hourglass_empty') + ' \u52a0\u8f7d\u7248\u672c...</span>';
         fetch('/compliance/laws/' + lawId + '/versions', { credentials: 'include' })
             .then(r => r.json())
             .then(data => {
@@ -443,7 +443,7 @@ window.Compliance = {
         if (versions.length >= 2) {
             html += '<div style="margin-top:6px;font-size:0.65rem;display:flex;gap:6px;align-items:center;">';
             html += '<button class="law-timeline-btn" style="padding:2px 8px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);cursor:pointer;">📜 版本时间线</button>';
-            html += '<button class="law-impact-btn" style="padding:2px 8px;border:1px solid #e74c3c;color:#e74c3c;border-radius:4px;background:var(--card-bg);cursor:pointer;">⚠️ 变更影响评估</button>';
+            html += '<button class="law-impact-btn" style="padding:2px 8px;border:1px solid #e74c3c;color:#e74c3c;border-radius:4px;background:var(--card-bg);cursor:pointer;">' + _icon('warning') + ' 变更影响评估</button>';
             html += '</div>';
         }
         container.innerHTML = html;
@@ -471,7 +471,7 @@ window.Compliance = {
         html += '<div class="modal-content" style="max-width:700px;max-height:80vh;overflow-y:auto;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
         html += '<strong style="font-size:0.85rem;">\ud83d\udcdc \u7248\u672c\u65f6\u95f4\u7ebf</strong>';
-        html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">\u2716</button>';
+        html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">' + _icon('close') + '</button>';
         html += '</div>';
         html += '<div style="position:relative;padding-left:24px;border-left:2px solid var(--card-border);margin-left:8px;">';
         sorted.forEach((v, i) => {
@@ -511,7 +511,7 @@ window.Compliance = {
                 if (!data.success) throw new Error(data.error || 'failed');
                 const impact = data.data || data;
                 let html = '<span style="float:right;cursor:pointer;font-size:1.2rem;" onclick="this.closest(\'.modal\').remove()">&times;</span>';
-                html += '<h4 style="margin:0 0 8px;">⚠️ 法规变更影响评估</h4>';
+                html += '<h4 style="margin:0 0 8px;">' + _icon('warning') + ' 法规变更影响评估</h4>';
 
                 html += '<div style="display:flex;gap:10px;margin-bottom:12px;">';
                 html += _impactStat('涉及条款', impact.affected_articles || 0, '#8e44ad');
@@ -524,8 +524,8 @@ window.Compliance = {
                     html += '<div style="margin-bottom:10px;font-size:0.65rem;">';
                     html += '<span style="font-weight:600;">严重程度：</span>';
                     html += '<span style="color:#e74c3c;">🚫 ' + (sb.critical || 0) + '</span> ';
-                    html += '<span style="color:#e67e22;">❌ ' + (sb.violation || 0) + '</span> ';
-                    html += '<span style="color:#f39c12;">⚠️ ' + (sb.warning || 0) + '</span> ';
+                    html += '<span style="color:#e67e22;">' + _icon('cancel') + ' ' + (sb.violation || 0) + '</span> ';
+                    html += '<span style="color:#f39c12;">' + _icon('warning') + ' ' + (sb.warning || 0) + '</span> ';
                     html += '| <span style="color:#e74c3c;">打开 ' + (sb.open || 0) + '</span> ';
                     html += '<span style="color:#27ae60;">已解决 ' + (sb.resolved || 0) + '</span>';
                     html += '</div>';
@@ -543,7 +543,7 @@ window.Compliance = {
                         const sevCol = c.severity === 'critical' ? '#e74c3c' : c.severity === 'violation' ? '#e67e22' : '#f39c12';
                         html += '<div style="padding:2px 4px;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;">';
                         html += '<span>' + hlVerse(c.title) + '</span>';
-                        html += '<span style="color:' + sevCol + ';">' + c.severity + (c.is_resolved ? ' ✅' : '') + '</span>';
+                        html += '<span style="color:' + sevCol + ';">' + c.severity + (c.is_resolved ? ' ' + _icon('check_circle') + '' : '') + '</span>';
                         html += '</div>';
                     });
                     html += '</div></div>';
@@ -607,7 +607,7 @@ window.Compliance = {
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.style.display = 'flex';
-        modal.innerHTML = '<div class="modal-content" style="max-width:90vw;max-height:85vh;width:900px;overflow:auto;background:var(--card-bg);border-radius:8px;padding:16px;"><span style="font-size:0.85rem;">\u23f3 \u52a0\u8f7d\u5dee\u5f02...</span></div>';
+        modal.innerHTML = '<div class="modal-content" style="max-width:90vw;max-height:85vh;width:900px;overflow:auto;background:var(--card-bg);border-radius:8px;padding:16px;"><span style="font-size:0.85rem;">' + _icon('hourglass_empty') + ' \u52a0\u8f7d\u5dee\u5f02...</span></div>';
         document.body.appendChild(modal);
         modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
 
@@ -628,12 +628,12 @@ window.Compliance = {
         const summary = diffData.summary || {};
         let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
         html += '<strong style="font-size:0.85rem;">\u2194\ufe0e \u7248\u672c\u5dee\u5f02</strong>';
-        html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">\u2716</button>';
+        html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">' + _icon('close') + '</button>';
         html += '</div>';
         html += '<div style="display:flex;gap:12px;margin-bottom:10px;font-size:0.68rem;">';
-        html += '<span style="color:#27ae60;">\u2795 \u65b0\u589e: ' + (summary.added || 0) + '</span>';
-        html += '<span style="color:#e74c3c;">\u2796 \u5220\u9664: ' + (summary.removed || 0) + '</span>';
-        html += '<span style="color:#e67e22;">\u270f\ufe0f \u4fee\u6539: ' + (summary.changed || 0) + '</span>';
+        html += '<span style="color:#27ae60;">' + _icon('add') + ' \u65b0\u589e: ' + (summary.added || 0) + '</span>';
+        html += '<span style="color:#e74c3c;">' + _icon('remove') + ' \u5220\u9664: ' + (summary.removed || 0) + '</span>';
+        html += '<span style="color:#e67e22;">' + _icon('edit') + ' \u4fee\u6539: ' + (summary.changed || 0) + '</span>';
         html += '</div>';
         if (!changes.length) {
             html += '<p style="font-size:0.75rem;color:var(--card-muted);">\u4e24\u4e2a\u7248\u672c\u5b8c\u5168\u76f8\u540c\u3002</p>';
@@ -658,7 +658,7 @@ window.Compliance = {
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.style.display = 'flex';
-        modal.innerHTML = '<div class="modal-content" style="max-width:700px;max-height:85vh;overflow-y:auto;background:var(--card-bg);border-radius:8px;padding:16px;"><span style="font-size:0.85rem;">\u23f3 \u52a0\u8f7d\u6761\u6b3e...</span></div>';
+        modal.innerHTML = '<div class="modal-content" style="max-width:700px;max-height:85vh;overflow-y:auto;background:var(--card-bg);border-radius:8px;padding:16px;"><span style="font-size:0.85rem;">' + _icon('hourglass_empty') + ' \u52a0\u8f7d\u6761\u6b3e...</span></div>';
         document.body.appendChild(modal);
         modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
 
@@ -669,7 +669,7 @@ window.Compliance = {
                 const v = data.data || data;
                 let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
                 html += '<strong style="font-size:0.85rem;">\ud83d\udcdc ' + hlVerse(v.version_label || '') + '</strong>';
-                html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">\u2716</button>';
+                html += '<button onclick="this.closest(\'.modal\').remove()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">' + _icon('close') + '</button>';
                 html += '</div>';
                 html += '<div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:8px;">' + (v.version_date || '') + ' | ' + (v.article_count || (v.articles || []).length) + ' \u6761\u6b3e</div>';
                 const articles = v.articles || [];
@@ -764,9 +764,9 @@ window.Compliance = {
         if (existing) existing.remove();
         let html = '<div id="incrementalResults" style="margin-top:8px;padding:8px;background:var(--bg-color);border-radius:6px;font-size:0.65rem;">';
         html += '<div style="display:flex;gap:16px;margin-bottom:6px;">';
-        html += '<span style="color:#27ae60;">✅ 通过: ' + (summary.pass || 0) + '</span>';
-        html += '<span style="color:#f39c12;">⚠️ 警告: ' + (summary.warning || 0) + '</span>';
-        html += '<span style="color:#e67e22;">❌ 违规: ' + (summary.violation || 0) + '</span>';
+        html += '<span style="color:#27ae60;">' + _icon('check_circle') + ' 通过: ' + (summary.pass || 0) + '</span>';
+        html += '<span style="color:#f39c12;">' + _icon('warning') + ' 警告: ' + (summary.warning || 0) + '</span>';
+        html += '<span style="color:#e67e22;">' + _icon('cancel') + ' 违规: ' + (summary.violation || 0) + '</span>';
         html += '<span style="color:#e74c3c;">🚫 严重: ' + (summary.critical || 0) + '</span>';
         html += '</div>';
         findings.slice(0, 10).forEach(f => {
@@ -799,7 +799,7 @@ window.Compliance = {
         const panel = document.getElementById('complianceDashboardPanel');
         if (!panel) return;
         panel.style.display = 'block';
-        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">⏳ 加载仪表盘...</span>';
+        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">' + _icon('hourglass_empty') + ' 加载仪表盘...</span>';
 
         fetch('/compliance/dashboard?days=30', { credentials: 'include' })
             .then(r => r.json())
@@ -838,7 +838,7 @@ window.Compliance = {
 
                 // Top violations
                 if (d.top_violations && d.top_violations.length) {
-                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">⚠️ 常见违规 TOP5</strong>';
+                    html += '<div style="margin-bottom:10px;"><strong style="font-size:0.68rem;">' + _icon('warning') + ' 常见违规 TOP5</strong>';
                     html += '<div style="font-size:0.62rem;margin-top:4px;">';
                     d.top_violations.forEach((v, i) => {
                         const sc = v.status === 'critical' ? '#e74c3c' : '#e67e22';
@@ -865,7 +865,7 @@ window.Compliance = {
                         html += '<span style="width:50px;text-align:center;font-weight:600;color:' + scoreColor + ';">' + (r.score || '-') + '</span>';
                         html += '<span style="width:40px;text-align:center;color:#e74c3c;">' + (r.critical_count || 0) + '</span>';
                         html += '<span style="width:40px;text-align:center;color:#e67e22;">' + (r.violation_count || 0) + '</span>';
-                        html += '<span style="width:50px;text-align:center;color:' + scColor + ';">' + (r.status === 'PASS' ? '✅' : '❌') + '</span>';
+                        html += '<span style="width:50px;text-align:center;color:' + scColor + ';">' + (r.status === 'PASS' ? '' + _icon('check_circle') + '' : '' + _icon('cancel') + '') + '</span>';
                         html += '</div>';
                     });
                     html += '</div></div>';
@@ -910,7 +910,7 @@ window.Compliance = {
             return;
         }
         panel.style.display = 'block';
-        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">⏳ 加载对比数据...</span>';
+        panel.innerHTML = '<span style="color:var(--card-muted);font-size:0.7rem;">' + _icon('hourglass_empty') + ' 加载对比数据...</span>';
 
         fetch('/compliance/compare?days=90', { credentials: 'include' })
             .then(r => r.json())
@@ -982,12 +982,12 @@ window.Compliance = {
                     });
                     html += '</tbody></table></div></div>';
                 } else {
-                    html += '<div style="color:var(--card-muted);font-size:0.62rem;">⚠️ 功能维度过多 (' + functions.length + ')，仅显示汇总。</div>';
+                    html += '<div style="color:var(--card-muted);font-size:0.62rem;">' + _icon('warning') + ' 功能维度过多 (' + functions.length + ')，仅显示汇总。</div>';
                 }
 
                 // Most problematic functions
                 if (funcSummaries.length) {
-                    html += '<div style="margin-bottom:8px;"><strong style="font-size:0.68rem;">⚠️ 常见问题功能</strong>';
+                    html += '<div style="margin-bottom:8px;"><strong style="font-size:0.68rem;">' + _icon('warning') + ' 常见问题功能</strong>';
                     html += '<div style="font-size:0.62rem;margin-top:4px;">';
                     funcSummaries.slice(0, 10).forEach(f => {
                         const sc = f.avg_score >= 80 ? '#27ae60' : f.avg_score >= 50 ? '#f39c12' : '#e74c3c';

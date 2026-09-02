@@ -73,7 +73,7 @@ window.Cases = {};
         currentFilter = filter;
         const container = document.getElementById('casesListContainer');
         if (!container) return;
-        container.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载中...</span>';
+        container.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载中...</span>';
 
         let url = '/cases?page=1&per_page=50';
         if (filter.severity) url += '&severity=' + filter.severity;
@@ -100,7 +100,7 @@ window.Cases = {};
                         html += '<div style="display:flex;gap:6px;font-size:0.62rem;margin-top:2px;">';
                         html += '<span style="color:' + sevColor + ';">' + sevLabel + '</span>';
                         html += '<span style="color:var(--card-muted);">' + _h(c.category) + '</span>';
-                        if (c.is_resolved) html += '<span style="color:#27ae60;">✅ 已解决</span>';
+                        if (c.is_resolved) html += '<span style="color:#27ae60;">' + _icon('check_circle') + ' 已解决</span>';
                         if (c.tags && c.tags.length) {
                             html += c.tags.slice(0, 3).map(t => '<span style="background:var(--card-border);padding:0 3px;border-radius:2px;margin:0 1px;">' + t + '</span>').join('');
                         }
@@ -128,7 +128,7 @@ window.Cases = {};
 
     function showDetail(cid) {
         const detail = document.getElementById('casesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载中...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载中...</span>';
 
         fetch('/cases/' + cid, { credentials: 'include' })
             .then(r => r.json())
@@ -146,7 +146,7 @@ window.Cases = {};
                 if (c.created_at) html += ' | ' + c.created_at;
                 html += '</div></div>';
                 html += '<div style="display:flex;gap:6px;">';
-                html += '<button class="case-resolve-btn" style="font-size:0.62rem;padding:3px 10px;border:1px solid #27ae60;color:#27ae60;border-radius:3px;cursor:pointer;">' + (c.is_resolved ? '🔄 重新打开' : '✅ 标记解决') + '</button>';
+                html += '<button class="case-resolve-btn" style="font-size:0.62rem;padding:3px 10px;border:1px solid #27ae60;color:#27ae60;border-radius:3px;cursor:pointer;">' + (c.is_resolved ? '🔄 重新打开' : '' + _icon('check_circle') + ' 标记解决') + '</button>';
                 html += '<button class="case-delete-btn" style="font-size:0.62rem;padding:3px 10px;border:1px solid #e74c3c;color:#e74c3c;border-radius:3px;cursor:pointer;">🗑️</button>';
                 html += '</div></div>';
 
@@ -235,7 +235,7 @@ window.Cases = {};
 
     function showStats() {
         const detail = document.getElementById('casesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载统计...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载统计...</span>';
 
         fetch('/cases/stats', { credentials: 'include' })
             .then(r => r.json())

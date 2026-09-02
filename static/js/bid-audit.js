@@ -166,12 +166,12 @@
                 });
                 const d = await r.json();
                 if (r.ok) {
-                    msgEl.innerHTML = '<span style="color:#22c55e;">✅ ' + (d.message || '保存成功') + '</span>';
+                    msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' ' + (d.message || '保存成功') + '</span>';
                     Object.keys(_dirty).forEach(k => delete _dirty[k]);
                     _updateDot();
                     loadAuditConfig();
                 } else {
-                    msgEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (d.error || '保存失败') + '</span>';
+                    msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' ' + (d.error || '保存失败') + '</span>';
                 }
             } catch (_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
             btn.disabled = false; btn.textContent = '💾 保存审计配置';
@@ -576,7 +576,7 @@
                 });
                 const pfData = await pfRes.json();
                 if (!pfRes.ok) {
-                    statusEl.innerHTML = '<span style="color:#ef4444;">❌ ' + (pfData.error || '预检失败') + '</span>';
+                    statusEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' ' + (pfData.error || '预检失败') + '</span>';
                     btn.disabled = false; btn.textContent = '🔍 预检文件';
                     return;
                 }

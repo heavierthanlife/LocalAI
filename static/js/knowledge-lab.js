@@ -141,7 +141,7 @@ let currentProjectName = '';
                             if (!selectedIds.length) { alert('请至少选择一位用户'); return; }
                             modal.querySelectorAll('.report-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
                             const resultDiv = modal.querySelector('#workReportResult');
-                            resultDiv.innerHTML = '<p>⏳ AI正在汇总数据并撰写报告，请稍候（约30-60秒）...</p>';
+                            resultDiv.innerHTML = '<p>' + _icon('hourglass_empty') + ' AI正在汇总数据并撰写报告，请稍候（约30-60秒）...</p>';
                             try {
                                 const r = await fetch('/admin/generate_work_report', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({period, user_ids:selectedIds}) });
                                 const d = await r.json();
@@ -154,7 +154,7 @@ let currentProjectName = '';
                                 } else {
                                     resultDiv.innerHTML = `<p style="color:#dc2626;">❌ ${escapeHtml(d.error||'生成失败')}</p>`;
                                 }
-                            } catch(_) { resultDiv.innerHTML = '<p style="color:#dc2626;">❌ 网络错误</p>'; }
+                            } catch(_) { resultDiv.innerHTML = '<p style="color:#dc2626;">' + _icon('cancel') + ' 网络错误</p>'; }
                             modal.querySelectorAll('.report-btn').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
                         };
                     });
@@ -273,8 +273,8 @@ let currentProjectName = '';
                             body:JSON.stringify({action:'set_ttl', ttl_hours:hrs})
                         });
                         const d = await r.json();
-                        if (r.ok) { ttlDisplay.textContent = hrs; msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; }
-                        else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                        if (r.ok) { ttlDisplay.textContent = hrs; msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; }
+                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                     } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 };
                 m.getElementById('searchCacheClearBtn').onclick = async () => {
@@ -285,8 +285,8 @@ let currentProjectName = '';
                             body:JSON.stringify({action:'clear'})
                         });
                         const d = await r.json();
-                        if (r.ok) msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>';
-                        else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                        if (r.ok) msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>';
+                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                     } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 };
             };
@@ -1085,7 +1085,7 @@ let currentProjectName = '';
                         });
                         if (r.ok) {
                             _wfSteps = steps; _wfStepIdx = 0; _wfResults = [];
-                            if (aiResult) aiResult.innerHTML = '<div style="color:#22c55e;text-align:center;padding:20px;">✅ 工作流已保存！<br>在输入框中描述你的需求，然后点击 <b>🔄 执行工作流</b></div>';
+                            if (aiResult) aiResult.innerHTML = '<div style="color:#22c55e;text-align:center;padding:20px;">' + _icon('check_circle') + ' 工作流已保存！<br>在输入框中描述你的需求，然后点击 <b>🔄 执行工作流</b></div>';
                         }
                     };
                 }
@@ -2394,7 +2394,7 @@ let currentProjectName = '';
         const title = document.getElementById('notebookEditTitle').value.trim();
         if (!title) return;
         const el = document.getElementById('notebookSummary');
-        el.innerHTML = '⏳ AI摘要生成中...';
+        el.innerHTML = '' + _icon('hourglass_empty') + ' AI摘要生成中...';
         const r = await fetch('/notebook/' + encodeURIComponent(title) + '/summarize', {method:'POST', credentials:'include'});
         const d = await r.json();
         el.innerHTML = d.summary ? '🤖 ' + escapeHtml(d.summary) : '失败';

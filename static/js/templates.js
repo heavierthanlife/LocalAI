@@ -83,7 +83,7 @@ window.Templates = {};
         page = page || 1;
         const container = document.getElementById('tplListContainer');
         if (!container) return;
-        container.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载中...</span>';
+        container.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载中...</span>';
 
         let url = '/templates?page=' + page + '&per_page=30';
         if (category) url += '&category=' + encodeURIComponent(category);
@@ -145,7 +145,7 @@ window.Templates = {};
     // ── Detail View ──
     function showDetail(tid) {
         const detail = document.getElementById('templatesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载中...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载中...</span>';
 
         fetch('/templates/' + tid, { credentials: 'include' })
             .then(r => r.json())
@@ -315,7 +315,7 @@ window.Templates = {};
             formData.append('file', file);
 
             const previewDiv = document.getElementById('tplImportPreview');
-            previewDiv.innerHTML = '<span style="color:var(--card-muted);">⏳ 解析中...</span>';
+            previewDiv.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 解析中...</span>';
 
             try {
                 const resp = await fetch('/templates/import/preview', { method: 'POST', credentials: 'include', body: formData });
@@ -376,7 +376,7 @@ window.Templates = {};
     // ── Versions ──
     function showVersions(tid) {
         const detail = document.getElementById('templatesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载版本...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载版本...</span>';
 
         fetch('/templates/' + tid + '/versions', { credentials: 'include' })
             .then(r => r.json())
@@ -425,7 +425,7 @@ window.Templates = {};
 
     function viewVersionSnapshot(tid, vid) {
         const detail = document.getElementById('templatesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载快照...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载快照...</span>';
 
         fetch('/templates/' + tid + '/versions/' + vid, { credentials: 'include' })
             .then(r => r.json())
@@ -452,7 +452,7 @@ window.Templates = {};
     // ── Diff ──
     function showDiff(tid, fromVid, toVid) {
         const detail = document.getElementById('templatesDetail');
-        detail.innerHTML = '<span style="color:var(--card-muted);">⏳ 加载差异...</span>';
+        detail.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载差异...</span>';
 
         fetch('/templates/' + tid + '/diff?from=' + fromVid + '&to=' + toVid, { credentials: 'include' })
             .then(r => r.json())

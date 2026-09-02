@@ -366,11 +366,11 @@
                                     const sr = await fetch(`/admin/ingest/status/${d.task_id}`, {credentials:'include'});
                                     const sd = await sr.json();
                                     if (sd.status === 'done') {
-                                        progressEl.innerHTML += '<br>✅ 处理完成';
+                                        progressEl.innerHTML += '<br>' + _icon('check_circle') + ' 处理完成';
                                         clearInterval(poll);
                                         progressEl.innerHTML += '<div style="margin-top:6px;display:flex;gap:6px;"><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',1,this)">👍 满意</button><button class="fb-btn" onclick="window.submitIngestFeedback(\''+d.task_id+'\',-1,this)">👎 不满意</button></div>';
                                     }
-                                    else if (sd.status === 'failed') { progressEl.innerHTML += '<br>❌ 处理失败'; clearInterval(poll); }
+                                    else if (sd.status === 'failed') { progressEl.innerHTML += '<br>' + _icon('cancel') + ' 处理失败'; clearInterval(poll); }
                                     else { progressEl.innerHTML = `<span>任务ID: ${d.task_id} — ${sd.status||'processing'} ${sd.progress||''}</span>`; }
                                 }, 3000);
                             }
@@ -420,7 +420,7 @@
                 btn.disabled = true; btn.textContent = '⏳...';
                 try {
                     await fetch('/admin/user_styles/analyze_all', { method:'POST', credentials:'include' });
-                    document.getElementById('styleMsg').innerHTML = '<span style="color:#22c55e;">✅ 批量分析已触发</span>';
+                    document.getElementById('styleMsg').innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' 批量分析已触发</span>';
                     loadStyleManager();
                 } catch(_) { document.getElementById('styleMsg').innerHTML = '<span style="color:#ef4444;">失败</span>'; }
                 btn.disabled = false; btn.textContent = '🔄 全量分析';
@@ -574,8 +574,8 @@
                         body:JSON.stringify({mode:'incremental'})
                     });
                     const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadTrainingExportPanel(); }
+                    else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 btn.disabled = false; btn.textContent = '📥 增量导出';
             };
@@ -590,8 +590,8 @@
                         body:JSON.stringify({mode:'quality'})
                     });
                     const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadTrainingExportPanel(); }
+                    else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 btn.disabled = false; btn.textContent = '📦 全量导出';
             };
@@ -606,8 +606,8 @@
                         body:JSON.stringify({mode:'all'})
                     });
                     const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadTrainingExportPanel(); }
+                    else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 btn.disabled = false; btn.textContent = '📦 全量(含低质量)';
             };
@@ -620,8 +620,8 @@
                         body:JSON.stringify({mode:'reset_watermark'})
                     });
                     const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadTrainingExportPanel(); }
+                    else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
             };
 
@@ -650,8 +650,8 @@
                         body:JSON.stringify({})
                     });
                     const d = await r.json();
-                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadTrainingExportPanel(); }
-                    else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                    if (r.ok) { msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadTrainingExportPanel(); }
+                    else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 trCleanupNowBtn.disabled = false; trCleanupNowBtn.textContent = '🗑️ 立即清理';
             };
@@ -781,7 +781,7 @@
                                     exportFilesDetails._loaded = false;  // force reload
                                     exportFilesDetails.open = false;
                                     document.getElementById('exportFileCount').textContent = `(${dd.kept})`;
-                                } else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(dd.error||'失败')+'</span>';
+                                } else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(dd.error||'失败')+'</span>';
                             } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                             btn.disabled = false; btn.textContent = '🧹 清理旧文件';
                         };
@@ -798,12 +798,12 @@
                                     });
                                     const dd = await rr.json();
                                     if (rr.ok) {
-                                        msgEl.innerHTML = '<span style="color:#22c55e;">✅ '+dd.message+'</span>';
+                                        msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+dd.message+'</span>';
                                         // Reload file list
                                         exportFilesDetails._loaded = false;
                                         exportFilesDetails.open = false;
                                         setTimeout(() => { exportFilesDetails.open = true; }, 100);
-                                    } else msgEl.innerHTML = '<span style="color:#ef4444;">❌ '+(dd.error||'Failed')+'</span>';
+                                    } else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(dd.error||'Failed')+'</span>';
                                 } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">Network error</span>'; btn.disabled = false; }
                             };
                         });
@@ -1171,7 +1171,7 @@
         async function handleVLTest(file) {
             if (!file) return;
             vlTestResult.style.display = 'block';
-            vlTestResult.innerHTML = '⏳ 分析中...';
+            vlTestResult.innerHTML = '' + _icon('hourglass_empty') + ' 分析中...';
             const fd = new FormData();
             fd.append('image', file);
             try {
@@ -1215,8 +1215,8 @@
                     body:JSON.stringify({_action:'save_factory'})
                 });
                 const d = await r.json();
-                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadRuntimeConfig(); }
-                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadRuntimeConfig(); }
+                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
             } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
             saveFactoryBtn.disabled = false; saveFactoryBtn.textContent = '🏭 保存为出厂预设';
         };
@@ -1232,8 +1232,8 @@
                     body:JSON.stringify({_action:'restore_factory'})
                 });
                 const d = await r.json();
-                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>'; loadRuntimeConfig(); }
-                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'失败')+'</span>';
+                if (r.ok) { document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; loadRuntimeConfig(); }
+                else document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
             } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
             restoreFactoryBtn.disabled = false; restoreFactoryBtn.textContent = '↩ 恢复出厂预设';
         };
@@ -1264,13 +1264,13 @@
             });
             const d = await r.json();
             if (r.ok) {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>';
+                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>';
                 _rcDirty = {};
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = 'none';
                 loadRuntimeConfig();
             } else {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'保存失败')+'</span>';
+                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'保存失败')+'</span>';
             }
         } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
         btn.disabled = false; btn.textContent = '💾 Save All Changes';
@@ -1288,13 +1288,13 @@
             });
             const d = await r.json();
             if (r.ok) {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">✅ '+d.message+'</span>';
+                document.getElementById('rcMsg').innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>';
                 _rcDirty = {};
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = 'none';
                 loadRuntimeConfig();
             } else {
-                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">❌ '+(d.error||'Failed')+'</span>';
+                document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'Failed')+'</span>';
             }
         } catch(_) { document.getElementById('rcMsg').innerHTML = '<span style="color:#ef4444;">Network error</span>'; }
     });

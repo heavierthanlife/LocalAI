@@ -86,7 +86,7 @@ async function initEditor() {
         _updateScoreIndicator();
     } catch (e) {
         console.error('Tiptap editor load failed:', e);
-        editorEl.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">⚠️ 编辑器加载失败，Tiptap CDN 可能不可用。刷新重试或使用文件上传模式。</span>';
+        editorEl.innerHTML = '<span style="color:#e74c3c;font-size:0.7rem;">' + _icon('warning') + ' 编辑器加载失败，Tiptap CDN 可能不可用。刷新重试或使用文件上传模式。</span>';
         editorEl.style.padding = '12px';
     }
 }
@@ -309,7 +309,7 @@ function _updateScoreIndicator(summary) {
 
     const total = (summary.pass || 0) + (summary.warning || 0) + (summary.violation || 0) + (summary.critical || 0);
     if (!total) {
-        scoreEl.innerHTML = '<span style="color:var(--card-muted);">✅ 无违规</span>';
+        scoreEl.innerHTML = '<span style="color:var(--card-muted);">' + _icon('check_circle') + ' 无违规</span>';
         return;
     }
 
