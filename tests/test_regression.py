@@ -933,6 +933,56 @@ def test_clearance_baseline_classified_normal():
         "正常文档 typo 指标不应误报"
 
 
+# ── 剽窃检测模式 (Plagiarism Mode, FIX-016 后续) ──
+def test_plagiarism_identical_flagged():
+    """完全相同文档 → 疑似剽窃（cosine=1.0 + 高匹配段占比）。"""
+    from app.services.plagiarism_detector import detect_plagiarism
+    text = ('第一章 招标公告\n本招标项目已由某市发展和改革委员会批准建设。\n'
+            '建设地点：某市新城区；建设规模：总建筑面积约50000平方米。\n'
+            '计划工期：730日历天；招标范围：施工图纸范围内的土建、安装工程。\n'
+            '投标人须具备建筑工程施工总承包一级资质。')
+    r = detect_plagiarism(text, text, filename_a='A.docx', filename_b='B.docx')
+    assert r['verdict'] == '疑似剽窃', f"相同文档应为疑似剽窃: {r['verdict']}"
+    assert r['cosine_similarity'] >= 0.99
+    # 除短标题段（len<MIN_PARA_CHARS 不计）外，其余段落应高匹配
+    assert r['high_match_para_count'] >= r['para_count'] - 1, \
+        f"几乎所有段落应高匹配: {r['high_match_para_count']}/{r['para_count']}"
+
+
+def test_plagiarism_different_not_flagged():
+    """内容完全不同 → 正常（cosine 低 + 高匹配段少）。"""
+    from app.services.plagiarism_detector import detect_plagiarism
+    ta = ('第一章 招标公告\n本招标项目已由某市发展和改革委员会批准建设。\n建设地点：某市新城区。')
+    tb = ('第五章 技术标准\n采购CT机1台、MRI设备1台、超声诊断仪3台。\n预算金额：1500万元。')
+    r = detect_plagiarism(ta, tb, filename_a='A.docx', filename_b='B.docx')
+    assert r['verdict'] == '正常', f"不同文档应为正常: {r['verdict']}"
+    assert r['high_match_para_count'] == 0
+
+
+def test_plagiarism_partial_detected():
+    """部分段落抄袭（共享招标模板 + 不同技术方案）→ 疑似剽窃（双信号）。"""
+    from app.services.plagiarism_detector import detect_plagiarism
+    common = ('第一章 招标公告\n本招标项目已由某市发展和改革委员会批准建设。\n'
+              '建设地点：某市新城区；建设规模：总建筑面积约50000平方米。\n'
+              '计划工期：730日历天；招标范围：施工图纸范围内的土建、安装工程。')
+    ta = common + '\n技术方案：采用开槽法施工，沟槽钢板桩支护。\n商务报价：302,070,000元。'
+    tb = common + '\n技术方案：采用定向钻穿越施工，泥浆护壁。\n商务报价：329,270,000元。'
+    r = detect_plagiarism(ta, tb, filename_a='A.docx', filename_b='B.docx')
+    assert r['verdict'] == '疑似剽窃', f"共享模板+部分雷同应为疑似剽窃: {r['verdict']}"
+    assert r['high_match_para_ratio'] >= 0.20
+
+
+def test_plagiarism_short_paras_no_false_positive():
+    """极短段落（< MIN_PARA_CHARS）不应因单字匹配被计为高匹配段。"""
+    from app.services.plagiarism_detector import detect_plagiarism
+    ta = 'p1\np2\np3\np4\np5\n第一章 招标公告 本招标项目已批准 建设规模50000平方米'
+    tb = 'q1\nq2\nq3\nq4\nq5\n第一章 招标公告 本招标项目已批准 建设规模50000平方米'
+    r = detect_plagiarism(ta, tb, filename_a='A.docx', filename_b='B.docx')
+    # 5 个短段不应计入高匹配
+    assert r['verdict'] in ('正常', '高度相似'), f"短段不应误判疑似剽窃: {r['verdict']}"
+    assert r['high_match_para_count'] <= 2, f"短段高匹配数应受限: {r['high_match_para_count']}"
+
+
 # ── FIX-2026-09-01-016: LLM 来源切换 OpenRouter + NVIDIA ──
 def test_llm_provider_switch_active_sources():
     """FIX-016: PROVIDER_CONFIG 必须含 openrouter + nvidia，且不含已注释的旧 provider。"""
