@@ -8791,56 +8791,6 @@
         });
     }
 
-    // ── FIX-016 后续: emoji → Material Symbols 图标映射表 ──
-    // 全站复用: <span class="msi msi-sm">icon_name</span>
-    const MSI = {
-        '📥': 'download', '📊': 'bar_chart', '🔀': 'swap_horiz', '⚖️': 'balance',
-        '🤖': 'smart_toy', '🖼️': 'image', '🛡️': 'verified_user', '🔴': 'error',
-        '⚠️': 'warning', '✅': 'check_circle', '❌': 'cancel', '⏳': 'hourglass_empty',
-        '👥': 'groups', '🕸️': 'hub', '📋': 'list_alt', '🔑': 'key', '🔍': 'search',
-        '📄': 'description', '📁': 'folder', '📂': 'folder_open', '🗑️': 'delete',
-        '🔄': 'refresh', '➕': 'add', '✏️': 'edit', '⚙️': 'settings', '🔧': 'build',
-        '📝': 'edit_note', '💬': 'chat', '🧠': 'psychology', '💰': 'payments',
-        '📈': 'trending_up', '📉': 'trending_down', '📚': 'menu_book', '📜': 'article',
-        '🏢': 'domain', '👤': 'person', '🏗️': 'construction', '📅': 'calendar_month',
-        '🔗': 'link', '💾': 'save', '📤': 'upload', '🕐': 'schedule', '⏱️': 'timer',
-        '🚫': 'block', '⛔': 'block', '🔥': 'local_fire_department', '💡': 'lightbulb',
-        '⭐': 'star', '★': 'star', '📌': 'push_pin', '📍': 'location_on',
-        '⏭️': 'skip_next', '⏭': 'skip_next', '⚡': 'bolt', '💼': 'work',
-        '🏛️': 'account_balance', '🏷️': 'sell', '🆕': 'new_releases', '🌐': 'public',
-        '📖': 'menu_book', '📓': 'note', '📑': 'table_rows', '✉️': 'mail',
-        '📨': 'send', '🗺️': 'map', '🧹': 'cleaning_services', '♻️': 'recycling',
-        '🔨': 'hammer', '🎛️': 'tune', '🔬': 'science', '🧪': 'science',
-        '📎': 'attach_file', '🔔': 'notifications', '✕': 'close', '✖': 'close',
-        '☰': 'menu', '👑': 'workspace_premium', '👁️': 'visibility', '🩺': 'monitor_heart',
-        '📷': 'photo_camera', '📹': 'videocam', '📱': 'smartphone', '⌨️': 'keyboard',
-        '📦': 'inventory_2', '🗂️': 'folder_special', '🗄️': 'database', '🗓️': 'calendar_month',
-        '🔑': 'key', '🏁': 'flag', '🎉': 'celebration', '✨': 'auto_awesome',
-        '🛠️': 'construction', '⏹': 'stop', '💭': 'chat', '↺': 'restart_alt',
-        '⬇️': 'south', '⬇': 'south', '⬆️': 'north', '⬆': 'north',
-        '✓': 'check', '√': 'check', '➤': 'chevron_right', '☰': 'menu',
-        '📝': 'edit_note', '🚨': 'notifications_active', '🌓': 'dark_mode',
-        '📏': 'straighten', '📐': 'architecture',
-        '🗑': 'delete', '🗄': 'database', '🗂': 'folder_special', '🖼': 'image',
-        '🏷': 'sell', '🏛': 'account_balance', '🎛': 'tune', '✍️': 'edit',
-        '✍': 'edit',
-    };
-    // FIX-016 后续: 暴露给全站 JS 复用 (chat.js/review.js/knowledge-lab.js 等)
-    if (typeof window !== 'undefined') {
-        window.MSI = MSI;
-        window._icon = _icon;
-        window._iconMd = _iconMd;
-    }
-    function _icon(name) {
-        // name: Material Symbols ligature name or emoji (mapped)
-        var glyph = MSI[name] || name;
-        return '<span class="msi msi-sm" aria-hidden="true">' + _clearanceEscape(glyph) + '</span>';
-    }
-    function _iconMd(name) {
-        var glyph = MSI[name] || name;
-        return '<span class="msi msi-md" aria-hidden="true">' + _clearanceEscape(glyph) + '</span>';
-    }
-
     function initClearanceTool() {
         var fileInput = document.getElementById('clearanceFileInput');
         var selectBtn = document.getElementById('selectClearanceFilesBtn');
