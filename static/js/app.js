@@ -9299,12 +9299,18 @@
         if (report.image_sampling && report.image_sampling.length) {
             html += '<details class="cl-l1"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明</summary>';
             html += '<div class="cl-l2">' + _renderImageSamplingTab(report.image_sampling) + '</div></details>';
+        } else {
+            html += '<details class="cl-l1"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明</summary>';
+            html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未包含图片或未执行图片抽检。</p></div></details>';
         }
 
         // ── 六、全量审计补充检查 ──
         if (report.audit_supplement && report.audit_supplement.per_file && report.audit_supplement.per_file.length) {
             html += '<details class="cl-l1"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查</summary>';
             html += '<div class="cl-l2">' + _renderAuditSupplementTab(report.audit_supplement) + '</div></details>';
+        } else {
+            html += '<details class="cl-l1"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查</summary>';
+            html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未包含审计补充数据。</p></div></details>';
         }
 
         return html;

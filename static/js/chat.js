@@ -241,10 +241,10 @@
         actionRow.className = 'action-row';
         const copyBtn = document.createElement('button');
         copyBtn.className = 'action-btn';
-        copyBtn.innerHTML = '📋 <span class="btn-text">复制全篇</span>';
+        copyBtn.innerHTML = _icon('📋') + ' <span class="btn-text">复制全篇</span>';
         const regenerateBtn = document.createElement('button');
         regenerateBtn.className = 'action-btn';
-        regenerateBtn.innerHTML = '🔄 <span class="btn-text">重新生成</span>';
+        regenerateBtn.innerHTML = _icon('🔄') + ' <span class="btn-text">重新生成</span>';
         actionRow.appendChild(copyBtn);
         if (!_isCurrentSessionProjectChat) {
             actionRow.appendChild(regenerateBtn);
@@ -256,10 +256,10 @@
         ratingDiv.className = 'rating-buttons';
         const upBtn = document.createElement('button');
         upBtn.className = 'rating-btn';
-        upBtn.innerHTML = '👍 <span class="btn-text">有帮助</span>';
+        upBtn.innerHTML = _icon('👍') + ' <span class="btn-text">有帮助</span>';
         const downBtn = document.createElement('button');
         downBtn.className = 'rating-btn';
-        downBtn.innerHTML = '👎 <span class="btn-text">无帮助</span>';
+        downBtn.innerHTML = _icon('👎') + ' <span class="btn-text">无帮助</span>';
         ratingDiv.appendChild(upBtn);
         ratingDiv.appendChild(downBtn);
         const commentInput = document.createElement('input');
@@ -268,7 +268,7 @@
         commentInput.placeholder = '补充意见';
         const submitBtn = document.createElement('button');
         submitBtn.className = 'feedback-submit';
-        submitBtn.innerHTML = '📨 <span class="btn-text">提交反馈</span>';
+        submitBtn.innerHTML = _icon('📨') + ' <span class="btn-text">提交反馈</span>';
         const statusSpan = document.createElement('span');
         statusSpan.className = 'feedback-status';
         feedbackDiv.appendChild(ratingDiv);
@@ -503,7 +503,7 @@
                 const pinIsActive = pinnedSessions && pinnedSessions.has(sess.thread_id);
                 const pinBtn = document.createElement('button');
                 pinBtn.className = 'pin-button';
-                pinBtn.textContent = pinIsActive ? '📌' : '📍';
+                pinBtn.innerHTML = _icon(pinIsActive ? '📌' : '📍');
                 pinBtn.title = pinIsActive ? '取消置顶' : '置顶';
                 pinBtn.style.background = 'none';
                 pinBtn.style.border = 'none';
@@ -515,7 +515,7 @@
                     if (!pinnedSessions) return;
                     if (pinnedSessions.has(sess.thread_id)) {
                         pinnedSessions.delete(sess.thread_id);
-                        pinBtn.textContent = '📍';
+                        pinBtn.innerHTML = _icon('📍');
                         pinBtn.style.opacity = '0.4';
                     } else {
                         pinnedSessions.add(sess.thread_id);
@@ -528,7 +528,7 @@
                 // Archive button
                 const archiveBtn = document.createElement('button');
                 archiveBtn.className = 'archive-history';
-                archiveBtn.textContent = '📦';
+                archiveBtn.innerHTML = _icon('📦');
                 archiveBtn.title = '归档聊天';
                 archiveBtn.style.marginLeft = '8px';
                 archiveBtn.style.background = 'none';
@@ -568,7 +568,7 @@
                 // Delete button
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-history';
-                deleteBtn.textContent = '🗑️';
+                deleteBtn.innerHTML = _icon('🗑️');
                 deleteBtn.onclick = async (e) => {
                     e.stopPropagation();
                     const confirmed = await confirm(`确定要删除聊天“${sess.title}”吗？此操作不可恢复。`);
@@ -996,10 +996,10 @@
         actionRow.className = 'action-row';
         const copyBtn = document.createElement('button');
         copyBtn.className = 'action-btn';
-        copyBtn.innerHTML = '📋 <span class="btn-text">复制全篇</span>';
+        copyBtn.innerHTML = _icon('📋') + ' <span class="btn-text">复制全篇</span>';
         const regenerateBtn = document.createElement('button');
         regenerateBtn.className = 'action-btn';
-        regenerateBtn.innerHTML = '🔄 <span class="btn-text">重新生成</span>';
+        regenerateBtn.innerHTML = _icon('🔄') + ' <span class="btn-text">重新生成</span>';
         actionRow.appendChild(copyBtn);
         if (!_isCurrentSessionProjectChat) {
             actionRow.appendChild(regenerateBtn);
@@ -1010,10 +1010,10 @@
         ratingDiv.className = 'rating-buttons';
         const upBtn = document.createElement('button');
         upBtn.className = 'rating-btn';
-        upBtn.innerHTML = '👍 <span class="btn-text">有帮助</span>';
+        upBtn.innerHTML = _icon('👍') + ' <span class="btn-text">有帮助</span>';
         const downBtn = document.createElement('button');
         downBtn.className = 'rating-btn';
-        downBtn.innerHTML = '👎 <span class="btn-text">无帮助</span>';
+        downBtn.innerHTML = _icon('👎') + ' <span class="btn-text">无帮助</span>';
         ratingDiv.appendChild(upBtn);
         ratingDiv.appendChild(downBtn);
         const commentInput = document.createElement('input');
@@ -1022,7 +1022,7 @@
         commentInput.placeholder = '补充意见';
         const submitBtn = document.createElement('button');
         submitBtn.className = 'feedback-submit';
-        submitBtn.innerHTML = '📨 <span class="btn-text">提交反馈</span>';
+        submitBtn.innerHTML = _icon('📨') + ' <span class="btn-text">提交反馈</span>';
         const statusSpan = document.createElement('span');
         statusSpan.className = 'feedback-status';
         feedbackDiv.appendChild(ratingDiv);

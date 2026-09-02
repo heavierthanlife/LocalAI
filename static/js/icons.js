@@ -39,7 +39,7 @@
         '📏': 'straighten', '📐': 'architecture',
         '🗑': 'delete', '🗄': 'database', '🗂': 'folder_special', '🖼': 'image',
         '🏷': 'sell', '🏛': 'account_balance', '🎛': 'tune', '✍️': 'edit',
-        '✍': 'edit'
+        '✍': 'edit', '👍': 'thumb_up', '👎': 'thumb_down'
     };
 
     function _esc(s) {
@@ -57,8 +57,16 @@
         return '<span class="msi msi-md" aria-hidden="true">' + _esc(glyph) + '</span>';
     }
 
+    // FIX-016 后续: 统一折叠箭头工具（M5）。用 Material Symbols expand_more + CSS 旋转
+    // 替代 textContent='▶'/'▼'。调用: _toggleArrow(el, isCollapsed)
+    function _toggleArrow(el, collapsed) {
+        if (!el) return;
+        el.innerHTML = '<span class="msi msi-arrow' + (collapsed ? ' collapsed' : '') + '" aria-hidden="true">expand_more</span>';
+    }
+
     // Expose globals for all business scripts (loaded after this file)
     window.MSI = MSI;
     window._icon = _icon;
     window._iconMd = _iconMd;
+    window._toggleArrow = _toggleArrow;
 })();

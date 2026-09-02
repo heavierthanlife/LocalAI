@@ -39,3 +39,14 @@
 .msi-sm { font-size: 16px; }
 .msi-md { font-size: 20px; }
 .msi-lg { font-size: 26px; }
+
+/* 折叠箭头 (M5): expand_more + 旋转 */
+.msi-arrow {
+    transition: transform 0.2s;
+    display: inline-flex;
+    font-size: 18px;
+    color: inherit;
+}
+.msi-arrow.collapsed {
+    transform: rotate(-90deg);
+}
