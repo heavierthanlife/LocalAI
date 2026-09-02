@@ -129,7 +129,7 @@
                                         const preview = thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
                                         thinkingHtml = `<div class="thinking-container">
                                             <div class="thinking-header" onclick="toggleThinking(this);">
-                                                <span class="arrow">▶</span><span>思考过程</span>
+                                                <span class="arrow msi msi-arrow collapsed">expand_more</span><span>思考过程</span>
                                                 <span class="thinking-preview">${escapeHtml(preview)}</span>
                                             </div>
                                             <div class="thinking-content">${md.render(thinking)}</div>
@@ -928,7 +928,7 @@
             header.onclick = function() { toggleThinking(this); };
             const arrow = document.createElement('span');
             arrow.className = 'arrow';
-            arrow.textContent = '▶';
+            _toggleArrow(arrow, true);
             const label = document.createElement('span');
             label.textContent = '思考过程';
             const preview = document.createElement('span');
@@ -1077,7 +1077,7 @@
                         header.onclick = function() { toggleThinking(this); };
                         const arrowSpan = document.createElement('span');
                         arrowSpan.className = 'arrow';
-                        arrowSpan.textContent = '▶';
+                        _toggleArrow(arrowSpan, true);
                         const labelSpan = document.createElement('span');
                         labelSpan.textContent = '思考过程';
                         const previewSpan = document.createElement('span');

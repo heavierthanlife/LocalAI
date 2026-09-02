@@ -328,10 +328,10 @@
         const arrow = headerElement.querySelector('.arrow');
         if (contentDiv.classList.contains('show')) {
             contentDiv.classList.remove('show');
-            arrow.textContent = '▶';
+            _toggleArrow(arrow, true);
         } else {
             contentDiv.classList.add('show');
-            arrow.textContent = '▼';
+            _toggleArrow(arrow, false);
         }
     }
     function formatElapsedTime(seconds) {
@@ -520,7 +520,7 @@
             bubble.style.cssText = 'margin-bottom:2px;padding:4px 10px;border-radius:6px;background:#eff6ff;border:1px solid #bfdbfe;font-size:0.7rem;cursor:pointer;';
             const summary = document.createElement('div');
             summary.style.cssText = 'display:flex;align-items:center;gap:4px;color:#3b82f6;';
-            summary.innerHTML = '<span class="inline-quote-icon">▶</span><span>' + ('引用' + author + ' — ' + lineCount + '行, ' + charCount + '字').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+            summary.innerHTML = '<span class="inline-quote-icon msi msi-arrow collapsed">expand_more</span><span>' + ('引用' + author + ' — ' + lineCount + '行, ' + charCount + '字').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
             const quoteBody = document.createElement('div');
             quoteBody.className = 'inline-quote-content';
             quoteBody.style.cssText = 'display:none;margin-top:4px;padding:4px 8px;background:white;border-radius:4px;border:1px solid #e5e7eb;max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:0.68rem;color:#374151;font-family:monospace;';
@@ -530,8 +530,8 @@
             bubble.addEventListener('click', function(e) {
                 const icon = this.querySelector('.inline-quote-icon');
                 const body = this.querySelector('.inline-quote-content');
-                if (body.style.display === 'none') { body.style.display = 'block'; icon.textContent = '▼'; }
-                else { body.style.display = 'none'; icon.textContent = '▶'; }
+                if (body.style.display === 'none') { body.style.display = 'block'; _toggleArrow(icon, false); }
+                else { body.style.display = 'none'; _toggleArrow(icon, true); }
             });
 
             // Name tag (right-aligned) — extract from content or use session
@@ -8101,7 +8101,7 @@
                 label.textContent = '引用' + (author ? ' @' + author : '') + ' — ' + lineCount + '行, ' + charCount + '字';
                 content.textContent = fullContent;
                 bubble.style.display = 'block';
-                icon.textContent = '▶';  // collapsed
+                _toggleArrow(icon, true);  // collapsed
                 content.style.display = 'none';
             }
 
