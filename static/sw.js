@@ -1,5 +1,5 @@
 /* ZLAIservices Service Worker — PWA offline support + auto-update */
-const CACHE_NAME = 'zlai-services-v3';
+const CACHE_NAME = 'zlai-services-v4';
 const ASSETS = [
     '/static/manifest.json',
     '/static/css/app.css',
