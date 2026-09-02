@@ -161,8 +161,10 @@ def test_snapshot_keyword_overlap(keyword_texts):
     )
 
     # ── Snapshot values (FIX-013 stop-word filtered + FIX-015 word-level TF-IDF) ──
+    # 2026-09-02 (FIX-016 后续): domain_words.txt 扩充 → 注册建造师 成为单 token,
+    # keyword_overlap slight_diff 快照从 0.41176471 漂到 0.4。
     assert results["near_identical"] == pytest.approx(0.55555556, abs=1e-6)
-    assert results["slight_diff"] == pytest.approx(0.41176471, abs=1e-6)
+    assert results["slight_diff"] == pytest.approx(0.4, abs=1e-6)
     assert results["no_overlap"] == pytest.approx(0.0, abs=1e-6)
 
 
