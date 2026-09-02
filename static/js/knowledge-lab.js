@@ -553,12 +553,12 @@ let currentProjectName = '';
 
                 let buttonsHtml = '';
                 if (!isQuitted) {
-                    buttonsHtml = `<button class="open-project" data-id="${p.id}" data-name="${escapeHtml(p.name)}" data-status="${p.status}" style="background: #27ae60; color: white; border: none; border-radius: 4px; padding: 4px 8px;">📂 打开</button>`;
+                    buttonsHtml = `<button class="open-project" data-id="${p.id}" data-name="${escapeHtml(p.name)}" data-status="${p.status}" style="background: #27ae60; color: white; border: none; border-radius: 4px; padding: 4px 8px;">${_icon('📂')} 打开</button>`;
                     if (p.status === 'active') {
                         buttonsHtml += `
-                            <button class="member-manager-btn" data-id="${p.id}" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px;">👥 成员管理</button>
-                            <button class="finish-project-btn" data-id="${p.id}" style="background: #f39c12; color: white; border: none; border-radius: 4px; padding: 4px 8px;">🏁 完成并归档</button>
-                            <button class="abort-project" data-id="${p.id}" style="background: #e67e22; color: white; border: none; border-radius: 4px; padding: 4px 8px;">⛔ 中止</button>
+                            <button class="member-manager-btn" data-id="${p.id}" style="background: #3498db; color: white; border: none; border-radius: 4px; padding: 4px 8px;">${_icon('👥')} 成员管理</button>
+                            <button class="finish-project-btn" data-id="${p.id}" style="background: #f39c12; color: white; border: none; border-radius: 4px; padding: 4px 8px;">${_icon('🏁')} 完成并归档</button>
+                            <button class="abort-project" data-id="${p.id}" style="background: #e67e22; color: white; border: none; border-radius: 4px; padding: 4px 8px;">${_icon('⛔')} 中止</button>
                         `;
                     }
                     if (p.status === 'archived') {
@@ -684,12 +684,12 @@ let currentProjectName = '';
         let archiveBanner = '';
         if (status === 'archived') {
             archiveBanner = `<div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-                <span style="font-size:0.85rem; color:#1e40af;">📦 此项目已归档，仅可查看和下载</span>
-                ${archiveFilename ? `<a href="/admin/projects/${projectId}/download_archive/${encodeURIComponent(archiveFilename)}" style="background:#2563eb; color:white; text-decoration:none; border-radius:6px; padding:6px 14px; font-size:0.82rem;">📥 下载归档ZIP</a>` : ''}
+                <span style="font-size:0.85rem; color:#1e40af;">${_icon('📦')} 此项目已归档，仅可查看和下载</span>
+                ${archiveFilename ? `<a href="/admin/projects/${projectId}/download_archive/${encodeURIComponent(archiveFilename)}" style="background:#2563eb; color:white; text-decoration:none; border-radius:6px; padding:6px 14px; font-size:0.82rem;">${_icon('📥')} 下载归档ZIP</a>` : ''}
             </div>`;
         } else if (status === 'aborted') {
             archiveBanner = `<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; margin-bottom:12px;">
-                <span style="font-size:0.85rem; color:#991b1b;">⛔ 此项目已中止，仅可查看</span>
+                <span style="font-size:0.85rem; color:#991b1b;">${_icon('⛔')} 此项目已中止，仅可查看</span>
             </div>`;
         }
 
