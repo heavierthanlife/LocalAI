@@ -1,0 +1,41 @@
+/* Material Symbols Outlined — self-hosted (FIX-016 后续)
+   Font file: static/fonts/material-symbols-outlined.woff2 (487KB, Apache-2.0)
+   Usage: <span class="material-symbols-outlined">icon_name</span>
+   Ligature font: the icon name text renders as the glyph. Color inherits currentColor. */
+
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../fonts/material-symbols-outlined.woff2") format("woff2");
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
+  /* keep baseline aligned with surrounding text */
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+/* Sizing helpers */
+.msi { font-family: "Material Symbols Outlined"; font-weight: normal; line-height: 1;
+       display: inline-block; vertical-align: middle; overflow: hidden; }
+.msi-xs { font-size: 14px; }
+.msi-sm { font-size: 16px; }
+.msi-md { font-size: 20px; }
+.msi-lg { font-size: 26px; }

@@ -8791,6 +8791,46 @@
         });
     }
 
+    // ── FIX-016 后续: emoji → Material Symbols 图标映射表 ──
+    // 全站复用: <span class="msi msi-sm">icon_name</span>
+    const MSI = {
+        '📥': 'download', '📊': 'bar_chart', '🔀': 'swap_horiz', '⚖️': 'balance',
+        '🤖': 'smart_toy', '🖼️': 'image', '🛡️': 'verified_user', '🔴': 'error',
+        '⚠️': 'warning', '✅': 'check_circle', '❌': 'cancel', '⏳': 'hourglass_empty',
+        '👥': 'groups', '🕸️': 'hub', '📋': 'list_alt', '🔑': 'key', '🔍': 'search',
+        '📄': 'description', '📁': 'folder', '📂': 'folder_open', '🗑️': 'delete',
+        '🔄': 'refresh', '➕': 'add', '✏️': 'edit', '⚙️': 'settings', '🔧': 'build',
+        '📝': 'edit_note', '💬': 'chat', '🧠': 'psychology', '💰': 'payments',
+        '📈': 'trending_up', '📉': 'trending_down', '📚': 'menu_book', '📜': 'article',
+        '🏢': 'domain', '👤': 'person', '🏗️': 'construction', '📅': 'calendar_month',
+        '🔗': 'link', '💾': 'save', '📤': 'upload', '🕐': 'schedule', '⏱️': 'timer',
+        '🚫': 'block', '⛔': 'block', '🔥': 'local_fire_department', '💡': 'lightbulb',
+        '⭐': 'star', '★': 'star', '📌': 'push_pin', '📍': 'location_on',
+        '⏭️': 'skip_next', '⏭': 'skip_next', '⚡': 'bolt', '💼': 'work',
+        '🏛️': 'account_balance', '🏷️': 'sell', '🆕': 'new_releases', '🌐': 'public',
+        '📖': 'menu_book', '📓': 'note', '📑': 'table_rows', '✉️': 'mail',
+        '📨': 'send', '🗺️': 'map', '🧹': 'cleaning_services', '♻️': 'recycling',
+        '🔨': 'hammer', '🎛️': 'tune', '🔬': 'science', '🧪': 'science',
+        '📎': 'attach_file', '🔔': 'notifications', '✕': 'close', '✖': 'close',
+        '☰': 'menu', '👑': 'workspace_premium', '👁️': 'visibility', '🩺': 'monitor_heart',
+        '📷': 'photo_camera', '📹': 'videocam', '📱': 'smartphone', '⌨️': 'keyboard',
+        '📦': 'inventory_2', '🗂️': 'folder_special', '🗄️': 'database', '🗓️': 'calendar_month',
+        '🔑': 'key', '🏁': 'flag', '🎉': 'celebration', '✨': 'auto_awesome',
+        '🛠️': 'construction', '⏹': 'stop', '💭': 'chat', '↺': 'restart_alt',
+        '⬇️': 'south', '⬇': 'south', '⬆️': 'north', '⬆': 'north',
+        '✓': 'check', '√': 'check', '➤': 'chevron_right', '☰': 'menu',
+        '📝': 'edit_note',
+    };
+    function _icon(name) {
+        // name: Material Symbols ligature name or emoji (mapped)
+        var glyph = MSI[name] || name;
+        return '<span class="msi msi-sm" aria-hidden="true">' + _clearanceEscape(glyph) + '</span>';
+    }
+    function _iconMd(name) {
+        var glyph = MSI[name] || name;
+        return '<span class="msi msi-md" aria-hidden="true">' + _clearanceEscape(glyph) + '</span>';
+    }
+
     function initClearanceTool() {
         var fileInput = document.getElementById('clearanceFileInput');
         var selectBtn = document.getElementById('selectClearanceFilesBtn');
@@ -9212,52 +9252,53 @@
         var compliance = report.compliance;
         var ai = report.ai_review;
         var html = '';
+        // FIX-016 后续: 默认全收起 + 中文编号 + Material Symbols 图标 + 层级类
 
-        // ── Download link (chat-bubble) ──
+        // ── 下载链接 ──
         if (downloadUrl) {
             html += '<div style="margin-bottom:10px;">';
-            html += '<a href="' + downloadUrl + '" data-clearance-download="1" download style="color:#16a34a;text-decoration:none;font-weight:600;">📥 下载报告 (DOCX+PDF)</a>';
+            html += '<a href="' + downloadUrl + '" data-clearance-download="1" download style="color:#16a34a;text-decoration:none;font-weight:600;">' + _icon('📥') + ' 下载报告 (DOCX+PDF)</a>';
             html += '</div>';
         }
 
         // ── 一、指标分析 ──
-        html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析</summary>';
-        html += '<div style="padding-top:4px;">' + _renderIndicatorsTab(report) + '</div></details>';
+        html += '<details class="cl-l1"><summary><span class="cl-num">一</span>' + _icon('📊') + ' 指标分析</summary>';
+        html += '<div class="cl-l2">' + _renderIndicatorsTab(report) + '</div></details>';
 
         // ── 二、横向对比 ──
         if (cross && (cross.pairs || []).length) {
-            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 横向对比</summary>';
-            html += '<div style="padding-top:4px;">' + _renderCrossTab(cross, report._files || []) + '</div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">二</span>' + _icon('🔀') + ' 横向对比</summary>';
+            html += '<div class="cl-l2">' + _renderCrossTab(cross, report._files || []) + '</div></details>';
         }
 
         // ── 三、合规审查 ──
         if (compliance && !compliance.skipped) {
-            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚖️ 合规审查</summary>';
-            html += '<div style="padding-top:4px;">' + _renderComplianceTab(compliance) + '</div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查</summary>';
+            html += '<div class="cl-l2">' + _renderComplianceTab(compliance) + '</div></details>';
         } else {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚖️ 合规审查</summary>';
-            html += '<div style="padding-top:4px;"><p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p></div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查</summary>';
+            html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p></div></details>';
         }
 
         // ── 四、AI 评审 ──
         if (ai && ai.per_file && ai.per_file.length) {
-            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🤖 AI 评审</summary>';
-            html += '<div style="padding-top:4px;">' + _renderAITab(ai) + '</div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审</summary>';
+            html += '<div class="cl-l2">' + _renderAITab(ai) + '</div></details>';
         } else {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🤖 AI 评审</summary>';
-            html += '<div style="padding-top:4px;"><p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p></div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审</summary>';
+            html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p></div></details>';
         }
 
-        // ── 五、图片随机抽检说明（九）──
+        // ── 五、图片随机抽检说明 ──
         if (report.image_sampling && report.image_sampling.length) {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🖼️ 图片随机抽检说明</summary>';
-            html += '<div style="padding-top:4px;">' + _renderImageSamplingTab(report.image_sampling) + '</div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明</summary>';
+            html += '<div class="cl-l2">' + _renderImageSamplingTab(report.image_sampling) + '</div></details>';
         }
 
-        // ── 六、全量审计补充检查（十）──
+        // ── 六、全量审计补充检查 ──
         if (report.audit_supplement && report.audit_supplement.per_file && report.audit_supplement.per_file.length) {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🛡️ 全量审计补充检查</summary>';
-            html += '<div style="padding-top:4px;">' + _renderAuditSupplementTab(report.audit_supplement) + '</div></details>';
+            html += '<details class="cl-l1"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查</summary>';
+            html += '<div class="cl-l2">' + _renderAuditSupplementTab(report.audit_supplement) + '</div></details>';
         }
 
         return html;
@@ -9266,7 +9307,7 @@
     function _renderImageSamplingTab(sampling) {
         var html = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">随机抽取部分图片进行视觉校验，检测可能被忽略的图纸/印章/数据差异。</div>';
         (sampling || []).forEach(function(sf) {
-            html += '<details style="margin-bottom:6px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">🖼️ ' + _clearanceEscape(sf.filename || '') + ' (' + (sf.samples || []).length + '张)</summary>';
+            html += '<details class="cl-l3"><summary>' + _icon('🖼️') + ' ' + _clearanceEscape(sf.filename || '') + ' (' + (sf.samples || []).length + '张)</summary>';
             (sf.samples || []).forEach(function(s) {
                 html += '<div style="font-size:0.66rem;border:1px solid var(--card-border);border-radius:6px;padding:4px 8px;margin:4px 0;">';
                 html += '<b>#' + (s.seq || '') + '</b> 位置: ' + _clearanceEscape(s.chapter || '') + '<br>';
@@ -9285,7 +9326,7 @@
             var tl = pf.timeline || {};
             var st = pf.style || {};
             var ru = pf.rules || {};
-            html += '<details style="margin-bottom:6px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.72rem;">🛡️ ' + _clearanceEscape(pf.filename || '') + '</summary>';
+            html += '<details class="cl-l3"><summary>' + _icon('🛡️') + ' ' + _clearanceEscape(pf.filename || '') + '</summary>';
             html += '<div style="font-size:0.66rem;padding:4px 8px;">';
             if (st.score != null) html += '风格分析: <b>' + (st.score || 0).toFixed(1) + '</b> 分 (' + _clearanceEscape(st.findings && st.findings.formality_label || '') + ')<br>';
             if (ru.count != null) html += '自规则提取: <b>' + (ru.count || 0) + '</b> 条 · 评分 ' + (ru.score || 0).toFixed(1) + '<br>';
@@ -9391,33 +9432,38 @@
         html += '</div>';
 
         if (suspected.length > 0) {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔴 预警嫌疑单位 (' + suspected.length + '家)</summary>';
+            // FIX-016 后续: 红色警报母条目 + 附注
+            var warnCount = suspected.filter(function(su){ return (su.score||0) > 10; }).length;
+            html += '<details class="alert-parent"><summary>' + _icon('🔴') + ' 预警嫌疑单位 (' + suspected.length + '家)' +
+                '<span class="alert-note">含 ' + warnCount + ' 家高嫌疑</span></summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
             suspected.forEach(function(su) {
-                html += '<tr>';
-                html += '<td>' + ((su.score||0) > 10 ? '★ ' : '') + _clearanceEscape((su.name||'').substring(0,30)) + '</td>';
+                var danger = (su.score||0) > 30;
+                html += '<tr class="' + (danger ? 'alert-item' : '') + '">';
+                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + _clearanceEscape((su.name||'').substring(0,30)) + '</td>';
                 html += '<td>' + (su.indicators_triggered||0) + '</td>';
-                html += '<td style="color:' + ((su.score||0) > 30 ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
+                html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
             });
             html += '</table></details>';
         } else {
-            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现预警嫌疑单位</p>';
+            html += '<p class="severity-ok" style="font-size:0.72rem;margin-bottom:8px;">' + _icon('✅') + ' 未发现预警嫌疑单位</p>';
         }
 
-        html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析详情 (' + indicators.length + '项)</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('📊') + ' 指标分析详情 (' + indicators.length + '项)</summary>';
         indicators.forEach(function(ind, idx) {
-            var catTag = (ind.category || '') + (ind.skipped ? ' ⏭️' : '');
-            html += '<div style="padding:8px 10px;border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;">';
+            var catTag = (ind.category || '') + (ind.skipped ? ' ' + _icon('⏭️') : '');
+            var isDanger = ind.score >= 15 && !ind.skipped;
+            html += '<div class="' + (isDanger ? 'alert-item' : '') + '" style="border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;padding:8px 10px;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + _clearanceEscape(ind.name||'') + '</strong>';
             html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + _clearanceEscape(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
             html += '</div>';
             var resText = ind.result || '';
-            var resColor = '#16a34a';
-            if (resText.indexOf('⚠️') !== -1 || resText.indexOf('🔴') !== -1 || resText.indexOf('⏭') !== -1) resColor = '#e74c3c';
-            else if (resText.indexOf('✅') !== -1) resColor = '#16a34a';
-            html += '<div style="font-size:0.68rem;color:' + resColor + ';">' + _clearanceEscape(resText) + '</div>';
+            // FIX-016 后续 + 阶段 D: 用 severity 字段/score 着色，替代 indexOf(emoji)
+            var sev = ind.severity || (ind.score >= 15 ? 'danger' : (ind.score > 0 ? 'warn' : 'ok'));
+            var cls = sev === 'danger' ? 'severity-danger' : (sev === 'warn' ? 'severity-warn' : 'severity-ok');
+            html += '<div class="' + cls + '" style="font-size:0.68rem;">' + _clearanceEscape(resText) + '</div>';
             if (ind.details && ind.details.length > 0 && !ind.skipped) {
                 html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
                 var keys = Object.keys(ind.details[0] || {});
@@ -9433,7 +9479,7 @@
         html += '</details>';
 
         if (personnel.list && personnel.list.length > 0) {
-            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">👥 关系人员汇总 (' + personnel.total + '人)</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('👥') + ' 关系人员汇总 (' + personnel.total + '人)</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位</th><th>姓名</th><th>类型</th></tr>';
             personnel.list.slice(0, 20).forEach(function(p) {
@@ -9469,12 +9515,12 @@
 
         html += '<div style="font-size:0.78rem;margin-bottom:8px;"><strong>横向对比:</strong> ' + files.length + ' 个投标单位 · ' + pairs.length + ' 对组合 · 点击矩阵单元格查看对详情</div>';
 
-        // ── E2: 帮派 ──
+        // ── E2: 帮派 (红色警报) ──
         if (gangs && gangs.length) {
-            html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;color:#dc2626;">🕸️ 疑似围标集团 (' + gangs.length + '个)</summary>';
+            html += '<details class="alert-parent"><summary>' + _icon('🕸️') + ' 疑似围标集团 (' + gangs.length + '个)<span class="alert-note">红色高嫌疑</span></summary>';
             gangs.forEach(function(g, gi) {
-                html += '<div style="font-size:0.7rem;margin:4px 0;padding:4px 8px;border:1px solid #fca5a5;border-radius:6px;background:#fef2f2;">';
-                html += '<b>集团' + (gi + 1) + '</b>：' + (g.files || []).map(_clearanceEscape).join(' ⚡ ') +
+                html += '<div class="alert-item" style="font-size:0.7rem;">';
+                html += '<b>集团' + (gi + 1) + '</b>：' + (g.files || []).map(_clearanceEscape).join(' ' + _icon('⚡') + ' ') +
                     ' | 成员 ' + (g.members || []).length + ' 家 | 最高风险 ' + (g.max_risk || 0).toFixed(1) +
                     ' | 平均 ' + (g.avg_risk || 0).toFixed(1);
                 html += '</div>';
@@ -9483,7 +9529,7 @@
         }
 
         // ── 多维矩阵切换 ──
-        html += '<details open style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔀 风险矩阵</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('🔀') + ' 风险矩阵</summary>';
         html += '<div style="display:flex;gap:6px;margin:4px 0;">';
         html += '<button class="cm-matrix-btn" data-m="risk" style="border:1px solid var(--card-border);background:#8e44ad;color:#fff;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">综合风险</button>';
         html += '<button class="cm-matrix-btn" data-m="text" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">文本相似</button>';
@@ -9530,7 +9576,7 @@
         html += '</details>';
 
         // ── C: 全部组合明细 ──
-        html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📋 全部组合明细 (' + pairs.length + '对)</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('📋') + ' 全部组合明细 (' + pairs.length + '对)</summary>';
         var maxP = Math.max.apply(null, pairs.map(function(p) { return p.risk || 0; }));
         var avgP = pairs.reduce(function(s, p) { return s + (p.risk || 0); }, 0) / (pairs.length || 1);
         var hiP = pairs.filter(function(p) { return (p.risk || 0) > 5; }).length;
@@ -9549,25 +9595,26 @@
         });
         html += '</table></details>';
 
-        // ── 高风险组合 ──
+        // ── 高风险组合 (红色警报) ──
         var high = pairs.filter(function(p) { return (p.risk || 0) > 5; });
         if (high.length > 0) {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">⚠️ 高风险组合 (' + high.length + '对)</summary>';
+            html += '<details class="alert-parent"><summary>' + _icon('⚠️') + ' 高风险组合 (' + high.length + '对)<span class="alert-note">风险 &gt; 5 需关注</span></summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>风险</th><th>文本相似</th><th>属性雷同</th></tr>';
             high.forEach(function(p) {
-                html += '<tr><td>' + _clearanceEscape((p.name1 || '').substring(0, 18)) + '</td><td>' + _clearanceEscape((p.name2 || '').substring(0, 18)) + '</td>';
-                html += '<td style="color:' + ((p.risk || 0) > 20 ? '#e74c3c' : '#e67e22') + ';">' + (p.risk || 0).toFixed(1) + '</td>';
+                var danger = (p.risk || 0) > 20;
+                html += '<tr class="' + (danger ? 'alert-item' : '') + '"><td>' + _clearanceEscape((p.name1 || '').substring(0, 18)) + '</td><td>' + _clearanceEscape((p.name2 || '').substring(0, 18)) + '</td>';
+                html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + ';">' + (p.risk || 0).toFixed(1) + '</td>';
                 html += '<td>' + (p.sim || 0).toFixed(1) + '%</td><td>' + (p.attr_same ? '是' : '否') + '</td></tr>';
             });
             html += '</table></details>';
         } else {
-            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现高风险组合</p>';
+            html += '<p class="severity-ok" style="font-size:0.72rem;margin-bottom:8px;">' + _icon('✅') + ' 未发现高风险组合</p>';
         }
 
         // ── 重点信息雷同 ──
         if (keyInfo.length > 0) {
-            html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔑 重点信息雷同 (' + keyInfo.length + '组)</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('🔑') + ' 重点信息雷同 (' + keyInfo.length + '组)</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>共同关键词</th></tr>';
             keyInfo.slice(0, 20).forEach(function(ki) {
@@ -9585,7 +9632,7 @@
     }
 
     function _showPairDetail(p, files) {
-        var html = '<div style="font-size:0.85rem;font-weight:700;margin-bottom:8px;">🔍 ' + _clearanceEscape(p.name1 || '') + ' ↔ ' + _clearanceEscape(p.name2 || '') + '</div>';
+        var html = '<div style="font-size:0.85rem;font-weight:700;margin-bottom:8px;">' + _icon('🔍') + ' ' + _clearanceEscape(p.name1 || '') + ' ↔ ' + _clearanceEscape(p.name2 || '') + '</div>';
         html += '<div style="font-size:0.75rem;margin-bottom:10px;line-height:1.7;">';
         html += '综合风险: <b style="color:' + ((p.risk || 0) > 20 ? '#dc2626' : (p.risk || 0) > 5 ? '#d97706' : '#16a34a') + '">' + (p.risk || 0).toFixed(1) + '</b>';
         html += ' · 文本相似: <b>' + (p.sim || 0).toFixed(1) + '%</b>';
@@ -9625,7 +9672,7 @@
     function _renderComplianceTab(comp) {
         var html = '';
         var summary = comp.summary || {};
-        html += '<div style="font-size:0.78rem;margin-bottom:8px;">⚖️ 基于招标文件《' + _clearanceEscape(comp.tender_name||'') + '》' + (comp.rules||[]).length + ' 条规则</div>';
+        html += '<div style="font-size:0.78rem;margin-bottom:8px;">' + _icon('⚖️') + ' 基于招标文件《' + _clearanceEscape(comp.tender_name||'') + '》' + (comp.rules||[]).length + ' 条规则</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
         html += '<span style="background:#16a34a;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">通过 ' + (summary.pass||0) + '</span>';
         html += '<span style="background:#d97706;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">警告 ' + (summary.warning||0) + '</span>';
@@ -9635,7 +9682,7 @@
 
         (comp.per_file || []).forEach(function(pf, pi) {
             var s = pf.summary || {};
-            html += '<details ' + (pi === 0 ? 'open' : '') + ' style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.75rem;">📄 ' + _clearanceEscape(pf.filename||'') + ' — 通过' + (s.pass||0) + ' 警告' + (s.warning||0) + ' 违规' + (s.violation||0) + ' 严重' + (s.critical||0) + '</summary>';
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('📄') + ' ' + _clearanceEscape(pf.filename||'') + ' — 通过' + (s.pass||0) + ' 警告' + (s.warning||0) + ' 违规' + (s.violation||0) + ' 严重' + (s.critical||0) + '</summary>';
             var results = pf.results || [];
             if (results.length) {
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:4px;">';
@@ -9658,7 +9705,7 @@
         (ai.per_file || []).forEach(function(pf, pi) {
             var r = pf.review || {};
             var scores = r.scores || {};
-            html += '<details ' + (pi === 0 ? 'open' : '') + ' style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.75rem;">🤖 ' + _clearanceEscape(pf.filename||'') + ' — ' + (r.verdict||'') + ' (' + (r.overall||0) + '/10)</summary>';
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('🤖') + ' ' + _clearanceEscape(pf.filename||'') + ' — ' + (r.verdict||'') + ' (' + (r.overall||0) + '/10)</summary>';
             if (Object.keys(scores).length) {
                 html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;">';
                 Object.keys(scores).forEach(function(k) {
@@ -9680,7 +9727,7 @@
                 });
                 html += '</table>';
             }
-            if (r.summary) html += '<div style="margin-top:6px;font-size:0.7rem;">📝 ' + _clearanceEscape(r.summary) + '</div>';
+            if (r.summary) html += '<div style="margin-top:6px;font-size:0.7rem;">' + _icon('📝') + ' ' + _clearanceEscape(r.summary) + '</div>';
             html += '</details>';
         });
         return html;
@@ -9701,39 +9748,41 @@
         html += '<strong>投标单位:</strong> ' + info.bidder_count;
         html += ' | <strong>综合评分:</strong> <span style="color:' + (info.total_score >= 60 ? '#e74c3c' : info.total_score >= 30 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
         html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
-        if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">📥 下载DOCX报告</a>';
+        if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">' + _icon('📥') + ' 下载DOCX报告</a>';
         html += '</div>';
 
         // Suspected units
         if (suspected.length > 0) {
-            html += '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">🔴 预警嫌疑单位 (' + suspected.length + '家)</summary>';
+            var warnCount2 = suspected.filter(function(su){ return (su.score||0) > 10; }).length;
+            html += '<details class="alert-parent"><summary>' + _icon('🔴') + ' 预警嫌疑单位 (' + suspected.length + '家)<span class="alert-note">含 ' + warnCount2 + ' 家高嫌疑</span></summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
             suspected.forEach(function(su) {
-                html += '<tr>';
-                html += '<td>' + (su.score > 10 ? '★ ' : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
+                var danger = (su.score||0) > 30;
+                html += '<tr class="' + (danger ? 'alert-item' : '') + '">';
+                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
                 html += '<td>' + (su.indicators_triggered||0) + '</td>';
-                html += '<td style="color:' + (su.score > 30 ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
+                html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
             });
             html += '</table></details>';
         } else {
-            html += '<p style="color:#27ae60;font-size:0.72rem;margin-bottom:8px;">✅ 未发现预警嫌疑单位</p>';
+            html += '<p class="severity-ok" style="font-size:0.72rem;margin-bottom:8px;">' + _icon('✅') + ' 未发现预警嫌疑单位</p>';
         }
 
         // Indicator cards
-        html += '<details><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">📊 指标分析详情 (' + indicators.length + '项)</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('📊') + ' 指标分析详情 (' + indicators.length + '项)</summary>';
         indicators.forEach(function(ind, idx) {
-            var catTag = (ind.category || '') + (ind.skipped ? ' ⏭️' : '');
+            var catTag = (ind.category || '') + (ind.skipped ? ' ' + _icon('⏭️') : '');
             html += '<div style="padding:8px 10px;border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
             html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + escapeHtml(ind.name||'') + '</strong>';
             html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + escapeHtml(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
             html += '</div>';
             var resText = ind.result || '';
-            var resColor = '#16a34a';
-            if (resText.indexOf('⚠️') !== -1 || resText.indexOf('🔴') !== -1 || resText.indexOf('⏭') !== -1) resColor = '#e74c3c';
-            else if (resText.indexOf('✅') !== -1) resColor = '#16a34a';
-            html += '<div style="font-size:0.68rem;color:' + resColor + ';">' + escapeHtml(resText) + '</div>';
+            // FIX-016 后续: severity/score 着色，替代 indexOf(emoji)
+            var sev2 = ind.severity || (ind.score >= 15 ? 'danger' : (ind.score > 0 ? 'warn' : 'ok'));
+            var cls2 = sev2 === 'danger' ? 'severity-danger' : (sev2 === 'warn' ? 'severity-warn' : 'severity-ok');
+            html += '<div class="' + cls2 + '" style="font-size:0.68rem;">' + escapeHtml(resText) + '</div>';
             if (ind.details && ind.details.length > 0 && !ind.skipped) {
                 html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
                 var keys = Object.keys(ind.details[0] || {});
@@ -9792,7 +9841,7 @@
                 <div style="background:var(--card-bg);border-radius:12px;padding:20px;max-width:900px;width:95%;max-height:80vh;display:flex;flex-direction:column;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                         <h3 style="margin:0;" id="resultHistoryTitle"></h3>
-                        <button id="resultHistoryClose" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">✕</button>
+                        <button id="resultHistoryClose" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">${_icon('✕')}</button>
                     </div>
                     <div id="resultHistoryContent" style="overflow-y:auto;flex:1;font-size:0.75rem;"></div>
                 </div>`;
@@ -9829,9 +9878,9 @@
             html += `<td>${r.id}</td><td>${escapeHtml((r.doc_name||'').substring(0,25))}</td>`;
             html += `<td style="color:${r.risk_score > 50 ? '#e74c3c' : r.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(r.risk_score||0).toFixed(1)}</td>`;
             html += `<td>${(r.cv||0).toFixed(4)}</td>`;
-            html += `<td>${r.same_rate_flag ? '⚠️' : '✓'}</td>`;
-            html += `<td>${r.abnormal_drop_flag ? '⬇️' : '✓'}</td>`;
-            html += `<td>${r.clustering_flag ? '🔗' : '✓'}</td>`;
+            html += `<td>${r.same_rate_flag ? _icon('⚠️') : _icon('✅')}</td>`;
+            html += `<td>${r.abnormal_drop_flag ? _icon('⬇️') : _icon('✅')}</td>`;
+            html += `<td>${r.clustering_flag ? _icon('🔗') : _icon('✅')}</td>`;
             html += `<td>${(r.checked_at||'').substring(0,16)}</td>`;
             html += `<td>${escapeHtml(r.username||'')}</td></tr>`;
         });
