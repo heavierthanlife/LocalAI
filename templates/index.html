@@ -360,9 +360,11 @@
                     </div>
                     <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <button id="runClearanceBtn" class="file-btn" style="background:#8e44ad;color:#fff;border-color:#7d3c98;" disabled>开始清标</button>
+                        <button id="runPlagiarismBtn" class="file-btn" title="两文件剽窃/雷同检测"><span class="msi msi-sm" aria-hidden="true">balance</span> 两文件剽窃对比</button>
                         <button id="clearanceFileStationBtn" class="file-btn">文件站</button>
                         <span id="storageWarning" class="storage-warning"></span>
                     </div>
+                    <div id="plagiarismResult" style="display:none;margin-top:8px;border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;font-size:0.72rem;"></div>
                     <div id="clearanceProgress" style="display:none;margin-top:6px;">
                         <div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:2px;"><span id="clearanceProgressText">初始化...</span></div>
                         <div style="background:#e2e8f0;border-radius:4px;height:6px;overflow:hidden;"><div id="clearanceProgressBar" style="width:0%;height:100%;background:#8e44ad;border-radius:4px;transition:width 0.3s;"></div></div>

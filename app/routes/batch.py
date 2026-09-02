@@ -349,3 +349,45 @@ def check_typos_endpoint():
         result['diff_text'] = report.diff_text[:5000]
 
     return ok(result)
+
+
+@batch_bp.route('/plagiarism/compare', methods=['POST'])
+def plagiarism_compare():
+    """Plagiarism mode: two-file comparison (FIX-016 后续).
+
+    Reuses compute_similarity_with_numbers + paragraph aggregation. Distinct from
+    清标 mode — outputs pairwise verdict + paragraph heatmap, NOT composite score.
+    """
+    if session.get('consent_value', 0) != 1:
+        return err("Consent not given", "FORBIDDEN", 403)
+    if not session.get('user_id'):
+        return err("Not logged in", "AUTH_REQUIRED", 401)
+
+    files = request.files.getlist('files') or []
+    if len(files) < 2:
+        return err("需要上传 2 个文件", "VALIDATION_ERROR", 400)
+
+    texts = []
+    names = []
+    for f in files[:2]:
+        if not f.filename or not allowed_file(f.filename):
+            return err(f"不支持的格式: {f.filename}", "VALIDATION_ERROR", 400)
+        text, _ = extract_text_from_file(f)
+        if not text or not is_valid_extracted_text(text):
+            return err(f"无法提取文本: {f.filename}", "VALIDATION_ERROR", 400)
+        texts.append(text)
+        names.append(f.filename)
+
+    # optional template (招标文件) for boilerplate removal
+    template_text = None
+    tf = request.files.get('template')
+    if tf and tf.filename and allowed_file(tf.filename):
+        template_text, _ = extract_text_from_file(tf)
+
+    from app.services.plagiarism_detector import detect_plagiarism
+    report = detect_plagiarism(
+        texts[0], texts[1],
+        template_text=template_text,
+        filename_a=names[0], filename_b=names[1],
+    )
+    return ok(report)

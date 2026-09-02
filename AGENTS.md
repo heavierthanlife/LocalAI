@@ -70,6 +70,17 @@ Every feature upgrade must include regression verification:
 - **VL**：`vl_model.py` 独立解耦，默认 `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`。
 - **环境变量**：`OPENROUTER_API_KEY` / `NVIDIA_API_KEY`（.env / docker-compose 透传）。
 
+## 剽窃检测模式（Plagiarism Mode）
+
+两文件对比，聚焦「谁抄了谁」——区别于清标模式（3+ 文件聚合复合指数）。
+
+- **复用**：`_make_vectorizer`, `tokenize_for_tfidf`, `DEFAULT_STOP_WORDS`, `remove_template_content`, `compute_similarity_with_numbers`
+- **独立**：`app/services/plagiarism_detector.py`（段落归并 + 双信号判定 + 报告生成）
+- **不复用**：`INDICATOR_WEIGHTS`, `RiskScorer`, `composite_score`, `_detect_component`
+- **路由**：`POST /batch/plagiarism/compare`（2 文件 + 可选招标文件模板）
+- **双信号判定**（阈值由回归测试锁定）：`cosine ≥ 0.60` AND `高匹配段占比 ≥ 0.20` → 疑似剽窃；`MIN_PARA_CHARS=20` 防短段误报
+- **前端**：清标工具区「两文件剽窃对比」按钮（取前两个已选文件）
+
 ## Architecture
 
 | Layer | Location | Notes |

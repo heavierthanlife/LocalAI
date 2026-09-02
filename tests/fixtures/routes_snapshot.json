@@ -1,2294 +1,2300 @@
 [
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/.well-known/appspecific/com.chrome.devtools.json"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/all_user_kb"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/analytics"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/approve_delete/<username>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/archived_sessions"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/archived_sessions"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/archived_sessions/<thread_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/archived_sessions/all"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/audit_log"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/audit_note"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/clear_all_data"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/clear_file_cache"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/db_data"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_delete_row"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/db_migrations"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_migrations/apply"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_migrations/rollback"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_migrations/snapshot"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/db_schema"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_table_data"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/db_tables"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/db_tables_overview"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/db_update_row"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/embedding_cache"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/embedding_cache/clear"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/file_audit"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/generate_work_report"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/domain_approve"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/domain_reject"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/domain_review"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/feedback"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/kb_approve/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/kb_chunk/<task_id>/<int:chunk_index>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/kb_chunk/<task_id>/<int:chunk_index>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/kb_reject/<task_id>/<int:chunk_index>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/kb_review/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/review_workload"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/stale_status"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/status/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/ingest/structured"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/ingest/upload"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/llm_providers"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/notifications"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/notifications/mark_read"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/pending_deletions"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/admin/projects/<int:project_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/projects/<int:project_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/abort"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_activity"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_analyze"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_assist"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_assist/stream"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_memory"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_workflow"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ai_workflow_step"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/all_users"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/backfill_chat"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/batch_download"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/download_archive/<zip_filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/comments"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/comments"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/content"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/download"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/move"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/new_version"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/rename"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/status"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/versions"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/batch_move"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/files/search"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/finish"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/comments"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/comments"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/files"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/rename"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/upload"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/mark_read"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/members"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/members"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/admin/projects/<int:project_id>/members/<user_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/admin/projects/<int:project_id>/members/<user_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/members/search"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/my_workflow"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/my_workflow"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/ping"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/presence"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/quote"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/quote_tree/<int:message_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/regen_votes"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/regen_votes/<int:vote_id>/cast"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/regen_votes/<int:vote_id>/resolve"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/todos"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/todos"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/todos/<int:todo_id>/done"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/todos/<int:todo_id>/remove"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/todos/done_log"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/projects/<int:project_id>/transfer_manager/<user_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/unread_count"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/wiki-tree"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/projects/<int:project_id>/workflow_kpi"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/promote_to_company/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/quote_anomaly_results"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/quote_anomaly_results/<int:id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/rag_delete/<source>/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/rag_rebuild"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/rag_stats"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/relationship_results"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/relationship_results/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/review/document"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/role"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/runtime_config"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/runtime_config"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/runtime_config_schema"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/search_cache_config"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/search_cache_config"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/send_mail"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/skill_archive/<int:skill_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/skill_audit"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/skill_audit/feedback"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/skill_merge"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/system_cleanup"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/system_prompt"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/system_prompt"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/task_deposit"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/task_deposit/transfer/<int:item_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training/lora/<industry>/activate"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training/lora/<industry>/deactivate"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training/lora/adapters"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training/lora/datasets"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training/run_lora"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training_cleanup"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_cleanup_stats"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training_export"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_export_history"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training_exports_cleanup"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training_exports_delete/<filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_exports_download/<filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_exports_list"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_health"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/training_health"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_health_history"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/training_stats"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/transfer_assets"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/typo_results"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/user_assets"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/user_emails"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/user_styles"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/user_styles/<user_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/user_styles/<user_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/user_styles/<user_id>/analyze"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/user_styles/<user_id>/delete"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/admin/user_styles/analyze_all"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/users"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/admin/vl_status"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/api/chat/create_grill_thread"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/api/graph/citation"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/api/graph/collusion"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/api/graph/compliance"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/api/graph/law-impact"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/api/graph/types"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/api/login"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/api/projects/<int:project_id>/get_or_create_grill_thread"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/apidocs/"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/apidocs/index.html"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/apispec_1.json"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/archive_session/<thread_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/batch_result/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/cases"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cases"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/cases/<int:case_id>"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/cases/<int:case_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/cases/<int:case_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cases/<int:case_id>/laws"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/cases/<int:case_id>/laws/<int:article_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cases/<int:case_id>/tags"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/cases/<int:case_id>/tags"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cases/<int:case_id>/templates"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/cases/<int:case_id>/templates/<int:link_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cases/auto-generate"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/cases/stats"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/chat/poll/<thread_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/check_auth"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/check_quote_anomaly"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/check_quote_anomaly/feedback"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/check_storage"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/check_typos"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cleanup_anon_temp"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/cleanup_now"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/clearance/preview_criteria"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/clearance/run"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/clearance/status/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/clearance/stream/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/company_kb/categories"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/company_kb/content/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/company_kb/delete/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/company_kb/generate_skill/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/company_kb/list"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/company_kb/rename/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/company_kb/search"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/company_kb/skill/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/company_kb/upload"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compare_bidders_quotes"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/check"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/compare"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/dashboard"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/extract_rules"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/feedback"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/feedback/history"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/graph"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/incremental_check"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/laws"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/laws/<int:law_id>/diff"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/laws/<int:law_id>/versions"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/laws/<int:law_id>/versions"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/laws/<int:law_id>/versions/<int:version_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/laws/<int:law_id>/versions/activate"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/compliance/laws/<law_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/laws/monitor/events"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/laws/monitor/impact"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/compliance/laws/upload"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/result/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/rules/<task_id>"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/compliance/rules/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/training_data"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/compliance/trends"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/confirm_delete_account"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/create_account"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/credit_check_resume/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/credit_check_status/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_account"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_batch_result/<int:id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_credit_report/<int:report_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_file_station"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_recycle_item"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/delete_session/<thread_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/document_analysis/analyze"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/document_analysis/status/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/document_analysis/stream/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/download_credit_report/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/download_original_file"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/empty_recycle_bin"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/extract_relationships"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/favicon.ico"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/favicon.ico"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/feedback"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/feedback"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/fetch_url"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/flasgger_static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_captcha_image/<task_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_csrf_token"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_csrf_token"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_file_station"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_recent_files"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_recycle_bin"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/get_sessions"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/health"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/knowledge_lab/content/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/knowledge_lab/delete/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/knowledge_lab/generate_skill/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/knowledge_lab/list"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/knowledge_lab/rename/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/knowledge_lab/rename_skill/<int:file_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/knowledge_lab/skill/<int:file_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/knowledge_lab/upload"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/list_archived_sessions"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/list_batch_results"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/list_credit_reports"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/llm_providers"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/llm_providers/set"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/load_cached_file"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/load_project_file"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/load_session/<thread_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/login"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/logout"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/my_daily_report"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/my_writing_style"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/my_writing_style"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/my_writing_style/analyze"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/new_chat"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/notebook"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/notebook/<note_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/notebook/<note_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/notebook/<note_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/notebook/<note_id>/summarize"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/notebook/search"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/oauth2-redirect.html"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/project_files/<int:file_id>/generate_skill"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/regenerate"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/reload_captcha/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/request_delete_account"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/request_pin_change_code"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/restore_from_recycle_bin"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/restore_session/<thread_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/search_chat"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/send"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/send_stream"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/set_email"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/set_image_analysis"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/set_max_tokens"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/share_conversation"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/shared/<token>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/solve_captcha/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/start_credit_check"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/static/<path:filename>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/stream_upload"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/submit_delete_choices"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/sw.js"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/tasks"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/tasks/<task_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/tasks/<task_id>/cancel"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/tasks/<task_id>/delete"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/tasks/<task_id>/stream"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/templates"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/templates/<int:file_id>/generate_doc"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates/<int:template_id>"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/templates/<int:template_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/templates/<int:template_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates/<int:template_id>/diff"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates/<int:template_id>/export"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates/<int:template_id>/versions"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/templates/<int:template_id>/versions/<int:version_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/templates/import/confirm"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/templates/import/preview"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/templates/recommend"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/timeline/<int:project_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/diff"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/list"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/milestones"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/timeline/<int:project_id>/milestones/<milestone_code>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/milestones/batch"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/steps"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/steps"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/timeline/<int:project_id>/steps/<int:step_id>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/timeline/<int:project_id>/steps/<int:step_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/steps/batch"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/steps/generate"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/steps/progress"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/<int:project_id>/suggestions"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/suggestions/<int:suggestion_id>"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/timeline/<int:project_id>/suggestions/generate"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/legal/categories"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/timeline/legal/schedule"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/update_account"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/update_session_title"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/upload_file"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/user_project_files"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/bookmarks"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/wiki/bookmarks"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/wiki/bookmarks/<int:bookmark_id>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/category/<category_name>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/compare"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/comparisons"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/wiki/comparisons/<path:comp_path>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/entity-graph"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/index"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/wiki/legal/import"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/page/<path:page_path>"
- },
- {
-  "methods": [
-   "PUT"
-  ],
-  "rule": "/wiki/page/<path:page_path>"
- },
- {
-  "methods": [
-   "DELETE"
-  ],
-  "rule": "/wiki/page/<path:page_path>"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/page/<path:page_path>/raw"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/search"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/stats"
- },
- {
-  "methods": [
-   "GET"
-  ],
-  "rule": "/wiki/tree"
- },
- {
-  "methods": [
-   "POST"
-  ],
-  "rule": "/wiki/view-log"
- }
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/.well-known/appspecific/com.chrome.devtools.json"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/all_user_kb"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/analytics"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/approve_delete/<username>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/archived_sessions"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/archived_sessions"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/archived_sessions/<thread_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/archived_sessions/all"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/audit_log"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/audit_note"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/clear_all_data"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/clear_file_cache"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/db_data"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_delete_row"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/db_migrations"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_migrations/apply"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_migrations/rollback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_migrations/snapshot"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/db_schema"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_table_data"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/db_tables"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/db_tables_overview"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/db_update_row"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/embedding_cache"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/embedding_cache/clear"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/file_audit"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/generate_work_report"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/domain_approve"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/domain_reject"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/domain_review"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/feedback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/kb_approve/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/kb_chunk/<task_id>/<int:chunk_index>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/kb_chunk/<task_id>/<int:chunk_index>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/kb_reject/<task_id>/<int:chunk_index>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/kb_review/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/review_workload"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/stale_status"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/status/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/ingest/structured"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/ingest/upload"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/llm_providers"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/notifications"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/notifications/mark_read"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/pending_deletions"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/admin/projects/<int:project_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/projects/<int:project_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/abort"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_activity"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_analyze"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_assist"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_assist/stream"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_memory"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_workflow"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ai_workflow_step"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/all_users"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/backfill_chat"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/batch_download"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/download_archive/<zip_filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/comments"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/comments"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/content"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/download"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/move"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/new_version"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/rename"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/status"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/<int:file_id>/versions"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/batch_move"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/files/search"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/finish"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/comments"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/comments"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/files"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/rename"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/folders/<int:folder_id>/upload"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/mark_read"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/members"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/members"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/admin/projects/<int:project_id>/members/<user_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/admin/projects/<int:project_id>/members/<user_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/members/search"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/my_workflow"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/my_workflow"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/ping"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/presence"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/quote"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/quote_tree/<int:message_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/regen_votes"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/regen_votes/<int:vote_id>/cast"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/regen_votes/<int:vote_id>/resolve"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/todos"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/todos"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/todos/<int:todo_id>/done"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/todos/<int:todo_id>/remove"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/todos/done_log"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/projects/<int:project_id>/transfer_manager/<user_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/unread_count"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/wiki-tree"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/projects/<int:project_id>/workflow_kpi"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/promote_to_company/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/quote_anomaly_results"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/quote_anomaly_results/<int:id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/rag_delete/<source>/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/rag_rebuild"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/rag_stats"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/relationship_results"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/relationship_results/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/review/document"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/role"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/runtime_config"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/runtime_config"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/runtime_config_schema"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/search_cache_config"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/search_cache_config"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/send_mail"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/skill_archive/<int:skill_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/skill_audit"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/skill_audit/feedback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/skill_merge"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/system_cleanup"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/system_prompt"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/system_prompt"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/task_deposit"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/task_deposit/transfer/<int:item_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training/lora/<industry>/activate"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training/lora/<industry>/deactivate"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training/lora/adapters"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training/lora/datasets"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training/run_lora"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training_cleanup"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_cleanup_stats"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training_export"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_export_history"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training_exports_cleanup"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training_exports_delete/<filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_exports_download/<filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_exports_list"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_health"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/training_health"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_health_history"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/training_stats"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/transfer_assets"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/typo_results"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/user_assets"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/user_emails"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/user_styles"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/user_styles/<user_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/user_styles/<user_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/user_styles/<user_id>/analyze"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/user_styles/<user_id>/delete"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/user_styles/analyze_all"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/users"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/admin/vl_status"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/chat/create_grill_thread"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/graph/citation"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/graph/collusion"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/graph/compliance"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/graph/law-impact"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/api/graph/types"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/login"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/api/projects/<int:project_id>/get_or_create_grill_thread"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/apidocs/"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/apidocs/index.html"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/apispec_1.json"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/archive_session/<thread_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/batch_result/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/cases"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cases"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/cases/<int:case_id>"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/cases/<int:case_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/cases/<int:case_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cases/<int:case_id>/laws"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/cases/<int:case_id>/laws/<int:article_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cases/<int:case_id>/tags"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/cases/<int:case_id>/tags"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cases/<int:case_id>/templates"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/cases/<int:case_id>/templates/<int:link_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cases/auto-generate"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/cases/stats"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/chat/poll/<thread_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/check_auth"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/check_quote_anomaly"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/check_quote_anomaly/feedback"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/check_storage"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/check_typos"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cleanup_anon_temp"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/cleanup_now"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/clearance/preview_criteria"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/clearance/run"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/clearance/status/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/clearance/stream/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/company_kb/categories"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/company_kb/content/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/company_kb/delete/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/company_kb/generate_skill/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/company_kb/list"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/company_kb/rename/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/company_kb/search"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/company_kb/skill/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/company_kb/upload"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compare_bidders_quotes"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/check"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/compare"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/dashboard"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/extract_rules"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/feedback"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/feedback/history"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/graph"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/incremental_check"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/laws"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/laws/<int:law_id>/diff"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/laws/<int:law_id>/versions"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/laws/<int:law_id>/versions"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/laws/<int:law_id>/versions/<int:version_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/laws/<int:law_id>/versions/activate"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/compliance/laws/<law_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/laws/monitor/events"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/laws/monitor/impact"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/compliance/laws/upload"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/result/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/rules/<task_id>"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/compliance/rules/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/training_data"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/compliance/trends"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/confirm_delete_account"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/create_account"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/credit_check_resume/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/credit_check_status/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_account"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_batch_result/<int:id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_credit_report/<int:report_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_file_station"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_recycle_item"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/delete_session/<thread_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/document_analysis/analyze"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/document_analysis/status/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/document_analysis/stream/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/download_credit_report/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/download_original_file"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/empty_recycle_bin"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/extract_relationships"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/favicon.ico"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/favicon.ico"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/feedback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/feedback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/fetch_url"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/flasgger_static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_captcha_image/<task_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_csrf_token"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_csrf_token"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_file_station"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_recent_files"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_recycle_bin"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/get_sessions"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/health"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/knowledge_lab/content/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/knowledge_lab/delete/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/knowledge_lab/generate_skill/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/knowledge_lab/list"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/knowledge_lab/rename/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/knowledge_lab/rename_skill/<int:file_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/knowledge_lab/skill/<int:file_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/knowledge_lab/upload"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/list_archived_sessions"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/list_batch_results"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/list_credit_reports"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/llm_providers"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/llm_providers/set"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/load_cached_file"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/load_project_file"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/load_session/<thread_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/login"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/logout"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/my_daily_report"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/my_writing_style"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/my_writing_style"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/my_writing_style/analyze"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/new_chat"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/notebook"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/notebook/<note_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/notebook/<note_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/notebook/<note_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/notebook/<note_id>/summarize"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/notebook/search"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/oauth2-redirect.html"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/plagiarism/compare"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/project_files/<int:file_id>/generate_skill"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/regenerate"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/reload_captcha/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/request_delete_account"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/request_pin_change_code"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/restore_from_recycle_bin"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/restore_session/<thread_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/search_chat"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/send"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/send_stream"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/set_email"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/set_image_analysis"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/set_max_tokens"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/share_conversation"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/shared/<token>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/solve_captcha/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/start_credit_check"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/static/<path:filename>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/stream_upload"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/submit_delete_choices"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/sw.js"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/tasks"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/tasks/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/tasks/<task_id>/cancel"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/tasks/<task_id>/delete"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/tasks/<task_id>/stream"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/templates"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/templates/<int:file_id>/generate_doc"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates/<int:template_id>"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/templates/<int:template_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/templates/<int:template_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates/<int:template_id>/diff"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates/<int:template_id>/export"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates/<int:template_id>/versions"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/templates/<int:template_id>/versions/<int:version_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/templates/import/confirm"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/templates/import/preview"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/templates/recommend"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/timeline/<int:project_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/diff"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/list"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/milestones"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/timeline/<int:project_id>/milestones/<milestone_code>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/milestones/batch"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/steps"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/steps"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/timeline/<int:project_id>/steps/<int:step_id>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/timeline/<int:project_id>/steps/<int:step_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/steps/batch"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/steps/generate"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/steps/progress"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/<int:project_id>/suggestions"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/suggestions/<int:suggestion_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/timeline/<int:project_id>/suggestions/generate"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/legal/categories"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/timeline/legal/schedule"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/update_account"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/update_session_title"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/upload_file"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/user_project_files"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/bookmarks"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/wiki/bookmarks"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/wiki/bookmarks/<int:bookmark_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/category/<category_name>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/compare"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/comparisons"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/wiki/comparisons/<path:comp_path>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/entity-graph"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/index"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/wiki/legal/import"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/page/<path:page_path>"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/wiki/page/<path:page_path>"
+  },
+  {
+    "methods": [
+      "DELETE"
+    ],
+    "rule": "/wiki/page/<path:page_path>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/page/<path:page_path>/raw"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/search"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/stats"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/wiki/tree"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/wiki/view-log"
+  }
 ]

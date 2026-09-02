@@ -9043,6 +9043,52 @@
             _showClearanceInfoModal();
         };
 
+        // ── 剽窃检测模式 (Plagiarism Mode, FIX-016 后续) ──
+        var plagBtn = document.getElementById('runPlagiarismBtn');
+        var plagResult = document.getElementById('plagiarismResult');
+        if (plagBtn) {
+            plagBtn.onclick = async function() {
+                if (!plagResult) return;
+                if (selectedFiles.length < 2) {
+                    alert('请先选择至少 2 份投标文件（取前两份进行剽窃对比）');
+                    return;
+                }
+                plagResult.style.display = 'block';
+                plagResult.innerHTML = '<span class="msi msi-sm">hourglass_empty</span> 正在对比...';
+                try {
+                    var fd = new FormData();
+                    fd.append('files', selectedFiles[0]);
+                    fd.append('files', selectedFiles[1]);
+                    if (tenderFile) fd.append('template', tenderFile);
+                    var res = await fetch('/batch/plagiarism/compare', {
+                        method: 'POST', body: fd, credentials: 'include'
+                    });
+                    var d = await res.json();
+                    if (!d.success) throw new Error(d.error || '对比失败');
+                    var r = d.data || {};
+                    var vColor = r.verdict === '疑似剽窃' ? '#dc2626' : (r.verdict === '高度相似' ? '#d97706' : '#16a34a');
+                    var h = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">' + _icon('balance') + ' 剽窃对比结果</div>';
+                    h += '<div style="margin-bottom:8px;">' + _icon('swap_horiz') + ' <b>' + _clearanceEscape(r.doc_a || '') + '</b> ↔ <b>' + _clearanceEscape(r.doc_b || '') + '</b></div>';
+                    h += '<div style="margin-bottom:6px;">文本相似度: <b>' + (r.cosine_similarity || 0).toFixed(2) + '</b>';
+                    h += ' | 结论: <b style="color:' + vColor + '">' + _clearanceEscape(r.verdict || '') + '</b></div>';
+                    h += '<div style="font-size:0.66rem;color:var(--card-muted);margin-bottom:6px;">高匹配段: ' + (r.high_match_para_count || 0) + '/' + (r.para_count || 0) + ' (占比 ' + ((r.high_match_para_ratio || 0) * 100).toFixed(0) + '%)</div>';
+                    var hm = r.high_match_paragraphs || [];
+                    if (hm.length) {
+                        h += '<div style="font-size:0.68rem;margin-top:4px;"><b>疑似雷同段落 (' + hm.length + '):</b></div>';
+                        hm.slice(0, 8).forEach(function(ps) {
+                            var ratioPct = Math.round((ps.match_ratio || 0) * 100);
+                            var bg = ratioPct >= 80 ? '#fef2f2' : ratioPct >= 50 ? '#fffbeb' : '#fff';
+                            h += '<div style="background:' + bg + ';border-left:3px solid ' + vColor + ';border-radius:4px;padding:4px 8px;margin:3px 0;font-size:0.64rem;">';
+                            h += '段落 ' + (ps.para_idx + 1) + ' · 匹配率 ' + ratioPct + '% · ' + _clearanceEscape((ps.snippet_a || '').substring(0, 60)) + '</div>';
+                        });
+                    }
+                    plagResult.innerHTML = h;
+                } catch (e) {
+                    plagResult.innerHTML = '<span style="color:#dc2626;">' + _icon('cancel') + ' 对比失败: ' + _clearanceEscape(e.message || '网络错误') + '</span>';
+                }
+            };
+        }
+
         function _showClearanceInfoModal() {
             // Remove any existing modal
             var oldBackdrop = document.querySelector('.clearance-info-backdrop');
