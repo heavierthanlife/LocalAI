@@ -173,6 +173,29 @@ _add('routes', 'project file skill has member guard',
      'PASS' if _project_file_skill_guard() else 'FAIL',
      'generate_project_file_skill must fetch project_id + check project membership (QA-Loop C2)')
 
+
+# Auth-decorator session invariant (QA-Loop C3 regression guard)
+# admin_required / auditor_required must enforce the same consent+user_id
+# session checks as login_required (via shared _check_session_valid), otherwise
+# admin-only endpoints have a weaker auth surface.
+def _auth_decorators_session_guard():
+    admin_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'admin.py')
+    try:
+        with open(admin_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    # admin_required body must call _check_session_valid (same as login_required)
+    m = re.search(r'def admin_required\(f\):(.*?)\ndef ', src, re.S)
+    if not m:
+        return False
+    return '_check_session_valid()' in m.group(1)
+
+
+_add('routes', 'admin/auditor decorators share session checks',
+     'PASS' if _auth_decorators_session_guard() else 'FAIL',
+     'admin_required/auditor_required must call _check_session_valid (QA-Loop C3)')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================

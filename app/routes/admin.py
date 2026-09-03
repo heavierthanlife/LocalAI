@@ -142,6 +142,9 @@ def require_role(min_role):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        session_err = _check_session_valid()
+        if session_err:
+            return session_err
         if not is_admin():
             return err("Admin access required", "FORBIDDEN", 403)
         return f(*args, **kwargs)
@@ -159,18 +162,34 @@ def auditor_required(f):
     """Decorator: admin or auditor required (review/audit operations only)."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        session_err = _check_session_valid()
+        if session_err:
+            return session_err
         if not is_auditor_or_admin():
             return err("Admin or Auditor access required", "FORBIDDEN", 403)
         return f(*args, **kwargs)
     return decorated_function
 
+def _check_session_valid():
+    """Return an error response if the session lacks consent or user_id, else None.
+
+    Shared by login_required / admin_required / auditor_required so all three
+    enforce the same session invariants (QA-Loop C3: admin_required previously
+    skipped these, creating an inconsistent auth surface).
+    """
+    if session.get('consent_value', 0) != 1:
+        return err("Consent not given", "FORBIDDEN", 403)
+    if not session.get('user_id'):
+        return err("Not logged in", "AUTH_REQUIRED", 401)
+    return None
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('consent_value', 0) != 1:
-            return err("Consent not given", "FORBIDDEN", 403)
-        if not session.get('user_id'):
-            return err("Not logged in", "AUTH_REQUIRED", 401)
+        session_err = _check_session_valid()
+        if session_err:
+            return session_err
         return f(*args, **kwargs)
     return decorated_function
 
