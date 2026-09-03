@@ -7558,7 +7558,7 @@
                 _setupTimelineCreationForm(currentProjectId);
             }
         } catch (e) {
-            content.innerHTML = '<p style="color:var(--card-muted);">加载失败: ' + e.message + '</p>';
+            content.innerHTML = '<p style="color:var(--card-muted);">加载失败: ' + escapeHtml(e.message) + '</p>';
         }
     }
 
@@ -9885,10 +9885,10 @@
             if (resp.ok) {
                 renderFn(data, document.getElementById('resultHistoryContent'));
             } else {
-                document.getElementById('resultHistoryContent').innerHTML = '<p style="color:#e74c3c;">加载失败: ' + (data.error || '未知错误') + '</p>';
+                document.getElementById('resultHistoryContent').innerHTML = '<p style="color:#e74c3c;">加载失败: ' + escapeHtml(data.error || '未知错误') + '</p>';
             }
         } catch (err) {
-            document.getElementById('resultHistoryContent').innerHTML = '<p style="color:#e74c3c;">网络错误: ' + err.message + '</p>';
+            document.getElementById('resultHistoryContent').innerHTML = '<p style="color:#e74c3c;">网络错误: ' + escapeHtml(err.message) + '</p>';
         }
     }
 
