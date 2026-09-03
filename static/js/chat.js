@@ -1,4 +1,13 @@
 ﻿/* Chat System module - extracted from app.js (W4) */
+    // QA-Loop C8: 渲染 markdown 前统一消毒（纵深防御）。
+    // md 以 html:false 初始化会转义原始 HTML，但 DOMPurify 兜底可拦截
+    // 转义之外的注入面（如未来切换 md 配置/插件）。_safeHTML 定义于 compliance.js，
+    // 未加载时原样输出 md.render 结果。
+    function _renderMarkdown(src) {
+        var html = (typeof md !== 'undefined' && typeof md.render === 'function') ? md.render(src || '') : String(src || '');
+        if (typeof _safeHTML === 'function') return _safeHTML(html);
+        return html;
+    }
     // ======================== STREAMING SEND FUNCTION ========================
     async function sendMessageStreaming(userMsg, messageId, files, userGroup = null, retryCount = 0) {
         const formData = new FormData();
@@ -132,11 +141,11 @@
                                                 <span class="arrow msi msi-arrow collapsed">expand_more</span><span>思考过程</span>
                                                 <span class="thinking-preview">${escapeHtml(preview)}</span>
                                             </div>
-                                            <div class="thinking-content">${md.render(thinking)}</div>
+                                            <div class="thinking-content">${_renderMarkdown(thinking)}</div>
                                         </div>`;
 
                                         // Render thinking block + answer
-                                        answerDiv.innerHTML = thinkingHtml + md.render(answerStart);
+                                        answerDiv.innerHTML = thinkingHtml + _renderMarkdown(answerStart);
                                         scrollToBottom(true);
                                         continue;
                                     }
@@ -145,13 +154,13 @@
                                 if (thinkingDone) {
                                     if (noThinkingMarker) {
                                         // Direct answer — no thinking block
-                                        answerDiv.innerHTML = md.render(fullResponse);
+                                        answerDiv.innerHTML = _renderMarkdown(fullResponse);
                                     } else {
                                         const splitIdx = fullResponse.search(THINKING_END);
                                         const answerText = splitIdx >= 0
                                             ? fullResponse.substring(splitIdx + fullResponse.match(THINKING_END)[0].length)
                                             : fullResponse;
-                                        answerDiv.innerHTML = thinkingHtml + md.render(answerText);
+                                        answerDiv.innerHTML = thinkingHtml + _renderMarkdown(answerText);
                                     }
                                 } else {
                                     // Still in thinking phase — show dimmed streaming text
@@ -180,10 +189,10 @@
                                     if (finalThinking) {
                                         const thinkingHtml2 = `<div class="message-thinking" style="font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;" onclick="this.classList.toggle('collapsed');const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none';">
                                             💭 思考过程 <span style="font-size:0.6rem;">(点击展开)</span></div>
-                                        <div class="thinking-content" style="display:none;font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;">${md.render(finalThinking)}</div>`;
-                                        answerDiv.innerHTML = thinkingHtml2 + md.render(finalAnswer);
+                                        <div class="thinking-content" style="display:none;font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;">${_renderMarkdown(finalThinking)}</div>`;
+                                        answerDiv.innerHTML = thinkingHtml2 + _renderMarkdown(finalAnswer);
                                     } else {
-                                        answerDiv.innerHTML = md.render(finalAnswer);
+                                        answerDiv.innerHTML = _renderMarkdown(finalAnswer);
                                     }
                                     scrollToBottom(true);
                                 }
@@ -314,14 +323,14 @@
             const data = await res.json();
             if (res.ok && data.assistant_message) {
                 const answerDiv = wrapper.querySelector('.assistant-answer');
-                answerDiv.innerHTML = md.render(data.assistant_message);
+                answerDiv.innerHTML = _renderMarkdown(data.assistant_message);
                 fixLinksInContainer(answerDiv);
                 group.dataset.assistantMsg = data.assistant_message;
                 if (data.thinking) {
                     const thinkingContainer = wrapper.querySelector('.thinking-container');
                     if (thinkingContainer) {
                         const contentDiv = thinkingContainer.querySelector('.thinking-content');
-                        contentDiv.innerHTML = md.render(data.thinking);
+                        contentDiv.innerHTML = _renderMarkdown(data.thinking);
                         const previewSpan = thinkingContainer.querySelector('.thinking-preview');
                         previewSpan.innerText = data.thinking.substring(0, 80) + '...';
                     }
@@ -940,7 +949,7 @@
             header.appendChild(preview);
             const contentDiv = document.createElement('div');
             contentDiv.className = 'thinking-content';
-            contentDiv.innerHTML = md.render(thinking);
+            contentDiv.innerHTML = _renderMarkdown(thinking);
             thinkingContainer.appendChild(header);
             thinkingContainer.appendChild(contentDiv);
             wrapper.appendChild(thinkingContainer);
@@ -979,14 +988,14 @@
                 }
             } catch (err) {
                 console.error('CLEARANCE_REPORT parse failed:', err);
-                answerDiv.innerHTML = md.render(asciiTableToMarkdown(assistantMsg));
+                answerDiv.innerHTML = _renderMarkdown(asciiTableToMarkdown(assistantMsg));
             }
         } else if (assistantMsg && assistantMsg.includes('COMPARE_REPORT')) {
             let htmlContent = assistantMsg.replace(/^<!--.*?-->/, '').trim();
             answerDiv.innerHTML = htmlContent;
             answerDiv.classList.add('comparison-report');
         } else {
-            answerDiv.innerHTML = md.render(asciiTableToMarkdown(assistantMsg));
+            answerDiv.innerHTML = _renderMarkdown(asciiTableToMarkdown(assistantMsg));
         }
         fixLinksInContainer(answerDiv);
         wrapper.appendChild(answerDiv);
@@ -1064,7 +1073,7 @@
             });
             const data = await res.json();
             if (res.ok && data.assistant_message) {
-                answerDiv.innerHTML = md.render(data.assistant_message);
+                answerDiv.innerHTML = _renderMarkdown(data.assistant_message);
                 fixLinksInContainer(answerDiv);
                 group.dataset.assistantMsg = data.assistant_message;
                 if (data.thinking) {
@@ -1088,13 +1097,13 @@
                         header.appendChild(previewSpan);
                         const contentDiv = document.createElement('div');
                         contentDiv.className = 'thinking-content';
-                        contentDiv.innerHTML = md.render(data.thinking);
+                        contentDiv.innerHTML = _renderMarkdown(data.thinking);
                         thinkingContainer.appendChild(header);
                         thinkingContainer.appendChild(contentDiv);
                         wrapper.insertBefore(thinkingContainer, answerDiv);
                     } else {
                         const contentDiv = thinkingContainer.querySelector('.thinking-content');
-                        contentDiv.innerHTML = md.render(data.thinking);
+                        contentDiv.innerHTML = _renderMarkdown(data.thinking);
                         const previewSpan = thinkingContainer.querySelector('.thinking-preview');
                         previewSpan.innerText = data.thinking.substring(0, 80) + '...';
                     }
