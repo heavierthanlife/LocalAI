@@ -509,7 +509,7 @@ def set_user_role():
     return jsonify({"status": "ok", "username": username, "is_auditor": is_auditor})
 
 # ── Admin: view all users' personal KB files ──
-@knowledge_bp.route('/admin/all_user_kb', methods=['GET'])
+# (路由装饰器挂在下方 admin_all_user_kb 定义处，避免空装饰器误绑下一个函数)
 
 
 # ── Writing Style Profiles ──
@@ -864,6 +864,7 @@ def admin_rag_delete(source, file_id):
         return jsonify({"error": str(e)}), 500
 
 
+@knowledge_bp.route('/admin/all_user_kb', methods=['GET'])
 def admin_all_user_kb():
     from app.routes.admin import is_admin as check_admin
     if not check_admin():

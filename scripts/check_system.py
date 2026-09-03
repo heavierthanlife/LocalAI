@@ -114,6 +114,45 @@ for rf in sorted(route_files):
     bp_found, _ = _grep_file(f'app/routes/{rf}', r'Blueprint|register_blueprint')
     _add('routes', f'Route: {rf}', 'PASS' if bp_found else 'FAIL')
 
+
+# Orphaned route decorators (QA-Loop C1 regression guard)
+# A @..._bp.route(...) decorator must be IMMEDIATELY followed by a def; if blank
+# lines/comments separate it from the function (or the next non-comment line is
+# another decorator for a different endpoint), Python binds the route to the
+# WRONG function — the bug that made /admin/all_user_kb return garbage.
+def _orphaned_route_decorators():
+    orphans = []
+    for rf in route_files:
+        fpath = os.path.join(PROJECT_ROOT, 'app', 'routes', rf)
+        if not os.path.isfile(fpath):
+            continue
+        with open(fpath, 'r', encoding='utf-8') as fh:
+            lines = fh.readlines()
+        for idx, line in enumerate(lines):
+            stripped = line.strip()
+            if not re.match(r'^@\w+(\.\w+)*\.route\(', stripped):
+                continue
+            j = idx + 1
+            while j < len(lines):
+                nxt = lines[j].strip()
+                if nxt == '' or nxt.startswith('#'):
+                    j += 1
+                    continue
+                break
+            if j >= len(lines):
+                continue
+            nxt = lines[j].strip()
+            if not (nxt.startswith('def ') or nxt.startswith('@')):
+                orphans.append(f'{rf}:{idx + 1}')
+    return orphans
+
+
+_orphans = _orphaned_route_decorators()
+_add('routes', 'No orphaned route decorators',
+     'PASS' if not _orphans else 'FAIL',
+     f'route decorators not IMMEDIATELY followed by def: {_orphans}' if _orphans
+     else 'all @_bp.route(...) decorators sit directly above their def')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================
