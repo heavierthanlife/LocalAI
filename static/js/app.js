@@ -7531,7 +7531,13 @@
     async function loadTimelinePanel() {
         if (!currentProjectId) {
             const content = document.getElementById('timelineContent');
-            if (content) content.innerHTML = '<p style="color:var(--card-muted);">请先在"项目"标签页中选择一个项目。</p>';
+            if (content) content.innerHTML = '<p style="color:var(--card-muted);">请先在"项目"标签页中选择一个项目。</p>' +
+                '<button id="timelineGotoProjectBtn" class="file-btn" style="margin-top:8px;font-size:0.75rem;">选择项目</button>';
+            const gotoBtn = document.getElementById('timelineGotoProjectBtn');
+            if (gotoBtn) gotoBtn.onclick = () => {
+                const adminBtn = document.getElementById('adminTabBtn');
+                if (adminBtn) { adminBtn.click(); switchSidebarPane('projects'); showSubTabBar('projects'); }
+            };
             return;
         }
         const setup = document.getElementById('timelineSetup');
