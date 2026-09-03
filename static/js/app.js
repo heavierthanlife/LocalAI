@@ -3090,7 +3090,7 @@
             content.innerHTML = '<p style="text-align:center;padding:40px;">🧠 AI正在分析技能库...</p>';
             try {
                 const res = await fetch('/admin/skill_audit', { credentials: 'include' });
-                if (!res.ok) { content.innerHTML = '<p style="color:#ef4444;">权限不足</p>'; return; }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
 
                 if (!data.total_skills && !data.duplicates?.length && !data.unused?.length) {
@@ -3261,7 +3261,14 @@
                         if (keepBBtn) keepBBtn.onclick = () => doMerge('keep_b');
                     }
                 }, 100);
-            } catch(e) { content.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; }
+            } catch(e) {
+                // M4 (FIX-016 后续): 区分错误码
+                var sm = /HTTP (\d+)/.exec(String(e && e.message || e));
+                var msg = '';
+                if (sm) { var c = parseInt(sm[1],10); msg = c===401?'请先登录':(c===403?'权限不足':(c>=500?'服务器错误 ('+c+')':'请求失败 ('+c+')')); }
+                else if (e && e.name==='TypeError') msg = '网络错误';
+                content.innerHTML = '<p style="color:#ef4444;">加载失败' + (msg ? '：' + msg : '') + '</p>';
+            }
         }
 
     // ======================== Knowledge Lab Tab ========================

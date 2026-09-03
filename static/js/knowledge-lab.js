@@ -2584,8 +2584,8 @@ let currentProjectName = '';
             } catch(_) {}
         }
         try {
-            if (!labData) { const r = await fetch('/knowledge_lab/list', { credentials: 'include' }); labData = await r.json(); }
-            if (!coData) { const r = await fetch('/company_kb/list', { credentials: 'include' }); coData = await r.json(); }
+            if (!labData) { const r = await fetch('/knowledge_lab/list', { credentials: 'include' }); if (!r.ok) throw new Error('HTTP ' + r.status); labData = await r.json(); }
+            if (!coData) { const r = await fetch('/company_kb/list', { credentials: 'include' }); if (!r.ok) throw new Error('HTTP ' + r.status); coData = await r.json(); }
             const labSkills = (labData.files || []).filter(f => f.has_skill);
             const coSkills = (coData.files || []).filter(f => f.has_skill);
             const all = [...labSkills.map(f => ({...f, _src: 'personal', _url: '/knowledge_lab/skill/'})),
@@ -2624,7 +2624,16 @@ let currentProjectName = '';
                 };
             });
         } catch(e) {
-            container.innerHTML = '<p style="grid-column:1/-1; color:#ef4444;">加载失败</p>';
+            // M4 (FIX-016 后续): 区分错误码给出有意义提示，而非泛化"加载失败"
+            var statusMsg = '';
+            var m = /HTTP (\d+)/.exec(String(e && e.message || e));
+            if (m) {
+                var code = parseInt(m[1], 10);
+                statusMsg = code === 401 ? '请先登录' : (code === 403 ? '权限不足' : (code >= 500 ? '服务器错误 (' + code + ')' : '请求失败 (' + code + ')'));
+            } else if (e && e.name === 'TypeError') {
+                statusMsg = '网络错误';
+            }
+            container.innerHTML = '<p style="grid-column:1/-1; color:#ef4444;">加载失败' + (statusMsg ? '：' + statusMsg : '') + '</p>';
         }
     }
 

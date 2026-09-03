@@ -222,7 +222,8 @@
                 '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
                 '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
                 '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
-                '<span class="audit-toggle msi msi-arrow collapsed" style="font-size:0.6rem;color:var(--card-muted);">expand_more</span> 展开' +
+                '<span class="audit-toggle" style="font-size:0.6rem;color:var(--card-muted);display:inline-flex;vertical-align:middle;"></span>' +
+                '<span class="audit-toggle-label" style="font-size:0.6rem;color:var(--card-muted);"> 展开</span>' +
                 '</div>' +
                 '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
                 '</div>';
@@ -233,18 +234,23 @@
         if (refreshBtn) refreshBtn.onclick = loadAuditHistory;
 
         panel.querySelectorAll('.audit-history-card').forEach(card => {
+            const toggle = card.querySelector('.audit-toggle');
+            const label = card.querySelector('.audit-toggle-label');
+            if (toggle) _toggleArrow(toggle, true);
             card.onclick = async () => {
                 const detailEl = card.querySelector('.audit-history-detail');
                 if (!detailEl) return;
                 if (detailEl.style.display !== 'none') {
                     detailEl.style.display = 'none';
-                    var _t=card.querySelector('span:last-child'); _t.innerHTML = '<span class="msi msi-arrow collapsed">expand_more</span> 展开';
+                    _toggleArrow(toggle, true);
+                    if (label) label.textContent = ' 展开';
                     return;
                 }
                 const runId = card.dataset.runId;
                 detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
                 detailEl.style.display = 'block';
-                var _t2=card.querySelector('span:last-child'); _t2.innerHTML = '<span class="msi msi-arrow">expand_more</span> 收起';
+                _toggleArrow(toggle, false);
+                if (label) label.textContent = ' 收起';
                 try {
                     const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
                     if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
@@ -299,7 +305,8 @@
                 '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
                 '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
                 '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
-                '<span class="audit-toggle msi msi-arrow collapsed" style="font-size:0.6rem;color:var(--card-muted);">expand_more</span> 展开' +
+                '<span class="audit-toggle" style="font-size:0.6rem;color:var(--card-muted);display:inline-flex;vertical-align:middle;"></span>' +
+                '<span class="audit-toggle-label" style="font-size:0.6rem;color:var(--card-muted);"> 展开</span>' +
                 '</div>' +
                 '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
                 '</div>';
@@ -308,18 +315,23 @@
         const refreshBtn = document.getElementById('projectAuditHistoryRefreshBtn');
         if (refreshBtn) refreshBtn.onclick = loadProjectAuditHistory;
         panel.querySelectorAll('.audit-history-card').forEach(card => {
+            const toggle = card.querySelector('.audit-toggle');
+            const label = card.querySelector('.audit-toggle-label');
+            if (toggle) _toggleArrow(toggle, true);
             card.onclick = async () => {
                 const detailEl = card.querySelector('.audit-history-detail');
                 if (!detailEl) return;
                 if (detailEl.style.display !== 'none') {
                     detailEl.style.display = 'none';
-                    var _t=card.querySelector('span:last-child'); _t.innerHTML = '<span class="msi msi-arrow collapsed">expand_more</span> 展开';
+                    _toggleArrow(toggle, true);
+                    if (label) label.textContent = ' 展开';
                     return;
                 }
                 const runId = card.dataset.runId;
                 detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
                 detailEl.style.display = 'block';
-                var _t2=card.querySelector('span:last-child'); _t2.innerHTML = '<span class="msi msi-arrow">expand_more</span> 收起';
+                _toggleArrow(toggle, false);
+                if (label) label.textContent = ' 收起';
                 try {
                     const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
                     if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }

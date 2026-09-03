@@ -1015,3 +1015,36 @@ def test_llm_fallback_chain_catalog():
     from app.services.llm_fallback import get_fallback_chain, DEFAULT_CHAIN
     chain = get_fallback_chain()
     assert chain and chain[0][0] == 'openrouter', f"fallback 链应以 openrouter 开头: {chain}"
+
+
+# ── FIX-2026-09-02-M6: 清标报告章节编号不跳号 (MiMo QA) ──
+def _clearance_report_function_src():
+    """提取 static/js/app.js 中 buildClearanceReportHtml 的函数体源码。"""
+    with open('static/js/app.js', 'r', encoding='utf-8') as f:
+        content = f.read()
+    start = content.index('function buildClearanceReportHtml')
+    # 该函数后紧跟 _renderImageSamplingTab，以此作为函数体结束边界
+    end = content.index('function _renderImageSamplingTab', start)
+    return content[start:end]
+
+
+def test_clearance_report_all_six_sections_in_order():
+    """M6: 清标报告 HTML 必须渲染一~六全部中文章节编号，且按序出现。"""
+    fn = _clearance_report_function_src()
+    positions = []
+    for num in '一二三四五六':
+        marker = 'cl-num">' + num
+        assert marker in fn, f"章节 {num} 编号缺失（清标报告章节完整性被破坏）"
+        positions.append(fn.index(marker))
+    assert positions == sorted(positions), "清标报告章节编号必须按一~六顺序出现"
+
+
+def test_clearance_report_sections_five_six_have_placeholder():
+    """M6: 五(图片抽检)/六(全量审计) 无数据时必须渲染 else 占位分支，不得跳号。"""
+    fn = _clearance_report_function_src()
+    # 摘要行每章节出现两次 = if + else 双分支
+    for num, placeholder in (('五', '未包含图片或未执行图片抽检。'),
+                             ('六', '未包含审计补充数据。')):
+        assert fn.count('cl-num">' + num) == 2, \
+            f"章节 {num} 缺少 else 占位分支（M6 修复被回退）"
+        assert placeholder in fn, f"章节 {num} 占位文案缺失: {placeholder}"
