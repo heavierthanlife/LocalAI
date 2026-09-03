@@ -214,6 +214,30 @@ _add('routes', 'credit rate limiter is Redis-backed',
      'PASS' if _credit_rate_redis_guard() else 'FAIL',
      'credit 限速必须用 Redis INCR（credit_rate: 前缀）跨 worker 生效 (QA-Loop C4)')
 
+
+# Report zip file handle guard (QA-Loop C5 regression guard)
+# knowledge.py work-report flow must read the zip via a context-managed open()
+# (with open ... as _zf) rather than an anonymous open(...).read() that can
+# leak a file descriptor on exception/loop paths.
+def _report_zip_handle_guard():
+    knowledge_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'knowledge.py')
+    try:
+        with open(knowledge_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    # Positive: zip hash must be computed inside a context-managed open()
+    if "with open(zip_path, 'rb') as _zf:" not in src:
+        return False
+    # Negative: every open(zip_path must be a `with open(` — no anonymous
+    # `= open(` or `.read())` inline usage remains.
+    return re.search(r'(?<!with )open\(\s*zip_path', src) is None
+
+
+_add('routes', 'report zip opened with context manager',
+     'PASS' if _report_zip_handle_guard() else 'FAIL',
+     'knowledge.py 必须用 with open(zip_path) 计算 zip 哈希，禁止匿名 open().read() (QA-Loop C5)')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================

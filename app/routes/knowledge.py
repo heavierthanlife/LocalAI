@@ -704,6 +704,9 @@ def admin_generate_work_report():
 
     # Store both .md and .zip in DB
     file_hash = hashlib.sha256(report.encode()).hexdigest()
+    # QA-Loop C5: 显式 with open 关闭句柄，避免匿名 open() 在异常/循环路径泄漏 fd
+    with open(zip_path, 'rb') as _zf:
+        zip_hash = hashlib.sha256(_zf.read()).hexdigest()
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""INSERT INTO user_files (user_id, thread_id, filename, size_bytes, original_stored_path,
@@ -713,7 +716,7 @@ def admin_generate_work_report():
             cur.execute("""INSERT INTO user_files (user_id, thread_id, filename, size_bytes, original_stored_path,
                 file_hash, original_expires_at, original_name) VALUES (%s, %s, %s, %s, %s, %s, NOW() + INTERVAL '90 days', %s)""",
                 (user_id, session.get('thread_id', str(uuid.uuid4())), zip_name,
-                 os.path.getsize(zip_path), to_rel_path(zip_path), hashlib.sha256(open(zip_path,'rb').read()).hexdigest(), zip_name))
+                 os.path.getsize(zip_path), to_rel_path(zip_path), zip_hash, zip_name))
             conn.commit()
 
     return jsonify({
