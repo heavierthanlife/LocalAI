@@ -1941,7 +1941,7 @@
             const res = await fetch('/check_storage', { credentials: 'include' });
             const data = await res.json();
             const warningSpan = document.getElementById('storageWarning');
-            if (data.warning && warningSpan) warningSpan.innerHTML = '⚠️ ' + data.message + '，可在「我的文件」中清理旧文件释放空间。';
+            if (data.warning && warningSpan) warningSpan.innerHTML = '⚠️ ' + escapeHtml(data.message) + '，可在「我的文件」中清理旧文件释放空间。';
             else if (warningSpan) warningSpan.innerHTML = '';
         } catch (err) { console.error('Storage check failed', err); }
     }
