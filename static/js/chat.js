@@ -992,7 +992,9 @@
             }
         } else if (assistantMsg && assistantMsg.includes('COMPARE_REPORT')) {
             let htmlContent = assistantMsg.replace(/^<!--.*?-->/, '').trim();
-            answerDiv.innerHTML = htmlContent;
+            // QA-Loop D1: COMPARE_REPORT 是后端 LLM 生成的 HTML，注入面与 markdown 同级；
+            // 过 _safeHTML(DOMPurify) 消毒后渲染，与其他分支（_renderMarkdown）保持纵深一致。
+            answerDiv.innerHTML = typeof _safeHTML === 'function' ? _safeHTML(htmlContent) : htmlContent;
             answerDiv.classList.add('comparison-report');
         } else {
             answerDiv.innerHTML = _renderMarkdown(asciiTableToMarkdown(assistantMsg));
