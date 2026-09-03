@@ -20,7 +20,7 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(37/37 verified automatically)_
+_(38/38 verified automatically)_
 
 - [x] Route module files exist: 30
 - [x] Route: admin.py
@@ -59,6 +59,7 @@ _(37/37 verified automatically)_
 - [x] credit rate limiter is Redis-backed
 - [x] report zip opened with context manager
 - [x] work report filter built structurally
+- [x] skill_hash not shadowed by kb hash
 
 ## DATABASE
 
@@ -202,8 +203,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 132 |
+| [x] Pass | 133 |
 | [?] Manual | 4 |
-| **Total** | **136** |
+| **Total** | **137** |
 
-**Verification rate**: 132/136 auto-verified (97%)
+**Verification rate**: 133/137 auto-verified (97%)

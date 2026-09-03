@@ -229,9 +229,11 @@ def _report_zip_handle_guard():
     # Positive: zip hash must be computed inside a context-managed open()
     if "with open(zip_path, 'rb') as _zf:" not in src:
         return False
-    # Negative: every open(zip_path must be a `with open(` — no anonymous
-    # `= open(` or `.read())` inline usage remains.
-    return re.search(r'(?<!with )open\(\s*zip_path', src) is None
+    # Negative: no anonymous open(zip_path must remain — anonymous form is
+    # `(... open(zip_path ...)` inside an expression (e.g. hashlib.sha256(
+    # open(zip_path,'rb').read())), which matches `(open(\s*zip_path`. The
+    # context-managed `with open(zip_path` does NOT start with '('.
+    return re.search(r'\(open\(\s*zip_path', src) is None
 
 
 _add('routes', 'report zip opened with context manager',
@@ -257,6 +259,26 @@ def _workreport_filter_guard():
 _add('routes', 'work report filter built structurally',
      'PASS' if _workreport_filter_guard() else 'FAIL',
      'user_filter_no_alias 必须结构化构建，禁止 str.replace 后处理 (QA-Loop C7)')
+
+
+# skill_hash shadowing guard (QA-Loop round-002 D3)
+# generate_project_file_skill 里 skill_hash 不得被重赋值遮蔽：line 287 用 16 位
+# 前缀哈希写 project_files.skill_summary_hash，line 292 若重赋完整 SHA-256 会
+# 让同变量承载两种语义，易被维护误用。必须用独立变量名 kb_file_hash。
+def _skill_hash_shadow_guard():
+    knowledge_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'knowledge.py')
+    try:
+        with open(knowledge_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    return ('kb_file_hash = hashlib.sha256(skill.encode()).hexdigest()' in src
+            and 'skill_hash = hashlib.sha256(skill.encode()).hexdigest()' not in src)
+
+
+_add('routes', 'skill_hash not shadowed by kb hash',
+     'PASS' if _skill_hash_shadow_guard() else 'FAIL',
+     'generate_project_file_skill 必须用 kb_file_hash，禁止 skill_hash 重赋值遮蔽 (QA-Loop D3)')
 
 # ===========================================================================
 # 3. Database (code-level checks)

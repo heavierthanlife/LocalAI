@@ -289,12 +289,12 @@ def generate_project_file_skill(file_id):
                         "skill_summary_hash = %s WHERE id = %s", (skill, skill_hash, file_id))
             # Also save to user's personal KB permanently
             skill_name = os.path.splitext(row['original_name'])[0] + '_技能.md'
-            skill_hash = hashlib.sha256(skill.encode()).hexdigest()
+            kb_file_hash = hashlib.sha256(skill.encode()).hexdigest()
             cur.execute("""
                 INSERT INTO knowledge_lab_files (user_id, filename, original_name, file_size, content, file_hash, stored_path, skill_summary, skill_generated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (file_hash) DO UPDATE SET skill_summary = EXCLUDED.skill_summary, skill_generated_at = NOW()
-            """, (user_id, skill_name, row['original_name'], len(skill.encode()), skill, skill_hash, '', skill))
+            """, (user_id, skill_name, row['original_name'], len(skill.encode()), skill, kb_file_hash, '', skill))
             conn.commit()
     return jsonify({"status": "ok", "skill_length": len(skill), "message": "技能已生成并保存到个人知识库"})
 
