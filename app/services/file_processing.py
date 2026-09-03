@@ -30,6 +30,16 @@ from app.services.ocr import ocr_manager, run_ocr
 from app.services.file_cache import add_to_cache
 from app.services.session_manager import get_cached_image_description, cache_image_description
 
+# QA-Loop C9: 过滤文本提取结果中的非可打印/乱码字符。
+# DOCX 内嵌 OLE 对象/二进制片段、坏解码（U+FFFD）、C0/C1 控制符在对比报告里
+# 会显示成乱码（°±ÅÂ抡斤...）。统一清洗：保留正常文本/标点/常见符号，
+# 移除控制符、替代符、孤立代理、双向控制符，但保留 \n\t\r 结构。
+_CONTROL_FILTER = re.compile(
+    r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f'
+    r'\u061c\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff'
+    r'\ufffd\uD800-\uDFFF]'
+)
+
 # ── VL circuit breaker ────────────────────────────────────────────────────
 # After N consecutive VL failures (e.g. misconfigured endpoint returning 404),
 # skip all further VL calls in this process — prevents dozens of slow failing
@@ -934,6 +944,18 @@ def extract_structured_text(file_storage) -> list:
         return []
 
 
+def clean_extracted_text(text):
+    """QA-Loop C9: 移除提取文本中的乱码/控制字符，保留 \n\t\r 结构。
+
+    DOCX 内嵌二进制片段、坏解码字符、C0/C1 控制符会以乱码形式出现在对比报告
+    （如 '°±ÅÂ抡斤'）。此函数在 extract_text_from_file 返回前统一清洗，
+    只剔除不可打印字符，不影响正常中文/标点。
+    """
+    if not text:
+        return text
+    return _CONTROL_FILTER.sub('', text)
+
+
 def extract_text_from_file(file_storage):
     filename = file_storage.filename
     if not filename:
@@ -1214,7 +1236,7 @@ def extract_text_from_file(file_storage):
             text = safe_error_response(f"不支持的文件格式: {original_ext}", log_error=e)
 
     if not text or text.startswith("["):
-        return text, page_texts
+        return clean_extracted_text(text), page_texts
 
     analyze_images = session.get('analyze_images', True)
     if analyze_images:
@@ -1262,6 +1284,7 @@ def extract_text_from_file(file_storage):
 
     if text:
         text = clean_report_headers(text)
+        text = clean_extracted_text(text)
 
     return text, page_texts
 
