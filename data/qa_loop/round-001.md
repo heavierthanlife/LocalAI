@@ -93,8 +93,9 @@
 
 ## ⑥ PUSH
 
-- git push LocalAI master — 结果: 待执行（qa-loop skill v2 新增 PUSH 阶段，推送后补录）
-- 规则：先推送远端 + 工作树干净，才允许进入下一轮 RE-CHECK。
+- git push LocalAI master — 结果: OK（SSH remote `git@github.com:heavierthanlife/LocalAI.git`，先换 remote 解决 GCM socks5h 代理挂起）
+- 范围: `8e5b9fd..11b539a` 21 commits → `master -> master`，工作树干净，ahead=0
+- 规则（qa-loop skill v2）：先推送远端 + 工作树干净，才允许进入下一轮 RE-CHECK ✅
 
 ## ⑦ RE-CHECK
 
