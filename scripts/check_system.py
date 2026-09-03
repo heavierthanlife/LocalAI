@@ -238,6 +238,26 @@ _add('routes', 'report zip opened with context manager',
      'PASS' if _report_zip_handle_guard() else 'FAIL',
      'knowledge.py 必须用 with open(zip_path) 计算 zip 哈希，禁止匿名 open().read() (QA-Loop C5)')
 
+
+# Structural filter build guard (QA-Loop C7 regression guard)
+# work-report user filter must be built structurally (both aliased + non-aliased
+# forms) — not via str.replace('cs.user_id','user_id') which silently breaks on
+# whitespace/format variation.
+def _workreport_filter_guard():
+    knowledge_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'knowledge.py')
+    try:
+        with open(knowledge_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    return ('user_filter_no_alias = f" AND user_id IN' in src
+            and 'user_filter_no_alias = user_filter.replace' not in src)
+
+
+_add('routes', 'work report filter built structurally',
+     'PASS' if _workreport_filter_guard() else 'FAIL',
+     'user_filter_no_alias 必须结构化构建，禁止 str.replace 后处理 (QA-Loop C7)')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================

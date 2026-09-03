@@ -550,10 +550,14 @@ def admin_generate_work_report():
     end_date = now
 
     user_filter = ""
+    user_filter_no_alias = ""
     user_params = [since]
     if user_ids:
         placeholders = ",".join(["%s"] * len(user_ids))
+        # QA-Loop C7: 结构化构建带/不带表别名的两套 filter，
+        # 不再用 str.replace('cs.user_id','user_id') 后处理（对空格/换行格式敏感会静默失败）
         user_filter = f" AND cs.user_id IN ({placeholders})"
+        user_filter_no_alias = f" AND user_id IN ({placeholders})"
         user_params.extend(user_ids)
 
     with get_db_connection() as conn:
@@ -574,7 +578,6 @@ def admin_generate_work_report():
 
             u_params = [since]
             if user_ids: u_params.extend(user_ids)
-            user_filter_no_alias = user_filter.replace('cs.user_id','user_id') if user_filter else ''
             cur.execute(f"SELECT COUNT(DISTINCT user_id) as cnt FROM chat_sessions WHERE updated_at >= %s {user_filter_no_alias}", u_params)
             user_count = cur.fetchone()['cnt']
 
