@@ -72,7 +72,27 @@
 - **教训**：mimo-vision 截图只用昨天的旧图 → 主 agent 必须以截图时间戳 vs commit 时间比对，才能避免把已修问题当新问题（本轮回圈已验证该机制有效）。
 
 ## ⑤ IMPLEMENT
-> 待用户批准确认清单后实施。
+
+用户批准 A（全部 11 条）。批内每 fix 一 commit：
+
+| # | commit | 内容 |
+|---|--------|------|
+| C1 | c85fc34 | knowledge.py 空路由装饰器 + check_system 孤立装饰器守卫 |
+| C2 | 1cb94dc | generate_project_file_skill IDOR 成员校验 + 守卫 |
+| C3 | 85775f2 | admin_required/auditor_required 会话校验 + 守卫 |
+| C4 | 9eecab3 | credit 限速器迁 Redis + 2 回归测试 + 守卫 |
+| C5 | 27be656 | 工作报告 zip 文件句柄 with open + 守卫 |
+| C6 | df6327e | app.js checkStorage message 转义 |
+| C7 | 7393161 | work_report filter 结构化构建 + 守卫 |
+| C8 | 7489653 | chat.js md.render 统一 DOMPurify 消毒 |
+| C9 | c153ee3 | 文本提取乱码/控制字符清洗 |
+| C10 | 93c9585 | 时间线空态"选择项目"引导按钮 |
+| C11 | fb91b59 | 统计区图标统一 Material Symbols |
+
+验证：16 个 JS node --check 全过 · tests/test_regression.py exit=0 · verify_fixes 89/89 · smoke 7/7
 
 ## ⑥ RE-CHECK
-> 状态: 未跑（首轮全量；下一轮增量基线 last_head=3c04174b 不变，直至本批修复提交后更新）
+
+状态: 未跑（建议下一轮增量基线 last_head=fb91b59，按 qa-loop skill 流程 RE-CHECK）。
+预期：C1/C2 路由面无新增端点（守卫项 4 项已入 check_system 135→136 项）。
+新增回归测试：C4 限速 Redis ×2（tests/test_regression.py 84 项）。
