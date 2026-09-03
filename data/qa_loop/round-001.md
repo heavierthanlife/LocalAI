@@ -91,7 +91,12 @@
 
 验证：16 个 JS node --check 全过 · tests/test_regression.py exit=0 · verify_fixes 89/89 · smoke 7/7
 
-## ⑥ RE-CHECK
+## ⑥ PUSH
+
+- git push LocalAI master — 结果: 待执行（qa-loop skill v2 新增 PUSH 阶段，推送后补录）
+- 规则：先推送远端 + 工作树干净，才允许进入下一轮 RE-CHECK。
+
+## ⑦ RE-CHECK
 
 状态: 未跑（建议下一轮增量基线 last_head=fb91b59，按 qa-loop skill 流程 RE-CHECK）。
 预期：C1/C2 路由面无新增端点（守卫项 4 项已入 check_system 135→136 项）。
