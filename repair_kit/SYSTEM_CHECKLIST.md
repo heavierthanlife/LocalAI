@@ -20,7 +20,7 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(34/34 verified automatically)_
+_(35/35 verified automatically)_
 
 - [x] Route module files exist: 30
 - [x] Route: admin.py
@@ -56,6 +56,7 @@ _(34/34 verified automatically)_
 - [x] No orphaned route decorators
 - [x] project file skill has member guard
 - [x] admin/auditor decorators share session checks
+- [x] credit rate limiter is Redis-backed
 
 ## DATABASE
 
@@ -199,8 +200,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 129 |
+| [x] Pass | 130 |
 | [?] Manual | 4 |
-| **Total** | **133** |
+| **Total** | **134** |
 
-**Verification rate**: 129/133 auto-verified (96%)
+**Verification rate**: 130/134 auto-verified (97%)

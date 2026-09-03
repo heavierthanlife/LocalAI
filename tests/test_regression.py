@@ -1048,3 +1048,22 @@ def test_clearance_report_sections_five_six_have_placeholder():
         assert fn.count('cl-num">' + num) == 2, \
             f"章节 {num} 缺少 else 占位分支（M6 修复被回退）"
         assert placeholder in fn, f"章节 {num} 占位文案缺失: {placeholder}"
+
+
+# ── QA-Loop C4: credit 限速器 Redis 优先（跨 worker 生效）──
+def test_credit_rate_limit_redis_backed():
+    """QA-Loop C4: credit 限速必须走 Redis（跨 gunicorn worker 共享），
+    不得仅用进程内 dict（多 worker 下可绕过 10/5min 限制）。"""
+    with open('app/routes/credit.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'credit_rate:' in content, "credit 限速必须使用 Redis key 前缀 credit_rate:"
+    assert 'r.incr(' in content, "credit 限速必须用 Redis INCR 原子计数"
+    assert 'get_redis(' in content, "credit 限速必须通过 redis_client.get_redis 取客户端"
+
+
+def test_credit_rate_limit_memory_fallback_present():
+    """QA-Loop C4: Redis 不可用时仍保留内存降级路径（单 worker/开发不挂）。"""
+    with open('app/routes/credit.py', 'r', encoding='utf-8') as f:
+        content = f.read()
+    assert 'Fallback: in-memory' in content or 'fallback' in content.lower(), \
+        "credit 限速必须包含 Redis 不可用时的内存降级分支"

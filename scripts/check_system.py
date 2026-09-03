@@ -196,6 +196,24 @@ _add('routes', 'admin/auditor decorators share session checks',
      'PASS' if _auth_decorators_session_guard() else 'FAIL',
      'admin_required/auditor_required must call _check_session_valid (QA-Loop C3)')
 
+
+# Credit rate limiter Redis-backed (QA-Loop C4 regression guard)
+# The rate limiter must use Redis (credit_rate: prefix + INCR) so the counter is
+# shared across gunicorn workers; a process-local dict is bypassable.
+def _credit_rate_redis_guard():
+    credit_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'credit.py')
+    try:
+        with open(credit_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    return ('credit_rate:' in src and 'r.incr(' in src)
+
+
+_add('routes', 'credit rate limiter is Redis-backed',
+     'PASS' if _credit_rate_redis_guard() else 'FAIL',
+     'credit 限速必须用 Redis INCR（credit_rate: 前缀）跨 worker 生效 (QA-Loop C4)')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================

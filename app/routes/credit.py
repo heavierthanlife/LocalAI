@@ -24,27 +24,51 @@ from docx.shared import Cm, Inches
 logger = logging.getLogger(__name__)
 
 # Rate limiter for credit check endpoints (prevents abuse of browser automation)
+# QA-Loop C4: previously a process-local dict — under gunicorn's multiple
+# gevent workers each worker had its own counter, letting users bypass the
+# 10/5min cap by spreading requests across workers. Now Redis-backed
+# (credit_rate:{ip}) with in-memory fallback when Redis is unavailable,
+# mirroring credit_task_registry.py's degradation pattern.
 _credit_rate_limit = {}
 _CREDIT_RATE_MAX = 10       # max requests per window
 _CREDIT_RATE_WINDOW = 300   # 5 minutes in seconds
+_RATE_PREFIX = 'credit_rate:'
+
+def _rate_limit_check(ip):
+    """Return True if allowed, False if limited. Redis-primary, memory fallback."""
+    now = time.time()
+    try:
+        from app.services.redis_client import get_redis
+        r = get_redis(decode_responses=True)
+        if r is not None:
+            key = _RATE_PREFIX + (ip or 'unknown')
+            count = r.incr(key)
+            if count == 1:
+                r.expire(key, _CREDIT_RATE_WINDOW)
+            return count <= _CREDIT_RATE_MAX
+    except Exception as e:
+        logger.warning(f"Credit rate limiter Redis failed, falling back to memory: {e}")
+    # Fallback: in-memory (dev / single-worker)
+    key = f'credit:{ip}'
+    for k in list(_credit_rate_limit.keys()):
+        if _credit_rate_limit[k]['ts'] < now - _CREDIT_RATE_WINDOW:
+            del _credit_rate_limit[k]
+    entry = _credit_rate_limit.get(key)
+    if entry is None:
+        _credit_rate_limit[key] = {'count': 0, 'ts': now}
+        entry = _credit_rate_limit[key]
+    elif entry['count'] >= _CREDIT_RATE_MAX:
+        return False
+    entry['count'] += 1
+    return True
 
 def credit_rate_limit(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         ip = request.remote_addr or 'unknown'
-        now = time.time()
-        # Purge stale entries
-        for k in list(_credit_rate_limit.keys()):
-            if _credit_rate_limit[k]['ts'] < now - _CREDIT_RATE_WINDOW:
-                del _credit_rate_limit[k]
-        key = f'credit:{ip}'
-        if key in _credit_rate_limit:
-            if _credit_rate_limit[key]['count'] >= _CREDIT_RATE_MAX:
-                logger.warning(f"Credit rate limit exceeded for {ip}")
-                return jsonify({"error": "Too many credit check requests. Please try again later."}), 429
-        else:
-            _credit_rate_limit[key] = {'count': 0, 'ts': now}
-        _credit_rate_limit[key]['count'] += 1
+        if not _rate_limit_check(ip):
+            logger.warning(f"Credit rate limit exceeded for {ip}")
+            return jsonify({"error": "Too many credit check requests. Please try again later."}), 429
         return f(*args, **kwargs)
     return wrapper
 
