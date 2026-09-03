@@ -153,6 +153,26 @@ _add('routes', 'No orphaned route decorators',
      f'route decorators not IMMEDIATELY followed by def: {_orphans}' if _orphans
      else 'all @_bp.route(...) decorators sit directly above their def')
 
+
+# Project-file member-guard invariant (QA-Loop C2 regression guard)
+# generate_project_file_skill must not be IDOR: it must look up project_id on the
+# file and verify the caller is a member (admin bypass) before acting on it.
+def _project_file_skill_guard():
+    knowledge_path = os.path.join(PROJECT_ROOT, 'app', 'routes', 'knowledge.py')
+    try:
+        with open(knowledge_path, 'r', encoding='utf-8') as fh:
+            src = fh.read()
+    except OSError:
+        return False
+    safe = ('get_user_role_in_project' in src
+            and 'SELECT content, original_name, project_id FROM project_files' in src)
+    return safe
+
+
+_add('routes', 'project file skill has member guard',
+     'PASS' if _project_file_skill_guard() else 'FAIL',
+     'generate_project_file_skill must fetch project_id + check project membership (QA-Loop C2)')
+
 # ===========================================================================
 # 3. Database (code-level checks)
 # ===========================================================================

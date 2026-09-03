@@ -267,10 +267,18 @@ def generate_project_file_skill(file_id):
         return jsonify({"error": "Not logged in"}), 401
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT content, original_name FROM project_files WHERE id = %s", (file_id,))
+            cur.execute("SELECT content, original_name, project_id FROM project_files WHERE id = %s", (file_id,))
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "File not found"}), 404
+            # QA-Loop C2: prevent IDOR — user must be admin or a member of the file's project
+            from app.routes.admin import is_admin as check_admin
+            if not check_admin():
+                if not row['project_id']:
+                    return jsonify({"error": "文件不属于任何项目"}), 403
+                from app.routes.admin import get_user_role_in_project
+                if get_user_role_in_project(row['project_id'], user_id) is None:
+                    return jsonify({"error": "无权访问该项目"}), 403
             if not row['content']:
                 return jsonify({"error": "No text content available"}), 400
             skill = generate_skill_for_file(row['content'], row['original_name'], "project_file")

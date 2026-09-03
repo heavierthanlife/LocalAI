@@ -20,7 +20,7 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(32/32 verified automatically)_
+_(33/33 verified automatically)_
 
 - [x] Route module files exist: 30
 - [x] Route: admin.py
@@ -54,6 +54,7 @@ _(32/32 verified automatically)_
 - [x] Route: upload.py
 - [x] Route: wiki.py
 - [x] No orphaned route decorators
+- [x] project file skill has member guard
 
 ## DATABASE
 
@@ -197,8 +198,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 127 |
+| [x] Pass | 128 |
 | [?] Manual | 4 |
-| **Total** | **131** |
+| **Total** | **132** |
 
-**Verification rate**: 127/131 auto-verified (96%)
+**Verification rate**: 128/132 auto-verified (96%)
