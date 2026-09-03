@@ -2607,7 +2607,7 @@
             // Activity insight (distinct from main panel's card grid)
             const daysWithActivity = (s.messages_per_day || []).filter(d => d.count > 0);
             const activeLabel = daysWithActivity.length >= 5 ? '非常活跃' : daysWithActivity.length >= 2 ? '正常使用' : '需要更多互动';
-            const trendLabel = daysWithActivity.length >= 2 && daysWithActivity[daysWithActivity.length-1].count > (daysWithActivity[0]?.count||0) ? '📈 上升' : '📉 平稳';
+            const trendLabel = daysWithActivity.length >= 2 && daysWithActivity[daysWithActivity.length-1].count > (daysWithActivity[0]?.count||0) ? _icon('📈') + ' 上升' : _icon('📉') + ' 平稳';
 
             activity.innerHTML = `<div style="background:var(--card-bg);border-radius:6px;padding:8px;margin-bottom:6px;">
                 <div style="font-weight:500;">活跃度: ${activeLabel}</div>
@@ -7894,16 +7894,16 @@
                 const isAdmin = stats.is_admin_view;
                 const items = [];
                 if (isAdmin) {
-                    items.push(`<span title="用户总数">👥<b>${stats.total_users}</b></span>`, `<span title="24h活跃用户">🟢<b>${stats.active_users_24h}</b></span>`, `<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`,
-                        `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`, `<span title="今日消息">📨<b>${stats.messages_today||0}</b></span>`,
-                        `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`,
-                        `<span title="活跃项目数">📂<b>${stats.active_projects}</b></span>`);
-                    if (stats.credit_checks != null) items.push(`<span title="信用查询">🔍<b>${stats.credit_checks}</b></span>`);
-                    if (stats.rag_stats?.total > 0) items.push(`<span title="RAG索引数">🧠<b>${stats.rag_stats.total}</b></span>`);
+                    items.push(`<span title="用户总数">${_icon('👥')}<b>${stats.total_users}</b></span>`, `<span title="24h活跃用户">${_icon('🟢')}<b>${stats.active_users_24h}</b></span>`, `<span title="会话总数">${_icon('💬')}<b>${stats.total_sessions}</b></span>`,
+                        `<span title="消息总数">${_icon('✉️')}<b>${stats.total_messages}</b></span>`, `<span title="今日消息">${_icon('📨')}<b>${stats.messages_today||0}</b></span>`,
+                        `<span title="存储用量">${_icon('💾')}<b>${stats.storage_mb}MB</b></span>`,
+                        `<span title="活跃项目数">${_icon('📂')}<b>${stats.active_projects}</b></span>`);
+                    if (stats.credit_checks != null) items.push(`<span title="信用查询">${_icon('🔍')}<b>${stats.credit_checks}</b></span>`);
+                    if (stats.rag_stats?.total > 0) items.push(`<span title="RAG索引数">${_icon('🧠')}<b>${stats.rag_stats.total}</b></span>`);
                 } else {
-                    items.push(`<span title="会话总数">💬<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">✉️<b>${stats.total_messages}</b></span>`,
-                        `<span title="今日消息">📨<b>${stats.messages_today||0}</b></span>`,
-                        `<span title="文件总数">📁<b>${stats.total_files||0}</b></span>`, `<span title="存储用量">💾<b>${stats.storage_mb}MB</b></span>`);
+                    items.push(`<span title="会话总数">${_icon('💬')}<b>${stats.total_sessions}</b></span>`, `<span title="消息总数">${_icon('✉️')}<b>${stats.total_messages}</b></span>`,
+                        `<span title="今日消息">${_icon('📨')}<b>${stats.messages_today||0}</b></span>`,
+                        `<span title="文件总数">${_icon('📁')}<b>${stats.total_files||0}</b></span>`, `<span title="存储用量">${_icon('💾')}<b>${stats.storage_mb}MB</b></span>`);
                 }
                 let sparkline = '';
                 if (stats.messages_per_day?.length) {

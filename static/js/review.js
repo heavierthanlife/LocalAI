@@ -16,7 +16,7 @@
                 if (res.status === 403) { content.innerHTML = '<span>需要登录</span>'; return; }
                 if (!res.ok) { content.innerHTML = '<span style="color:#e74c3c;">服务器错误 (' + res.status + ')</span>'; return; }
                 const stats = await res.json();
-                const items = ['<span title="用户总数">👥<b>' + stats.total_users + '</b></span>', '<span title="会话总数">💬<b>' + stats.total_sessions + '</b></span>', '<span title="消息总数">✉️<b>' + stats.total_messages + '</b></span>'];
+                const items = ['<span title="用户总数">' + _icon('👥') + '<b>' + stats.total_users + '</b></span>', '<span title="会话总数">' + _icon('💬') + '<b>' + stats.total_sessions + '</b></span>', '<span title="消息总数">' + _icon('✉️') + '<b>' + stats.total_messages + '</b></span>'];
                 content.innerHTML = '<div style="font-size:0.7rem;color:var(--card-muted);">' + items.join(' · ') + '</div>';
                 if (sections) { sections.style.display = 'block'; _setupReviewLazySections(); }
                 _checkStaleReviews();

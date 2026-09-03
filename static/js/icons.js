@@ -39,7 +39,8 @@
         '📏': 'straighten', '📐': 'architecture',
         '🗑': 'delete', '🗄': 'database', '🗂': 'folder_special', '🖼': 'image',
         '🏷': 'sell', '🏛': 'account_balance', '🎛': 'tune', '✍️': 'edit',
-        '✍': 'edit', '👍': 'thumb_up', '👎': 'thumb_down'
+        '✍': 'edit', '👍': 'thumb_up', '👎': 'thumb_down',
+        '🟢': 'monitoring'
     };
 
     function _esc(s) {
