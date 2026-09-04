@@ -60,6 +60,26 @@
 
 ## ⑦ RE-CHECK
 
-- 视觉补拍清单（P0，需起服务 5443 + Playwright）：统计卡片(C11) / 时间线空态(C10) / 侧栏搜索框(存疑旧 bug) / 聊天长 markdown(C8) / 存储警告(C6)。
-- 停跑判定：D1–D3 为代码侧新发现的中/低风险，已全部修复；视觉侧无新的确认问题（截图滞后无法实证）。本轮无未决 Critical/High → 满足质量闸门，round-002 可收尾。
+### 视觉补拍验证（09-04 实机运行，起服务 5443 + Playwright + mimo-vision 复核）
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| C11 统计卡片图标 | ✅ 通过 | 实时 DOM：9 个图标全为 Material Symbols（groups/monitoring/chat/mail/send/save/folder_open/search/psychology），无 emoji/方块/乱码 |
+| C10 时间线空态 | ✅ 通过 | 截图可见「请先在"项目"标签页中选择一个项目。」+「选择项目」按钮（cursor:pointer） |
+| C8 聊天渲染 | ✅ 通过 | markdown 正常、操作栏图标 MSI、无原始 HTML/乱码 |
+| 侧栏搜索框（V2-1 旧疑） | ✅ 通过 | 实时截图：正常 `<input placeholder="快速筛选...">`，HTML 外露 bug 已不存在（旧 09-02 截图滞后） |
+| E 问题（▶ 字符排） | ❌ 误报 | mimo 报「重复 ▶ 文本」来自 accessibility 快照（Material Symbols 字形在无障碍树显示为 ▶）；全页实时 DOM 扫描仅 1 个正常引用箭头（quoteBubble），无泄漏 |
+
+### 视觉遗留（低优先级，非本轮）
+- 角色管理区 heading 用 raw emoji 👥（app.js:2676 附近）→ 风格统一项
+- 旧 09-02 截图中若干 P2（清标 emoji 方块、AI 乱码摘要）经查与当前代码不符或已被 C9 清洗覆盖
+
+### 停跑判定
+round-002：代码侧 3 条（D1-D3）已修复；视觉侧无确认问题（E 误报、其余通过）。
+**无未决 Critical/High → 满足质量闸门，round-002 收尾。**
+
+### 待办（round-003 或后续）
+- 起服务验证已完成；可关停 run.py 后台进程
+- 低优先级风格项（👥 heading emoji）可选纳入后续轮
+
 
