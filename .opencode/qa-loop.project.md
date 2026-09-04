@@ -39,3 +39,22 @@
 - pytest smoke 需要 Flask app context 但无 DB；`@pytest.mark.db` 默认 deselect。
 - 容器内无 pytest，E2E 用 `docker exec + python 脚本`（见 AGENTS.md）。
 - 数据门槛：text_sim 无招标文件时跳过、quote 无结构化开标价仅参考、relationship 权重已调低——QA 关注的是与这些门槛相关的误报。
+
+## 部署 / 镜像重建（⑧ IMAGE）
+- `has_docker: true`（qa-loop 每轮 IMPLEMENT+DOCS+PUSH 后执行 IMAGE 阶段）
+- 镜像：`local-ai:latest`（`docker-compose.yml` `app`/`celery-worker`/`celery-beat` 三个服务共用，`build: .`）
+- 重建命令：`docker compose build` → `docker compose up -d app celery-worker celery-beat`（nginx/postgres/redis 不动）
+- 健康检查：`curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/check_auth` 期望 200（nginx :443）；容器内健康：`docker exec localai-app python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/check_auth', timeout=5)"`
+- **容器内代码抽查**（确认镜像 = 当前 HEAD，全部命中才算通过）：
+  - `docker exec localai-app sh -c "grep -c 'kb_file_hash' /app/app/routes/knowledge.py"` → ≥1
+  - `docker exec localai-app sh -c "grep -c 'credit_rate:' /app/app/routes/credit.py"` → ≥1
+  - `docker exec localai-app sh -c "grep -c '_renderMarkdown' /app/static/js/chat.js"` → ≥1
+  - `docker exec localai-app sh -c "grep -c 'escapeHtml(data.message)' /app/static/js/app.js"` → ≥1
+- 抽查失败 → 视为部署失败，回滚上版镜像并报告（`docker compose up -d --force-recreate <svc>` 于上一 tag），不进入下一轮
+- 注意：重建前先停掉本地 `python run.py` 实例，避免端口冲突（:5443/:5000 与容器 :80/:443 无关，但避免双写 DB）
+
+## 文档同步（⑥ DOCS）
+- `CHANGELOG.md`：每轮有代码变更则在顶部新增条目，按 FIX 编号细分（`FIX-<date>-QA-<id>`，Keep a Changelog 风格）
+- 合规相关改动追加 `regression: N/N baseline passed` 标记
+- `AGENTS.md` / 运维手册：若约定或部署方式变化则同步
+- 文档随代码同 commit，PUSH 之前完成

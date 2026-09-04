@@ -8,6 +8,53 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-04] — QA-Loop 基础设施：九阶段流程固化（文档同步 + 镜像重建）
+
+### Added
+- `qa-loop` 三方自动循环升级为**九阶段**：`COLLECT → VERIFY → CROSS-EXAM → CONFIRM → IMPLEMENT → DOCS → PUSH → IMAGE → RE-CHECK`
+  - **⑥ DOCS**：每轮代码变更后，`CHANGELOG.md` 按 FIX 编号细分条目 + `AGENTS.md` 约定同步 + `round-NNN.md`，随代码同 commit（PUSH 前）
+  - **⑧ IMAGE**：项目 `has_docker:true` 时 `docker compose build` + `up -d` + 健康检查 + 容器内代码抽查，保证镜像 = HEAD
+- 全局 skill（`shared-agent-infra/skills/qa-loop`）+ 全局 command `/qa-loop` + 项目参数（`.opencode/qa-loop.project.md`）同步九阶段
+- 维护约定：每轮更新完毕后必须同步文档并重建镜像，保证「仓库 HEAD、文档、运行镜像」三者一致
+
+### round-003（增量无代码变更）
+- `9205efe..HEAD` 增量 diff 仅含 docs → 质量闸门通过，直接收尾（commit `50fcce6`）
+
+## [2026-09-04] — QA-Loop round-002：安全纵深补强（D1–D3）
+
+### Fixed
+- `FIX-2026-09-04-QA-D1` `chat.js` — `COMPARE_REPORT` 分支直接 `innerHTML=htmlContent` 绕过 DOMPurify（与 C8 纵深不一致）→ 补 `_safeHTML()` 消毒（commit `3f7483f`）
+- `FIX-2026-09-04-QA-D2` `app.js` — 三处错误消息（`data.error`/`err.message`/`e.message`）未转义拼 innerHTML → 统一 `escapeHtml()`（commit `498f8b1`）
+- `FIX-2026-09-04-QA-D3` `knowledge.py` — `skill_hash` 变量重赋值遮蔽 → `kb_file_hash` + check_system 守卫 + C5 守卫正则修正（commit `9205efe`）
+
+### Changed
+- check_system 守卫增至 133/137（新增「skill_hash not shadowed by kb hash」）；tests/test_regression.py 全量 exit=0
+
+## [2026-09-03] — QA-Loop round-001：代码层 11 项修复 + 基础设施固化
+
+### Added
+- **QA-Loop 三方自动循环基础设施**（commit `4b178c3`）：全局 skill + 全局 command `/qa-loop` + 项目参数 `.opencode/qa-loop.project.md`；`data/qa_loop/` 基线 + round-001 审计记录
+
+### Fixed
+- `FIX-2026-09-03-QA-C1` `knowledge.py` — 空路由装饰器致 `/admin/all_user_kb`(GET) 误绑 `generate_work_report` → 恢复真实端点 + check_system「No orphaned route decorators」守卫（commit `c85fc34`）
+- `FIX-2026-09-03-QA-C2` `knowledge.py` — `generate_project_file_skill` IDOR（无项目成员校验）→ 补 `get_user_role_in_project` 成员校验 + 守卫（commit `1cb94dc`）
+- `FIX-2026-09-03-QA-C3` `admin.py` — `admin_required`/`auditor_required` 缺失 consent+user_id 会话校验 → 抽公共 `_check_session_valid()` + 守卫（commit `85775f2`）
+- `FIX-2026-09-03-QA-C4` `credit.py` — 限速器进程内存 dict 跨 gunicorn worker 失效 → 迁 Redis `credit_rate:{ip}` INCR+TTL + 内存降级 + 2 回归测试 + 守卫（commit `9eecab3`）
+- `FIX-2026-09-03-QA-C5` `knowledge.py` — 工作报告 zip 文件句柄泄漏（匿名 `open().read()`）→ `with open` + 守卫（commit `27be656`）
+- `FIX-2026-09-03-QA-C6` `app.js` — `checkStorage` warning message 未转义拼 innerHTML → `escapeHtml()`（commit `df6327e`）
+- `FIX-2026-09-03-QA-C7` `knowledge.py` — work_report user filter 用 `str.replace('cs.user_id')` 后处理脆弱 → 结构化构建两套 filter + 守卫（commit `7393161`）
+- `FIX-2026-09-03-QA-C8` `chat.js` — `md.render()` 输出未过 DOMPurify（15 处）→ 统一 `_renderMarkdown()` 消毒 + 助手（commit `7489653`）
+- `FIX-2026-09-03-QA-C9` `file_processing.py` — 文本提取乱码/控制字符（U+FFFD/C0/C1/代理）→ `clean_extracted_text()` + `_CONTROL_FILTER`（commit `c153ee3`）
+- `FIX-2026-09-03-QA-C10` `app.js` — 时间线空态无操作引导 → 加「选择项目」按钮（commit `93c9585`）
+- `FIX-2026-09-03-QA-C11` `app.js`/`review.js`/`icons.js` — 统计区图标 emoji 混排/方块 → 统一 Material Symbols + `🟢→monitoring` 映射（commit `fb91b59`）
+
+### Changed
+- `scripts/check_system.py` 新增多项回归守卫（孤立装饰器/成员校验/会话校验/Redis 限速/zip 句柄/结构化 filter/变量遮蔽）
+- `tests/test_regression.py` 新增 credit 限速 Redis 回归测试 ×2
+- 基线 `data/qa_loop/last_head` 推进；round-001/002/003 记录在 `data/qa_loop/`
+
+---
+
 ## [2026-09-01] — 文档现实对齐更正 + RTX 2080 Super 支持评估
 
 ### 文档管线事实更正
