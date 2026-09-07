@@ -12,6 +12,7 @@ venv/
 .venv/
 env/
 .env/
+.env
 
 # ── IDE / Editor ──
 .vscode/
@@ -29,7 +30,18 @@ env/
 data/
 logs/
 
+# ── Large local caches / agent dirs (never bake into image) ──
+local_cache/
+company_kb_files/
+knowledge_lab_files/
+.opencode/
+.remember/
+.playwright-mcp/
+tools/
+*.tar.gz
+
 # ── Certificates (volume-mounted) ──
+cert/
 # cert/ is mounted as a volume, keep cert/ in .dockerignore to avoid
 # baking certs into the image. Copy cert/ to the server separately.
 

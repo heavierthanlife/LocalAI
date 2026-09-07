@@ -46,9 +46,19 @@ docker-compose down -v        # 停止并删除数据卷（⚠️ 数据丢失�
 ### 更新部署
 
 ```bash
-docker build -t local-ai:latest .
+# 推荐：GPU 自动检测 + 构建（无 GPU → torch+cpu；有 GPU → CUDA cu124，TORCH_CUDA_INDEX 可覆盖）
+python scripts/docker_build.py
+# 等价手动方式：
+docker compose build --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cpu app celery-worker celery-beat
+
 docker compose up -d --force-recreate app celery-worker
 ```
+
+**GPU 机器**：构建脚本自动装 CUDA torch；部署叠加 GPU override：
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d app celery-worker
+```
+若 CUDA 索引与显卡（如 RTX 2080 Super, sm_75）不兼容，用 `TORCH_CUDA_INDEX` 覆盖或回退 CPU 分支（应用纯 CPU 亦可运行）。
 
 ---
 

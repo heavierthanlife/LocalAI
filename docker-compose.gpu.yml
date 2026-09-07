@@ -1,0 +1,24 @@
+# GPU override for Local_AI — merge with base compose on a machine WITH an NVIDIA GPU.
+#
+# Usage (Windows + Docker Desktop, "Use the WSL 2 based engine" + NVIDIA driver):
+#   python scripts/docker_build.py            # builds CUDA torch (auto-detected)
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# CPU-only machines: do NOT load this file (docker compose up -d as usual).
+services:
+  app:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  celery-worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

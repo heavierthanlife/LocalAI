@@ -8,6 +8,27 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-07] — Docker 构建加速：GPU 自动检测 + torch CPU/CUDA 分流（FIX-2026-09-07-QA-C1）
+
+### Fixed
+- **Docker build 从 1.5-2 小时降到 ~90 秒**：根因是 `torch==2.12.1` 在 Linux PyPI/清华源解析为 **CUDA 版**（拖入 nvidia-cublas 423MB/cuda-toolkit/nvidia-\* 全家桶，pip 层 6.69GB），而运行时**纯 CPU**（代码零 `.cuda()`、easyocr 日志实证 "Using CPU"、compose 不分配 GPU）
+- **两机同仓 GPU 智能分流**：新增 `scripts/docker_build.py`——宿主 `nvidia-smi` 检测 → 无 GPU 装 `download.pytorch.org/whl/cpu`（`torch 2.12.1+cpu`），有 GPU 装 `.../whl/cu124`（`TORCH_CUDA_INDEX` 可覆盖）；Dockerfile `ARG TORCH_INDEX` 默认 CPU
+- **构建提速基建**：apt/pip 全改 BuildKit `--mount=type=cache`（跨构建复用下载）；torch/torchvision 独立一层利于缓存；`.dockerignore` 收紧（上下文 185MB→~10MB，排除 `local_cache/`95MB/`.opencode/`55MB/`tools/`22MB 等）
+- **堵密钥泄入镜像**：`.dockerignore` 补 `.env`（文件，此前只排了 `.env/` 目录）
+- **新增 `docker-compose.gpu.yml`**：app/celery-worker GPU 设备保留（GPU 机 `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`）
+- **修复行业词表被 `app_data` 卷遮蔽**：compose 三服务加 `./data/industry_words:/app/data/industry_words:ro` 只读 bind 挂载
+
+### Changed
+- 镜像体积 **12.8GB → 5.94GB**（砍掉 CUDA 载荷）；容器内 `torch 2.12.1+cpu`、`cuda_available: False`
+
+### regression: 104/104 tests passed · verify_fixes 89/89 · check_system 133/137
+- 本机 CPU 分支实测：build ~90s、站点 200、industry_words 挂载生效、容器内 4 项修复标记命中
+- 注：GPU 机（RTX 2080 Super, Turing sm_75）需真机验证 cu124 兼容性；不兼容则改 `TORCH_CUDA_INDEX`
+
+---
+
+
+
 ## [2026-09-07] — QA-Loop round-004：清标算法可靠性重构（段落级实质雷同）+ 字体排版
 
 ### Added

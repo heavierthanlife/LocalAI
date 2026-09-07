@@ -48,6 +48,9 @@ services:
       # Persistent data — survives container restarts
       - app_data:/app/data
       - app_logs:/app/logs
+      # Read-only code asset: industry word tables (baked into image too, but
+      # app_data volume would shadow /app/data — bind-mount explicitly)
+      - ./data/industry_words:/app/data/industry_words:ro
       # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
@@ -130,6 +133,7 @@ services:
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
+      - ./data/industry_words:/app/data/industry_words:ro
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
@@ -156,6 +160,7 @@ services:
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
+      - ./data/industry_words:/app/data/industry_words:ro
     depends_on:
       postgres:
         condition: service_healthy

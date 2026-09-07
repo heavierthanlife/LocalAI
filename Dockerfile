@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1
 # ── Local_AI Production Docker Image ──
-# Build: docker build -t local-ai:latest .
+# Build: python scripts/docker_build.py   (auto GPU detection)
+#        docker build -t local-ai:latest .
 # Run:   docker-compose up -d
 
 FROM python:3.12-slim
@@ -8,7 +10,9 @@ LABEL maintainer="Local_AI Team"
 LABEL description="中联招标智能助手 — AI-powered bidding agency platform"
 
 # ── System dependencies ──
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 \
@@ -24,7 +28,9 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 # ── LibreOffice (headless docx→pdf) ──
 # Used by document analysis to produce the PDF variant of the report.
 # fonts-noto-cjk required for Chinese rendering in the PDF.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer libreoffice-core fonts-noto-cjk \
     && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/*
 
@@ -32,10 +38,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd -m -s /bin/bash localai && mkdir -p /app && chown localai:localai /app
 
 # ── Python dependencies ──
+# FIX-2026-09-07-QA-C1: torch/torchvision 独立一层 + 按宿主 GPU 自动分流。
+#   无 GPU 机器装 CPU wheel（~200MB）；有 GPU 机器装 CUDA wheel（由
+#   scripts/docker_build.py 检测后传 TORCH_INDEX）。BuildKit cache mount 使
+#   pip/apt 下载跨构建复用，避免每次全量重下。
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
-    && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent
+
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1 \
+ && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
+ && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent
 
 # ── Application code ──
 COPY --chown=localai:localai . .

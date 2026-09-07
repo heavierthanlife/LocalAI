@@ -54,11 +54,22 @@ celery -A celery_app worker -l info -c 2
 ## Docker 部署
 
 ```bash
-docker-compose up -d
+# 推荐：GPU 自动检测 + 构建（无 GPU 装 torch+cpu，有 GPU 装 CUDA cu124）
+python scripts/docker_build.py
+# 或手动指定 CUDA 索引：$env:TORCH_CUDA_INDEX="https://download.pytorch.org/whl/cu128"
+
+# 部署
+docker compose up -d
 # 6 服务: app, postgres, redis, celery-worker, celery-beat, nginx
 # nginx 在 :80/:443，HTTPS 终结
 # 健康检查: curl -f http://localhost:8000/check_auth
 ```
+
+**GPU 机器（如 RTX 2080 Super）**：构建脚本自动检测到 GPU 并装 CUDA 版 torch；部署时叠加 GPU override：
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+若 CUDA 索引与显卡不兼容，用 `$env:TORCH_CUDA_INDEX` 覆盖（如 cu121/cu128）或回退 CPU。
 
 完整服务说明见 [`USER_MANUAL.md`](USER_MANUAL.md) §Docker 部署。
 
