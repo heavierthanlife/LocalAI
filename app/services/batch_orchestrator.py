@@ -101,7 +101,8 @@ def _detect_component(filename: str, text: str = '') -> str:
 
 
 def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
-                        template_text=None, collusion_para=0.0, template_missing=False):
+                        template_text=None, collusion_para=0.0, template_missing=False,
+                        extra_stop_words=None):
     """Compute a single file-pair's similarity metrics."""
     text1 = file_data[i]['text']
     text2 = file_data[j]['text']
@@ -128,8 +129,8 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
 
     # Key info overlap
     if check_items.get('key_info', True):
-        t1 = preprocess_text_for_similarity(text1, template_text)
-        t2 = preprocess_text_for_similarity(text2, template_text)
+        t1 = preprocess_text_for_similarity(text1, template_text, extra_stop_words=extra_stop_words)
+        t2 = preprocess_text_for_similarity(text2, template_text, extra_stop_words=extra_stop_words)
         if template_text:
             t1 = remove_template_content(t1, template_text)
             t2 = remove_template_content(t2, template_text)
@@ -178,12 +179,15 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
 
 
 def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=None,
-                      collusion_para_map=None, template_missing=False):
+                      collusion_para_map=None, template_missing=False,
+                      extra_stop_words=None):
     """Run pairwise comparison for all file pairs.
 
     collusion_para_map: {(i,j): 0-100 paragraph-collusion score} — threaded into
     the RiskScorer (FIX-2026-09-04-QA-B1).  template_missing: when True the
     whole-document text_sim contributes 0 (no tender file → template overlap).
+    extra_stop_words: industry word tables merged into key_info preprocessing
+    (FIX-2026-09-07-QA-C2) so 行业通用词 don't inflate keyword overlap.
     """
     n = len(file_data)
     pairs = []
@@ -194,7 +198,8 @@ def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=N
             if collusion_para_map:
                 cp = float(collusion_para_map.get((i, j), collusion_para_map.get((j, i), 0.0)) or 0.0)
             pair = compute_single_pair(file_data, i, j, check_items, tfidf_matrix, template_text,
-                                       collusion_para=cp, template_missing=template_missing)
+                                       collusion_para=cp, template_missing=template_missing,
+                                       extra_stop_words=extra_stop_words)
             pairs.append(pair)
             risk_matrix[i][j] = pair['risk']
             risk_matrix[j][i] = pair['risk']
@@ -1077,4 +1082,3 @@ def build_report_docx(file_data, pairs, key_info_matches, attr_details=None):
     doc.save(buf)
     buf.seek(0)
     return buf.getvalue()
-    return html_out

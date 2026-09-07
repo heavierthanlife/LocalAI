@@ -96,7 +96,7 @@ def _weighted_total_score(indicators: list[dict]) -> float:
     return round(num / den * 100, 1) if den > 0 else 0.0
 
 
-def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
+def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_stop_words=None):
     """Run a single checker with try-except, returns dict or None."""
     try:
         if name == 'skip':
@@ -129,7 +129,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
             pairs, risk_matrix = compute_all_pairs(file_data, {
                 'text_sim': False, 'key_info': True,
                 'file_attr': False, 'image_sim': False
-            }, template_text=tender_text)
+            }, template_text=tender_text, extra_stop_words=extra_stop_words)
             key_info_matches = build_key_info_matches(pairs)
             return {'key_info_matches': key_info_matches}
 
@@ -201,10 +201,17 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             logger.warning(f"quote_with_open_price injection failed: {e}")
 
     # Run all checkers (each in try-except)
+    # FIX-2026-09-07-QA-C2: 指标层 key_info/text_sim 也消费行业词表（消除行业词污染）
+    try:
+        from app.services.industry_words import load_industry_stopwords
+        ind_stop = frozenset(load_industry_stopwords(ptype))
+    except Exception:
+        ind_stop = frozenset()
     checker_data = {}
     for ind in INDICATOR_DEFS:
         checker_data[ind['checker']] = _run_checker(
-            ind['checker'], file_data, user_id, thread_id, tender_text=tender_text
+            ind['checker'], file_data, user_id, thread_id, tender_text=tender_text,
+            extra_stop_words=ind_stop
         )
 
     # OPEN_INFO / TENDER indicators (activate skipped indicators with new inputs)
@@ -1330,10 +1337,6 @@ def run_analysis_async(self, file_data, file_specs, user_id, thread_id, task_id,
 
         # Step 3: Generate DOCX + PDF (90%)
         bus.progress(90, '正在生成分析报告...')
-
-        # Initialize Flask context for DB access
-        from celery_app import init_flask_context
-        init_flask_context()
 
         from app.config import DATA_DIR, to_rel_path
         docx_bytes = build_analysis_docx(report)

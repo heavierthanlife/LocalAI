@@ -3,14 +3,14 @@ import os, json, tempfile
 from sklearn.metrics.pairwise import cosine_similarity
 from app.services.file_processing import preprocess_text_for_similarity, remove_template_content, _make_vectorizer
 
-def _precompute_tfidf_for_files(file_data, template_text=None):
+def _precompute_tfidf_for_files(file_data, template_text=None, extra_stop_words=None):
     texts = []
     for fd in file_data:
-        clean = preprocess_text_for_similarity(fd['text'], template_text)
+        clean = preprocess_text_for_similarity(fd['text'], template_text, extra_stop_words=extra_stop_words)
         if template_text:
             clean = remove_template_content(clean, template_text)
         texts.append(clean)
-    vectorizer = _make_vectorizer(stop_words=None, lowercase=True)
+    vectorizer = _make_vectorizer(stop_words=extra_stop_words, lowercase=True)
     tfidf_matrix = vectorizer.fit_transform(texts)
     return vectorizer, tfidf_matrix
 

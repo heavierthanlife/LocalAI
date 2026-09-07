@@ -8,6 +8,28 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-07] — 真实文件清标测试：段落检测器性能加固 + 行业词表接线（FIX-2026-09-07-QA-C2）
+
+### Fixed
+- **段落级实质雷同检测 O(n²) 性能爆炸**（实测 300 段×3 文件 >300s 超时）：锚子串倒排索引替代段长桶遍历 + `MAX_CAND_PER_PARA=40` 候选上限 + `MAX_PARAS_PER_FILE=2500` 分层抽样 → 300 段 2.67s / 1000 段 8.96s / 2500 段 28.9s；**真实 3 文件（~3500 段）1.6s**
+- **内存：弃全量 bigram frozenset 指纹**（数万段可达 2-4GB）
+- **`merged` 去重 key 用文件集合 → 吞不同实质段**：改「段落类型 + 内容前缀」指纹，同一实质段跨 3 家正确合并
+- **行业词表未接指标层**：`preprocess_text_for_similarity`/`_precompute_tfidf_for_files`/`compute_all_pairs` 加 `extra_stop_words`；`run_analysis`/`run_clearance` 统一 ptype 下传 → 军营超市行业词（超市/收银/理货）不再抬高 key_info/余弦（sim 87.4→83.0 等）
+- ThreadPool 4→5、删 `batch_orchestrator.py` 死代码、删 `run_analysis_async` 重复 `init_flask_context`
+
+### Changed
+- `collusion_para_map` 评分 `min(100, c*25)` → `min(100, sqrt(c)*25)`（避免 4 段即满分）
+
+### regression: 108/108 tests passed · verify_fixes 89/89 · check_system 133/137
+- **真实 3 文件容器内测试**（元丰/物美/中昌华美 军营超市项目，已证实串标）：
+  - 算法层：`total_score=36 中等预警`、`collusion_score=70`、195 共享段、25 服务承诺段（match 0.85-1.00, surprise 0.53-0.78）、三对 collusion_para=100、集团 1（有实质证据）
+  - 端到端 Celery：`batch_comparison_results` 落库成功，产物 DOCX+PDF ZIP 取回桌面
+- 新增 4 回归测试：性能上限 / 内容指纹去重 / 行业词接线（preprocess + run_analysis）
+
+---
+
+
+
 ## [2026-09-07] — Docker 构建加速：GPU 自动检测 + torch CPU/CUDA 分流（FIX-2026-09-07-QA-C1）
 
 ### Fixed

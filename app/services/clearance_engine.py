@@ -46,7 +46,7 @@ def _run_indicator_analysis(file_data, user_id, thread_id, tender_text=None,
 
 
 # ── 维度 2: 横向对比（横向）────────────────────────────────────────
-def _run_cross_comparison(file_data, tender_text=None):
+def _run_cross_comparison(file_data, tender_text=None, ptype=None):
     from app.services.batch_orchestrator import (
         compute_all_pairs, build_key_info_matches, build_attr_details,
         cluster_order_by_risk, detect_gangs,
@@ -62,9 +62,16 @@ def _run_cross_comparison(file_data, tender_text=None):
     # 不是围标证据。此时仍计算原始余弦供"参考"展示（text_matrix），但通过
     # template_missing=True 让 RiskScorer 忽略 text_sim（与指标层 skip 对齐）。
     template_missing = not bool(tender_text)
+    # FIX-2026-09-07-QA-C2: 横向层 key_info/text_sim 也消费行业词表（行业词不抬高重合）
+    try:
+        from app.services.industry_words import load_industry_stopwords
+        ind_stop = frozenset(load_industry_stopwords(ptype))
+    except Exception:
+        ind_stop = frozenset()
     tfidf_matrix = None
     try:
-        _vec, tfidf_matrix = _precompute_tfidf_for_files(file_data, template_text=tender_text)
+        _vec, tfidf_matrix = _precompute_tfidf_for_files(file_data, template_text=tender_text,
+                                                         extra_stop_words=ind_stop)
     except Exception as e:
         logger.warning(f"TF-IDF precompute failed, text sim will be 0: {e}")
 
@@ -73,7 +80,7 @@ def _run_cross_comparison(file_data, tender_text=None):
     collusion_para_map = {}
     try:
         from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
-        paragraph_collusion = detect_shared_substantive_segments(file_data)
+        paragraph_collusion = detect_shared_substantive_segments(file_data, ptype=ptype)
         for k, c in (paragraph_collusion.get('per_pair_count') or {}).items():
             i, j = map(int, k.strip('()').split(','))
             collusion_para_map[(i, j)] = min(100, c * 25)
@@ -82,7 +89,8 @@ def _run_cross_comparison(file_data, tender_text=None):
 
     pairs, risk_matrix = compute_all_pairs(
         file_data, check_items, tfidf_matrix=tfidf_matrix, template_text=tender_text,
-        collusion_para_map=collusion_para_map, template_missing=template_missing)
+        collusion_para_map=collusion_para_map, template_missing=template_missing,
+        extra_stop_words=ind_stop)
     filenames = [fd['filename'] for fd in file_data]
     n = len(filenames)
 
@@ -288,6 +296,13 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
     n = len(file_data)
     results = {}
 
+    # FIX-2026-09-07-QA-C2: 统一计算一次采购类型，下传横向层（避免两层各算 + 保证一致）
+    try:
+        from app.services.industry_words import get_procurement_type
+        ptype = get_procurement_type(*[fd.get('text', '') for fd in file_data])
+    except Exception:
+        ptype = 'engineering'
+
     dim_labels = {
         'indicators': '指标分析',
         'cross': '横向对比',
@@ -297,13 +312,13 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
     }
 
     futures = {}
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         if options.get('indicator_analysis', True):
             futures['indicators'] = pool.submit(
                 _run_indicator_analysis, file_data, user_id, thread_id,
                 tender_text, open_info, eval_criteria)
         if options.get('cross_comparison', True):
-            futures['cross'] = pool.submit(_run_cross_comparison, file_data, tender_text)
+            futures['cross'] = pool.submit(_run_cross_comparison, file_data, tender_text, ptype)
         if options.get('compliance_check', False) and tender_text:
             futures['compliance'] = pool.submit(_run_compliance_check, tender_text, tender_name, file_data)
         if options.get('ai_review', True):

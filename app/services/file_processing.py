@@ -324,13 +324,15 @@ def _make_vectorizer(stop_words=None, **kwargs):
     return TfidfVectorizer(tokenizer=_tokenizer, token_pattern=None, **kwargs)
 
 
-def preprocess_text_for_similarity(text, template_text=None):
+def preprocess_text_for_similarity(text, template_text=None, extra_stop_words=None):
     """Preprocess text for similarity: strip noise, tokenize Chinese with jieba, filter.
 
     Chinese text: jieba segmentation → space-joined for TfidfVectorizer.
     English text: whitespace split with length filter.
     FIX-013: filters high-frequency stop words; if template_text (招标文件) is
     provided, its top-50 high-frequency words are added to the stop set.
+    FIX-2026-09-07-QA-C2: extra_stop_words (e.g. industry word tables) are merged
+    into the stop set so 行业通用词 (超市/收银/理货…) don't inflate similarity.
     """
     if not text:
         return ""
@@ -338,6 +340,8 @@ def preprocess_text_for_similarity(text, template_text=None):
     from app.services.stop_words import DEFAULT_STOP_WORDS
 
     stop_words = set(DEFAULT_STOP_WORDS)
+    if extra_stop_words:
+        stop_words |= set(extra_stop_words)
     if template_text and template_text.strip():
         # 自适应 k（长招标文件提取更多高频词），并加 TF≥2 守卫：
         # 只把反复重现的框架词并入停用集，避免误杀 TF=1 的独特技术参数

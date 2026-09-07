@@ -37,6 +37,10 @@ SURPRISE_THRESHOLD = 0.35    # 段内"非行业/非模板词"占比 ≥ 35% 才�
 LEN_BAND = 2.2               # 长度比过滤：lenA/lenB 必须落在 [1/LEN_BAND, LEN_BAND]
 MAX_PARA_CHARS = 4000        # 忽略超长段（多为表格/清单）
 MAX_SEGMENTS = 200           # 结果段上限（防报告爆炸）
+MAX_PARAS_PER_FILE = 2500    # 单文件段落数上限（超限按步长抽样，防 O(n²) 爆炸）
+MAX_CAND_PER_PARA = 40       # 每段候选对上限（按共享锚数降序截断，锁定复杂度 O(段数×K)）
+ANCHOR_WIN = 12              # 锚子串窗口长（近逐字段必共享长连续子串）
+ANCHOR_MIN_SHARE = 1         # 候选对需共享 ≥N 个锚子串（1 即可，配合长度/surprise 预筛控量）
 
 # ── 法律/模板句式词（标准条款段用，计入"惊讶度"折扣）──────────
 _LEGAL_TERMS = frozenset({
@@ -72,14 +76,38 @@ _LEGAL_MARKERS = ("应当", "必须", "不得", "可以", "按照", "根据", "�
 
 
 def _split_paragraphs(text: str):
-    """Return non-empty paragraphs (len in [MIN_PARA_CHARS, MAX_PARA_CHARS])."""
-    return [p.strip() for p in (text or "").split("\n")
-            if MIN_PARA_CHARS <= len(p.strip()) <= MAX_PARA_CHARS]
+    """Return non-empty paragraphs (len in [MIN_PARA_CHARS, MAX_PARA_CHARS]).
+
+    FIX-2026-09-07-QA-C2: cap paragraph count per file (MAX_PARAS_PER_FILE);
+    when exceeded, keep a length-stratified sample so giant docs (tens of
+    thousands of table rows) don't blow up the pairwise matcher.
+    """
+    paras = [p.strip() for p in (text or "").split("\n")
+             if MIN_PARA_CHARS <= len(p.strip()) <= MAX_PARA_CHARS]
+    if len(paras) <= MAX_PARAS_PER_FILE:
+        return paras
+    # 按段长分层抽样：保持长短段比例，避免只留某一段长
+    import math
+    buckets: dict[int, list[str]] = {}
+    for p in paras:
+        buckets.setdefault(len(p) // 50, []).append(p)
+    total = len(paras)
+    keep = []
+    quota = MAX_PARAS_PER_FILE
+    # 逐桶按占比分配名额
+    for b in sorted(buckets):
+        frac = len(buckets[b]) / total
+        n_keep = max(1, int(quota * frac))
+        step = max(1, len(buckets[b]) // max(n_keep, 1))
+        keep.extend(buckets[b][::step][:n_keep])
+    if len(keep) < MIN_PARA_CHARS:
+        keep = paras[:MAX_PARAS_PER_FILE]
+    return keep[:MAX_PARAS_PER_FILE]
 
 
 def _classify_paragraph(para: str) -> str:
     """服务承诺段 / 技术方案段 / 标准条款段 / 其他."""
-    s = para[:600]
+    s = para
     svc = sum(1 for m in _SVC_MARKERS if m in s)
     tech = sum(1 for m in _TECH_MARKERS if m in s)
     legal = sum(1 for m in _LEGAL_MARKERS if m in s)
@@ -96,7 +124,7 @@ def _classify_paragraph(para: str) -> str:
     return "其他"
 
 
-def _surprise(para: str, stop: frozenset) -> float:
+def _surprise(para: str, merged_stop: frozenset) -> tuple[float, int]:
     """Fraction of jieba tokens that survive stop-word removal.
 
     High surprise = distinctive wording (collusion-relevant).  Low surprise =
@@ -104,21 +132,29 @@ def _surprise(para: str, stop: frozenset) -> float:
     Returns (fraction, distinct_token_count).
     """
     from app.services.text_utils import lcut
-    merged = set(stop) | set(DEFAULT_STOP_WORDS) | set(_LEGAL_TERMS)
-    toks = [w for w in lcut(para) if len(w) >= 2 and w not in merged]
-    total = len([w for w in lcut(para) if len(w) >= 2])
+    all_toks = lcut(para)
+    toks = [w for w in all_toks if len(w) >= 2 and w not in merged_stop]
+    total = len([w for w in all_toks if len(w) >= 2])
     if total == 0:
         return 0.0, 0
     return round(len(toks) / total, 3), len(toks)
 
 
-def _candidates(plen: int, buckets: dict[int, list[tuple[int, int]]],
-                lo: float, hi: float) -> list[tuple[int, int]]:
-    """Paragraphs in other files whose length falls in the same band (pre-filter)."""
-    out = []
-    for b in range(int(lo) // 15, int(hi) // 15 + 1):
-        out.extend(buckets.get(b, []))
-    return out
+def _anchors(s: str) -> tuple:
+    """5 overlapping 12-char windows of a paragraph (head / quarters / tail).
+
+    Near-verbatim paragraphs share long contiguous substrings → shared anchors.
+    Using multiple overlapping positions tolerates small prefix drift (e.g.
+    "服务承诺：" vs "服务承诺：（一）").  Numeric table rows / list items with
+    different 编号 do NOT share anchors → pruned before SequenceMatcher.
+    """
+    n = len(s)
+    if n <= ANCHOR_WIN:
+        return (s,)
+    if n <= ANCHOR_WIN * 2:
+        return (s[:ANCHOR_WIN], s[-ANCHOR_WIN:])
+    pos = [0, n // 4, n // 2, (3 * n) // 4, n - ANCHOR_WIN]
+    return tuple(s[p:p + ANCHOR_WIN] for p in pos)
 
 
 def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None = None) -> dict:
@@ -126,6 +162,10 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
     content.  Returns the collusion evidence list + per-pair stats + a 0-100 score.
 
     file_data: [{filename, text, ...}] — `text` is RAW (newlines preserved).
+
+    FIX-2026-09-07-QA-C2 (perf): anchor-substring inverted index replaces the
+    O(n²) length-bucket scan + bigram-set intersection.  Only paragraphs sharing
+    ≥ ANCHOR_MIN_SHARE anchors run SequenceMatcher, so large docs are feasible.
     """
     n = len(file_data)
     if n < 2:
@@ -135,53 +175,62 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
     if ptype is None:
         ptype = get_procurement_type(*[fd.get("text", "") for fd in file_data])
     stop = frozenset(load_industry_stopwords(ptype))
+    merged_stop = frozenset(set(stop) | set(DEFAULT_STOP_WORDS) | set(_LEGAL_TERMS))
 
-    # 1) 每文件分段 + 预计算（保留 >2000 字长段给表格，其余按段长入桶）
+    # 1) 每文件分段 + 预计算
     docs: list[tuple[str, list[tuple[str, str, float, int]]]] = []
     for fi, fd in enumerate(file_data):
         paras = _split_paragraphs(fd.get("text", ""))
         docs.append((fd.get("filename", f"file{fi}"), [
             (p, _classify_paragraph(p), surp, dcnt) for p in paras
-            for surp, dcnt in [_surprise(p, stop)]
+            for surp, dcnt in [_surprise(p, merged_stop)]
         ]))
 
-    # 2) 段长桶索引 + 每段字符 bigram 指纹（哈希剪枝，避免全量 SequenceMatcher）
-    buckets: dict[int, list[tuple[int, int]]] = {}
+    # 2) 锚子串倒排索引：anchor -> [(doc_idx, para_idx)]
+    anchor_index: dict[str, list[tuple[int, int]]] = {}
     for di, (_f, plist) in enumerate(docs):
         for pi, (p, _c, _s, _d) in enumerate(plist):
-            buckets.setdefault(len(p) // 15, []).append((di, pi))
+            for a in set(_anchors(p)):
+                anchor_index.setdefault(a, []).append((di, pi))
 
-    def _fingerprint(s: str) -> frozenset:
-        return frozenset(s[i:i + 2] for i in range(len(s) - 1))
-
-    fp_cache: dict[tuple[int, int], frozenset] = {}
-    for di, (_f, plist) in enumerate(docs):
-        for pi, (p, _c, _s, _d) in enumerate(plist):
-            fp_cache[(di, pi)] = _fingerprint(p)
-
-    # 3) 两两 near-verbatim 段匹配（长度比带内 + bigram 指纹交集剪枝）
+    # 3) 匹配：锚倒排查候选 → 候选段必须真的包含我方某个窗口子串 → SequenceMatcher
     segments: dict[str, dict] = {}
     seg_order: list[str] = []
+    seen_pairs: set[tuple[int, int, int, int]] = set()
     for di in range(n):
         plist = docs[di][1]
         for pi, (para, cls, surp, dcnt) in enumerate(plist):
             plen = len(para)
-            lo, hi = plen / LEN_BAND, plen * LEN_BAND
-            cand = _candidates(plen, buckets, lo, hi)
-            for dj, pj in cand:
-                if dj <= di:
+            my_windows = set(_anchors(para))
+            # 统计每个候选段与我共享的锚窗口数
+            shared_count: dict[tuple[int, int], int] = {}
+            for a in my_windows:
+                for dj, pj in anchor_index.get(a, ()):
+                    if dj == di:
+                        continue
+                    k = (dj, pj)
+                    shared_count[k] = shared_count.get(k, 0) + 1
+            # 候选按共享锚数降序，截断到 MAX_CAND_PER_PARA（真实 near-verbatim 段
+            # 共享锚最多必排前；限制比较次数以锁定性能）
+            ordered = sorted(shared_count.items(), key=lambda kv: -kv[1])[:MAX_CAND_PER_PARA]
+            for (dj, pj), shared in ordered:
+                if shared < ANCHOR_MIN_SHARE:
+                    continue
+                if (di, pi, dj, pj) in seen_pairs or (dj, pj, di, pi) in seen_pairs:
                     continue
                 other, ocls, osurp, odcnt = docs[dj][1][pj]
                 if abs(len(other) - plen) / max(plen, len(other)) > 0.5:
                     continue
                 if min(surp, osurp) < SURPRISE_THRESHOLD or min(dcnt, odcnt) < 2:
                     continue
-                # bigram 指纹交集：无共同 2-gram 则不可能 near-verbatim
-                if not (fp_cache.get((di, pi), frozenset()) & fp_cache.get((dj, pj), frozenset())):
+                # 硬剪枝：候选段必须真的包含我方某个 12 字窗口（锚交集只说明"各有一个同串"，
+                # 对 编号行/表格行 这类同前缀段无效——用 `in` 验证连续子串真出现在对方）。
+                if not any(w in other for w in my_windows):
                     continue
                 ratio = difflib.SequenceMatcher(None, para, other).ratio()
                 if ratio < NEAR_DUPLICATE_RATIO:
                     continue
+                seen_pairs.add((di, pi, dj, pj))
                 key = f"{di}:{pi}|{dj}:{pj}"
                 seg = {
                     "segment_text": para[:200],
@@ -191,25 +240,31 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
                     "match_ratio": round(ratio, 3),
                     "matching_files": [(docs[di][0], docs[dj][0], round(ratio, 3))],
                     "files": {docs[di][0], docs[dj][0]},
+                    "_content_key": f"{cls}:{para[:80]}",
                 }
                 segments[key] = seg
                 seg_order.append(key)
 
-    # 4) 合并"同一实质段"记录（去重同文件对 + 汇集 ≥3 家共享）
+    # 4) 合并"同一实质段"记录（去重同文件对 + 汇集 ≥3 家共享；key=类型+内容前缀）
     merged: list[dict] = []
-    merged_key: dict[frozenset, int] = {}
+    merged_key: dict[str, int] = {}
     for key in seg_order:
         seg = segments[key]
-        fk = frozenset(seg["files"])
-        if fk in merged_key:
-            idx = merged_key[fk]
+        ck = seg.pop("_content_key", None) or f"{seg['type']}:{seg['segment_text'][:80]}"
+        if ck in merged_key:
+            idx = merged_key[ck]
+            # 同一实质段被更多文件共享 → 汇集 files（内部存 set，展示时 sorted）
+            merged[idx]["files"].update(seg["files"])
+            merged[idx]["matching_files"].extend(seg["matching_files"])
             if seg["match_ratio"] > merged[idx]["match_ratio"]:
                 merged[idx]["match_ratio"] = seg["match_ratio"]
             continue
-        merged_key[fk] = len(merged)
-        seg["n_files"] = len(fk)
-        seg["files"] = sorted(fk)
+        merged_key[ck] = len(merged)
+        seg["files"] = set(seg["files"])
+        seg["n_files"] = len(seg["files"])
         merged.append(seg)
+    for seg in merged:
+        seg["files"] = sorted(seg["files"])
 
     # 5) 每对统计
     per_pair_count: dict[tuple[int, int], int] = {}
@@ -225,13 +280,14 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
         tot = min(len(docs[i][1]), len(docs[j][1]))
         per_pair_ratio[(i, j)] = round(cnt / max(tot, 1), 4)
 
-    # 6) 围标风险分（0-100）：数量 + 多文件一致性 + 平均惊讶度
+    # 6) 围标风险分（0-100）：数量（√ 曲线）+ 多文件一致性 + 平均惊讶度
     score = 0.0
     if merged:
+        import math
         cnt = min(len(merged), 5)
         n_files3 = sum(1 for s in merged if s["n_files"] >= 3)
         avg_surp = sum(s["surprise"] for s in merged) / len(merged)
-        score = min(100, cnt * 15 + n_files3 * 20 + avg_surp * 20)
+        score = min(100, math.sqrt(cnt) * 25 + n_files3 * 20 + avg_surp * 20)
 
     return {
         "shared_segments": merged[:MAX_SEGMENTS],

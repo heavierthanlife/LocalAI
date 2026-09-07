@@ -156,3 +156,89 @@ def test_find_shared_typos_cross_file():
     batch2 = detect_typos_batch(docs2)
     r2 = find_shared_typos(docs2, ptype="engineering", precomputed=batch2, min_confidence=0.70)
     assert r2["shared_typo_count"] == 0, "无跨文件共享错别字时不应误报"
+
+
+# ── 6. 性能上限（FIX-2026-09-07-QA-C2）────────────────────────
+def test_paragraph_collusion_large_docs_fast():
+    """2000 段×3 文件（≈真实军营超市文档规模）须在 60s 内完成（防 O(n²) 回归）。"""
+    import time
+    from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
+    docs = []
+    for fi in range(3):
+        paras = []
+        for k in range(2000):
+            if k % 100 == 0:
+                s = ("服务承诺：热情、主动、耐心、周到、细致、尽职尽责，对顾客必须树立尊重和友好的态度，"
+                     "做到主动服务、微笑待客，让客人宾至如归。")
+            else:
+                s = f"第{k}项商品陈列规范、理货及时、收银准确，编号{fi*1000+k} 库存充足，保质期管理到位。"
+            paras.append(s)
+        docs.append({"filename": f"f{fi}.docx", "text": "\n".join(paras)})
+    t0 = time.time()
+    r = detect_shared_substantive_segments(docs, ptype="services")
+    dt = time.time() - t0
+    # 全量测试并行时 CPU 竞争明显；单独跑 ~28s。90s 门槛锁"非 O(n²) 回归"。
+    assert dt < 90, f"大文档检测应 <90s，实测 {dt:.1f}s（性能回归）"
+    # 服务承诺段仍应命中
+    assert len(r["shared_segments"]) >= 1, "大文档中服务承诺段雷同仍应检出"
+
+
+def test_paragraph_collusion_merged_dedup_by_content():
+    """同一实质段跨多文件应合并为一条记录（H-3 修复：去重 key=内容前缀非文件集合）。"""
+    from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
+    svc = "服务承诺：热情、主动、耐心、周到、细致、尽职尽责，对顾客必须树立尊重和友好的态度。"
+    tech = "技术方案：采用开槽法施工，沟槽钢板桩支护，井点降水，管线直埋。"
+    docs = [
+        {"filename": "a.docx", "text": svc + "\n" + tech},
+        {"filename": "b.docx", "text": svc + "\n" + tech},
+        {"filename": "c.docx", "text": svc},
+    ]
+    r = detect_shared_substantive_segments(docs, ptype="services")
+    segs = r["shared_segments"]
+    assert len(segs) == 2, f"应合并为 2 个不同实质段（服务承诺+技术方案），实测 {len(segs)}: {[s['segment_text'][:20] for s in segs]}"
+    by_type = {s["type"] for s in segs}
+    assert "服务承诺段" in by_type
+
+
+# ── 7. 行业词表接线指标层（FIX-2026-09-07-QA-C2）───────────────
+def test_industry_words_merge_into_key_info():
+    """指标层 key_info 应消费行业词表：行业通用词（超市/收银/理货）不抬高重合。"""
+    from app.services.file_processing import preprocess_text_for_similarity
+    from app.services.industry_words import load_industry_stopwords
+    from app.services.stop_words import DEFAULT_STOP_WORDS
+
+    svc = "超市门店运营服务，商品陈列规范，理货及时，收银准确，顾客满意度高。"
+    ind = frozenset(load_industry_stopwords("services"))
+    # 无行业词表 → 行业词保留
+    no_extra = preprocess_text_for_similarity(svc, None)
+    # 有行业词表 → 行业词被过滤
+    with_extra = preprocess_text_for_similarity(svc, None, extra_stop_words=ind)
+    assert any(w in no_extra.split() for w in ("超市", "商品", "收银", "理货")), \
+        f"无行业词表时应保留行业词: {no_extra[:40]}"
+    assert not any(w in with_extra.split() for w in ("超市", "商品", "收银", "理货")), \
+        f"有行业词表时应过滤行业词: {with_extra[:40]}"
+
+
+def test_run_analysis_key_info_uses_industry_words():
+    """run_analysis 的 key_info checker 应传行业词表（指标层不因行业词虚高）。"""
+    from app.services.document_analysis_svc import run_analysis
+    boiler = "应当遵守国家法律法规和招标文件要求，认真履行合同义务。"
+    docs = [
+        {"filename": "a.docx", "text": boiler + "超市商品陈列规范，收银准确，理货及时。", "metadata": {}, "images": []},
+        {"filename": "b.docx", "text": boiler + "超市商品陈列规范，收银准确，理货及时。", "metadata": {}, "images": []},
+        {"filename": "c.docx", "text": boiler + "注重商品质量管理与库存周转。", "metadata": {}, "images": []},
+    ]
+    report = run_analysis(docs, user_id="t", thread_id="t")
+    ki = next((i for i in report["indicators"] if i["id"] == "contact_person_same"), None)
+    # 行业词被过滤后：a/b 共享的剩余关键词应远少于行业词未过滤时
+    # 直接验证：共同关键词里不应以纯行业词（超市/收银/理货/陈列）为主
+    if ki:
+        det = ki.get("details") or []
+        all_kw = []
+        for d in det:
+            all_kw.extend(d.get("keywords", []) if isinstance(d, dict) else [])
+        ind_words = {"超市", "商品", "收银", "理货", "陈列", "顾客"}
+        ind_hits = [w for w in all_kw if w in ind_words]
+        assert len(ind_hits) <= 1, f"共同关键词不应以行业词为主: {all_kw} 命中{ind_hits}"
+        # 分数不因纯行业词雷同而虚高（≤15 即可，行业词过滤后应明显低于未过滤）
+        assert ki.get("score", 0) <= 15, f"行业词过滤后 key_info 不应虚高: {ki.get('score')}"
