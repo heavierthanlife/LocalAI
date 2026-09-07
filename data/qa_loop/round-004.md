@@ -33,7 +33,7 @@
 - CHANGELOG 顶部新增 [2026-09-07] round-004 条目（FIX-2026-09-04-QA-B1/B2，regression 标记）。
 
 ## ⑦ PUSH
-- 见 commit：<待填>
+- `33ee2ed..a292a36` 已推送（LocalAI master），工作树干净。
 
 ## ⑧ IMAGE
 - 镜像重建 + 容器内抽查：见部署记录。
