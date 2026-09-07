@@ -171,23 +171,29 @@ def test_snapshot_keyword_overlap(keyword_texts):
 # ── Test 3: Risk scoring formula snapshot ────────────────────────────────────
 
 def test_snapshot_risk_formula():
-    """Lock the risk scoring formula: 0.375*key + 0.375*attr + 0.25*text (+0 img).
+    """Lock the risk scoring formula: 0.30*key + 0.30*attr + 0.10*text (+0.30 para).
 
     FIX-010: image weight removed (image_sim disabled in clearance), text_sim only
     contributes when cosine ≥ 80% (template-overlap gate).
+    FIX-2026-09-04-QA-B1: whole-document text_sim down-weighted to 0.10
+    (paragraph-level substantive collusion, weight 0.30, is the primary signal) and
+    zeroed entirely when the tender file is missing (template overlap ≠ collusion).
 
-        risk = 0.375*key + 0.375*attr + 0.25*text_gated + 0.0*img
+        risk = 0.30*key + 0.30*attr + 0.10*text_gated + 0.30*collusion_para + 0.0*img
 
     where:
       key_info_val = key_overlap_similarity * 100  (percentage)
       file_attr_val = raw attr_similarity (0-100)
-      text_sim_val = cosine_similarity * 100, but 0 unless ≥80
+      text_sim_val = cosine_similarity * 100, but 0 unless ≥80 and tender present
+      collusion_para = paragraph-level near-verbatim substantive score (0-100)
       img_sim_val = ignored (0)
     """
-    def _risk(key_info_pct, file_attr_val, text_sim_pct, img_sim_val):
-        text_eff = text_sim_pct if text_sim_pct >= 80 else 0.0
-        return (0.375 * key_info_pct + 0.375 * file_attr_val +
-                0.25 * text_eff + 0.0 * img_sim_val)
+    from app.services.batch_orchestrator import RiskScorer
+
+    def _risk(key_info_pct, file_attr_val, text_sim_pct, img_sim_val,
+              collusion_para=0.0, template_missing=False):
+        return RiskScorer.compute(key_info_pct, file_attr_val, text_sim_pct, img_sim_val,
+                                  collusion_para=collusion_para, template_missing=template_missing)
 
     scenarios = [
         # (name, key_pct, attr, text_pct, img) -> expected_risk
@@ -207,35 +213,39 @@ def test_snapshot_risk_formula():
     for name, k, a, t, i in scenarios:
         results[name] = _risk(k, a, t, i)
 
-    # ── Exact arithmetic snapshots (weights 0.375/0.375/0.25) ──
+    # ── Exact arithmetic snapshots (weights 0.30/0.30/0.10) ──
     assert results["zero_all"] == 0.0
-    # 30*.375 + 20*.375 + 0 (text<80 gated) = 11.25 + 7.5 = 18.75
-    assert results["typical_low"] == 18.75
-    # 50*.375 + 40*.375 + 0 = 18.75 + 15 = 33.75
-    assert results["typical_mid"] == 33.75
-    # 80*.375 + 70*.375 + 0 = 30 + 26.25 = 56.25
-    assert results["typical_high"] == 56.25
-    # 100*.375 + 100*.375 + 100*.25 = 37.5 + 37.5 + 25 = 100.0
-    assert results["max_all"] == 100.0
-    # 90*.375 + 10*.375 + 0 = 33.75 + 3.75 = 37.5
-    assert results["key_heavy"] == 37.5
-    # text_high_gate: 10*.375 + 10*.375 + 90*.25 = 3.75+3.75+22.5 = 30.0
-    assert results["text_high_gate"] == 30.0
-    # text_below_gate: 10*.375 + 10*.375 + 0 = 7.5
-    assert results["text_below_gate"] == 7.5
-    # attr_heavy: 10*.375 + 90*.375 + 0 = 3.75 + 33.75 = 37.5
-    assert results["attr_heavy"] == 37.5
-    # mixed: 45*.375 + 55*.375 + 0 = 16.875 + 20.625 = 37.5
-    assert results["mixed"] == 37.5
+    # 30*.30 + 20*.30 + 0 (text<80 gated) = 9 + 6 = 15
+    assert results["typical_low"] == 15.0
+    # 50*.30 + 40*.30 + 0 = 15 + 12 = 27
+    assert results["typical_mid"] == 27.0
+    # 80*.30 + 70*.30 + 0 = 24 + 21 = 45
+    assert results["typical_high"] == 45.0
+    # 100*.30 + 100*.30 + 100*.10 = 30 + 30 + 10 = 70
+    assert results["max_all"] == 70.0
+    # 90*.30 + 10*.30 + 0 = 27 + 3 = 30
+    assert results["key_heavy"] == 30.0
+    # text_high_gate: 10*.30 + 10*.30 + 90*.10 = 3+3+9 = 15
+    assert results["text_high_gate"] == 15.0
+    # text_below_gate: 10*.30 + 10*.30 + 0 = 6
+    assert results["text_below_gate"] == 6.0
+    # attr_heavy: 10*.30 + 90*.30 + 0 = 3 + 27 = 30
+    assert results["attr_heavy"] == 30.0
+    # mixed: 45*.30 + 55*.30 + 0 = 13.5 + 16.5 = 30
+    assert results["mixed"] == 30.0
 
     # ── Invariants ──
     # Weights sum to 1.0 (incl. the 0 image weight)
-    assert abs(0.375 + 0.375 + 0.25 + 0.0 - 1.0) < 1e-10
+    assert abs(0.30 + 0.30 + 0.10 + 0.30 + 0.0 - 1.0) < 1e-10
 
     # text_sim gate: below 80% contributes 0, at/above contributes linearly
     assert _risk(0, 0, 79, 0) == 0.0
-    assert _risk(0, 0, 80, 0) == 20.0
-    assert _risk(0, 0, 100, 0) == 25.0
+    assert _risk(0, 0, 80, 0) == 8.0
+    assert _risk(0, 0, 100, 0) == 10.0
+    # template_missing → text contributes 0 regardless of the ≥80% gate
+    assert _risk(0, 0, 90, 0, template_missing=True) == 0.0
+    # collusion_para contributes 0.30 * value
+    assert _risk(0, 0, 0, 0, collusion_para=50) == 15.0
 
     # Weighted average never exceeds the maximum component (text-gated)
     for name, k, a, t, i in scenarios:

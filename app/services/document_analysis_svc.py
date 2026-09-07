@@ -129,7 +129,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None):
             pairs, risk_matrix = compute_all_pairs(file_data, {
                 'text_sim': False, 'key_info': True,
                 'file_attr': False, 'image_sim': False
-            })
+            }, template_text=tender_text)
             key_info_matches = build_key_info_matches(pairs)
             return {'key_info_matches': key_info_matches}
 
@@ -179,6 +179,14 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     """
     n = len(file_data)
     _ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+    # FIX-2026-09-04-QA-B1: 采购类型探测（工程/货物/服务）——驱动行业词表选择，
+    # 供段落级实质雷同检测与指标判断使用。
+    try:
+        from app.services.industry_words import get_procurement_type
+        ptype = get_procurement_type(*[fd.get('text', '') for fd in file_data])
+    except Exception:
+        ptype = 'engineering'
 
     # FIX-015 (C2): if an open-info table provides authoritative bid prices,
     # inject them into file_data BEFORE running checkers so the quote checker
@@ -349,13 +357,31 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 result_text = f"○ 跳过（{error_msg}）"
 
         elif ind['checker'] == 'typo':
+            # FIX-2026-09-04-QA-B2: 错误雷同按"跨文件共享错别字"计分（围标信号），
+            # 总数只作参考。pycorrector 的随机误报不会跨文件逐字相同，被自然排除。
             typos = typo_data.get('results', {})
             if typos:
                 total = sum(r.total_suspects for r in typos.values())
                 critical = sum(r.critical_count for r in typos.values())
-                if total > 0:
-                    score = min(total * 0.5 + critical * 2, 15)
-                    result_text = f"▲ 发现{total}处疑似错别字（其中严重{critical}处）。"
+                shared = {}
+                try:
+                    from app.services.typo_detector import find_shared_typos
+                    shared = find_shared_typos(file_data, ptype=ptype, precomputed=typos)
+                except Exception as e:
+                    logger.warning(f"find_shared_typos failed: {e}")
+                shared_count = shared.get('shared_typo_count', 0)
+                if shared_count > 0:
+                    score = min(shared_count * 10 + critical * 2, 15)
+                    result_text = (f"▲ 发现 {shared_count} 个跨文件共享错别字"
+                                   f"（疑似共同制作/抄袭）；文件内错别字共 {total} 处。")
+                    details = [
+                        {'错别字': s.get('suspect_text', ''),
+                         '出现文件': ', '.join(s.get('shared_in_files', [])),
+                         '置信度': f"{s.get('confidence', 0):.2f}"}
+                        for s in shared.get('shared_typos', [])[:10]
+                    ]
+                elif total > 0:
+                    result_text = f"○ 文件内发现 {total} 处错别字（其中严重{critical}处），但无跨文件共享，不作雷同信号。"
                     details = [{'file': n, 'total': r.total_suspects, 'critical': r.critical_count}
                               for n, r in typos.items() if r.total_suspects > 0][:10]
                 else:
@@ -506,6 +532,7 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     return {
         '_pairs': pairs,
         '_files': [fd.get('filename', '') for fd in file_data],
+        '_ptype': ptype,
         'basic_info': {
             'project_name': '用户自定义',
             'bidder_count': n,
@@ -516,6 +543,11 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             ),
             # 样本量太小 → 复合指数统计意义有限（P-D 免责声明）
             'sample_note': f'本次共 {n} 家投标人，样本量小，复合指数仅供参考' if n < 5 else '',
+            # FIX-2026-09-04-QA-B1: 缺招标文件 → 文本/关键词类指标未计入，指数为下限估计
+            'template_missing_note': (
+                '缺招标文件：文本相似度/关键词类指标未计入或仅作参考，冒烟指数为下限估计'
+                if not tender_text else ''
+            ),
         },
         'suspected_units': suspected_units,
         'indicators': indicators,
@@ -549,7 +581,8 @@ def _add_heading(doc, text, size, bold=True):
     try:
         rPr = run._element.get_or_add_rPr()
         rFonts = rPr.get_or_add_rFonts()
-        rFonts.set(qn('w:eastAsia'), '宋体')
+        # 标题黑体（用户确认的排版规格）
+        rFonts.set(qn('w:eastAsia'), '黑体')
     except Exception:
         pass
     return h
@@ -568,7 +601,19 @@ def _merge_row(t, row, start, end):
     return merged
 
 
-def _set_cell(cell, text, bold=False, size=BODY):
+def _shade_cell(cell, hexcolor='D9E2F3'):
+    """Light blue-grey header background (用户确认：表头底色)."""
+    try:
+        tcPr = cell._element.get_or_add_tcPr()
+        shd = tcPr.makeelement(qn('w:shd'), {
+            qn('w:val'): 'clear', qn('w:color'): 'auto', qn('w:fill'): hexcolor,
+        })
+        tcPr.append(shd)
+    except Exception:
+        pass
+
+
+def _set_cell(cell, text, bold=False, size=BODY, shade=False):
     cell.text = ''
     p = cell.paragraphs[0]
     run = p.add_run(_safe(text))
@@ -581,6 +626,8 @@ def _set_cell(cell, text, bold=False, size=BODY):
         rFonts.set(qn('w:eastAsia'), '宋体')
     except Exception:
         pass
+    if shade:
+        _shade_cell(cell)
     return run
 
 
@@ -596,6 +643,13 @@ def _build_standard_sections(doc, report):
     run = title.add_run('串通投标线索分析报告')
     run.bold = True
     run.font.size = Pt(H0)
+    run.font.name = 'Times New Roman'
+    try:
+        rPr = run._element.get_or_add_rPr()
+        rFonts = rPr.get_or_add_rFonts()
+        rFonts.set(qn('w:eastAsia'), '黑体')
+    except Exception:
+        pass
 
     for _ in range(4):
         doc.add_paragraph()
@@ -636,6 +690,14 @@ def _build_standard_sections(doc, report):
         rn.font.size = Pt(FINE)
         rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
+    # FIX-2026-09-04-QA-B1: 缺招标文件诚实标注（文本/关键词指标未计入）
+    tm_note = info.get('template_missing_note', '')
+    if tm_note:
+        p = doc.add_paragraph()
+        rn = p.add_run(tm_note)
+        rn.font.size = Pt(FINE)
+        rn.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
+
     # ── Section 2: 预警单位汇总 ──
     _add_heading(doc, '二、预警单位汇总', H1)
     suspected = report.get('suspected_units', [])
@@ -645,8 +707,8 @@ def _build_standard_sections(doc, report):
     run.font.size = Pt(H2)
 
     su_table = _add_table(doc, len(suspected) + 1, 2)
-    _set_cell(su_table.cell(0, 0), '单位名称', bold=True)
-    _set_cell(su_table.cell(0, 1), '涉及指标数量', bold=True)
+    _set_cell(su_table.cell(0, 0), '单位名称', bold=True, shade=True)
+    _set_cell(su_table.cell(0, 1), '涉及指标数量', bold=True, shade=True)
     for si, su in enumerate(suspected):
         _set_cell(su_table.cell(si + 1, 0), (('★ ' if su['score'] > 10 else '  ') + _safe(su['name'])))
         _set_cell(su_table.cell(si + 1, 1), str(su.get('indicators_triggered', 0)))
@@ -693,20 +755,20 @@ def _build_standard_sections(doc, report):
             _add_heading(doc, f'{sub_no}、{ind["name"]}', H2)
 
             t = _add_table(doc, 6, 4)
-            _set_cell(t.cell(0, 0), '指标名称', bold=True)
+            _set_cell(t.cell(0, 0), '指标名称', bold=True, shade=True)
             _merge_row(t, 0, 1, 3)
             _set_cell(t.cell(0, 1), ind['name'])
 
-            _set_cell(t.cell(1, 0), '指标类别', bold=True)
+            _set_cell(t.cell(1, 0), '指标类别', bold=True, shade=True)
             _set_cell(t.cell(1, 1), ind['category'])
-            _set_cell(t.cell(1, 2), '指标得分', bold=True)
+            _set_cell(t.cell(1, 2), '指标得分', bold=True, shade=True)
             _set_cell(t.cell(1, 3), f"{ind.get('score', 0)} 分")
 
-            _set_cell(t.cell(2, 0), '针对问题', bold=True)
+            _set_cell(t.cell(2, 0), '针对问题', bold=True, shade=True)
             _merge_row(t, 2, 1, 3)
             _set_cell(t.cell(2, 1), ind.get('problem', ''))
 
-            _set_cell(t.cell(3, 0), '分析规则', bold=True)
+            _set_cell(t.cell(3, 0), '分析规则', bold=True, shade=True)
             _merge_row(t, 3, 1, 3)
             rule_text_val = ind.get('rule', '')
             rule_ref = ind.get('rule_ref', {})
@@ -715,7 +777,7 @@ def _build_standard_sections(doc, report):
                 rule_text_val += f"\n规则依据：{rule_ref.get('label', '')} {law_text}"
             _set_cell(t.cell(3, 1), rule_text_val)
 
-            _set_cell(t.cell(4, 0), '分析结果', bold=True)
+            _set_cell(t.cell(4, 0), '分析结果', bold=True, shade=True)
             _merge_row(t, 4, 1, 3)
             result_run = _set_cell(t.cell(4, 1), ind.get('result', ''))
             result_text = _safe(ind.get('result', ''))
@@ -726,7 +788,7 @@ def _build_standard_sections(doc, report):
             elif '○' in result_text:
                 result_run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B)
 
-            _set_cell(t.cell(5, 0), '指标详情', bold=True)
+            _set_cell(t.cell(5, 0), '指标详情', bold=True, shade=True)
             details = ind.get('details', [])
             if details and not ind.get('skipped', False):
                 _merge_row(t, 5, 1, 3)
@@ -886,11 +948,11 @@ def build_clearance_docx(report, info_overrides=None):
             _add_heading(doc, title, H2)
             n = len(files)
             t = _add_table(doc, n + 1, n + 1)
-            _set_cell(t.cell(0, 0), '投标单位', bold=True)
+            _set_cell(t.cell(0, 0), '投标单位', bold=True, shade=True)
             for j, fname in enumerate(files):
-                _set_cell(t.cell(0, j + 1), _safe(truncate_filename(fname, 8)), bold=True)
+                _set_cell(t.cell(0, j + 1), _safe(truncate_filename(fname, 20)), bold=True, shade=True)
             for i in range(n):
-                _set_cell(t.cell(i + 1, 0), _safe(truncate_filename(files[i], 8)), bold=True)
+                _set_cell(t.cell(i + 1, 0), _safe(truncate_filename(files[i], 20)), bold=True, shade=True)
                 for j in range(n):
                     val = '--' if i == j else (
                         fmt(m[i][j]) if i < len(m) and j < len(m[i]) else '--')
@@ -898,6 +960,14 @@ def build_clearance_docx(report, info_overrides=None):
             doc.add_paragraph()
 
         _add_heading(doc, '六、横向对比分析', H1, bold=True)
+
+        # FIX-2026-09-04-QA-B1: 无招标文件 → 文本矩阵仅供参考（原始余弦含模板重叠）
+        template_missing = cross.get('template_missing', False)
+        if template_missing:
+            note = doc.add_paragraph()
+            rn = note.add_run('注：未提供招标文件，以下文本相似度矩阵为原始值，含招标模板/行业词重叠，仅供参考，不计入风险与集团判定。')
+            rn.font.size = Pt(FINE)
+            rn.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
 
         # 6.1 综合风险矩阵
         _write_matrix('6.1、综合风险矩阵', risk_matrix, lambda v: f"{v:.1f}")
@@ -913,7 +983,7 @@ def build_clearance_docx(report, info_overrides=None):
             _add_heading(doc, '6.5、高风险组合详情', H2)
             pt = _add_table(doc, len(high_pairs) + 1, 7)
             for j, hdr in enumerate(['投标单位1', '投标单位2', '风险度', '文本相似度', '关键信息重合', '文件属性雷同', '矩阵坐标']):
-                _set_cell(pt.cell(0, j), hdr, bold=True, size=9)
+                _set_cell(pt.cell(0, j), hdr, bold=True, size=9, shade=True)
             for ri, p in enumerate(high_pairs):
                 _set_cell(pt.cell(ri + 1, 0), _safe(p.get('name1', '')), size=9)
                 _set_cell(pt.cell(ri + 1, 1), _safe(p.get('name2', '')), size=9)
@@ -929,7 +999,7 @@ def build_clearance_docx(report, info_overrides=None):
             _add_heading(doc, '6.6、全部组合明细', H2)
             at = _add_table(doc, len(pairs) + 1, 7)
             for j, hdr in enumerate(['投标单位1', '投标单位2', '风险度', '文本相似度', '关键信息重合', '文件属性雷同', '矩阵坐标']):
-                _set_cell(at.cell(0, j), hdr, bold=True, size=9)
+                _set_cell(at.cell(0, j), hdr, bold=True, size=9, shade=True)
             has_mismatch = any(p.get('component_mismatch') for p in pairs)
             for ri, p in enumerate(pairs):
                 _set_cell(at.cell(ri + 1, 0), _safe(p.get('name1', '')), size=9)
@@ -954,7 +1024,7 @@ def build_clearance_docx(report, info_overrides=None):
             _add_heading(doc, '6.7、重点信息雷同', H2)
             kt = _add_table(doc, len(key_info) + 1, 3)
             for j, hdr in enumerate(['投标单位1', '投标单位2', '共同关键词']):
-                _set_cell(kt.cell(0, j), hdr, bold=True, size=8)
+                _set_cell(kt.cell(0, j), hdr, bold=True, size=8, shade=True)
             for ri, ki in enumerate(key_info):
                 _set_cell(kt.cell(ri + 1, 0), _safe(ki.get('name1', '')), size=8)
                 _set_cell(kt.cell(ri + 1, 1), _safe(ki.get('name2', '')), size=8)
@@ -966,7 +1036,7 @@ def build_clearance_docx(report, info_overrides=None):
             _add_heading(doc, '6.8、疑似围标集团', H2)
             gt = _add_table(doc, len(gangs) + 1, 5)
             for j, hdr in enumerate(['集团', '成员单位', '成员数', '组内最高风险', '组内平均风险']):
-                _set_cell(gt.cell(0, j), hdr, bold=True, size=9)
+                _set_cell(gt.cell(0, j), hdr, bold=True, size=9, shade=True)
             for ri, g in enumerate(gangs):
                 _set_cell(gt.cell(ri + 1, 0), f"集团{ri + 1}", size=9)
                 _set_cell(gt.cell(ri + 1, 1), ' / '.join(_safe(f) for f in g.get('files', [])), size=9)
@@ -974,6 +1044,26 @@ def build_clearance_docx(report, info_overrides=None):
                 _set_cell(gt.cell(ri + 1, 3), f"{g.get('max_risk', 0):.1f}", size=9)
                 _set_cell(gt.cell(ri + 1, 4), f"{g.get('avg_risk', 0):.1f}", size=9)
             doc.add_paragraph()
+
+        # FIX-2026-09-04-QA-B1: 共享实质段落（段落级围标铁证，含类型标注 + 惊讶度）
+        pc = cross.get('paragraph_collusion') or {}
+        shared_segs = pc.get('shared_segments') or []
+        if shared_segs:
+            _add_heading(doc, '6.9、共享实质段落（段落级雷同证据）', H2)
+            st = _add_table(doc, len(shared_segs) + 1, 5)
+            for j, hdr in enumerate(['段落类型', '共享单位', '一致率', '惊讶度', '段落内容预览']):
+                _set_cell(st.cell(0, j), hdr, bold=True, size=9, shade=True)
+            for ri, s in enumerate(shared_segs[:12]):
+                _set_cell(st.cell(ri + 1, 0), _safe(s.get('type', '其他')), size=9)
+                _set_cell(st.cell(ri + 1, 1), ' / '.join(_safe(f) for f in s.get('files', [])), size=9)
+                _set_cell(st.cell(ri + 1, 2), f"{s.get('match_ratio', 0):.0%}", size=9)
+                _set_cell(st.cell(ri + 1, 3), f"{s.get('surprise', 0):.2f}", size=9)
+                _set_cell(st.cell(ri + 1, 4), _safe(s.get('segment_text', ''))[:60], size=8)
+            doc.add_paragraph()
+            note = doc.add_paragraph()
+            rn = note.add_run('注：惊讶度=段内非行业词/非模板词占比；越高说明措辞越独特，跨文件近逐字雷同越可能是抄写而非模板套用。')
+            rn.font.size = Pt(FINE)
+            rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
     # ── Section 7: 合规审查结果 ──
     comp = report.get('compliance')

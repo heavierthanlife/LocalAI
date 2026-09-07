@@ -45,15 +45,18 @@ logger = logging.getLogger(__name__)
 class RiskScorer:
     """Configurable risk scoring formula.
 
-    The default weights match the current production formula
-    (0.3*key + 0.3*attr + 0.2*text + 0.2*img), locked via
-    tests/test_batch_orchestrator.py::test_snapshot_risk_formula.
+    FIX-2026-09-04-QA-B1: paragraph-level substantive collusion (collusion_para)
+    is now the primary text signal; whole-document text_sim is down-weighted to
+    0.10 (it averages away the real near-verbatim service-commitment evidence) and
+    is fully zeroed when the tender file is missing (template overlap ≠ collusion).
+    Snapshot locked via tests/test_batch_orchestrator.py::test_snapshot_risk_formula.
     """
 
     WEIGHTS = {
-        "key_info": 0.375,
-        "file_attr": 0.375,
-        "text_sim": 0.25,
+        "key_info": 0.30,
+        "file_attr": 0.30,
+        "text_sim": 0.10,
+        "collusion_para": 0.30,  # paragraph-level near-verbatim substantive segments
         "image_sim": 0.0,   # image similarity disabled in clearance (images=[])
     }
 
@@ -63,13 +66,16 @@ class RiskScorer:
 
     @classmethod
     def compute(cls, key_info_pct: float, file_attr_val: float,
-                text_sim_pct: float, img_sim_val: float) -> float:
-        # text_sim only counts if it clears the ≥80% gate (template-overlap guard)
-        text_eff = text_sim_pct if text_sim_pct >= cls.TEXT_SIM_GATE * 100 else 0.0
+                text_sim_pct: float, img_sim_val: float,
+                collusion_para: float = 0.0, template_missing: bool = False) -> float:
+        # text_sim only counts if it clears the ≥80% gate AND the tender file was
+        # available for template removal — otherwise raw cosine is template overlap.
+        text_eff = text_sim_pct if (not template_missing and text_sim_pct >= cls.TEXT_SIM_GATE * 100) else 0.0
         return (
             cls.WEIGHTS["key_info"] * key_info_pct +
             cls.WEIGHTS["file_attr"] * file_attr_val +
             cls.WEIGHTS["text_sim"] * text_eff +
+            cls.WEIGHTS["collusion_para"] * collusion_para +
             cls.WEIGHTS["image_sim"] * img_sim_val
         )
 
@@ -95,14 +101,14 @@ def _detect_component(filename: str, text: str = '') -> str:
 
 
 def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
-                        template_text=None):
+                        template_text=None, collusion_para=0.0, template_missing=False):
     """Compute a single file-pair's similarity metrics."""
     text1 = file_data[i]['text']
     text2 = file_data[j]['text']
-    meta1 = file_data[i]['metadata']
-    meta2 = file_data[j]['metadata']
-    images1 = file_data[i]['images']
-    images2 = file_data[j]['images']
+    meta1 = file_data[i].get('metadata') or {}
+    meta2 = file_data[j].get('metadata') or {}
+    images1 = file_data[i].get('images') or []
+    images2 = file_data[j].get('images') or []
 
     from app.services.file_processing import image_similarity, file_attr_similarity
 
@@ -147,7 +153,8 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
         text_sim_val = 0.0
         key_info_val = 0.0
 
-    risk = RiskScorer.compute(key_info_val, file_attr_val, text_sim_val, img_sim_val)
+    risk = RiskScorer.compute(key_info_val, file_attr_val, text_sim_val, img_sim_val,
+                              collusion_para=collusion_para, template_missing=template_missing)
 
     _, html1, html2, blocks = compute_similarity_with_numbers(text1, text2, template_text)
 
@@ -166,17 +173,28 @@ def compute_single_pair(file_data, i, j, check_items, tfidf_matrix=None,
         'attr_same': 1 if meta1.get('author') and meta1['author'] == meta2.get('author') else 0,
         'component_mismatch': component_mismatch,
         'components': [comp1, comp2],
+        'collusion_para': collusion_para,
     }
 
 
-def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=None):
-    """Run pairwise comparison for all file pairs."""
+def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=None,
+                      collusion_para_map=None, template_missing=False):
+    """Run pairwise comparison for all file pairs.
+
+    collusion_para_map: {(i,j): 0-100 paragraph-collusion score} — threaded into
+    the RiskScorer (FIX-2026-09-04-QA-B1).  template_missing: when True the
+    whole-document text_sim contributes 0 (no tender file → template overlap).
+    """
     n = len(file_data)
     pairs = []
     risk_matrix = [[0] * n for _ in range(n)]
     for i in range(n):
         for j in range(i + 1, n):
-            pair = compute_single_pair(file_data, i, j, check_items, tfidf_matrix, template_text)
+            cp = 0.0
+            if collusion_para_map:
+                cp = float(collusion_para_map.get((i, j), collusion_para_map.get((j, i), 0.0)) or 0.0)
+            pair = compute_single_pair(file_data, i, j, check_items, tfidf_matrix, template_text,
+                                       collusion_para=cp, template_missing=template_missing)
             pairs.append(pair)
             risk_matrix[i][j] = pair['risk']
             risk_matrix[j][i] = pair['risk']
@@ -207,7 +225,7 @@ def build_attr_details(file_data):
     """Post-process file attribute details."""
     details = []
     for fd in file_data:
-        meta = fd['metadata']
+        meta = fd.get('metadata') or {}
         details.append({
             'filename': fd['filename'],
             'author': meta.get('author', ''),
@@ -254,9 +272,15 @@ def cluster_order_by_risk(risk_matrix, files):
     return order
 
 
-def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2):
+def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2,
+                 collusion_para_map=None):
     """E2 — find connected groups where every internal pair exceeds
     `threshold` risk (a "gang"/疑似围标集团).
+
+    FIX-2026-09-04-QA-B1: when `collusion_para_map` is provided, a gang is only
+    reported if it contains at least one internal pair with paragraph-level
+    substantive-collusion evidence — otherwise it's just shared template/industry
+    overlap, not a collusion ring.
 
     Returns list of dicts: {members:[indices], files:[names],
                             internal_pairs:[(i,j)], max_risk, avg_risk}
@@ -285,6 +309,16 @@ def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2):
                     changed = True
         return members
 
+    def _has_evidence(inds):
+        if not collusion_para_map:
+            return True  # legacy callers without the new signal
+        for a in range(len(inds)):
+            for b in range(a + 1, len(inds)):
+                i, j = inds[a], inds[b]
+                if collusion_para_map.get((i, j), collusion_para_map.get((j, i), 0.0)) > 0:
+                    return True
+        return False
+
     seen_groups = set()
     for i in range(n):
         for j in range(i + 1, n):
@@ -296,10 +330,12 @@ def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2):
             key = tuple(sorted(g))
             if key in seen_groups:
                 continue
+            gl = sorted(g)
+            if not _has_evidence(gl):
+                continue
             seen_groups.add(key)
             pairs = []
             risks = []
-            gl = sorted(g)
             for a in range(len(gl)):
                 for b in range(a + 1, len(gl)):
                     pairs.append((gl[a], gl[b]))

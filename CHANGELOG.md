@@ -8,6 +8,33 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-07] — QA-Loop round-004：清标算法可靠性重构（段落级实质雷同）+ 字体排版
+
+### Added
+- **段落级实质雷同检测**（`app/services/paragraph_collusion_detector.py`，FIX-2026-09-04-QA-B1）：在原始文本上分段，两两 `SequenceMatcher ≥0.85` 找近逐字雷同段，按**惊讶度**（段内非行业/非模板词占比）过滤样板段，仅"服务承诺段/技术方案段"等实质内容的跨文件雷同算围标信号
+- **行业词三表**（`data/industry_words/{engineering,goods,services}.txt` + `app/services/industry_words.py`）：双层（国家标准词层：财政部《政府采购品目分类目录 2022》+ 住建部《建筑业企业资质标准》；常见运营词层含超市经营词），采购类型探测（`get_procurement_type`），守卫测试锁定评价性措辞（热情/周到/细致/尽职 等）不入表
+- **跨文件共享错别字**（`typo_detector.find_shared_typos`，FIX-2026-09-04-QA-B2）：仅跨 ≥2 家逐字相同的 suspect_text 计分，白名单+行业词排除，天然消除 pycorrector 随机误报
+- 报告新增 **6.9、共享实质段落** 章节（段落类型/共享单位/一致率/惊讶度/内容预览）+ 表头底色 + 标题黑体排版
+
+### Changed
+- `RiskScorer` 权重重构（`batch_orchestrator.py`）：`text_sim 0.25→0.10`（整篇余弦是信号平均器）、新增 `collusion_para 0.30`（段落级实质雷同为主信号）
+- `clearance_engine._run_cross_comparison`：无招标文件时 `template_missing=True` → text_sim 对 risk 零贡献（与指标层 skip 对齐），原始余弦仍保留在 6.2 矩阵标注"仅参考"
+- `detect_gangs`：集团必须含 ≥1 对共享实质段（纯模板/行业重叠不再判集团）
+- `economic_error_similar`：由"错别字总数"改为"跨文件共享错别字数"
+- 封面增加"缺招标文件：文本/关键词类指标未计入，冒烟指数为下限估计"红字标注
+
+### Fixed
+- 矩阵表头显示纯 ".docx"（`truncate_filename(fname, 8)` 对中文长名退化为扩展名）→ 20 字符 + `file_processing.py` `available<1` 返回名称开头而非纯扩展名
+- `build_attr_details`/`compute_single_pair` 对缺失 `metadata`/`images` 键防御
+
+### regression: 104/104 tests passed · verify_fixes 89/89 · check_system 133/137
+- 3 家已证实串标案例（元丰/物美/中昌华美 军营超市项目）：元丰↔物美 服务承诺段近逐字雷同（match 0.94, surprise 0.67）被段落检测器命中；无招标文件时 text_sim 不进风险；合法同行（行业词重叠但独特段不同）不触发
+- 基线快照（工程类 价格标 vs 商务技术标）复合指数保持 <30 正常区间
+
+---
+
+
+
 ## [2026-09-04] — QA-Loop 基础设施：九阶段流程固化（文档同步 + 镜像重建）
 
 ### Added

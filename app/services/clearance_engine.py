@@ -58,15 +58,31 @@ def _run_cross_comparison(file_data, tender_text=None):
         'file_attr': True,
         'image_sim': False,
     }
-    # Precompute TF-IDF once so text similarity actually runs (was silently 0).
-    # Pass the tender doc as template_text so its boilerplate is stripped first.
+    # FIX-2026-09-04-QA-B1: 无招标文件时无法去除招标模板 → 整篇文本余弦是模板重叠，
+    # 不是围标证据。此时仍计算原始余弦供"参考"展示（text_matrix），但通过
+    # template_missing=True 让 RiskScorer 忽略 text_sim（与指标层 skip 对齐）。
+    template_missing = not bool(tender_text)
     tfidf_matrix = None
     try:
         _vec, tfidf_matrix = _precompute_tfidf_for_files(file_data, template_text=tender_text)
     except Exception as e:
         logger.warning(f"TF-IDF precompute failed, text sim will be 0: {e}")
+
+    # FIX-2026-09-04-QA-B1: 段落级实质雷同（新主信号）——无需招标文件即可运行。
+    paragraph_collusion = None
+    collusion_para_map = {}
+    try:
+        from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
+        paragraph_collusion = detect_shared_substantive_segments(file_data)
+        for k, c in (paragraph_collusion.get('per_pair_count') or {}).items():
+            i, j = map(int, k.strip('()').split(','))
+            collusion_para_map[(i, j)] = min(100, c * 25)
+    except Exception as e:
+        logger.warning(f"Paragraph collusion detection failed: {e}")
+
     pairs, risk_matrix = compute_all_pairs(
-        file_data, check_items, tfidf_matrix=tfidf_matrix, template_text=tender_text)
+        file_data, check_items, tfidf_matrix=tfidf_matrix, template_text=tender_text,
+        collusion_para_map=collusion_para_map, template_missing=template_missing)
     filenames = [fd['filename'] for fd in file_data]
     n = len(filenames)
 
@@ -89,10 +105,14 @@ def _run_cross_comparison(file_data, tender_text=None):
         'key_info_matches': build_key_info_matches(pairs),
         'attr_details': build_attr_details(file_data),
         'files': filenames,
+        'template_missing': template_missing,
+        'paragraph_collusion': paragraph_collusion,
     }
     # E2: gang detection (cluster of mutually high-risk companies)
+    #     FIX-2026-09-04-QA-B1: 集团必须含 ≥1 对共享实质段（否则只是模板/行业重叠）。
     try:
-        gangs = detect_gangs(risk_matrix, filenames, threshold=10.0)
+        gangs = detect_gangs(risk_matrix, filenames, threshold=10.0,
+                             collusion_para_map=collusion_para_map)
         if gangs:
             result['gangs'] = gangs
     except Exception as e:

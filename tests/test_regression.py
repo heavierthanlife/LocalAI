@@ -544,16 +544,26 @@ def test_weighted_total_score_composite():
 
 
 def test_risk_scorer_new_weights_and_gate():
-    """RiskScorer must use 0.375/0.375/0.25 weights + ≥80% text gate."""
+    """RiskScorer must use 0.30/0.30/0.10(+0.30 collusion_para) weights + ≥80% text gate.
+
+    FIX-2026-09-04-QA-B1: whole-document text_sim down-weighted (paragraph-level
+    substantive collusion is the primary signal); text still gated at ≥80% and
+    zeroed when the tender file is missing (template overlap ≠ collusion).
+    """
     from app.services.batch_orchestrator import RiskScorer
-    assert RiskScorer.WEIGHTS['key_info'] == 0.375
-    assert RiskScorer.WEIGHTS['file_attr'] == 0.375
-    assert RiskScorer.WEIGHTS['text_sim'] == 0.25
+    assert RiskScorer.WEIGHTS['key_info'] == 0.30
+    assert RiskScorer.WEIGHTS['file_attr'] == 0.30
+    assert RiskScorer.WEIGHTS['text_sim'] == 0.10
+    assert RiskScorer.WEIGHTS['collusion_para'] == 0.30
     assert RiskScorer.WEIGHTS['image_sim'] == 0.0
     # text <80% gate → contributes 0
     assert RiskScorer.compute(0, 0, 70, 0) == 0.0
-    # text ≥80% → contributes 0.25 * 80 = 20
-    assert RiskScorer.compute(0, 0, 80, 0) == 20.0
+    # text ≥80% → contributes 0.10 * 80 = 8
+    assert RiskScorer.compute(0, 0, 80, 0) == 8.0
+    # template_missing=True → text contributes 0 even at 80% (raw cosine is template overlap)
+    assert RiskScorer.compute(0, 0, 90, 0, template_missing=True) == 0.0
+    # collusion_para contributes 0.30 * value
+    assert RiskScorer.compute(0, 0, 0, 0, collusion_para=40) == 12.0
 
 
 def test_warning_threshold_order_and_scale():

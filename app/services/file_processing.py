@@ -800,8 +800,9 @@ def truncate_filename(filename, max_len=40):
         ext = ext[:10]
     available = max_len - len(ext) - 3
     if available < 1:
-        ext = ext[:max_len]
-        return ext
+        # FIX-2026-09-04-QA-B1: tiny max_len must not collapse to the bare
+        # extension (".docx") — keep the head of the stem instead.
+        return name[:max_len]
     truncated_name = name[:available] + '...'
     return truncated_name + ext
 

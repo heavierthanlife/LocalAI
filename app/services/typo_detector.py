@@ -635,6 +635,103 @@ def detect_typos_batch(
     return results
 
 
+def find_shared_typos(file_data: list[dict], ptype: str | None = None,
+                      min_shared_files: int = 2, min_confidence: float = 0.70,
+                      precomputed: dict | None = None) -> dict:
+    """Cross-file shared typos — a collusion signal (FIX-2026-09-04-QA-B2).
+
+    Only *identical* suspect_text appearing in ≥ `min_shared_files` files counts.
+    This kills the pycorrector random-false-positive problem: a generic-model
+    misflag ("把正确词报错别字") will not repeat verbatim across independent files,
+    whereas a genuinely copied typo (three bidders all writing the same wrong char)
+    is exactly the collusion evidence we want.  Whitelist + industry table words
+    are excluded as legitimate domain usage.
+
+    Args:
+        file_data: bid documents [{filename, text, ...}]
+        ptype: procurement type (for industry-stopword exclusion); auto if None
+        precomputed: optional dict filename -> TypoReport (from detect_typos_batch);
+                     when given, detection is NOT re-run.
+    """
+    from collections import defaultdict
+    from app.services.typo_whitelist import is_allowed
+    if ptype is None:
+        try:
+            from app.services.industry_words import get_procurement_type
+            ptype = get_procurement_type(*[fd.get('text', '') for fd in file_data])
+        except Exception:
+            ptype = None
+    try:
+        ind_stop = frozenset(load_industry_stopwords(ptype)) if ptype else frozenset()
+    except Exception:
+        ind_stop = frozenset()
+
+    per_file: dict[str, list[TypoFinding]] = {}
+    for fd in file_data:
+        fname = fd.get('filename', '')
+        text = fd.get('text', '')
+        if not fname or not text:
+            continue
+        if precomputed is not None:
+            rep = precomputed.get(fname)
+        else:
+            try:
+                rep = detect_typos(text, doc_name=fname)
+            except Exception:
+                rep = None
+        if rep is None:
+            continue
+        per_file[fname] = [
+            f for f in rep.findings
+            if f.severity in ('warning', 'critical')
+            and f.confidence >= min_confidence
+            and f.suspect_text
+            and not is_allowed(f.suspect_text)
+        ]
+
+    idx: dict[str, dict] = defaultdict(lambda: {'files': [], 'best': None})
+    for fname, findings in per_file.items():
+        for f in findings:
+            e = idx[f.suspect_text]
+            e['files'].append(fname)
+            if e['best'] is None or f.confidence > e['best'].confidence:
+                e['best'] = f
+
+    shared = []
+    for suspect, e in idx.items():
+        files = sorted(set(e['files']))
+        if len(files) < min_shared_files:
+            continue
+        # 领域词 → 合法用法，排除
+        if suspect in ind_stop:
+            continue
+        b = e['best']
+        shared.append({
+            'suspect_text': suspect,
+            'suggestions': (b.suggestions or [])[:3],
+            'confidence': round(b.confidence, 3),
+            'layer': b.layer,
+            'shared_in_files': files,
+        })
+
+    shared.sort(key=lambda x: -x['confidence'])
+
+    n = len(file_data)
+    per_pair: dict[str, int] = {}
+    for st in shared:
+        fs = [i for i, fd in enumerate(file_data) if fd.get('filename') in st['shared_in_files']]
+        for a in range(len(fs)):
+            for b in range(a + 1, len(fs)):
+                k = (min(fs[a], fs[b]), max(fs[a], fs[b]))
+                per_pair[f"({k[0]},{k[1]})"] = per_pair.get(f"({k[0]},{k[1]})", 0) + 1
+
+    return {
+        'shared_typos': shared,
+        'shared_typo_count': len(shared),
+        'per_pair_count': per_pair,
+    }
+
+
 def _generate_diff(text: str, findings: list[TypoFinding]) -> str:
     """Generate a simple before/after diff for review mode."""
     if not findings:
