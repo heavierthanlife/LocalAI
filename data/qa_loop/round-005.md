@@ -35,7 +35,7 @@
 - CHANGELOG 顶部新增 [2026-09-07] 条目；README/USER_MANUAL 补两机构建用法。
 
 ## ⑦ PUSH
-- 见 commit：<commit-fill>
+- `05281a5..d406c50` 已推送（LocalAI master），工作树干净。last_head=8d1030b。
 
 ## ⑧ IMAGE（本机 CPU 分支实测）
 - build：`python scripts/docker_build.py` → `GPU detected: False` → CPU 索引 → **~90 秒完成**（原 CUDA 全量 1.5-2h）。
