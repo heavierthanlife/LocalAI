@@ -46,7 +46,7 @@
 - CHANGELOG 新增 [2026-09-07] round-006 条目。
 
 ## ⑦ PUSH
-- 见 commit：<待填>
+- `8d1030b..9c147db` 已推送（LocalAI master），工作树干净。last_head=9c147db。
 
 ## ⑧ IMAGE / 真实文件测试（本机容器）
 - 重建镜像（`python scripts/docker_build.py` 增量秒级，pip cache 命中）→ up -d → 容器同步代码
