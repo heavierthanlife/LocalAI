@@ -80,10 +80,10 @@ INDICATOR_DEFS = [
     },
     {
         'id': 'same_machine_code',
-        'name': '同标段机器码雷同',
+        'name': '同标段文件作者/编制人雷同',
         'category': '触发指标',
-        'problem': '不同投标文件由同一台机器制作（机器硬件指纹/文件作者一致）。',
-        'rule': '同一标段内 ≥2 份投标文件机器码（制作机器标识）一致，记为疑似，每组得基准分 30 分。',
+        'problem': '不同投标文件由同一作者/编制人制作（文档 author 元数据一致），疑似同一人或同一台电脑制作。',
+        'rule': '同一标段内 ≥2 份投标文件作者（author/creator）一致的，记为疑似，每组得基准分 30 分。',
         'rule_ref': _rule_ref('002_tender_regs', '第四十条', '招标投标法实施条例'),
         'checker': 'file_attr',
         'local': True,
@@ -125,7 +125,7 @@ INDICATOR_DEFS = [
         'problem': '不同投标单位的联系人/联系方式雷同。',
         'rule': '同一标段 ≥2 份投标文件载明的联系人为同一人或同一电话/邮箱，记为疑似，每组得 30 分。',
         'rule_ref': _rule_ref('014_procurement_goods_bidding', '第三十七条', '政府采购货物和服务招标投标管理办法'),
-        'checker': 'key_info',
+        'checker': 'contact',
         'local': True,
     },
     {
@@ -175,8 +175,9 @@ INDICATOR_DEFS = [
         'problem': '同一批文件在不同标段间共享同一模板/指纹（关联投标人跨标段抱团）。',
         'rule': '不同标段投标文件文件码一致且投标人组合高度重合的，记为疑似，每组得 30 分。',
         'rule_ref': _rule_ref('009_bidder_conduct_opinions', '第十条', '发改法规规〔2022〕1117号'),
-        'checker': 'text_sim',
-        'local': True,
+        'checker': 'skip',
+        'local': False,
+        'skip_reason': '无标段分组输入，由同标段文件码/文本雷同代表',
     },
     {
         'id': 'cross_contact_same',
@@ -185,7 +186,7 @@ INDICATOR_DEFS = [
         'problem': '不同标段投标文件的联系人雷同，可能由同一人代理多家投标。',
         'rule': '不同标段投标文件联系人雷同且主体不同的，记为疑似，每组得 30 分。',
         'rule_ref': _rule_ref('009_bidder_conduct_opinions', '第十条', '发改法规规〔2022〕1117号'),
-        'checker': 'key_info',
+        'checker': 'contact',
         'local': True,
     },
 
@@ -244,11 +245,11 @@ INDICATOR_DEFS = [
         'id': 'bidder_count_abnormal',
         'name': '投标单位数异常',
         'category': '核心指标',
-        'problem': '投标单位数量异常（过少＝围标易达成，过多＝排斥竞争疑点）。',
-        'rule': '有效投标数 <3 或异常集中于少数关联主体的，记为可疑，得 10 分。',
-        'rule_ref': _rule_ref('002_tender_regs', '第四十四条', '招标投标法实施条例'),
-        'checker': 'skip',
-        'local': False,
+        'problem': '投标单位数量异常（过少：围标易达成；过多：排斥竞争疑点）。',
+        'rule': '有效投标数 <3 属异常，竞争不足，围标易达成，记为可疑，得 10 分。',
+        'rule_ref': _rule_ref('002_tender_regs', '第二十二条', '招标投标法实施条例'),
+        'checker': 'bidder_count',
+        'local': True,
     },
     {
         'id': 'upload_interval_abnormal',
@@ -312,11 +313,11 @@ INDICATOR_DEFS = [
     },
     {
         'id': 'high_price_abnormal',
-        'name': '投标单位高价投标异常',
+        'name': '投标报价异常（围标形态）',
         'category': '核心指标',
-        'problem': '投标人报价异常偏高（陪标方抬价，为特定单位让路）。',
-        'rule': '报价显著高于其他投标且无合理成本说明的，记为可疑，得 10 分。',
-        'rule_ref': _rule_ref('002_tender_regs', '第四十条', '招标投标法实施条例'),
+        'problem': '投标报价异常偏离（高价抬标/低价抢标/规律性报价），疑似围标。',
+        'rule': '报价显著高于/低于其他投标且无合理成本说明，或呈规律性浮动的，记为可疑，得 10 分。',
+        'rule_ref': _rule_ref('002_tender_regs', '第二十二条', '招标投标法实施条例'),
         'checker': 'quote',
         'local': True,
     },
@@ -404,13 +405,14 @@ INDICATOR_DEFS = [
     },
     {
         'id': 'cross_machine_code',
-        'name': '异标段机器码雷同',
+        'name': '异标段文件作者/编制人雷同',
         'category': '基础指标',
-        'problem': '不同标段投标文件由同一机器制作。',
-        'rule': '不同标段投标文件机器码一致且主体不同的，记为可疑，得 5 分。',
+        'problem': '不同标段投标文件由同一作者/编制人制作，可能同一人代理多家投标。',
+        'rule': '不同标段投标文件作者一致且主体不同的，记为可疑，得 5 分。',
         'rule_ref': _rule_ref('009_bidder_conduct_opinions', '第十条', '发改法规规〔2022〕1117号'),
-        'checker': 'file_attr',
-        'local': True,
+        'checker': 'skip',
+        'local': False,
+        'skip_reason': '无标段分组输入，跨标段判定由同标段作者雷同代表',
     },
     {
         'id': 'bidder_agent_contact',
@@ -419,9 +421,9 @@ INDICATOR_DEFS = [
         'problem': '投标人联系人与招标代理机构联系人雷同（内外勾连）。',
         'rule': '投标人投标文件联系人与招标代理联系人雷同的，记为可疑，得 5 分。',
         'rule_ref': _rule_ref('002_tender_regs', '第四十一条', '招标投标法实施条例'),
-        'checker': 'relationship',
-        'local': True,
-        # FIX-015 (D3): distinct skip reason — needs agency contact list data
+        'checker': 'skip',
+        'local': False,
+        # FIX-2026-09-07-QA-C4: 无招标代理联系人名单 → 真 skip（此前误用通用关系报告给分）
         'skip_reason': '缺少招标代理机构联系人名单（外部数据）',
     },
     {
@@ -471,7 +473,7 @@ INDICATOR_DEFS = [
         'problem': '技术标暗标中发现可识别身份信息（泄露单位身份）。',
         'rule': '技术标中出现单位名称、人员姓名等可识别身份信息的，记为可疑，得 5 分。',
         'rule_ref': _rule_ref('006_bid_eval_regs', '第十九条', '评标委员会和评标方法暂行规定'),
-        'checker': 'typo',
+        'checker': 'tech_seal',
         'local': True,
     },
     {
@@ -481,9 +483,9 @@ INDICATOR_DEFS = [
         'problem': '评委与投标人存在关联（影响独立评审）。',
         'rule': '评委与投标人存在任职、股权或社交关联的，记为可疑，得 5 分。',
         'rule_ref': _rule_ref('006_bid_eval_regs', '第十二条', '评标委员会和评标方法暂行规定'),
-        'checker': 'relationship',
-        'local': True,
-        # FIX-015 (D3): distinct skip reason — needs expert/评委 name list data
+        'checker': 'skip',
+        'local': False,
+        # FIX-2026-09-07-QA-C4: 无评标专家名单 → 真 skip（此前误用通用关系报告给分）
         'skip_reason': '缺少评标专家名单（外部数据）',
     },
     {
@@ -535,8 +537,8 @@ INDICATOR_DEFS = [
         'problem': '投标联系人电话号码异常（多单位共用、空号、重复号码）。',
         'rule': '不同投标单位的联系人电话雷同或同一号码出现在多个单位的，记为可疑，得 5 分。',
         'rule_ref': _rule_ref('002_tender_regs', '第四十条', '招标投标法实施条例'),
-        'checker': 'skip',
-        'local': False,
+        'checker': 'contact',
+        'local': True,
     },
 ]
 

@@ -5,21 +5,26 @@
       "投标文件_商务技术标.docx"
     ],
     "n_bidders": 2,
-    "date": "2026-09-01",
-    "note": "FIX-015 P0 vectorizer rebuild (word-level TF-IDF)"
+    "date": "2026-09-08",
+    "note": "FIX-2026-09-07-QA-C4 刷新: contact 改真实比对, relationship 真 skip, tech_seal 真检测, bidder_count 本地"
   },
-  "composite_score": 17.4,
+  "composite_score": 19.0,
   "warning_level": "◇ 正常",
   "indicators": {
+    "file_attr_lasteditor_same": {
+      "score": 0.0,
+      "skipped": false,
+      "result": "√ 未发现文件属性雷同。"
+    },
     "same_machine_code": {
       "score": 0.0,
       "skipped": false,
       "result": "√ 未发现文件属性雷同。"
     },
     "same_file_code": {
-      "score": 0.0,
-      "skipped": false,
-      "result": "√ 未发现显著文本相似异常。"
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（需招标文件做模板去除，文本相似度不作依据）"
     },
     "same_dongle": {
       "score": 0.0,
@@ -27,14 +32,14 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "tech_section_similar": {
-      "score": 0.0,
-      "skipped": false,
-      "result": "√ 未发现显著文本相似异常。"
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（需招标文件做模板去除，文本相似度不作依据）"
     },
     "contact_person_same": {
-      "score": 0.5,
+      "score": 0,
       "skipped": false,
-      "result": "▲ 发现1组共享关键信息，共1个共同关键词。"
+      "result": "√ 未发现联系人雷同。"
     },
     "economic_error_similar": {
       "score": 0.0,
@@ -58,13 +63,13 @@
     },
     "cross_file_code_same": {
       "score": 0.0,
-      "skipped": false,
-      "result": "√ 未发现显著文本相似异常。"
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "cross_contact_same": {
-      "score": 0.5,
+      "score": 0,
       "skipped": false,
-      "result": "▲ 发现1组共享关键信息，共1个共同关键词。"
+      "result": "√ 未发现跨标段联系人雷同。"
     },
     "tender_query": {
       "score": 0.0,
@@ -92,9 +97,9 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "bidder_count_abnormal": {
-      "score": 0.0,
-      "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "score": 15,
+      "skipped": false,
+      "result": "▲ 有效投标单位仅 2 家（<3），竞争不足，围标易达成。"
     },
     "upload_interval_abnormal": {
       "score": 0.0,
@@ -173,13 +178,13 @@
     },
     "cross_machine_code": {
       "score": 0.0,
-      "skipped": false,
-      "result": "√ 未发现文件属性雷同。"
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "bidder_agent_contact": {
-      "score": 28.5,
-      "skipped": false,
-      "result": "● 发现4个红色预警，2个实体，2个关系，风险评分28.5。缺少招标代理机构联系人名单（外部数据）"
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "expert_tenderer_closeness": {
       "score": 0.0,
@@ -202,14 +207,14 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "tech_seal_check": {
-      "score": 0.0,
+      "score": 30,
       "skipped": false,
-      "result": "√ 未发现文本质量问题。"
+      "result": "▲ 发现 2 份投标文件暗标身份泄露（技术标含可识别身份信息）。"
     },
     "expert_bidder_closeness": {
-      "score": 28.5,
-      "skipped": false,
-      "result": "● 发现4个红色预警，2个实体，2个关系，风险评分28.5。缺少评标专家名单（外部数据）"
+      "score": 0.0,
+      "skipped": true,
+      "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "bad_expert_score": {
       "score": 0.0,
@@ -232,21 +237,21 @@
       "result": "√ 各投标报价未见等比/等差规律浮动。"
     },
     "contact_phone_abnormal": {
-      "score": 0.0,
-      "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "score": 0,
+      "skipped": false,
+      "result": "√ 未发现不同投标文件联系电话雷同。"
     }
   },
   "suspected": [
     {
       "name": "投标文件_价格标.docx",
-      "indicators_triggered": 6,
-      "score": 11.1
+      "indicators_triggered": 2,
+      "score": 7.8
     },
     {
       "name": "投标文件_商务技术标.docx",
-      "indicators_triggered": 6,
-      "score": 12.3
+      "indicators_triggered": 2,
+      "score": 9.0
     }
   ]
 }

@@ -31,6 +31,14 @@ MAP_COLUMNS = {
     '报价方式': 'price_mode', '投标报价': 'bid_price',
     '备注': 'remark',
 }
+# FIX-2026-09-07-QA-C4: 交易平台列放开映射（此前"解析后忽略"）——开标表若含这些列，
+# 可激活 bid_ip_same / decrypt_ip_same / download_ip_same / same_dongle 等信号。
+PLATFORM_COLUMNS = {
+    '文件下载IP': 'download_ip', '标书上传时间': 'upload_time', '标书上传IP': 'upload_ip',
+    '解密状态': 'decrypt_status', '解密IP': 'decrypt_ip',
+    '文件码': 'file_code', '加密锁': 'dongle',
+}
+MAP_COLUMNS.update(PLATFORM_COLUMNS)
 # 可选的扩展列（评审/中标信息，若开标表提供）
 EXTRA_COLUMNS = {
     '中标单位': 'winner', '中标金额': 'win_amount', '评标得分': 'score',
@@ -453,9 +461,39 @@ def compute_open_info_indicators(file_data, open_info, eval_criteria):
     }
     for k, note in placeholder_open.items():
         if k not in out:
-            out[k] = {'score': 0, 'result': f'○ {note}。', 'details': []}
+            # FIX-2026-09-07-QA-C4: 占位保持 skipped（不参与复合指数分母，避免机械压低指数）
+            out[k] = {'score': 0, 'result': f'○ {note}。', 'details': [], 'skipped': True}
+
+    # FIX-2026-09-07-QA-C4: 平台列信号（开标表含文件下载IP/上传IP/解密IP/文件码/加密锁时激活）
+    _platform_signals(out, rows)
 
     return out
+
+
+def _platform_signals(out: dict, rows: list[dict]) -> None:
+    """开标表若含交易平台列（IP/文件码/加密锁），跨单位重复即激活对应指标。"""
+    col_map = {
+        'upload_ip': ('bid_ip_same', '上传IP'),
+        'decrypt_ip': ('decrypt_ip_same', '解密IP'),
+        'download_ip': ('download_ip_same', '下载IP'),
+        'file_code': ('same_file_code', '文件码'),
+        'dongle': ('same_dongle', '加密锁'),
+    }
+    for field, (ind_id, label) in col_map.items():
+        groups: dict[str, list[str]] = {}
+        for r in rows:
+            v = str(r.get(field, '') or '').strip()
+            bidder = str(r.get('bidder', '') or '').strip()
+            if v and bidder:
+                groups.setdefault(v, []).append(bidder)
+        dup = {v: b for v, b in groups.items() if len(set(b)) >= 2}
+        if dup:
+            details = [{label: v, 'bidders': ', '.join(sorted(set(b))[:5])} for v, b in dup.items()]
+            out[ind_id] = {
+                'score': min(15 + 5 * len(details), 30),
+                'result': f"▲ 发现 {len(details)} 组不同投标单位共用同一{label}（{label}雷同）。",
+                'details': details,
+            }
 
 
 def quote_with_open_price(file_data, open_info, reference_price=None):

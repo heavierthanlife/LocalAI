@@ -387,11 +387,20 @@ def remove_template_content(text, template_text, threshold=0.85):
         return "[Template content fully matched] " + text
     return '\n'.join(kept_paras)
 
-def extract_keywords(text, top_k=20):
-    """Extract keywords using jieba-optimized TF-IDF (works for Chinese)."""
+def extract_keywords(text, top_k=20, extra_stop_words=None):
+    """Extract keywords using jieba-optimized TF-IDF (works for Chinese).
+
+    FIX-2026-09-07-QA-C4: merge extra_stop_words (industry word tables) so
+    行业通用词 (超市/收银/理货…) don't dominate keyword overlap.
+    """
     if not text.strip():
         return []
-    vectorizer = _make_vectorizer(stop_words=None, max_features=top_k)
+    if extra_stop_words:
+        from app.services.stop_words import DEFAULT_STOP_WORDS
+        merged = set(DEFAULT_STOP_WORDS) | set(extra_stop_words)
+    else:
+        merged = None
+    vectorizer = _make_vectorizer(stop_words=merged, max_features=top_k)
     try:
         tfidf = vectorizer.fit_transform([text])
         feature_names = vectorizer.get_feature_names_out()
@@ -401,9 +410,9 @@ def extract_keywords(text, top_k=20):
     except Exception:
         return []
 
-def keyword_overlap_similarity(text1, text2):
-    kw1 = set(extract_keywords(text1, 20))
-    kw2 = set(extract_keywords(text2, 20))
+def keyword_overlap_similarity(text1, text2, extra_stop_words=None):
+    kw1 = set(extract_keywords(text1, 20, extra_stop_words=extra_stop_words))
+    kw2 = set(extract_keywords(text2, 20, extra_stop_words=extra_stop_words))
     if not kw1 and not kw2:
         return 0.0
     # Guard against template/boilerplate-only texts: if either side has too few
@@ -797,6 +806,12 @@ def extract_metadata(file_storage):
                 meta['last_modified_by'] = core_props.last_modified_by or ''
             except Exception:
                 meta['last_modified_by'] = ''
+            # FIX-2026-09-07-QA-C4: 补 creator / producer
+            try:
+                meta['creator'] = core_props.last_modified_by or core_props.author or ''
+            except Exception:
+                meta['creator'] = ''
+            meta['producer'] = 'WPS' if 'WPS' in (core_props.comments or '') else ''
         except Exception:
             pass
     return meta

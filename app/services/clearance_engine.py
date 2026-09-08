@@ -112,7 +112,7 @@ def _run_cross_comparison(file_data, tender_text=None, ptype=None):
         'text_matrix': text_matrix,
         'key_matrix': key_matrix,
         'attr_matrix': attr_matrix,
-        'key_info_matches': build_key_info_matches(pairs),
+        'key_info_matches': build_key_info_matches(pairs, extra_stop_words=ind_stop),
         'attr_details': build_attr_details(file_data),
         'files': filenames,
         'template_missing': template_missing,

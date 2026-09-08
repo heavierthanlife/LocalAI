@@ -75,8 +75,8 @@ DEFAULT_SCORE_CAP = 30.0
 def _weighted_total_score(indicators: list[dict]) -> float:
     """0-100 权重复合指数：Σ(w_i × min(score_i/cap_i, 1)) / Σ(w_i) × 100.
 
-    text_sim 三指标去重：same_file_code 全计，tech_section_similar /
-    cross_file_code_same 按 0.3× 衰减（避免同一次相似度被计 3 次）。
+    text_sim 去重：same_file_code 代表 text_sim 维度，tech_section_similar /
+    cross_file_code_same 不再单独贡献（避免同一次文本相似度被计 3 次）。
     """
     # text_sim 指标去重：same_file_code 代表 text_sim 维度，
     # tech_section_similar / cross_file_code_same 不再单独贡献（避免同一次相似度计 3 次）
@@ -89,6 +89,8 @@ def _weighted_total_score(indicators: list[dict]) -> float:
         iid = ind.get('id', '')
         if iid in ('tech_section_similar', 'cross_file_code_same'):
             continue  # 去重：由 same_file_code 代表
+        if iid == 'cross_contact_same':
+            continue  # FIX-2026-09-07-QA-C4: 无跨标段分组时与 contact_person_same 同源，去重
         w = INDICATOR_WEIGHTS.get(iid, DEFAULT_INDICATOR_WEIGHT)
         cap = INDICATOR_SCORE_CAPS.get(iid, DEFAULT_SCORE_CAP)
         s = float(ind.get('score', 0) or 0)
@@ -132,7 +134,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
                 'text_sim': False, 'key_info': True,
                 'file_attr': False, 'image_sim': False
             }, template_text=tender_text, extra_stop_words=extra_stop_words)
-            key_info_matches = build_key_info_matches(pairs)
+            key_info_matches = build_key_info_matches(pairs, extra_stop_words=extra_stop_words)
             return {'key_info_matches': key_info_matches}
 
         elif name == 'file_attr':
@@ -149,6 +151,34 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
                     lasteditor_groups[le] = lasteditor_groups.get(le, []) + [ad['filename']]
             return {'attr_details': attr_details, 'author_groups': author_groups,
                     'lasteditor_groups': lasteditor_groups}
+
+        elif name == 'contact':
+            # FIX-2026-09-07-QA-C4: 从投标文件正文提取真实联系人/电话/邮箱并跨文件比对。
+            # 替代原 key_info 关键词重合冒充联系人雷同的错误实现。
+            from app.services.contact_extractor import compare_contacts
+            return compare_contacts(file_data)
+
+        elif name == 'bidder_count':
+            # FIX-2026-09-07-QA-C4: 有效投标数 <3 本地可算（此前被误标 skip）
+            n = len(file_data)
+            if n < 3:
+                return {
+                    'bidder_count_abnormal': {
+                        'score': min((3 - n) * 15, 30),
+                        'result': f"▲ 有效投标单位仅 {n} 家（<3），竞争不足，围标易达成。",
+                        'details': [{'count': n, 'threshold': 3}],
+                    }
+                }
+            return {
+                'bidder_count_abnormal': {
+                    'score': 0, 'result': f"√ 有效投标单位 {n} 家，竞争充足。", 'details': [],
+                }
+            }
+
+        elif name == 'tech_seal':
+            # FIX-2026-09-07-QA-C4: 真实暗标身份泄露检测（替代 typo 错别字误用）
+            from app.services.tech_seal_detector import detect_tech_seal_leak
+            return {'results': detect_tech_seal_leak(file_data)}
 
         elif name == 'typo':
             from app.services.typo_detector import detect_typos_batch
@@ -244,6 +274,9 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
         file_scores[p['j']] += p['risk'] * 0.5
 
     # Add scores from other checkers
+    contact_data = checker_data.get('contact', {})
+    seal_data = checker_data.get('tech_seal', {})
+    bidder_count_data = checker_data.get('bidder_count', {})
     ki_data = checker_data.get('key_info', {})
     if ki_data.get('key_info_matches'):
         for ki in ki_data['key_info_matches']:
@@ -259,6 +292,13 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             for i in range(n):
                 if file_data[i]['filename'] in files:
                     file_scores[i] += 5.0
+
+    # FIX-2026-09-07-QA-C3: 同一最后编辑人（硬信号）给更高预警单位加成
+    for le, files in lasteditor_groups.items():
+        if len(files) >= 2:
+            for i in range(n):
+                if file_data[i]['filename'] in files:
+                    file_scores[i] += 10.0
 
     typo_data = checker_data.get('typo', {})
     if typo_data.get('results'):
@@ -338,6 +378,25 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             if skipped:
                 result_text = f"○ 跳过（{error_msg}）"
 
+        elif ind['checker'] == 'bidder_count':
+            bc = bidder_count_data.get(ind['id'], {})
+            score = bc.get('score', 0)
+            result_text = bc.get('result', '√ 有效投标数正常。')
+            details = bc.get('details', [])
+            if skipped:
+                result_text = f"○ 跳过（{error_msg}）"
+
+        elif ind['checker'] == 'contact':
+            # FIX-2026-09-07-QA-C4: 真实联系人/电话/邮箱比对（替代 key_info 关键词误报）
+            contact_res = contact_data.get(ind['id'], {})
+            score = contact_res.get('score', 0)
+            result_text = contact_res.get('result', '√ 未发现联系人雷同。')
+            details = contact_res.get('details', [])
+            if contact_res.get('placeholder'):
+                result_text = contact_res.get('result', '○ 需开标信息表/联系人数据')
+            if skipped:
+                result_text = f"○ 跳过（{error_msg}）"
+
         elif ind['checker'] == 'key_info':
             ki_matches = ki_data.get('key_info_matches', [])
             if ki_matches:
@@ -374,6 +433,22 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                                         'attr_same': '是'})
             else:
                 result_text = "√ 未发现文件属性雷同。"
+            if skipped:
+                result_text = f"○ 跳过（{error_msg}）"
+
+        elif ind['checker'] == 'tech_seal':
+            # FIX-2026-09-07-QA-C4: 暗标身份泄露检测（真实实现，替代 typo 错别字）
+            seal_res = seal_data.get('results', {})
+            leaked = [n for n, r in seal_res.items() if r.get('leak')]
+            if leaked:
+                score = 30
+                result_text = f"▲ 发现 {len(leaked)} 份投标文件暗标身份泄露（技术标含可识别身份信息）。"
+                details = [{'file': n, 'evidence': '；'.join(r.get('evidence', []))[:120]}
+                           for n, r in seal_res.items() if r.get('leak')][:10]
+            else:
+                score = 0
+                result_text = "√ 未发现技术标暗标身份泄露。"
+                details = []
             if skipped:
                 result_text = f"○ 跳过（{error_msg}）"
 
@@ -493,7 +568,8 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             score = oi.get('score', 0)
             result_text = oi.get('result', result_text)
             details = oi.get('details', [])
-            skipped = False
+            # FIX-2026-09-07-QA-C4: 占位结果保持 skipped（不参与分母）
+            skipped = bool(oi.get('skipped', False))
 
         rr = ind.get('rule_ref', {})
         indicators.append({

@@ -206,16 +206,18 @@ def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=N
     return pairs, risk_matrix
 
 
-def build_key_info_matches(pairs):
+def build_key_info_matches(pairs, extra_stop_words=None):
     """Post-process key info matches from pairs.
 
     FIX-015 (D4): carry the pair matrix coordinates (i, j) through so the report
     shows real coordinates instead of (-,-) from a mismatched index lookup.
+    FIX-2026-09-07-QA-C4: extra_stop_words (industry tables) filter 行业通用词
+    from the common keywords.
     """
     matches = []
     for p in pairs:
-        kw1 = set(extract_keywords(p['text1'], 20))
-        kw2 = set(extract_keywords(p['text2'], 20))
+        kw1 = set(extract_keywords(p['text1'], 20, extra_stop_words=extra_stop_words))
+        kw2 = set(extract_keywords(p['text2'], 20, extra_stop_words=extra_stop_words))
         matches.append({
             'name1': p['name1'],
             'name2': p['name2'],

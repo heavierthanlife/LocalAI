@@ -299,3 +299,68 @@ def test_run_analysis_lasteditor_indicator():
     le = inds.get("file_attr_lasteditor_same")
     assert le is not None, "缺少 file_attr_lasteditor_same 指标"
     assert le.get("score", 0) > 0, f"相同最后编辑人应触发: {le.get('score')} {le.get('result')}"
+
+
+# ── 10. 联系人/电话/邮箱真实比对（FIX-2026-09-07-QA-C4）────────
+def test_contact_person_same_real_match():
+    """跨文件同联系人 → contact_person_same 触发（真实联系人，非关键词）。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {"filename": "甲公司.docx", "text": "投标联系人：李四 联系电话：13811112222", "metadata": {}, "images": []},
+        {"filename": "乙公司.docx", "text": "委托代理人：李四 手机 13811112222", "metadata": {}, "images": []},
+        {"filename": "丙公司.docx", "text": "联系人：王五 电话 13933334444", "metadata": {}, "images": []},
+    ]
+    report = run_analysis(docs, user_id="t", thread_id="t")
+    inds = {i["id"]: i for i in report["indicators"]}
+    cp = inds["contact_person_same"]
+    assert cp.get("score", 0) > 0, f"同联系人应触发: {cp.get('result')}"
+    ph = inds["contact_phone_abnormal"]
+    assert ph.get("score", 0) > 0, f"同电话应触发: {ph.get('result')}"
+    # 关键词不应出现在 details（真实联系人证据）
+    det = " ".join(str(d) for d in cp.get("details", []))
+    assert "采购" not in det and "超市" not in det, f"details 不应含行业词: {det}"
+
+
+def test_contact_no_data_placeholder():
+    """无联系人实体 → contact 指标落"○ 需联系人数据"占位（score=0）。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {"filename": "a.docx", "text": "本项目为超市经营服务，商品陈列规范。", "metadata": {}, "images": []},
+        {"filename": "b.docx", "text": "经营思路：注重商品质量与库存周转。", "metadata": {}, "images": []},
+    ]
+    report = run_analysis(docs, user_id="t", thread_id="t")
+    inds = {i["id"]: i for i in report["indicators"]}
+    cp = inds["contact_person_same"]
+    assert cp.get("score", 0) == 0
+    assert "需开标信息表" in cp.get("result", ""), f"应占位提示: {cp.get('result')}"
+
+
+# ── 11. 暗标检测（FIX-2026-09-07-QA-C4）────────────────────────
+def test_tech_seal_detector_leak_and_clean():
+    """技术方案段内公司名 → 泄露；正常商务标自指称谓 → 不泄露。"""
+    from app.services.tech_seal_detector import detect_tech_seal_leak
+    leaky = detect_tech_seal_leak([
+        {"filename": "北京中昌华美超市服务有限责任公司.docx",
+         "text": "技术方案：本项目采用先进工艺。北京中昌华美超市服务有限责任公司将全权负责实施。"},
+    ])
+    assert leaky["北京中昌华美超市服务有限责任公司.docx"]["leak"] is True, "技术方案段公司名应判泄露"
+
+    clean = detect_tech_seal_leak([
+        {"filename": "商务技术文件-北京物美邻鲜连锁超市有限公司.docx",
+         "text": "我公司承诺严格按照招标文件要求提供服务，本公司实力雄厚。"},
+    ])
+    assert clean["商务技术文件-北京物美邻鲜连锁超市有限公司.docx"]["leak"] is False, "纯自指称谓不应误判泄露"
+
+
+def test_bidder_count_abnormal_local():
+    """有效投标数 <3 → bidder_count_abnormal 本地触发（不再 skip）。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {"filename": "a.docx", "text": "内容甲", "metadata": {}, "images": []},
+        {"filename": "b.docx", "text": "内容乙", "metadata": {}, "images": []},
+    ]
+    report = run_analysis(docs, user_id="t", thread_id="t")
+    inds = {i["id"]: i for i in report["indicators"]}
+    bc = inds["bidder_count_abnormal"]
+    assert bc.get("score", 0) > 0, f"n<3 应触发: {bc.get('score')} {bc.get('result')}"
+    assert bc.get("skipped") is not True, "bidder_count 不应 skip"

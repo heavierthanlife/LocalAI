@@ -8,6 +8,25 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-08] — 46 项指标语义错配系统修复：联系人/关系/暗标/投标数（FIX-2026-09-07-QA-C4）
+
+### Fixed
+- **联系人雷同误报**（用户报告 3.1.6）：`contact_person_same`/`cross_contact_same`/`contact_phone_abnormal` 不再用 key_info 关键词重合冒充，新增 `app/services/contact_extractor.py` 从投标文件正文提取真实联系人/手机号/邮箱并跨文件比对；无联系人数据落"○ 需开标信息表/联系人数据"占位（score=0）
+- **关系指标误报**：`bidder_agent_contact`/`expert_bidder_closeness` 无代理/评委名单时改真 skip（此前误跑通用关系报告给 28.5 分，文案自相矛盾）
+- **暗标检测空壳**：`tech_seal_check` 不再用错别字检测冒充，新增 `app/services/tech_seal_detector.py` 真实检测（技术方案段公司名/印章提示/大量人员姓名→泄露；校准避免自指称谓误判）
+- **投标数漏报**：`bidder_count_abnormal` 本地 `n<3` 触发（此前被误标 skip 吞掉）
+- **行业词污染关键词**：`extract_keywords`/`keyword_overlap_similarity`/`build_key_info_matches` 接入行业词表
+- **指标去重/语义**：`same_machine_code`→"文件作者/编制人雷同"改名、`cross_machine_code`→skip；`cross_contact_same` 加权去重；专家指标占位保持 skipped 不压低指数；`_weighted_total_score` docstring 与实现一致
+- **平台列激活**：`clearance_openinfo` 放开 IP/文件码/加密锁列映射 + `_platform_signals`（开标表含平台列且跨单位重复时激活对应指标）；`extract_metadata` docx 补 creator/producer；`suspected_units` 补 lasteditor 组加成
+
+### regression: 115/115 tests passed · verify_fixes 89/89 · check_system 133/137
+- 基线 scores.json 刷新（contact 0.5→0、relationship 28.5→skip、tech_seal 空壳→真检测、bidder_count skip→触发），composite 19.0 正常
+- 新增 4 回归测试：联系人真实比对/无数据占位/暗标泄露与非泄露/投标数本地触发
+
+---
+
+
+
 ## [2026-09-08] — 清标证据链提纯：模板段排除 + 元数据硬信号 + 6.9 铁证优先（FIX-2026-09-07-QA-C3）
 
 ### Fixed
