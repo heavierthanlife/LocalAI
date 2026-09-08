@@ -36,7 +36,7 @@
 - CHANGELOG 新增 [2026-09-08] round-008 条目。
 
 ## ⑦ PUSH
-- 见 commit：<待填>
+- `ff7ca33..9384d30` 已推送（LocalAI master），工作树干净。last_head=9384d30。
 
 ## ⑧ 验证
 - 回归 **115/115 passed**（新增 4：contact 真实比对/无数据占位/tech_seal 泄露与非泄露/bidder_count 本地）· verify_fixes 89/89 · check_system 133/137
