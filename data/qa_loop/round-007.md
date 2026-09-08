@@ -37,7 +37,7 @@
 - CHANGELOG 新增 [2026-09-08] round-007 条目。
 
 ## ⑦ PUSH
-- 见 commit：<待填>
+- `9c147db..ff7ca33` 已推送（LocalAI master），工作树干净。last_head=ff7ca33。
 
 ## ⑧ IMAGE / 真实文件复测
 - 容器内重跑（同步代码 + 真实 3 文件）：
