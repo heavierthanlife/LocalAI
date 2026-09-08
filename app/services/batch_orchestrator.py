@@ -237,6 +237,8 @@ def build_attr_details(file_data):
             'creation_date': meta.get('creationDate', ''),
             'creator': meta.get('creator', ''),
             'producer': meta.get('producer', ''),
+            'last_modified_by': meta.get('last_modified_by', ''),
+            'modified': str(meta.get('modified', '')),
         })
     return details
 
@@ -278,7 +280,7 @@ def cluster_order_by_risk(risk_matrix, files):
 
 
 def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2,
-                 collusion_para_map=None):
+                 collusion_para_map=None, evidence_counts=None, min_evidence=2):
     """E2 — find connected groups where every internal pair exceeds
     `threshold` risk (a "gang"/疑似围标集团).
 
@@ -286,6 +288,9 @@ def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2,
     reported if it contains at least one internal pair with paragraph-level
     substantive-collusion evidence — otherwise it's just shared template/industry
     overlap, not a collusion ring.
+    FIX-2026-09-07-QA-C3: `evidence_counts` maps pair→#non-template substantive
+    shared segments; a gang must contain ≥ `min_evidence` such segments to be
+    reported (default 2, per user decision).
 
     Returns list of dicts: {members:[indices], files:[names],
                             internal_pairs:[(i,j)], max_risk, avg_risk}
@@ -315,14 +320,18 @@ def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2,
         return members
 
     def _has_evidence(inds):
-        if not collusion_para_map:
+        if not collusion_para_map and not evidence_counts:
             return True  # legacy callers without the new signal
+        # 非模板实质段证据：组内所有内部对共享的实质段总数（跨对不去重，保守求和）
+        total = 0
         for a in range(len(inds)):
             for b in range(a + 1, len(inds)):
                 i, j = inds[a], inds[b]
-                if collusion_para_map.get((i, j), collusion_para_map.get((j, i), 0.0)) > 0:
+                if evidence_counts:
+                    total += evidence_counts.get((i, j), evidence_counts.get((j, i), 0))
+                elif collusion_para_map.get((i, j), collusion_para_map.get((j, i), 0.0)) > 0:
                     return True
-        return False
+        return total >= min_evidence
 
     seen_groups = set()
     for i in range(n):

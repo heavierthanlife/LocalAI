@@ -792,6 +792,11 @@ def extract_metadata(file_storage):
             meta['author'] = core_props.author or ''
             meta['created'] = core_props.created
             meta['modified'] = core_props.modified
+            # FIX-2026-09-07-QA-C3: 最后编辑人（cp:lastModifiedBy）——"同一人/同机做两家标书"硬信号
+            try:
+                meta['last_modified_by'] = core_props.last_modified_by or ''
+            except Exception:
+                meta['last_modified_by'] = ''
         except Exception:
             pass
     return meta

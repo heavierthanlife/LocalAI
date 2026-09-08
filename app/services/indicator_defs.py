@@ -69,6 +69,16 @@ def _rule_ref(key: str, article: str, law_label: str) -> dict:
 INDICATOR_DEFS = [
     # ── 3.1 触发指标（11 项）──────────────────────────────────
     {
+        'id': 'file_attr_lasteditor_same',
+        'name': '同标段最后编辑人雷同',
+        'category': '触发指标',
+        'problem': '不同投标文件由同一编辑人/同一制作环境最后修改（cp:lastModifiedBy 相同），疑似同一人或同一台电脑制作多家标书。',
+        'rule': '同一标段内 ≥2 份投标文件"最后编辑人"（lastModifiedBy）相同，记为疑似，每组得基准分 30 分。',
+        'rule_ref': _rule_ref('002_tender_regs', '第四十条', '招标投标法实施条例'),
+        'checker': 'file_attr',
+        'local': True,
+    },
+    {
         'id': 'same_machine_code',
         'name': '同标段机器码雷同',
         'category': '触发指标',

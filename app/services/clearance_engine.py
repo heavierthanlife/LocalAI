@@ -78,12 +78,14 @@ def _run_cross_comparison(file_data, tender_text=None, ptype=None):
     # FIX-2026-09-04-QA-B1: 段落级实质雷同（新主信号）——无需招标文件即可运行。
     paragraph_collusion = None
     collusion_para_map = {}
+    evidence_counts = {}  # FIX-2026-09-07-QA-C3: pair→非模板实质段数（集团判定门槛）
     try:
         from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
         paragraph_collusion = detect_shared_substantive_segments(file_data, ptype=ptype)
         for k, c in (paragraph_collusion.get('per_pair_count') or {}).items():
             i, j = map(int, k.strip('()').split(','))
             collusion_para_map[(i, j)] = min(100, c * 25)
+            evidence_counts[(i, j)] = c
     except Exception as e:
         logger.warning(f"Paragraph collusion detection failed: {e}")
 
@@ -120,7 +122,8 @@ def _run_cross_comparison(file_data, tender_text=None, ptype=None):
     #     FIX-2026-09-04-QA-B1: 集团必须含 ≥1 对共享实质段（否则只是模板/行业重叠）。
     try:
         gangs = detect_gangs(risk_matrix, filenames, threshold=10.0,
-                             collusion_para_map=collusion_para_map)
+                             collusion_para_map=collusion_para_map,
+                             evidence_counts=evidence_counts, min_evidence=2)
         if gangs:
             result['gangs'] = gangs
     except Exception as e:

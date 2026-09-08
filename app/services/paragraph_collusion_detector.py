@@ -61,6 +61,12 @@ _LEGAL_TERMS = frozenset({
     "重要", "主要", "基本", "相应", "必要", "能够", "可以", "应当", "不得",
     "本文件", "本项目", "本服务", "合同要求", "招标要求", "服务标准", "服务内容",
     "服务质量", "服务对象", "服务承诺", "服务期限", "服务地点", "服务费用",
+    # ── 投标函/声明模板措辞（FIX-2026-09-07-QA-C3：防止声明段被当实质雷同）──
+    "正本", "副本", "电子版", "份", "有效期", "截止日", "之日起", "日内",
+    "自愿", "接受", "执行", "全部条款", "仔细研究", "相关材料", "声明",
+    "真实有效", "不实", "后果", "承担", "待命", "供应", "腐烂", "变质",
+    "过期", "伪劣", "指定地点", "响应", "交货", "确认函", "授权书", "承诺书",
+    "资格证明", "我方", "本单位", "本项目", "充分理解", "同意", "条款", "投标",
 })
 
 # ── 段类型标记（报告标注用）───────────────────────────────────
@@ -106,17 +112,28 @@ def _split_paragraphs(text: str):
 
 
 def _classify_paragraph(para: str) -> str:
-    """服务承诺段 / 技术方案段 / 标准条款段 / 其他."""
+    """投标函声明段 / 服务承诺段 / 技术方案段 / 标准条款段 / 其他.
+
+    FIX-2026-09-07-QA-C3: 投标函/响应声明段（"一、按照招标文件要求提交投标文件
+    正本1份…""我方已完全理解招标文件…"）是套用招标模板的正常合规内容，不算串标
+    证据——单独归类并在评分中排除。优先级：声明段 > 标准条款 > 技术方案 > 服务承诺。
+    """
     s = para
+    # 投标函/响应声明指纹：我方/本单位/本投标 + 招标文件/条款/正本/副本/有效期/声明/承诺
+    declare = sum(1 for m in ("我方", "本单位", "本投标", "本文件", "招标文件", "正本",
+                              "副本", "有效期", "截止", "之日起", "日内", "声明",
+                              "自愿", "完全理解", "全部条款", "真实有效", "执行") if m in s)
     svc = sum(1 for m in _SVC_MARKERS if m in s)
     tech = sum(1 for m in _TECH_MARKERS if m in s)
     legal = sum(1 for m in _LEGAL_MARKERS if m in s)
-    if svc >= 1 and svc >= tech:
-        return "服务承诺段"
-    if tech >= 2 and tech > legal:
-        return "技术方案段"
-    if legal >= 3:
+    if declare >= 2:
+        return "投标函声明段"
+    if legal >= 2:
         return "标准条款段"
+    if tech >= 2 and tech > svc:
+        return "技术方案段"
+    if svc >= 2 and svc >= tech:
+        return "服务承诺段"
     if tech >= 1:
         return "技术方案段"
     if svc >= 1:
@@ -245,28 +262,33 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
                 segments[key] = seg
                 seg_order.append(key)
 
-    # 4) 合并"同一实质段"记录（去重同文件对 + 汇集 ≥3 家共享；key=类型+内容前缀）
+    # 4) 分流：模板类段（投标函声明/标准条款/其他/项目信息）与 实质段（服务承诺/技术方案）
+    #    FIX-2026-09-07-QA-C3：声明/条款段是套招标模板的正常合规内容，不作串标证据。
+    TEMPLATE_TYPES = {"投标函声明段", "标准条款段", "其他"}
+    template_merged: list[dict] = []
+    template_key: dict[str, int] = {}
     merged: list[dict] = []
     merged_key: dict[str, int] = {}
     for key in seg_order:
         seg = segments[key]
         ck = seg.pop("_content_key", None) or f"{seg['type']}:{seg['segment_text'][:80]}"
-        if ck in merged_key:
-            idx = merged_key[ck]
-            # 同一实质段被更多文件共享 → 汇集 files（内部存 set，展示时 sorted）
-            merged[idx]["files"].update(seg["files"])
-            merged[idx]["matching_files"].extend(seg["matching_files"])
-            if seg["match_ratio"] > merged[idx]["match_ratio"]:
-                merged[idx]["match_ratio"] = seg["match_ratio"]
+        is_tpl = seg["type"] in TEMPLATE_TYPES
+        bucket, bkey = (template_merged, template_key) if is_tpl else (merged, merged_key)
+        if ck in bkey:
+            idx = bkey[ck]
+            bucket[idx]["files"].update(seg["files"])
+            bucket[idx]["matching_files"].extend(seg["matching_files"])
+            if seg["match_ratio"] > bucket[idx]["match_ratio"]:
+                bucket[idx]["match_ratio"] = seg["match_ratio"]
             continue
-        merged_key[ck] = len(merged)
+        bkey[ck] = len(bucket)
         seg["files"] = set(seg["files"])
         seg["n_files"] = len(seg["files"])
-        merged.append(seg)
-    for seg in merged:
+        bucket.append(seg)
+    for seg in merged + template_merged:
         seg["files"] = sorted(seg["files"])
 
-    # 5) 每对统计
+    # 5) 每对统计（仅实质段）
     per_pair_count: dict[tuple[int, int], int] = {}
     for seg in merged:
         fs = [i for i, fd in enumerate(file_data) if fd["filename"] in seg["files"]]
@@ -280,7 +302,7 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
         tot = min(len(docs[i][1]), len(docs[j][1]))
         per_pair_ratio[(i, j)] = round(cnt / max(tot, 1), 4)
 
-    # 6) 围标风险分（0-100）：数量（√ 曲线）+ 多文件一致性 + 平均惊讶度
+    # 6) 围标风险分（0-100）：仅基于非模板实质段；数量 √ 曲线 + 多文件一致性 + 平均惊讶度
     score = 0.0
     if merged:
         import math
@@ -291,6 +313,7 @@ def detect_shared_substantive_segments(file_data: list[dict], ptype: str | None 
 
     return {
         "shared_segments": merged[:MAX_SEGMENTS],
+        "template_segments": template_merged[:MAX_SEGMENTS],
         "per_pair_count": {f"({i},{j})": c for (i, j), c in per_pair_count.items()},
         "per_pair_ratio": {f"({i},{j})": r for (i, j), r in per_pair_ratio.items()},
         "collusion_score": round(score, 1),

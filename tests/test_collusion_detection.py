@@ -242,3 +242,60 @@ def test_run_analysis_key_info_uses_industry_words():
         assert len(ind_hits) <= 1, f"共同关键词不应以行业词为主: {all_kw} 命中{ind_hits}"
         # 分数不因纯行业词雷同而虚高（≤15 即可，行业词过滤后应明显低于未过滤）
         assert ki.get("score", 0) <= 15, f"行业词过滤后 key_info 不应虚高: {ki.get('score')}"
+
+
+# ── 8. 投标函声明段排除（FIX-2026-09-07-QA-C3）─────────────────
+def test_declaration_template_excluded_from_collusion():
+    """投标函/声明模板段（套招标模板的合规内容）不列入实质雷同。"""
+    from app.services.paragraph_collusion_detector import detect_shared_substantive_segments
+    declare = ("一、按照招标文件要求提交投标文件正本1份和副本4份，电子版投标文件2份。"
+               "二、我方已完全理解招标文件的全部内容，自愿接受并执行招标文件的全部条款。"
+               "三、本投标有效期自提交投标文件的截止之日起180日内有效。")
+    svc = "服务承诺：热情、主动、耐心、周到、细致、尽职尽责，对顾客必须树立尊重和友好的态度。"
+    docs = [
+        {"filename": "a.docx", "text": declare + "\n" + svc},
+        {"filename": "b.docx", "text": declare + "\n" + "（一）" + svc},
+        {"filename": "c.docx", "text": declare + "\n" + "服务态度：文明礼貌热情，主动为顾客设想。"},
+    ]
+    r = detect_shared_substantive_segments(docs, ptype="services")
+    # 声明段应归入 template_segments 而非 shared_segments（实质段）
+    real_types = {s["type"] for s in r["shared_segments"]}
+    assert "投标函声明段" not in real_types, f"声明段不应作实质雷同: {real_types}"
+    assert real_types and real_types == {"服务承诺段"}, f"应只保留服务承诺铁证: {real_types}"
+    assert len(r["shared_segments"]) >= 1, "服务承诺铁证不应丢失"
+
+
+# ── 9. 元数据硬信号（FIX-2026-09-07-QA-C3）─────────────────────
+def test_lasteditor_metadata_extracted():
+    """extract_metadata 应取 docx 的 cp:lastModifiedBy（同一最后编辑人硬信号）。"""
+    from app.services.file_processing import extract_metadata
+    import io
+    from docx import Document as D
+    buf = io.BytesIO()
+    doc = D()
+    cp = doc.core_properties
+    cp.last_modified_by = "超彩赵"
+    doc.save(buf)
+    buf.seek(0)
+    class _Fake:
+        filename = "test.docx"
+        def read(self):
+            return buf.getvalue()
+        def seek(self, _):
+            buf.seek(0)
+    meta = extract_metadata(_Fake())
+    assert meta.get("last_modified_by") == "超彩赵", f"应取到 last_modified_by: {meta}"
+
+
+def test_run_analysis_lasteditor_indicator():
+    """两文件 last_modified_by 相同 → file_attr_lasteditor_same 指标触发。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {"filename": "a.docx", "text": "投标文件内容甲。", "metadata": {"last_modified_by": "超彩赵"}, "images": []},
+        {"filename": "b.docx", "text": "投标文件内容乙。", "metadata": {"last_modified_by": "超彩赵"}, "images": []},
+    ]
+    report = run_analysis(docs, user_id="t", thread_id="t")
+    inds = {i["id"]: i for i in report["indicators"]}
+    le = inds.get("file_attr_lasteditor_same")
+    assert le is not None, "缺少 file_attr_lasteditor_same 指标"
+    assert le.get("score", 0) > 0, f"相同最后编辑人应触发: {le.get('score')} {le.get('result')}"

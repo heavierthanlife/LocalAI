@@ -31,6 +31,7 @@ INDICATOR_WEIGHTS = {
     'economic_error_similar': 0.04, 'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
     'download_ip_same': 0.10, 'cross_file_code_same': 0.06,
     'cross_contact_same': 0.03,
+    'file_attr_lasteditor_same': 0.10,  # FIX-2026-09-07-QA-C3: 同一最后编辑人硬信号
     # 核心指标
     'tender_query': 0.06, 'candidate_give_up': 0.08,
     'subjective_expert_spread': 0.08, 'low_win_rate': 0.05, 'high_win_rate': 0.05,
@@ -59,6 +60,7 @@ INDICATOR_SCORE_CAPS = {
     'tech_section_similar': 30, 'contact_person_same': 40, 'economic_error_similar': 15,
     'bid_ip_same': 30, 'decrypt_ip_same': 30, 'download_ip_same': 30,
     'cross_file_code_same': 30, 'cross_contact_same': 40,
+    'file_attr_lasteditor_same': 30,  # FIX-2026-09-07-QA-C3
     'candidate_give_up': 45, 'high_price_abnormal': 30, 'waste_rate_abnormal': 40,
     'bidder_count_abnormal': 30, 'expert_deviation_abnormal': 35,
     'subjective_expert_spread': 35, 'subjective_expert_units': 35,
@@ -136,11 +138,17 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
         elif name == 'file_attr':
             attr_details = build_attr_details(file_data)
             author_groups = {}
+            lasteditor_groups = {}
             for ad in attr_details:
                 a = ad.get('author', '')
                 if a:
                     author_groups[a] = author_groups.get(a, []) + [ad['filename']]
-            return {'attr_details': attr_details, 'author_groups': author_groups}
+                # FIX-2026-09-07-QA-C3: 最后编辑人（cp:lastModifiedBy）——"同一人/同机做两家标书"
+                le = ad.get('last_modified_by', '')
+                if le:
+                    lasteditor_groups[le] = lasteditor_groups.get(le, []) + [ad['filename']]
+            return {'attr_details': attr_details, 'author_groups': author_groups,
+                    'lasteditor_groups': lasteditor_groups}
 
         elif name == 'typo':
             from app.services.typo_detector import detect_typos_batch
@@ -245,6 +253,7 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
 
     attr_data = checker_data.get('file_attr', {})
     author_groups = attr_data.get('author_groups', {})
+    lasteditor_groups = attr_data.get('lasteditor_groups', {})
     for author, files in author_groups.items():
         if len(files) >= 2:
             for i in range(n):
@@ -346,12 +355,17 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 result_text = f"○ 跳过（{error_msg}）"
 
         elif ind['checker'] == 'file_attr':
-            group_count = sum(1 for f in author_groups.values() if len(f) >= 2)
-            score = group_count * 5.0
+            # FIX-2026-09-07-QA-C3: 按指标分流——same_machine_code 用 author 分组，
+            # file_attr_lasteditor_same 用 cp:lastModifiedBy 分组（"同一人做两家标书"硬信号）
+            use_lasteditor = (ind['id'] == 'file_attr_lasteditor_same')
+            groups = lasteditor_groups if use_lasteditor else author_groups
+            group_count = sum(1 for f in groups.values() if len(f) >= 2)
+            score = group_count * 10.0 if use_lasteditor else group_count * 5.0
             if group_count > 0:
-                result_text = f"▲ 发现{group_count}组文件属性雷同。"
-                details = [{'author': a, 'files': ', '.join(fs), 'count': len(fs)}
-                          for a, fs in author_groups.items() if len(fs) >= 2]
+                key_label = '最后编辑人' if use_lasteditor else '作者'
+                result_text = f"▲ 发现{group_count}组文件{key_label}雷同。"
+                details = [{key_label: a, 'files': ', '.join(fs), 'count': len(fs)}
+                          for a, fs in groups.items() if len(fs) >= 2]
                 # D: 补充 pair 级 attr_same
                 for p in pairs:
                     if p.get('attr_same'):
@@ -1052,25 +1066,41 @@ def build_clearance_docx(report, info_overrides=None):
                 _set_cell(gt.cell(ri + 1, 4), f"{g.get('avg_risk', 0):.1f}", size=9)
             doc.add_paragraph()
 
-        # FIX-2026-09-04-QA-B1: 共享实质段落（段落级围标铁证，含类型标注 + 惊讶度）
+        # FIX-2026-09-04-QA-B1 / FIX-2026-09-07-QA-C3:
+        # 6.9 铁证优先——只列非模板实质段（服务承诺/技术方案），按惊讶度降序，预览加长。
         pc = cross.get('paragraph_collusion') or {}
         shared_segs = pc.get('shared_segments') or []
-        if shared_segs:
-            _add_heading(doc, '6.9、共享实质段落（段落级雷同证据）', H2)
-            st = _add_table(doc, len(shared_segs) + 1, 5)
+        template_segs = pc.get('template_segments') or []
+        real_segs = [s for s in shared_segs if s.get('type') in ('服务承诺段', '技术方案段')]
+        real_segs = sorted(real_segs, key=lambda s: -s.get('surprise', 0))
+        if real_segs:
+            _add_heading(doc, '6.9、共享实质段落（段落级雷同证据·铁证优先）', H2)
+            st = _add_table(doc, min(len(real_segs), 12) + 1, 5)
             for j, hdr in enumerate(['段落类型', '共享单位', '一致率', '惊讶度', '段落内容预览']):
                 _set_cell(st.cell(0, j), hdr, bold=True, size=9, shade=True)
-            for ri, s in enumerate(shared_segs[:12]):
+            for ri, s in enumerate(real_segs[:12]):
                 _set_cell(st.cell(ri + 1, 0), _safe(s.get('type', '其他')), size=9)
                 _set_cell(st.cell(ri + 1, 1), ' / '.join(_safe(f) for f in s.get('files', [])), size=9)
                 _set_cell(st.cell(ri + 1, 2), f"{s.get('match_ratio', 0):.0%}", size=9)
                 _set_cell(st.cell(ri + 1, 3), f"{s.get('surprise', 0):.2f}", size=9)
-                _set_cell(st.cell(ri + 1, 4), _safe(s.get('segment_text', ''))[:60], size=8)
+                _set_cell(st.cell(ri + 1, 4), _safe(s.get('segment_text', ''))[:100], size=8)
             doc.add_paragraph()
             note = doc.add_paragraph()
-            rn = note.add_run('注：惊讶度=段内非行业词/非模板词占比；越高说明措辞越独特，跨文件近逐字雷同越可能是抄写而非模板套用。')
+            rn = note.add_run('注：本表仅列"服务承诺段/技术方案段"等非模板实质雷同，按惊讶度降序；惊讶度=段内非行业/非模板词占比，越高越可能是抄写而非模板套用。')
             rn.font.size = Pt(FINE)
             rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+
+        # 6.9.2 模板/声明段折叠参考（投标函声明/标准条款/项目信息——套招标模板的合规内容，非串标证据）
+        if template_segs:
+            _add_heading(doc, '6.9.2、模板/声明段（投标函·招标条款复述，非串标证据，仅供参考）', H2)
+            tt = _add_table(doc, min(len(template_segs), 10) + 1, 3)
+            for j, hdr in enumerate(['段落类型', '共享单位', '段落内容预览']):
+                _set_cell(tt.cell(0, j), hdr, bold=True, size=8, shade=True)
+            for ri, s in enumerate(template_segs[:10]):
+                _set_cell(tt.cell(ri + 1, 0), _safe(s.get('type', '其他')), size=8)
+                _set_cell(tt.cell(ri + 1, 1), ' / '.join(_safe(f) for f in s.get('files', [])), size=8)
+                _set_cell(tt.cell(ri + 1, 2), _safe(s.get('segment_text', ''))[:60], size=8)
+            doc.add_paragraph()
 
     # ── Section 7: 合规审查结果 ──
     comp = report.get('compliance')
