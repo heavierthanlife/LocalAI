@@ -1,4 +1,4 @@
-# QA-Loop Round 015 (2026-09-09)
+﻿# QA-Loop Round 015 (2026-09-09)
 
 基线: last_head=22160b3 | 模式: full（VL 识别可靠性：OCR ground-truth + 最强 provider + 交叉验证） | 触发: user（mimo VL 低 IQ，如何确保图片识别被正确解读）
 
@@ -27,7 +27,7 @@
 - CHANGELOG [2026-09-09] round-015 条目 + fix_registry FIX-2026-09-09-022。
 
 ## ⑦ PUSH
-- `22160b3..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `22160b3..ebcc902` 已推送（LocalAI master）。last_head 更新。
 
 ## ⑧ 验证
 - 回归 **128/128**（+4 VL 单测：select_vl_pair 排序 / 交叉数字不一致 / 一致 / 无 verifier）· verify_fixes **105/105**
