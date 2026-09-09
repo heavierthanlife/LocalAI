@@ -27,7 +27,7 @@
 - CHANGELOG [2026-09-09] round-013 条目 + fix_registry FIX-2026-09-09-020（R1 invariant）+ SYSTEM_CHECKLIST 注。
 
 ## ⑦ PUSH
-- `49fea74..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `49fea74..788ec16` 已推送（LocalAI master），工作树干净。last_head=788ec16。
 
 ## ⑧ 验证
 - 回归 **121/121** · verify_fixes **101/101** · check_system 133/137 · node --check review/app.js · 后端 7 文件 syntax OK
