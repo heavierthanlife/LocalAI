@@ -1,4 +1,4 @@
-# QA-Loop Round 014 (2026-09-09)
+﻿# QA-Loop Round 014 (2026-09-09)
 
 基线: last_head=ece4ceb | 模式: focused（admin VL 测试组件 404 修复） | 触发: user（VL 模型测试报网络错误 + /admin/vl_test 404）
 
@@ -22,7 +22,7 @@
 - CHANGELOG [2026-09-09] round-014 条目 + round-014.md。
 
 ## ⑦ PUSH
-- `ece4ceb..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `ece4ceb..b256303` 已推送（LocalAI master）。last_head 更新。
 
 ## ⑧ 验证
 - 回归 **124/124**（+3 单测）· verify_fixes **102/102** · check_system 133/137
