@@ -214,3 +214,5 @@ _(6/6 verified automatically)_
 > Round-015 note: image sampling is OCR-first with [source] tags; verify_image cross-model; auto VL resolves strongest provider.
 
 > Round-016 T0 note: audit_bp registered; /knowledge_lab/feedback, /set_video_analysis added; /batch/plagiarism/compare alias; supersession JS → /admin/skill_merge.
+
+> Round-016: T0 audit_js_routes (no_route=0); e2e audit stack compose+seed+driver added.

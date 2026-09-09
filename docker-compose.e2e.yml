@@ -1,0 +1,129 @@
+# ── Local_AI Throwaway E2E Stack (T1 UI audit) ──
+# Reuses the built image local-ai:latest; isolated volumes/containers/ports.
+# Start: docker-compose -p e2e -f docker-compose.e2e.yml up -d
+# Stop : docker-compose -p e2e -f docker-compose.e2e.yml down -v
+# Audit: https://localhost:4443  (Playwright ignore_https_errors)
+services:
+  app:
+    image: local-ai:latest
+    container_name: localai-e2e-app
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - BOCHA_API_KEY=${BOCHA_API_KEY:-}
+      - DATABASE_URL=postgresql://localai:e2e@postgres:5432/localai
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_SECRET_KEY=e2e-secret-key
+      - WTF_CSRF_SECRET_KEY=e2e-csrf-key
+      - APP_ENV=production
+      - ADMIN_PIN=123456
+      - WORKERS=2
+      - LLM_TIMEOUT=120
+      - CREDIT_BROWSER_HEADLESS=true
+      - LOG_LEVEL=INFO
+    volumes:
+      - e2e_app_data:/app/data
+      - e2e_app_logs:/app/logs
+      - ./data/industry_words:/app/data/industry_words:ro
+      - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
+      - ./cert:/app/cert:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - e2e-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/check_auth', timeout=5)"]
+      interval: 15s
+      timeout: 8s
+      retries: 6
+      start_period: 45s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: localai-e2e-postgres
+    environment:
+      POSTGRES_USER: localai
+      POSTGRES_PASSWORD: e2e
+      POSTGRES_DB: localai
+    volumes:
+      - e2e_pg_data:/var/lib/postgresql/data
+    networks:
+      - e2e-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localai"]
+      interval: 8s
+      timeout: 4s
+      retries: 8
+
+  redis:
+    image: redis:7-alpine
+    container_name: localai-e2e-redis
+    command: redis-server --appendonly no
+    volumes:
+      - e2e_redis_data:/data
+    networks:
+      - e2e-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 8s
+      timeout: 3s
+      retries: 5
+
+  celery-worker:
+    image: local-ai:latest
+    container_name: localai-e2e-worker
+    command: celery -A celery_app worker -l warning -c 1 --max-tasks-per-child 50
+    environment:
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DATABASE_URL=postgresql://localai:e2e@postgres:5432/localai
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_SECRET_KEY=e2e-secret-key
+      - LLM_TIMEOUT=120
+    volumes:
+      - e2e_app_data:/app/data
+      - e2e_app_logs:/app/logs
+      - ./data/industry_words:/app/data/industry_words:ro
+      - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - e2e-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: localai-e2e-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./cert:/etc/nginx/certs:ro
+      - ./static:/app/static:ro
+    ports:
+      - "4443:443"
+    depends_on:
+      - app
+    networks:
+      - e2e-net
+
+volumes:
+  e2e_app_data:
+  e2e_app_logs:
+  e2e_pg_data:
+  e2e_redis_data:
+
+networks:
+  e2e-net:
+    driver: bridge

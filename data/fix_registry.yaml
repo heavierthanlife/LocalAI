@@ -758,3 +758,29 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_vl_verify_image_cross_model_mismatch"
+
+
+  - id: FIX-2026-09-09-023
+    title: "前端调用不存在路由的静态交叉检查 (T0 audit_js_routes)"
+    severity: high
+    rationale: >
+      /admin/vl_test 类 bug（JS fetch → 路由从未实现）此前靠人工/静态读码漏过。
+      修复：scripts/audit_js_routes.py 对全部前端 app-origin URL 做 url_map 解析，
+      no_route 必须为 0；audit_bp 已注册、knowledge feedback/set_video_analysis/
+      plagiarism alias/skill_merge 均已接线。
+    checks:
+      - type: grep
+        file: app/routes/__init__.py
+        pattern: "from app.routes.audit import audit_bp"
+      - type: grep
+        file: app/routes/knowledge.py
+        pattern: "def submit_knowledge_feedback"
+      - type: grep
+        file: app/routes/chat.py
+        pattern: "def set_video_analysis"
+      - type: grep
+        file: app/routes/batch.py
+        pattern: "/batch/plagiarism/compare"
+      - type: grep
+        file: scripts/audit_js_routes.py
+        pattern: "url_map"

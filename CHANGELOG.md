@@ -8,6 +8,29 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — UI/interaction "find-all" 审计 T0：静态死链交叉检查（FIX-2026-09-09-023）
+
+### Added
+- `scripts/audit_js_routes.py`：扫描 16 JS + templates 的 fetch/axios/XHR/ajax/href/action/window.open → 路径模板 + 方法感知解析 Flask url_map → 三档分类（no-route/dynamic/external）。首轮**报告模式**跑出并修复 5 处前端调用→不存在路由的死链
+
+### Fixed（T0 揪出的真实死链）
+- **audit_bp 从未注册**：register_all() 缺 audit → `/audit/*` 全部 404（审计后端整块闲置）；补注册复活
+- `/knowledge_lab/feedback` 无路由（技能点赞点踩）→ 参照 ingest 反馈实现（落 user_feedback + 训练日志）
+- `/set_video_analysis` 无路由 → 镜像 `/set_image_analysis`（session['analyze_videos']）
+- `/admin/skill_supersession/respond` 无路由 → 前端改指现有 `/admin/skill_merge`（能力早已存在）
+- `/batch/plagiarism/compare` 404 → batch_bp 根级路由是 `/plagiarism/compare`，补 alias 路由（AGENTS.md 文档 URL 保持可用）
+
+### Added（T1 审计基建，首切）
+- `docker-compose.e2e.yml`：throwaway 栈（复用镜像、`localai-e2e-*`、:4443、e2e_* 新卷）
+- `scripts/e2e_seed.py`（CEO admin / e2euser，幂等）+ `tests/fixtures/audit/`（vl_test.png + 合成标书 docx）
+- `scripts/run_ui_audit.py`：expand-all + 交互元素枚举 → safe-action 策略 + coverage ledger（exercised/blocked:reason/unexplained）+ pageerror/console.error/HTTP≥400 采集
+- 首切实跑 anon-home：34 元素/acted 23/15 failures → 均为匿名页引导 401/403（/cases /templates /notebook /check_storage×3 /admin/projects），低危真实，列入 backlog
+
+### regression: 128/128 tests passed · verify_fixes 110/110 · e2e site 200 · T0 no_route=0
+- backlog：admin 登录驱动+递归 surface walk、/check_storage 引导 401/403 判定、audit_trips 深度之旅（清标 fixture/VL 实图/剽窃/provider refresh）
+
+---
+
 ## [2026-09-09] — VL 识别可靠性：OCR ground-truth + 最强 provider + 交叉验证（FIX-2026-09-09-022）
 
 ### Changed
