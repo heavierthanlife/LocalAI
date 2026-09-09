@@ -26,7 +26,7 @@
 - CHANGELOG [2026-09-09] round-011 条目 + fix_registry FIX-2026-09-09-019（6 条 invariant）。
 
 ## ⑦ PUSH
-- `4b3931c..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `4b3931c..8c40637` 已推送（LocalAI master），工作树干净。last_head=8c40637。
 
 ## ⑧ 验证
 - 回归 **121/121 passed**（原 119 + 2 新）· verify_fixes **101/101**（+5，去 1 重复）· check_system 133/137 · node --check app.js · 后端 syntax 全过
