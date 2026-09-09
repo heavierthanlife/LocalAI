@@ -8,6 +8,25 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 全方位审核修复：死代码清理 / XSS 加固 / 报价信号完整呈现 / 段落证据前端 / 社区持久化（FIX-2026-09-09-018）
+
+### Fixed
+- **报价信号丢失**：`cross_tailing_digits`/`cross_progression`（跨投标人）与 per-bidder `tailing_digits_flag`/`progression_type` 此前计算后未持久化。`quote_anomaly_results` 表 +5 列（含幂等 ALTER），`save_quote_anomaly_results` INSERT 18→23 列；HTML 报表加"尾数一致/等比规律"列 + 2 条 cross 提示；管理端历史列表 SELECT 补齐新列
+- **铁证证据前端缺失（P0）**：段落级雷同证据此前仅 DOCX 有 6.9 表。新增 `_renderParagraphCollusionEvidence`（`_renderIndicatorsTab` 调用，照抄 DOCX 筛选/排序/截断逻辑，`_clearanceEscape` 全转义，模板段折叠参考）；数据已三路下发前端，后端零改动，live + 聊天重载双路径生效
+- **死代码清理**：删除零调用的 `renderDocAnalysisResults`（app.js，80 行）与 `loadAuditHistory`（bid-audit.js，83 行，含 return 后 70 行不可达）
+- **XSS 加固**：`renderQuoteAnomalyHistory`/`renderRelationshipHistory`/`renderTypoHistory` 的 `id`/`checked_at`/`task_id` 裸插值补 `escapeHtml`（`suggestions` 原已转义未重复包裹）
+- **社区检测持久化**：`relationship_risk_summary.details` 由单存 `company_personnel_map` 改为并入 `communities`（Louvain 团伙分组）；`/admin/relationship_results/<task_id>` 返回 communities；前端新增"团伙"详情按钮 + 社区区块渲染
+- **阈值对齐**：bid-audit.js `drop` 默认 0.15→0.30（对齐后端 `quote_anomaly_drop_threshold`）
+- **chat.js emoji 统一**：置顶态 `textContent='📌'` → `_icon('📌')`（与其他态一致）
+
+### regression: 119/119 tests passed · verify_fixes 96/96 · check_system 133/137 · node --check ×3 OK
+- 契约验证：`_run_cross_comparison` 产出 `paragraph_collusion`（服务承诺段 surprise=0.35/98% 一致）与前端渲染契约匹配
+- 管理端历史表新增"本福特/尾数一致/等比规律"三列（Benford >0.15 标黄）
+
+---
+
+
+
 ## [2026-09-09] — 铁证双层判定：铁证信号独立成硬警报，不再被复合指数稀释（FIX-2026-09-09-017）
 
 ### Added

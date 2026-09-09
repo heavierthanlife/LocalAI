@@ -24,7 +24,7 @@
         ],
         quote_anomaly: [
             {key: 'same_rate', label: '雷同报价阈值', type: 'float', default: 0.05},
-            {key: 'drop', label: '异常降价阈值', type: 'float', default: 0.15}
+            {key: 'drop', label: '异常降价阈值', type: 'float', default: 0.30}
         ],
         relationship_extraction: [
             {key: 'risk_signal_weight', label: '风险信号权重', type: 'int', default: 15}
@@ -176,91 +176,6 @@
             } catch (_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
             btn.disabled = false; btn.textContent = '💾 保存审计配置';
         };
-    }
-
-    // ── Audit History (review tab) ──
-    async function loadAuditHistory() {
-        const panel = document.getElementById('auditHistoryPanel');
-        if (!panel) return;
-        const pid = window._currentProjectId || currentProjectId;
-        if (!pid) {
-            panel.innerHTML = '<span style="color:var(--card-muted);">请先打开一个项目查看审计历史。</span>';
-            return;
-        }
-        // Migration notice: audit history is now per-project in the project view
-        panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);padding:8px;background:#f0f9ff;border-radius:6px;margin-bottom:8px;">📋 审计历史现已移至<strong>项目视图</strong>。请在项目管理中打开具体项目，即可在项目页面的底部查看该项目的审计记录和下载报告。</div>' +
-            '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
-        return;
-        panel.innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
-        let runs = [];
-        try {
-            const r = await fetch('/audit/history/' + pid, { credentials: 'include' });
-            if (!r.ok) { panel.innerHTML = '<span style="color:#ef4444;">加载失败</span>'; return; }
-            const rawRuns = await r.json();
-            runs = Array.isArray(rawRuns) ? rawRuns : (rawRuns.data || []);
-        } catch (_) { panel.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; return; }
-        if (!Array.isArray(runs) || !runs.length) {
-            panel.innerHTML = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">暂无审计记录。</div>';
-            return;
-        }
-        runs.sort((a, b) => new Date(b.started_at || b.created_at || 0) - new Date(a.started_at || a.created_at || 0));
-        let html = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">' +
-            '<span style="font-size:0.7rem;color:var(--card-muted);">共 ' + runs.length + ' 次审计</span>' +
-            '<button id="auditHistoryRefreshBtn" class="file-btn" style="font-size:0.65rem;padding:2px 8px;">🔄 刷新</button>' +
-            '</div>';
-        for (const run of runs) {
-            const isPass = run.overall_status === 'PASS';
-            const score = run.overall_score != null ? parseFloat(run.overall_score).toFixed(1) : '-';
-            const date = (run.started_at || run.created_at) ? new Date(run.started_at || run.created_at).toLocaleString() : '?';
-            const fileCount = run.file_count ?? run.total_files ?? 0;
-            const bidderCount = run.bidder_count ?? run.total_bidders ?? '?';
-            const runId = run.id;
-
-            html += '<div class="audit-history-card" data-run-id="' + runId + '" style="border:1px solid var(--card-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--card-bg);cursor:pointer;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">' +
-                '<span style="font-size:0.72rem;">' + date + '</span>' +
-                '<span style="font-size:0.7rem;">得分: <b>' + score + '</b></span>' +
-                '<span class="audit-status-badge ' + (isPass ? 'audit-pass' : 'audit-fail') + '" style="font-size:0.65rem;padding:1px 8px;border-radius:10px;font-weight:600;">' + (isPass ? 'PASS' : 'FAIL') + '</span>' +
-                '<span style="font-size:0.65rem;color:var(--card-muted);">' + fileCount + ' 文件 · ' + bidderCount + ' 投标人</span>' +
-                '<span class="audit-toggle" style="font-size:0.6rem;color:var(--card-muted);display:inline-flex;vertical-align:middle;"></span>' +
-                '<span class="audit-toggle-label" style="font-size:0.6rem;color:var(--card-muted);"> 展开</span>' +
-                '</div>' +
-                '<div class="audit-history-detail" style="display:none;margin-top:8px;border-top:1px solid var(--card-border);padding-top:8px;"></div>' +
-                '</div>';
-        }
-        panel.innerHTML = html;
-
-        const refreshBtn = document.getElementById('auditHistoryRefreshBtn');
-        if (refreshBtn) refreshBtn.onclick = loadAuditHistory;
-
-        panel.querySelectorAll('.audit-history-card').forEach(card => {
-            const toggle = card.querySelector('.audit-toggle');
-            const label = card.querySelector('.audit-toggle-label');
-            if (toggle) _toggleArrow(toggle, true);
-            card.onclick = async () => {
-                const detailEl = card.querySelector('.audit-history-detail');
-                if (!detailEl) return;
-                if (detailEl.style.display !== 'none') {
-                    detailEl.style.display = 'none';
-                    _toggleArrow(toggle, true);
-                    if (label) label.textContent = ' 展开';
-                    return;
-                }
-                const runId = card.dataset.runId;
-                detailEl.innerHTML = '<span style="font-size:0.65rem;color:var(--card-muted);">加载中...</span>';
-                detailEl.style.display = 'block';
-                _toggleArrow(toggle, false);
-                if (label) label.textContent = ' 收起';
-                try {
-                    const r = await fetch('/audit/result/' + runId, { credentials: 'include' });
-                    if (!r.ok) { detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">加载失败</span>'; return; }
-                    const result = await r.json();
-                    detailEl.innerHTML = _renderAuditResultDetail(result);
-                } catch (_) {
-                    detailEl.innerHTML = '<span style="color:#ef4444;font-size:0.65rem;">网络错误</span>';
-                }
-            };
-        });
     }
 
     async function loadProjectAuditHistory() {

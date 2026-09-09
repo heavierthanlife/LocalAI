@@ -208,3 +208,5 @@ _(6/6 verified automatically)_
 | **Total** | **137** |
 
 **Verification rate**: 133/137 auto-verified (97%)
+
+> FIX-2026-09-09-018 note: admin quote list SELECT +3 cols (tailing_digits_flag/progression_type), relationship detail returns communities (Louvain). Verified by check_integrity.py + regression.

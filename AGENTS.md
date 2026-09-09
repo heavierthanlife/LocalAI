@@ -100,6 +100,8 @@ Every feature upgrade must include regression verification:
 - **Migrations tool**: `python scripts/manage_db.py [check|migrate|rollback|history|snapshot]`
 - New migration files go in `migrations/` with `.sql` + `.rollback.sql` pairs
 - **Anonymous chat history**: `anon_chat_messages(thread_id PK, messages JSONB, updated_at)` — PostgreSQL-backed, atomic UPSERT append via `app/services/anonymous.py` (replaced per-thread JSON files)
+- **Quote anomaly results** (`quote_anomaly_results`, FIX-2026-09-09-018): 除基础列外含 `cross_same_rate` / `cross_clustering` / `cross_tailing_digits` / `cross_progression` / `cross_progression_type`（跨投标人信号）与 per-bidder `tailing_digits_flag` / `progression_type`。新增列用幂等 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 兼容旧库
+- **Relationship summary** (`relationship_risk_summary.details` JSONB): 存 `{'company_personnel_map': ..., 'communities': [...]}`，社区检测结果（Louvain 团伙分组）随任务持久化，管理端 `/admin/relationship_results/<task_id>` 返回 `communities`
 
 ## 清标评分 (clearance scoring)
 

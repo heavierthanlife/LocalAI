@@ -9524,6 +9524,55 @@
             });
             html += '</table></details>';
         }
+        html += _renderParagraphCollusionEvidence(report);
+        return html;
+    }
+
+    // 段落级实质雷同证据（FIX-2026-09-07-QA-C3 前端版，对齐 DOCX 6.9 表）:
+    // 只列服务承诺段/技术方案段等非模板实质段，按惊讶度降序最多 12 行；
+    // 模板/声明段折叠参考（投标函·招标条款复述，非串标证据）。
+    // 数据源: report.cross_comparison.paragraph_collusion，老报告无此字段时静默隐藏。
+    function _renderParagraphCollusionEvidence(report) {
+        var pc = ((report || {}).cross_comparison || {}).paragraph_collusion;
+        if (!pc || !Array.isArray(pc.shared_segments) || !pc.shared_segments.length) return '';
+        var real = pc.shared_segments.filter(function(s) {
+            return s.type === '服务承诺段' || s.type === '技术方案段';
+        });
+        real.sort(function(a, b) { return (b.surprise || 0) - (a.surprise || 0); });
+        var templateSegs = pc.template_segments || [];
+        var html = '';
+
+        if (real.length > 0) {
+            var scoreText = (pc.collusion_score != null) ? '，风险分 ' + pc.collusion_score : '';
+            html += '<details class="cl-l2"><summary>' + _icon('🧩') + ' 段落级实质雷同证据（' + real.length + '段' + scoreText + '）</summary>';
+            html += '<div style="font-size:0.62rem;color:var(--card-muted);margin-bottom:4px;">仅列服务承诺段/技术方案段等非模板实质雷同，按惊讶度降序</div>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
+            html += '<tr><th>段落类型</th><th>共享单位</th><th>一致率</th><th>惊讶度</th><th>内容预览</th></tr>';
+            real.slice(0, 12).forEach(function(s) {
+                html += '<tr style="border-top:1px solid var(--card-border);">';
+                html += '<td>' + _clearanceEscape(s.type || '其他') + '</td>';
+                html += '<td>' + _clearanceEscape((s.files || []).join(' / ')) + '</td>';
+                html += '<td>' + ((s.match_ratio || 0) * 100).toFixed(0) + '%</td>';
+                html += '<td>' + (s.surprise || 0).toFixed(2) + '</td>';
+                html += '<td>' + _clearanceEscape((s.segment_text || '').substring(0, 100)) + '</td>';
+                html += '</tr>';
+            });
+            html += '</table></details>';
+        }
+
+        if (templateSegs.length > 0) {
+            html += '<details class="cl-l2"><summary>' + _icon('📄') + ' ' + templateSegs.length + ' 段模板/声明段（投标函·招标条款复述，非串标证据）</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
+            html += '<tr><th>段落类型</th><th>共享单位</th><th>内容预览</th></tr>';
+            templateSegs.slice(0, 10).forEach(function(s) {
+                html += '<tr style="border-top:1px solid var(--card-border);">';
+                html += '<td>' + _clearanceEscape(s.type || '其他') + '</td>';
+                html += '<td>' + _clearanceEscape((s.files || []).join(' / ')) + '</td>';
+                html += '<td>' + _clearanceEscape((s.segment_text || '').substring(0, 60)) + '</td>';
+                html += '</tr>';
+            });
+            html += '</table></details>';
+        }
         return html;
     }
 
@@ -9770,87 +9819,6 @@
         return html;
     }
 
-    function renderDocAnalysisResults(report, panel, downloadUrl) {
-        if (!report) { panel.innerHTML = '<p>分析完成但无数据</p>'; panel.style.display = 'block'; return; }
-
-        var info = report.basic_info || {};
-        var indicators = report.indicators || [];
-        var suspected = report.suspected_units || [];
-        var personnel = report.personnel_summary || {};
-
-        var html = '';
-
-        // Basic info
-        html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
-        html += '<strong>投标单位:</strong> ' + info.bidder_count;
-        // 铁证触发(hard_alarm/■前缀)时优先红，否则按分数分级
-        var scoreColor = (isClearanceHighRisk(info) || (info.warning_level || '').charAt(0) === '■') ? '#e74c3c' : isClearanceMidRisk(info) ? '#e67e22' : '#27ae60';
-        html += ' | <strong>综合评分:</strong> <span style="color:' + scoreColor + '">' + (info.total_score||0).toFixed(1) + '分</span>';
-        html += ' | <strong>预警:</strong> <span style="color:' + scoreColor + '">' + (info.warning_level || '—') + '</span>';
-        if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">' + _icon('📥') + ' 下载DOCX报告</a>';
-        html += '</div>';
-
-        // Suspected units
-        if (suspected.length > 0) {
-            var warnCount2 = suspected.filter(function(su){ return (su.score||0) > 10; }).length;
-            html += '<details class="alert-parent"><summary>' + _icon('🔴') + ' 预警嫌疑单位 (' + suspected.length + '家)<span class="alert-note">含 ' + warnCount2 + ' 家高嫌疑</span></summary>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
-            html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
-            suspected.forEach(function(su) {
-                var danger = (su.score||0) > 30;
-                html += '<tr class="' + (danger ? 'alert-item' : '') + '">';
-                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + (su.hard_flag ? '<span style="color:#e74c3c;">★</span>' : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
-                html += '<td>' + (su.indicators_triggered||0) + '</td>';
-                html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
-            });
-            html += '</table></details>';
-        } else {
-            html += '<p class="severity-ok" style="font-size:0.72rem;margin-bottom:8px;">' + _icon('✅') + ' 未发现预警嫌疑单位</p>';
-        }
-
-        // Indicator cards
-        html += '<details class="cl-l2"><summary>' + _icon('📊') + ' 指标分析详情 (' + indicators.length + '项)</summary>';
-        indicators.forEach(function(ind, idx) {
-            var catTag = (ind.category || '') + (ind.skipped ? ' ' + _icon('⏭️') : '');
-            html += '<div style="padding:8px 10px;border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;">';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
-            html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + escapeHtml(ind.name||'') + '</strong>';
-            html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + escapeHtml(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
-            html += '</div>';
-            var resText = ind.result || '';
-            // FIX-016 后续: severity/score 着色，替代 indexOf(emoji)
-            var sev2 = ind.severity || (ind.score >= 15 ? 'danger' : (ind.score > 0 ? 'warn' : 'ok'));
-            var cls2 = sev2 === 'danger' ? 'severity-danger' : (sev2 === 'warn' ? 'severity-warn' : 'severity-ok');
-            html += '<div class="' + cls2 + '" style="font-size:0.68rem;">' + escapeHtml(resText) + '</div>';
-            if (ind.details && ind.details.length > 0 && !ind.skipped) {
-                html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
-                var keys = Object.keys(ind.details[0] || {});
-                ind.details.slice(0, 5).forEach(function(d) {
-                    html += keys.map(function(k) { return escapeHtml(k) + ': ' + escapeHtml(String(d[k]||'').substring(0, 60)); }).join(' | ');
-                    html += '<br>';
-                });
-                if (ind.details.length > 5) html += '...共' + ind.details.length + '项';
-                html += '</div>';
-            }
-            html += '</div>';
-        });
-        html += '</details>';
-
-        // Personnel summary
-        if (personnel.list && personnel.list.length > 0) {
-            html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:bold;font-size:0.78rem;">👥 关系人员汇总 (' + personnel.total + '人)</summary>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
-            html += '<tr><th>单位</th><th>姓名</th><th>类型</th></tr>';
-            personnel.list.slice(0, 20).forEach(function(p) {
-                html += '<tr><td>' + escapeHtml((p.company||'').substring(0,20)) + '</td><td>' + escapeHtml(p.person||'') + '</td><td>' + escapeHtml(p.title||'') + '</td></tr>';
-            });
-            html += '</table></details>';
-        }
-
-        panel.innerHTML = html;
-        panel.style.display = 'block';
-    }
-
     // ══════════════════════════════════════════════════════════════════
     // ══════════════════════════════════════════════════════════════════
     function initAdminResultViewers() {
@@ -9911,16 +9879,20 @@
         if (results.length === 0) { container.innerHTML = '<p>暂无报价异常检测记录</p>'; return; }
         let html = `<p>共 ${data.total||results.length} 条记录</p>`;
         html += '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;">';
-        html += '<tr><th>ID</th><th>文档</th><th>风险评分</th><th>CV</th><th>同价</th><th>降幅</th><th>聚类</th><th>时间</th><th>用户</th></tr>';
+        html += '<tr><th>ID</th><th>文档</th><th>风险评分</th><th>CV</th><th>同价</th><th>降幅</th><th>聚类</th><th>本福特</th><th>尾数一致</th><th>等比规律</th><th>时间</th><th>用户</th></tr>';
         results.forEach(r => {
             html += `<tr>`;
-            html += `<td>${r.id}</td><td>${escapeHtml((r.doc_name||'').substring(0,25))}</td>`;
+            html += `<td>${escapeHtml(String(r.id))}</td><td>${escapeHtml((r.doc_name||'').substring(0,25))}</td>`;
             html += `<td style="color:${r.risk_score > 50 ? '#e74c3c' : r.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(r.risk_score||0).toFixed(1)}</td>`;
             html += `<td>${(r.cv||0).toFixed(4)}</td>`;
             html += `<td>${r.same_rate_flag ? _icon('⚠️') : _icon('✅')}</td>`;
             html += `<td>${r.abnormal_drop_flag ? _icon('⬇️') : _icon('✅')}</td>`;
             html += `<td>${r.clustering_flag ? _icon('🔗') : _icon('✅')}</td>`;
-            html += `<td>${(r.checked_at||'').substring(0,16)}</td>`;
+            // 本福特偏差 > 0.15（对齐 runtime_config.quote_anomaly_benford_deviation_alert）加 ⚠️
+            html += `<td>${r.benford_deviation > 0.15 ? '<span style="color:#e67e22;">⚠️ </span>' : ''}${(r.benford_deviation||0).toFixed(3)}</td>`;
+            html += `<td>${r.tailing_digits_flag ? '是' : '否'}</td>`;
+            html += `<td>${escapeHtml(r.progression_type || '否')}</td>`;
+            html += `<td>${escapeHtml(String(r.checked_at||'')).substring(0,16)}</td>`;
             html += `<td>${escapeHtml(r.username||'')}</td></tr>`;
         });
         html += '</table>';
@@ -9932,18 +9904,61 @@
         if (results.length === 0) { container.innerHTML = '<p>暂无关联关系分析记录</p>'; return; }
         let html = `<p>共 ${data.total||results.length} 条记录</p>`;
         html += '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;">';
-        html += '<tr><th>ID</th><th>任务ID</th><th>实体数</th><th>关系数</th><th>风险评分</th><th>模块</th><th>时间</th><th>用户</th></tr>';
+        html += '<tr><th>ID</th><th>任务ID</th><th>实体数</th><th>关系数</th><th>风险评分</th><th>模块</th><th>时间</th><th>用户</th><th>详情</th></tr>';
         results.forEach(r => {
             html += `<tr>`;
-            html += `<td>${r.id}</td><td>${(r.task_id||'').substring(0,12)}</td>`;
+            html += `<td>${escapeHtml(String(r.id))}</td><td>${escapeHtml(String(r.task_id||'')).substring(0,12)}</td>`;
             html += `<td>${r.total_entities||0}</td><td>${r.total_relations||0}</td>`;
             html += `<td style="color:${r.risk_score > 50 ? '#e74c3c' : r.risk_score > 20 ? '#e67e22' : '#27ae60'}">${(r.risk_score||0).toFixed(1)}</td>`;
             html += `<td>${escapeHtml((r.modules_run||[]).join(', ').substring(0,25))}</td>`;
-            html += `<td>${(r.checked_at||'').substring(0,16)}</td>`;
-            html += `<td>${escapeHtml(r.username||'')}</td></tr>`;
+            html += `<td>${escapeHtml(String(r.checked_at||'')).substring(0,16)}</td>`;
+            html += `<td>${escapeHtml(r.username||'')}</td>`;
+            html += `<td><button class="rel-detail-btn" data-task-id="${escapeHtml(String(r.task_id||''))}" style="background:#3498db;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">📄 团伙</button></td></tr>`;
         });
         html += '</table>';
+        html += '<div id="relCommunityArea" style="margin-top:8px;"></div>';
         container.innerHTML = html;
+        // 详情展开: 点击行内按钮拉取 /admin/relationship_results/<task_id>，
+        // 后端返回 {summary, relationships, communities}，渲染疑似团伙分组
+        container.onclick = function(e) {
+            var btn = e.target && e.target.closest ? e.target.closest('.rel-detail-btn') : null;
+            if (!btn) return;
+            var tid = btn.getAttribute('data-task-id') || '';
+            var area = container.querySelector('#relCommunityArea');
+            if (!tid || !area) return;
+            area.innerHTML = '<p style="font-size:0.7rem;color:var(--card-muted);">加载中...</p>';
+            fetch('/admin/relationship_results/' + encodeURIComponent(tid), { credentials: 'include' })
+                .then(function(resp) { return resp.json(); })
+                .then(function(d) {
+                    if (!d.success) {
+                        area.innerHTML = '<p style="font-size:0.7rem;color:#e74c3c;">加载失败: ' + escapeHtml(d.error || '未知错误') + '</p>';
+                        return;
+                    }
+                    var sec = _renderCommunitiesSection(d.communities);
+                    area.innerHTML = sec || '<p style="font-size:0.7rem;color:var(--card-muted);">该任务未发现成员 ≥2 的疑似团伙分组</p>';
+                })
+                .catch(function() {
+                    area.innerHTML = '<p style="font-size:0.7rem;color:#e74c3c;">网络错误</p>';
+                });
+        };
+    }
+
+    // 疑似团伙分组: communities 数组（每项 {members[], member_count, edge_count, risk, risk_edge_count}），
+    // 仅渲染 member_count>=2 的组；空/缺失返回空串。成员名含原始文本，一律 escapeHtml。
+    function _renderCommunitiesSection(communities) {
+        if (!Array.isArray(communities) || !communities.length) return '';
+        var groups = communities.filter(function(c) { return (c.member_count || 0) >= 2; });
+        if (!groups.length) return '';
+        var html = '<details style="border:1px solid var(--card-border);border-radius:6px;padding:6px 10px;">';
+        html += '<summary style="cursor:pointer;font-size:0.75rem;font-weight:700;">' + _icon('🕸️') + ' 疑似团伙分组 (' + groups.length + '个)</summary>';
+        groups.forEach(function(c, i) {
+            html += '<div style="font-size:0.7rem;padding:4px 6px;margin-top:4px;border:1px solid var(--card-border);border-radius:6px;">';
+            html += '<b>团伙 ' + (i + 1) + '</b>（成员 ' + (c.member_count || 0) + ' 家 / 边 ' + (c.edge_count || 0) + ' 条 / 风险边 ' + (c.risk_edge_count || 0) + ' 条）';
+            html += '<div style="color:var(--card-muted);margin-top:2px;">' + escapeHtml((c.members || []).join('、')) + '</div>';
+            html += '</div>';
+        });
+        html += '</details>';
+        return html;
     }
 
     function renderTypoHistory(data, container) {
@@ -9954,13 +9969,13 @@
         html += '<tr><th>ID</th><th>文档</th><th>层次</th><th>疑似文本</th><th>建议</th><th>置信度</th><th>严重性</th><th>时间</th><th>用户</th></tr>';
         results.forEach(r => {
             html += `<tr>`;
-            html += `<td>${r.id}</td><td>${escapeHtml((r.doc_name||'').substring(0,20))}</td>`;
+            html += `<td>${escapeHtml(String(r.id))}</td><td>${escapeHtml((r.doc_name||'').substring(0,20))}</td>`;
             html += `<td>${escapeHtml(r.layer||'')}</td>`;
             html += `<td><code>${escapeHtml((r.suspect_text||'').substring(0,25))}</code></td>`;
             html += `<td>${escapeHtml((r.suggestions||'[]').substring(0,30))}</td>`;
             html += `<td>${((r.confidence||0)*100).toFixed(0)}%</td>`;
             html += `<td>${escapeHtml(r.severity||'info')}</td>`;
-            html += `<td>${(r.checked_at||'').substring(0,16)}</td>`;
+            html += `<td>${escapeHtml(String(r.checked_at||'')).substring(0,16)}</td>`;
             html += `<td>${escapeHtml(r.username||'')}</td></tr>`;
         });
         html += '</table>';

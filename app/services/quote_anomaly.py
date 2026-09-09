@@ -762,21 +762,27 @@ def save_quote_anomaly_results(
                         INSERT INTO quote_anomaly_results
                             (user_id, task_id, project_id, doc_name, prices, percentages,
                              cv, same_rate_flag, abnormal_drop_flag, clustering_flag,
+                             tailing_digits_flag, progression_type,
                              benford_deviation, risk_score, details, matched_prices,
                              cross_same_rate, cross_clustering,
+                             cross_tailing_digits, cross_progression, cross_progression_type,
                              max_cross_risk, avg_cross_cv)
-                        VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s)
+                        VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s)
                     """, (
                         user_id, task_id, project_id, pb['filename'],
                         _json.dumps(pb.get('prices', [])),
                         _json.dumps(pb.get('percentages', [])),
                         pb.get('cv', 0), pb.get('same_rate_flag', False),
                         pb.get('abnormal_drop_flag', False), pb.get('clustering_flag', False),
+                        pb.get('tailing_digits_flag', False), pb.get('progression_type', ''),
                         pb.get('benford_deviation', 0), pb.get('risk_score', 0),
                         _json.dumps(pb.get('details', []), ensure_ascii=False),
                         _json.dumps(pb.get('matched_prices', {})),
                         cross_result.get('cross_same_rate', False),
                         cross_result.get('cross_clustering', False),
+                        cross_result.get('cross_tailing_digits', False),
+                        cross_result.get('cross_progression', False),
+                        cross_result.get('cross_progression_type', ''),
                         cross_result.get('max_risk_score', 0),
                         cross_result.get('avg_cv', 0),
                     ))

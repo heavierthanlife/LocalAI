@@ -528,7 +528,7 @@
                         pinBtn.style.opacity = '0.4';
                     } else {
                         pinnedSessions.add(sess.thread_id);
-                        pinBtn.textContent = '📌';
+                        pinBtn.innerHTML = _icon('📌');
                         pinBtn.style.opacity = '1';
                     }
                     persistPins();

@@ -820,7 +820,7 @@ th{{background:#f1f5f9}}.highlight{{background:#fef9c3}}</style></head><body>
         html_out += (
             '<div class="card"><table>'
             '<tr><th>投标单位</th><th>风险评分</th><th>离散系数(CV)</th>'
-            '<th>同价疑义</th><th>异常降幅</th><th>聚类疑义</th><th>本福特偏差</th></tr>'
+            '<th>同价疑义</th><th>异常降幅</th><th>尾数一致</th><th>等比规律</th><th>聚类疑义</th><th>本福特偏差</th></tr>'
         )
         for pb in quote_result['per_bidder']:
             flags = []
@@ -835,6 +835,8 @@ th{{background:#f1f5f9}}.highlight{{background:#fef9c3}}</style></head><body>
                 f'<td>{pb.get("cv", 0):.4f}</td>'
                 f'<td>{"是" if pb.get("same_rate_flag") else "否"}</td>'
                 f'<td>{"是" if pb.get("abnormal_drop_flag") else "否"}</td>'
+                f'<td>{"是" if pb.get("tailing_digits_flag") else "否"}</td>'
+                f'<td>{pb.get("progression_type") or "否"}</td>'
                 f'<td>{"是" if pb.get("clustering_flag") else "否"}</td>'
                 f'<td>{pb.get("benford_deviation", 0):.3f}</td></tr>'
             )
@@ -843,6 +845,10 @@ th{{background:#f1f5f9}}.highlight{{background:#fef9c3}}</style></head><body>
             html_out += '<p class="risk-warn">⚠️ 跨投标单位同价疑义：多个投标单位首轮报价异常接近</p>'
         if quote_result.get('cross_clustering'):
             html_out += '<p class="risk-warn">🔗 跨投标单位价格聚类：多个投标单位报价集中在异常窄区间</p>'
+        if quote_result.get('cross_tailing_digits'):
+            html_out += '<p class="risk-warn">⚠️ 跨投标单位尾数一致：多个投标单位报价尾数相同/近</p>'
+        if quote_result.get('cross_progression'):
+            html_out += '<p class="risk-warn">⚠️ 跨投标单位报价等比/等差规律：报价呈规律性梯度</p>'
         html_out += (
             f'<p style="color:#64748b;font-size:.85rem;">'
             f'最高报价风险评分: {quote_result.get("max_risk_score", 0):.1f} | '

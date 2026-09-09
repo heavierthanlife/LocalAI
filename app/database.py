@@ -926,16 +926,31 @@ def _run_table_creation(cur: "PgCursor"):
             same_rate_flag  BOOLEAN DEFAULT FALSE,
             abnormal_drop_flag BOOLEAN DEFAULT FALSE,
             clustering_flag BOOLEAN DEFAULT FALSE,
+            tailing_digits_flag BOOLEAN DEFAULT FALSE,
+            progression_type TEXT DEFAULT '',
             benford_deviation REAL DEFAULT 0,
             risk_score      REAL DEFAULT 0,
             details         JSONB DEFAULT '[]',
             matched_prices  JSONB DEFAULT '{}',
             cross_same_rate BOOLEAN DEFAULT FALSE,
             cross_clustering BOOLEAN DEFAULT FALSE,
+            cross_tailing_digits BOOLEAN DEFAULT FALSE,
+            cross_progression BOOLEAN DEFAULT FALSE,
+            cross_progression_type TEXT DEFAULT '',
             max_cross_risk  REAL DEFAULT 0,
             avg_cross_cv    REAL DEFAULT 0,
             checked_at      TIMESTAMPTZ DEFAULT NOW()
         )
+    """)
+    cur.execute("""
+        DO $$
+        BEGIN
+            BEGIN ALTER TABLE quote_anomaly_results ADD COLUMN IF NOT EXISTS tailing_digits_flag BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE quote_anomaly_results ADD COLUMN IF NOT EXISTS progression_type TEXT DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE quote_anomaly_results ADD COLUMN IF NOT EXISTS cross_tailing_digits BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE quote_anomaly_results ADD COLUMN IF NOT EXISTS cross_progression BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+            BEGIN ALTER TABLE quote_anomaly_results ADD COLUMN IF NOT EXISTS cross_progression_type TEXT DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$;
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_quote_anomaly_task ON quote_anomaly_results(task_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_quote_anomaly_user ON quote_anomaly_results(user_id)")

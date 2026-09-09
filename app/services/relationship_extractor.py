@@ -845,7 +845,10 @@ def save_relationship_results(
                     report.risk_score,
                     _json.dumps(report.modules_run),
                     report.tianyancha_used,
-                    _json.dumps(report.company_personnel_map, ensure_ascii=False),
+                    _json.dumps({
+                        'company_personnel_map': report.company_personnel_map,
+                        'communities': report.communities,
+                    }, ensure_ascii=False),
                 ))
                 conn.commit()
         logger.info(f"Saved {saved} relationships for task {task_id}, risk_score={report.risk_score}")

@@ -241,6 +241,7 @@ def admin_quote_anomaly_results():
             cur.execute("""
                 SELECT q.id, q.task_id, q.doc_name, q.cv, q.same_rate_flag,
                        q.abnormal_drop_flag, q.clustering_flag, q.benford_deviation,
+                       q.tailing_digits_flag, q.progression_type,
                        q.risk_score, q.details, q.checked_at, u.username
                 FROM quote_anomaly_results q
                 LEFT JOIN users u ON q.user_id = u.user_id
@@ -329,7 +330,17 @@ def admin_relationship_detail(task_id):
                 ORDER BY module, confidence DESC
             """, (task_id,))
             relations = cur.fetchall()
+
+    details = summary.get('details') or {}
+    if isinstance(details, str):
+        try:
+            details = json.loads(details)
+        except Exception:
+            details = {}
+    communities = details.get('communities', []) if isinstance(details, dict) else []
+
     return ok({
         "summary": dict(summary),
         "relationships": [dict(r) for r in relations],
+        "communities": communities,
     })
