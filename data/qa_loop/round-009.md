@@ -32,7 +32,7 @@
 - CHANGELOG [2026-09-09] 条目 + fix_registry FIX-2026-09-09-017（7 条 invariant 检查）。
 
 ## ⑦ PUSH
-- `9b8761c..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `9b8761c..32313f8` 已推送（LocalAI master），工作树干净。last_head=32313f8。
 
 ## ⑧ 验证
 - 回归 **119/119 passed**（原 115 + 4 新增）· verify_fixes **96/96**（+7）· check_system 133/137 · app.js node --check OK
