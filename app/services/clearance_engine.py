@@ -30,11 +30,11 @@ def _now_str():
 
 # ── 维度 1: 指标分析（纵向）────────────────────────────────────────
 def _run_indicator_analysis(file_data, user_id, thread_id, tender_text=None,
-                            open_info=None, eval_criteria=None):
+                            open_info=None, eval_criteria=None, options=None):
     from app.services.document_analysis_svc import run_analysis
     report = run_analysis(file_data, user_id, thread_id,
                           tender_text=tender_text, open_info=open_info,
-                          eval_criteria=eval_criteria)
+                          eval_criteria=eval_criteria, options=options)
     return {
         'basic_info': report['basic_info'],
         'suspected_units': report['suspected_units'],
@@ -319,7 +319,7 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
         if options.get('indicator_analysis', True):
             futures['indicators'] = pool.submit(
                 _run_indicator_analysis, file_data, user_id, thread_id,
-                tender_text, open_info, eval_criteria)
+                tender_text, open_info, eval_criteria, options)
         if options.get('cross_comparison', True):
             futures['cross'] = pool.submit(_run_cross_comparison, file_data, tender_text, ptype)
         if options.get('compliance_check', False) and tender_text:

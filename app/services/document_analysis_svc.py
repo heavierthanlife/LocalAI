@@ -236,7 +236,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
 
 
 def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
-                 open_info=None, eval_criteria=None):
+                 open_info=None, eval_criteria=None, options=None):
     """Run all checkers, build a structured report matching the example format.
 
     Args:
@@ -246,6 +246,7 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
         tender_text: 招标文件全文（用于 text_sim 模板去除 + 评审标准提取）
         open_info: 结构化开标信息表 dict (from clearance_openinfo.parse_open_info_file)
         eval_criteria: 结构化评审标准 dict (from clearance_openinfo.extract_eval_criteria)
+        options: dict — 分析选项，`tech_seal_check`=False(默认) 时跳过暗标检测
 
     Returns:
         dict with basic_info, suspected_units, indicators, personnel_summary
@@ -281,7 +282,11 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     except Exception:
         ind_stop = frozenset()
     checker_data = {}
+    tech_seal_enabled = bool((options or {}).get('tech_seal_check', False))
     for ind in INDICATOR_DEFS:
+        if ind['checker'] == 'tech_seal' and not tech_seal_enabled:
+            checker_data.setdefault('tech_seal', {'skipped': True, 'error': '未开启暗标违规检查'})
+            continue
         checker_data[ind['checker']] = _run_checker(
             ind['checker'], file_data, user_id, thread_id, tender_text=tender_text,
             extra_stop_words=ind_stop

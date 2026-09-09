@@ -10,9 +10,11 @@ FIX-2026-09-07-QA-C4: `tech_seal_check` 此前被误用 typo(错别字) checker 
   - 从文件名提取投标人公司名（如"北京中昌华美超市服务有限责任公司"）
   - 检测该公司名是否以"异常高频/明显暴露"的方式出现在正文中
     （单纯出现在封面/签名页是正常的，但贯穿正文属泄露风险）
-  - 另检测正文中大量出现的人员姓名、公章/盖章提示、电话
+  - 另检测正文中大量出现的人员姓名、电话；公章/盖章提示仅作辅助证据
   合并文件场景保守起见：若公司名在正文出现次数超过阈值或出现在
   "技术方案/技术参数"等章节片段中，判为泄露。
+  注意：盖章/公章提示是弱信号（普通标书正文含"盖章/公章"属正常要求），
+  不独立触发泄露，仅当已由强信号（公司名/多处人员姓名）判定泄露时作为辅助证据列出。
 """
 from __future__ import annotations
 
@@ -39,12 +41,13 @@ def detect_tech_seal_leak(file_data: list[dict]) -> dict:
 
     Returns {filename: {'company': 公司名, 'leak': bool,
                         'evidence': [str], 'score': float}}
-    score 0-30：公司名贯穿正文 / 印章提示 / 多处人员姓名 → 泄露。
+    score 0-30：公司名贯穿技术方案段 / 多处人员姓名 → 泄露，盖章提示仅辅助。
 
     注意（FIX-2026-09-07-QA-C4 校准）：对"商务技术标"合并文件，正文中的
     "我公司/本公司"自指称谓是商务标的正常表述，**不作为独立泄露信号**。
-    只有：① 公司名在技术方案章节片段内出现；② 印章提示；③ ≥4 处人员姓名，
-    才判泄露——避免把正常商务标误判为暗标违规。
+    只有：① 公司名在技术方案章节片段内出现；② ≥4 处人员姓名，才判泄露——
+    避免把正常商务标误判为暗标违规。③ 盖章/公章提示为弱信号（普通标书
+    正文含"盖章/公章"属正常要求），不独立触发泄露，仅作辅助证据。
     """
     results = {}
     for fd in file_data:
@@ -68,13 +71,7 @@ def detect_tech_seal_leak(file_data: list[dict]) -> dict:
                     evidence.append(f"技术方案段出现公司名「{company}」")
                     break
 
-        # 2) 印章/公章提示（技术标不应盖章）
-        for mk in _SEAL_MARKERS:
-            if mk in text:
-                leak = True
-                evidence.append(f"正文出现「{mk}」提示")
-
-        # 3) 大量人员姓名（>4 处"姓名"样式）
+        # 2) 大量人员姓名（>4 处"姓名"样式）
         try:
             from app.services.relationship_extractor import _PERSON_NAME_RE
             person_count = len(list(_PERSON_NAME_RE.finditer(text)))
@@ -83,6 +80,12 @@ def detect_tech_seal_leak(file_data: list[dict]) -> dict:
                 evidence.append(f"正文出现 {person_count} 处人员姓名（匿名评审应避免）")
         except Exception:
             pass
+
+        # 3) 盖章/公章提示 —— 弱信号（普通标书正文含"盖章/公章"属正常要求），
+        #    不独立触发泄露；仅当已由强信号判定泄露时作为辅助证据列出。
+        seal_hits = [mk for mk in _SEAL_MARKERS if mk in text]
+        if seal_hits and leak:
+            evidence.append(f"正文出现盖章类提示「{'、'.join(seal_hits)}」（辅助证据）")
 
         score = 30 if leak else 0
         results[name] = {

@@ -9177,7 +9177,8 @@
                 indicator_analysis: document.getElementById('optIndicators').checked,
                 cross_comparison: document.getElementById('optCrossComparison').checked,
                 compliance_check: !!(tenderFile && document.getElementById('optCompliance').checked),
-                ai_review: !!(hasLLM && document.getElementById('optAIReview').checked)
+                ai_review: !!(hasLLM && document.getElementById('optAIReview').checked),
+                tech_seal_check: document.getElementById('optTechSeal').checked
             };
 
             try {

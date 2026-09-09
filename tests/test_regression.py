@@ -1145,7 +1145,8 @@ def test_hard_evidence_paragraph_t2_requires_two_types():
 
 
 def test_tech_seal_violation_independent():
-    """暗标违规独立轨道：单家技术标身份泄露 → 违规警示，不进串通铁证。"""
+    """暗标违规独立轨道：单家技术标身份泄露 → 违规警示，不进串通铁证。
+    需显式开启 tech_seal_check（默认关闭）。"""
     from app.services.document_analysis_svc import run_analysis
     docs = [
         {'filename': '北京中昌华美超市服务有限责任公司_技术标.docx',
@@ -1155,7 +1156,8 @@ def test_tech_seal_violation_independent():
          'text': '技术方案：采用定向钻穿越施工，泥浆护壁导向钻进。',
          'metadata': {}, 'images': []},
     ]
-    report = run_analysis(docs, user_id='t', thread_id='t')
+    report = run_analysis(docs, user_id='t', thread_id='t',
+                          options={'tech_seal_check': True})
     he = report['basic_info']['hard_evidence']
     assert he['violation_fired'] is True, "技术标身份泄露必须触发暗标违规警示"
     assert any(v['type'] == 'tech_seal_leak' for v in he['violations']), \
@@ -1168,3 +1170,54 @@ def test_tech_seal_violation_independent():
     else:
         assert report['basic_info']['warning_level'].startswith('■'), \
             "铁证/违规同时触发时展示级别必须以 ■ 开头（铁证优先）"
+
+
+def test_tech_seal_default_off():
+    """暗标违规检测开关默认关闭：不传 options 时 tech_seal 检查跳过，
+    泄露文档不产生 violation_fired。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': '北京中昌华美超市服务有限责任公司_技术标.docx',
+         'text': '技术方案：我公司北京中昌华美超市服务有限责任公司承诺……',
+         'metadata': {}, 'images': []},
+        {'filename': '天津恒达建筑工程有限公司_技术标.docx',
+         'text': '技术方案：采用定向钻穿越施工。',
+         'metadata': {}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')
+    bi = report['basic_info']
+    assert bi['hard_evidence']['violation_fired'] is False, \
+        "默认未开启 tech_seal_check 时不得产生暗标违规"
+    inds = [it for it in report['indicators'] if it['id'] == 'tech_seal_check']
+    assert inds, "indicators 必须含 tech_seal_check 指标"
+    assert inds[0]['skipped'] is True, \
+        f"默认关闭时 tech_seal_check 应 skipped: {inds[0]['result']}"
+    assert bi['warning_level'] != '■ 高度预警（暗标违规）', \
+        f"默认关闭时展示级别不得为暗标违规 label: {bi['warning_level']}"
+
+
+def test_tech_seal_seal_marker_weak_signal():
+    """盖章/公章提示是弱信号：不独立触发泄露；强信号（技术方案段公司名）
+    触发时盖章类提示作为辅助证据列出。"""
+    from app.services.tech_seal_detector import detect_tech_seal_leak
+
+    seal_only = detect_tech_seal_leak([
+        {'filename': '某公司.docx', 'text': '需加盖公章并签字盖章。'},
+    ])
+    r0 = seal_only['某公司.docx']
+    assert r0['leak'] is False, \
+        f"纯盖章文本不得触发泄露: {r0['evidence']}"
+    assert r0['score'] == 0, \
+        f"纯盖章文本 score 应为 0: {r0['score']}"
+
+    strong = detect_tech_seal_leak([
+        {'filename': '北京中昌华美超市服务有限责任公司.docx',
+         'text': '技术方案：北京中昌华美超市服务有限责任公司负责实施。需加盖公章。'},
+    ])
+    r1 = strong['北京中昌华美超市服务有限责任公司.docx']
+    assert r1['leak'] is True, \
+        f"技术方案段出现公司名必须触发泄露: {r1['evidence']}"
+    assert any(('辅助证据' in e or '盖章' in e) for e in r1['evidence']), \
+        f"泄露时盖章类提示应作辅助证据: {r1['evidence']}"
+    assert any('公司名' in e for e in r1['evidence']), \
+        f"evidence 必须含公司名条目: {r1['evidence']}"

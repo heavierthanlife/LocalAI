@@ -671,3 +671,31 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_tech_seal_violation_independent"
+
+
+  - id: FIX-2026-09-09-019
+    title: "暗标违规检测开关（默认关闭）+ 盖章弱信号降权"
+    severity: high
+    rationale: >
+      用户报告：普通标书正文必然含盖章/公章/签字盖章（招标要求），tech_seal 把它们
+      当暗标身份泄露 → 全标误报 '高度预警（暗标违规）'。修复：分析维度新增
+      optTechSeal 复选框（默认不勾选），options['tech_seal_check']=False 时
+      run_analysis 跳过 tech_seal checker（指标 skipped + 无违规警示），默认关同时
+      覆盖非清标文档分析路径；tech_seal_detector 中 _SEAL_MARKERS 降级为辅助证据
+      （不独立触发 leak，仅当强信号已判泄露时追加），强信号保留公司名/多人姓名。
+    checks:
+      - type: grep
+        file: templates/index.html
+        pattern: "id=\"optTechSeal\""
+      - type: grep
+        file: static/js/app.js
+        pattern: "tech_seal_check: document"
+      - type: grep
+        file: app/routes/clearance.py
+        pattern: "tech_seal_check', False"
+      - type: grep
+        file: app/services/tech_seal_detector.py
+        pattern: "seal_hits"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_tech_seal_default_off"

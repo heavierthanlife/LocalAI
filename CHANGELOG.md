@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 暗标违规检测开关（默认关闭）+ 盖章弱信号降权（FIX-2026-09-09-019）
+
+### Changed
+- **暗标违规检测开关**：分析维度行（横向对比/指标分析/合规审查/AI 评审）新增 `暗标违规` 复选框（`optTechSeal`），**默认不勾选**。`options['tech_seal_check']=False`（默认）时 `run_analysis` 跳过 tech_seal checker → 指标显示"○ 跳过（未开启暗标违规检查）"、不产生"⚠ 暗标违规"警示；`run_clearance`/`clearance.py` 透传 options。默认关同时覆盖非清标文档分析路径（run_analysis 调用方不传 options）
+
+### Fixed
+- **暗标全标误报**：`tech_seal_detector` 把普通标书正文必然出现的 `盖章/公章/签字盖章/投标专用章` 当暗标身份泄露 → 任意含"盖章"的标书触发 `■ 高度预警（暗标违规）`。修复：`_SEAL_MARKERS` 降级为**辅助证据**（不再独立触发 leak，仅当强信号——技术方案段公司名 / ≥4 处人员姓名——已判泄露时追加）；检测顺序重排为 公司名→人员姓名→盖章辅助
+
+### regression: 121/121 tests passed · verify_fixes 101/101 · check_system 133/137 · node --check app.js OK
+- `test_tech_seal_violation_independent` 改显式开启 `options={'tech_seal_check': True}`；新增 `test_tech_seal_default_off`（默认关无违规+指标 skipped）、`test_tech_seal_seal_marker_weak_signal`（纯盖章不触发 / 强信号+盖章辅助）
+- 合成两态：默认关→violation_fired False + skipped；开启→`■ 高度预警（暗标违规）`
+
+---
+
 ## [2026-09-09] — 全方位审核修复：死代码清理 / XSS 加固 / 报价信号完整呈现 / 段落证据前端 / 社区持久化（FIX-2026-09-09-018）
 
 ### Fixed

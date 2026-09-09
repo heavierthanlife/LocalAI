@@ -142,6 +142,7 @@ def run_clearance_route():
     options.setdefault('cross_comparison', True)
     options.setdefault('compliance_check', has_tender)
     options.setdefault('ai_review', True)
+    options.setdefault('tech_seal_check', False)
     # 未提供招标文件时强制关闭合规
     if not has_tender:
         options['compliance_check'] = False
