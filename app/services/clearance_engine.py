@@ -28,6 +28,74 @@ def _now_str():
     return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
+# ── 清标结果归属解析 ───────────────────────────────────────────────
+def resolve_clearance_threads(user_id, current_thread_id):
+    """解析清标报告应写入的目标线程列表（归属双写）。
+
+    规则：
+      1. 当前线程是项目对话（project_id 非空）→ [当前线程, 最新个人线程] 双写；
+      2. 当前线程是个人对话且为最新 → 只写最新个人线程；
+      3. 当前线程是个人对话但非最新 → [当前线程, 最新个人线程] 双写（保守不丢上下文）；
+      4. current_thread_id 为空 → 只写最新个人线程（无则新建 "分析结果" 会话）；
+      5. 最新个人线程不存在时自动创建。
+
+    健壮性：DB 查询/写入失败 → 回退 [current_thread_id]（保底不丢结果），logger.warning。
+    """
+    latest_personal_tid = None
+    is_project = False
+    try:
+        from app.database import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if current_thread_id:
+                    cur.execute("SELECT project_id FROM chat_sessions WHERE thread_id = %s",
+                                (current_thread_id,))
+                    _row = cur.fetchone()
+                    # project_id 可能为 INTEGER 或 TEXT（空串），统一按"非 NULL/非空"判项目
+                    is_project = bool(_row and _row[0] is not None and str(_row[0]).strip() != '')
+                # 最新个人线程：project_id 为空（个人对话），按活跃度排序
+                cur.execute(
+                    "SELECT thread_id FROM chat_sessions "
+                    "WHERE user_id = %s AND COALESCE(project_id::text, '') = '' "
+                    "ORDER BY updated_at DESC, id DESC LIMIT 1",
+                    (user_id,))
+                _row = cur.fetchone()
+                if _row:
+                    latest_personal_tid = _row[0]
+                else:
+                    # 无个人对话 → 新建一条"分析结果"会话承载报告
+                    import uuid as _uuid
+                    latest_personal_tid = str(_uuid.uuid4())
+                    cur.execute(
+                        "INSERT INTO chat_sessions (user_id, thread_id, title) VALUES (%s, %s, %s)",
+                        (user_id, latest_personal_tid, '分析结果'))
+                conn.commit()
+    except Exception as _e:
+        logger.warning(f"resolve_clearance_threads failed, fallback to current thread: {_e}")
+        return [t for t in [current_thread_id] if t]
+
+    targets = []
+    if current_thread_id:
+        targets.append(current_thread_id)
+    # 当前线程是个人但非最新（或为空/项目对话）时，同步到最新个人线程
+    current_is_latest = bool(current_thread_id and current_thread_id == latest_personal_tid)
+    current_is_personal = bool(current_thread_id) and not is_project
+    need_personal = (
+        not current_thread_id
+        or is_project
+        or (current_is_personal and not current_is_latest)
+    )
+    if need_personal and latest_personal_tid:
+        targets.append(latest_personal_tid)
+    # 去重保序
+    _seen, _out = set(), []
+    for _t in targets:
+        if _t and _t not in _seen:
+            _seen.add(_t)
+            _out.append(_t)
+    return _out
+
+
 # ── 维度 1: 指标分析（纵向）────────────────────────────────────────
 def _run_indicator_analysis(file_data, user_id, thread_id, tender_text=None,
                             open_info=None, eval_criteria=None, options=None):
@@ -547,10 +615,13 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                         ))
 
                 # ── Persist clearance result as an assistant chat message ──
-                # Store the full report JSON (frontend renders it into a chat
-                # bubble via the CLEARANCE_REPORT marker on both live-complete
-                # and session reload). Reuses this same transaction/connection.
-                if thread_id:
+                # 归属双写：结果跟随当前对话归属，项目对话/个人非最新时额外同步
+                # 到该用户最新个人对话；个人最新线程只写一条。Store the full report
+                # JSON (frontend renders it into a chat bubble via the
+                # CLEARANCE_REPORT marker on both live-complete and session reload).
+                # Reuses this same transaction/connection.
+                target_threads = resolve_clearance_threads(user_id, thread_id)
+                if target_threads:
                     try:
                         from flask import url_for as _url_for
                         _dl = _url_for('batch.download_batch_result', task_id=task_id)
@@ -562,13 +633,14 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                         'file_count': len(all_file_data),
                     }, ensure_ascii=False)
                     chat_content = '<!-- CLEARANCE_REPORT -->' + chat_payload
-                    try:
-                        cur.execute(
-                            "INSERT INTO chat_messages (thread_id, role, content, thinking, timestamp) "
-                            "VALUES (%s, 'assistant', %s, NULL, NOW())",
-                            (thread_id, chat_content))
-                    except Exception as _ce:
-                        logger.warning(f"Failed to persist clearance chat message: {_ce}")
+                    for _tid in target_threads:
+                        try:
+                            cur.execute(
+                                "INSERT INTO chat_messages (thread_id, role, content, thinking, timestamp) "
+                                "VALUES (%s, 'assistant', %s, NULL, NOW())",
+                                (_tid, chat_content))
+                        except Exception as _ce:
+                            logger.warning(f"Failed to persist clearance chat message for thread {_tid}: {_ce}")
                 conn.commit()
 
         from flask import url_for

@@ -208,3 +208,5 @@ _(6/6 verified automatically)_
 | **Total** | **137** |
 
 **Verification rate**: 133/137 auto-verified (97%)
+
+> Round-012 note: clearance report dual-write (project + latest personal thread), DOCX warning-details section. Verified by regression + resolve_clearance_threads cases.

@@ -151,10 +151,20 @@ def run_clearance_route():
     thread_id = session.get('thread_id', '')
     project_id = request.form.get('project_id', type=int)
 
+    # 归属双写：提交时预解析目标线程（跟随当前对话 + 同步最新个人对话），
+    # 供状态/流接口展示结果落点；worker 持久化时仍以 resolve_clearance_threads 为准。
+    target_threads = []
+    try:
+        from app.services.clearance_engine import resolve_clearance_threads
+        target_threads = resolve_clearance_threads(user_id or '', thread_id)
+    except Exception as _e:
+        logger.warning(f"Pre-resolve clearance threads failed: {_e}")
+
     # Pre-register the task as 'queued' so /clearance/status never 404s in the
     # window before the Celery worker calls bus.start() (which upgrades it).
     from app.services.task_bus import TaskBus
-    TaskBus(task_id, 'clearance', '清标分析').register_queued(extra={'thread_id': thread_id or ''})
+    TaskBus(task_id, 'clearance', '清标分析').register_queued(
+        extra={'thread_id': thread_id or '', 'target_threads': target_threads})
 
     info_overrides = {}
     for field in ('bid_number', 'bid_open_time', 'bidder_name', 'agent_name',

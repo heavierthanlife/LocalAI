@@ -5,6 +5,7 @@ Provides:
   - build_analysis_docx(): generates .docx following the bid-rigging clue analysis format
 """
 import logging
+import re
 from datetime import datetime, timezone
 from io import BytesIO
 
@@ -784,6 +785,246 @@ def _set_cell(cell, text, bold=False, size=BODY, shade=False):
     return run
 
 
+# ── 警示表格式呈现 (B1-1/B1-2)：铁证/违规/雷同/高风险/合规 统一警示详情 ──
+_EVIDENCE_TYPE_LABELS = {
+    'lasteditor_same': '最后编辑人雷同',
+    'author_same': '文件作者雷同',
+    'contact_phone_double': '联系人+电话双命中',
+    'platform_same_dongle': '平台加密锁雷同',
+    'platform_same_file_code': '平台文件码雷同',
+    'platform_bid_ip_same': '平台上传IP相同',
+    'platform_decrypt_ip_same': '平台解密IP相同',
+    'paragraph_collusion': '共享实质段',
+    'paragraph_multi_bidder': '实质段多单位共享',
+    'tech_seal_leak': '暗标身份泄露',
+}
+
+_WARNING_GUIDANCE = {
+    'lasteditor_same': '核对相关投标文件编制人与编制时间，确认是否存在同一人/同机代做多家标书。',
+    'author_same': '核对相关投标文件编制人与编制时间，确认是否存在同一人/同机代做多家标书。',
+    'paragraph_collusion': '比对共享段落全文，核查两单位标书是否出自同一模板或起草人，建议约谈投标方。',
+    'paragraph_multi_bidder': '比对共享段落全文，核查两单位标书是否出自同一模板或起草人，建议约谈投标方。',
+    'contact_phone_double': '核实联系人与联系电话的实际归属，确认是否同一自然人代理多家投标。',
+    'platform_*': '结合交易平台开标记录核实 IP/加密锁/文件码来源，必要时调取平台操作日志。',
+    'tech_seal_leak': '技术标含可识别身份信息，违反暗标评审要求，建议按招标文件作废标处理或约谈。',
+    'pair_high_risk': '建议调取两单位投标文件编制过程与往来记录，重点核查技术方案雷同。',
+}
+_DEFAULT_GUIDANCE = '建议结合上下文进一步核实。'
+_CHAPTER_BY_TYPE = {
+    'paragraph_collusion': '「技术方案/服务承诺」章节',
+    'paragraph_multi_bidder': '「技术方案/服务承诺」章节',
+    'tech_seal_leak': '「技术方案」章节',
+}
+_SEG_TYPE_CHAPTER = {
+    '服务承诺段': '「服务承诺」章节',
+    '技术方案段': '「技术方案」章节',
+}
+# 元数据/平台类铁证：无正文原文可查 → 摘录/章节占位
+_META_NO_TEXT_TYPES = frozenset({'lasteditor_same', 'author_same', 'contact_phone_double'})
+_PLATFORM_PREFIX = 'platform_'
+
+
+def _type_label(t):
+    """铁证/违规 type → 中文警示标签（未知 type 原样返回）。"""
+    return _EVIDENCE_TYPE_LABELS.get(t, t)
+
+
+def _guidance_for(it_type, verdict=''):
+    """按铁证 type / 合规 verdict 返回 1-2 句处理指引。"""
+    if it_type and it_type.startswith(_PLATFORM_PREFIX):
+        return _WARNING_GUIDANCE['platform_*']
+    g = _WARNING_GUIDANCE.get(it_type)
+    if g:
+        return g
+    if verdict:
+        if verdict == 'CRITICAL':
+            return '按招标文件与法律法规处理，必要时移送监督部门。'
+        if verdict == 'VIOLATION':
+            return '要求投标人限期说明并整改。'
+    return _DEFAULT_GUIDANCE
+
+
+def _locate_chapter(text, keyword):
+    """在 text 中定位 keyword 所在章节（不做页码，回扫最近章节标题）。
+
+    keyword 取首 20 字符；找不到再取前 12 字符；仍找不到返回 '全文'。
+    找到后从命中位置回扫最近一次命中章节标题词，返回「{章节名}」章节。
+    """
+    if not text or not keyword:
+        return '全文'
+    key = str(keyword)[:20]
+    i = text.find(key)
+    if i < 0:
+        i = text.find(str(keyword)[:12])
+    if i < 0:
+        return '全文'
+    head = text[:i]
+    _pat = re.compile(
+        r'(投标函|开标一览表|报价部分|商务标|技术方案|技术参数|技术指标|施工组织|服务方案|'
+        r'实施方案|项目概述|项目背景|人员配置|质量管理|安全文明|施工进度|资质要求|业绩要求|'
+        r'服务承诺|售后服务)'
+    )
+    hits = list(_pat.finditer(head))
+    if hits:
+        return f'「{hits[-1].group(1)[:20]}」章节'
+    return '全文'
+
+
+def _excerpt(text, keyword=None, width=80, max_len=200):
+    """keyword 前后各 width 字摘录（_safe 截断 ~max_len，前后加 …）。"""
+    s = _safe(text)
+    i = -1
+    if keyword:
+        i = s.find(str(keyword)[:20])
+        if i < 0:
+            i = s.find(str(keyword)[:12])
+    if i < 0:
+        snippet = s[:max_len]
+        if len(s) > max_len:
+            snippet += '…'
+        return snippet
+    lo = max(0, i - width)
+    hi = min(len(s), i + len(str(keyword)) + width)
+    snippet = s[lo:hi]
+    if lo > 0:
+        snippet = '…' + snippet
+    if hi < len(s):
+        snippet += '…'
+    if len(snippet) > max_len:
+        snippet = snippet[:max_len] + '…'
+    return snippet
+
+
+def _quoted_snippet(text):
+    """从 evidence 中提取「…」引用的原文片段（铁证 evidence 内嵌段落预览）。"""
+    m = re.search(r'「(.{1,80})」', _safe(text))
+    return m.group(1) if m else ''
+
+
+def _warning_table(doc, headers, rows):
+    """一张警示表格：表头 shade=True。"""
+    t = _add_table(doc, len(rows) + 1, len(headers))
+    for j, h in enumerate(headers):
+        _set_cell(t.cell(0, j), h, bold=True, size=FINE, shade=True)
+    for ri, row in enumerate(rows):
+        for ci, val in enumerate(row):
+            _set_cell(t.cell(ri + 1, ci), _safe(val), size=FINE)
+    return t
+
+
+def _append_warning_details(doc, report):
+    """B1-2: 警示详情与处理指引（无编号插页，插在标准五章后、六 横向对比前）。
+
+    铁证 items / 违规 violations / 段落雷同 shared_segments / 高风险组合 /
+    合规 CRITICAL·VIOLATION，每类一张表。因 report 不携带每文件正文 text，
+    原文摘录取 evidence 内嵌 snippet，所在章节按 type/段类型映射。
+    """
+    info = report.get('basic_info', {})
+    hard = info.get('hard_evidence') or {}
+    cross = report.get('cross_comparison') or {}
+    comp = report.get('compliance') or {}
+    sections = []  # (heading, headers, rows)
+
+    # 1) 铁证 items
+    items = hard.get('items') or []
+    if items:
+        rows = []
+        for it in items:
+            itype = it.get('type', '')
+            if itype in _META_NO_TEXT_TYPES or itype.startswith(_PLATFORM_PREFIX):
+                excerpt, chapter = '（证据来源：文件属性/交易平台记录）', '—'
+            else:
+                excerpt = _quoted_snippet(it.get('evidence', '')) or _excerpt(it.get('evidence', ''), max_len=120)
+                chapter = _CHAPTER_BY_TYPE.get(itype, '全文')
+            rows.append([
+                _type_label(itype), _safe(it.get('level', '')), excerpt, chapter,
+                _guidance_for(itype),
+            ])
+        sections.append(('（一）铁证警示', ['警示', '级别', '原文摘录', '所在章节', '处理指引'], rows))
+
+    # 2) 违规 violations
+    viols = hard.get('violations') or []
+    if viols:
+        rows = []
+        for v in viols:
+            vtype = v.get('type', '')
+            chapter = _CHAPTER_BY_TYPE.get(vtype, '全文')
+            excerpt = _excerpt(v.get('evidence', ''), max_len=120)
+            if not excerpt:
+                excerpt = _quoted_snippet(v.get('evidence', ''))
+            rows.append([
+                _type_label(vtype), '违规', excerpt, chapter, _guidance_for(vtype),
+            ])
+        sections.append(('（二）暗标违规警示', ['警示', '级别', '原文摘录', '所在章节', '处理指引'], rows))
+
+    # 3) 段落雷同 shared_segments（服务承诺/技术方案段，surprise 降序，最多 12）
+    pc = cross.get('paragraph_collusion') or {}
+    segs = [s for s in (pc.get('shared_segments') or []) if s.get('type') in ('服务承诺段', '技术方案段')]
+    segs = sorted(segs, key=lambda s: -s.get('surprise', 0))[:12]
+    if segs:
+        rows = []
+        for s in segs:
+            stype = s.get('type', '其他')
+            rows.append([
+                stype,
+                ' / '.join(_safe(f) for f in s.get('files', [])),
+                _SEG_TYPE_CHAPTER.get(stype, '全文'),
+                _excerpt(s.get('segment_text', ''), max_len=200),
+                _guidance_for('paragraph_collusion'),
+            ])
+        sections.append(('（三）段落级雷同警示', ['段落类型', '涉及文件', '所在章节', '原文摘录', '处理指引'], rows))
+
+    # 4) 高风险组合（pairs risk>10，最多 8）
+    high_pairs = [p for p in (cross.get('pairs') or []) if p.get('risk', 0) > 10][:8]
+    if high_pairs:
+        rows = []
+        for p in high_pairs:
+            rows.append([
+                _safe(p.get('name1', '')), _safe(p.get('name2', '')),
+                f"{p.get('risk', 0):.1f}", f"{p.get('sim', 0):.1f}%",
+                _guidance_for('pair_high_risk'),
+            ])
+        sections.append(('（四）高风险组合警示', ['投标方A', '投标方B', '风险', '相似度', '处理指引'], rows))
+
+    # 5) 合规 CRITICAL/VIOLATION（最多 8）
+    if comp and not comp.get('skipped'):
+        rule_map = {r.get('rule_id'): r.get('description', '') for r in comp.get('rules', [])}
+        rows = []
+        for pf in comp.get('per_file', []):
+            for res in pf.get('results', []):
+                verdict = res.get('verdict', '')
+                if verdict not in ('CRITICAL', 'VIOLATION'):
+                    continue
+                rows.append([
+                    _safe(pf.get('filename', '')),
+                    _safe(rule_map.get(res.get('rule_id', ''), res.get('rule_id', '')))[:80],
+                    _excerpt(res.get('evidence', ''), max_len=160),
+                    _guidance_for('', verdict),
+                ])
+                if len(rows) >= 8:
+                    break
+            if len(rows) >= 8:
+                break
+        if rows:
+            sections.append(('（五）合规严重警示', ['文件', '规则', '原文证据', '处理指引'], rows))
+
+    if not sections:
+        return
+
+    doc.add_page_break()
+    _add_heading(doc, '警示详情与处理指引', H1, bold=True)
+    p = doc.add_paragraph()
+    rn = p.add_run('以下为检测到的铁证/违规/段落雷同/高风险组合及合规严重项，均附原文摘录、所在章节'
+                   '（依据章节标题映射，不提供页码）与处理指引，供复核取证。')
+    rn.font.size = Pt(FINE)
+    rn.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+
+    for heading, headers, rows in sections:
+        _add_heading(doc, heading, H2)
+        _warning_table(doc, headers, rows)
+        doc.add_paragraph()
+
+
 def _build_standard_sections(doc, report):
     """Build cover + sections 一~五 (shared by analysis & clearance docx)."""
     info = report['basic_info']
@@ -851,24 +1092,37 @@ def _build_standard_sections(doc, report):
         rn.font.size = Pt(FINE)
         rn.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
 
-    # FIX-2026-09-09-QA: 铁证/违规警示段（红色加粗，冒烟指数仅供参考）
+    # FIX-2026-09-09-QA: 铁证/违规警示（B1-1：纯文字红段 → 表格，保留红色警示语义）
+    hard = info.get('hard_evidence') or {}
     if info.get('hard_alarm'):
-        hard_items = info.get('hard_evidence', {}).get('items', [])
-        types = '；'.join(_safe(it.get('evidence', '')) for it in hard_items[:4])
+        hard_items = hard.get('items', [])
+        if hard_items:
+            ht = _add_table(doc, len(hard_items) + 1, 4)
+            for j, hdr in enumerate(['证据类型', '级别', '证据文本', '涉及文件']):
+                _set_cell(ht.cell(0, j), hdr, bold=True, size=FINE, shade=True)
+            for ri, it in enumerate(hard_items):
+                _set_cell(ht.cell(ri + 1, 0), _type_label(it.get('type', '')), size=FINE)
+                _set_cell(ht.cell(ri + 1, 1), _safe(it.get('level', '')), size=FINE)
+                _set_cell(ht.cell(ri + 1, 2), _safe(it.get('evidence', '')), size=FINE)
+                _set_cell(ht.cell(ri + 1, 3), ', '.join(_safe(f) for f in it.get('files', [])), size=FINE)
         p = doc.add_paragraph()
-        rn = p.add_run(f"⚠ 铁证触发：{types or '检测到铁证级串通信号'}。"
-                       f"已直接判定为「{info.get('hard_label', '高度预警')}」，冒烟指数仅供参考。")
+        rn = p.add_run(f"已直接判定为「{info.get('hard_label', '高度预警')}」，冒烟指数仅供参考。")
         rn.bold = True
-        rn.font.size = Pt(BODY)
+        rn.font.size = Pt(FINE)
         rn.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
-    if info.get('hard_evidence', {}).get('violation_fired'):
-        viol = info.get('hard_evidence', {}).get('violations', [])
-        vtypes = '；'.join(_safe(v.get('evidence', '')) for v in viol[:3])
+    if hard.get('violation_fired') and hard.get('violations'):
+        viols = hard.get('violations', [])
+        vt = _add_table(doc, len(viols) + 1, 3)
+        for j, hdr in enumerate(['违规类型', '证据文本', '涉及文件']):
+            _set_cell(vt.cell(0, j), hdr, bold=True, size=FINE, shade=True)
+        for ri, v in enumerate(viols):
+            _set_cell(vt.cell(ri + 1, 0), _type_label(v.get('type', '')), size=FINE)
+            _set_cell(vt.cell(ri + 1, 1), _safe(v.get('evidence', '')), size=FINE)
+            _set_cell(vt.cell(ri + 1, 2), ', '.join(_safe(f) for f in v.get('files', [])), size=FINE)
         p = doc.add_paragraph()
-        rn = p.add_run(f"⚠ 暗标违规：{vtypes or '检测到暗标身份泄露'}。"
-                       f"已按「{info.get('hard_evidence', {}).get('violation_label', '高度预警')}」警示。")
+        rn = p.add_run(f"已按「{hard.get('violation_label', '高度预警')}」警示。")
         rn.bold = True
-        rn.font.size = Pt(BODY)
+        rn.font.size = Pt(FINE)
         rn.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
 
     # ── Section 2: 预警单位汇总 ──
@@ -1103,6 +1357,10 @@ def build_clearance_docx(report, info_overrides=None):
         report['basic_info'] = {**report.get('basic_info', {}), **info_overrides}
     doc = _new_docx()
     _build_standard_sections(doc, report)
+
+    # B1-2/B1-3: 警示详情与处理指引（无编号插页，插在标准五章后、六 横向对比前，
+    # 避免牵连 6.1-6.10 编号；所有警示均为表格式呈现）
+    _append_warning_details(doc, report)
 
     # ── Section 6: 横向对比分析 ──
     cross = report.get('cross_comparison')

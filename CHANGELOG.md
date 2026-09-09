@@ -8,6 +8,27 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 清标报告 UI 改造 + 归属双写 + DOCX 警示表格式化
+
+### Added
+- **警示总结表格**：清标报告下载链接与大标题之间新增 `_renderAlertSummary`（9 行汇总：冒烟指数/预警级别/铁证/暗标违规/高险指标/高嫌疑单位/集团/段落雷同/合规严重项，按最高 severity 着色）
+- **大标题跟随着色**：各章节 `<details class="cl-l1">` 按下属最高警示动态加 `cl-danger`/`cl-warn`（颜色+左边框）
+- **DOCX 警示详情章节**：无编号"警示详情与处理指引"——铁证/违规/6.9 段落/高风险组合/合规 critical 五类警示源各一表（原文摘录/所在章节/处理指引），`_guidance_for` 内置类型→指引映射；元数据/平台类警示显示"证据来源：文件属性/交易平台记录"
+
+### Changed
+- **折叠箭头**：quoteBubble 与报告全部章节折叠改为 Material Symbols `expand_more` + `.collapsed` CSS 旋转（`_toggleArrow`/`_clArrow`）
+- **章节参数统一表格**：指标 div 卡片→表格（含 details 折叠行）、围标集团→表格、合规徽章→表格、AI 评分→表格、图片抽检/审计文本→表格
+- **封面铁证/违规红字→表格**（证据类型/级别/证据文本/涉及文件 + 红色判定语）
+
+### Fixed
+- **清标结果误进项目对话**：新增 `resolve_clearance_threads`（跟随当前对话归属 + 同步该用户最新个人对话；个人对话跑→进最新个人对话；无会话则新建"分析结果"会话；DB 失败回退当前线程）；`run_clearance_async` 持久化遍历目标线程各插一条 CLEARANCE_REPORT。另修 `window.currentProjectId` 恒空 bug（→ 裸 `currentProjectId`）
+
+### regression: 121/121 tests passed · verify_fixes 101/101 · check_system 133/137 · node --check app.js OK
+- F1 渲染冒烟 21/21（XSS/老报告守卫/severity 映射）· F2 真库 5 用例（项目双写/个人单写/个人非最新双写/空会话建/DB失败回退）· B1 合成 15/15（5 类警示子节/元数据占位/章节映射/空报告守卫）
+- 遗留：报告不携带正文 text → DOCX 章节定位用段类型映射（`_locate_chapter` 回扫逻辑已备，待 report 携带 text 时启用）；页码明确不做
+
+---
+
 ## [2026-09-09] — 暗标违规检测开关（默认关闭）+ 盖章弱信号降权（FIX-2026-09-09-019）
 
 ### Changed

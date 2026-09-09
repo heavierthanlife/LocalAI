@@ -8157,7 +8157,7 @@
             if (content && icon) {
                 const isHidden = content.style.display === 'none';
                 content.style.display = isHidden ? 'block' : 'none';
-                icon.textContent = isHidden ? '▼' : '▶';
+                _toggleArrow(icon, isHidden);  // F1-1: Material Symbols expand_more + 旋转
             }
         });
         const removeBtn = document.getElementById('quoteBubbleRemove');
@@ -9193,7 +9193,7 @@
                     if (tenderFile) formData.append('tender_file', tenderFile);
                 }
                 formData.append('options', JSON.stringify(options));
-                formData.append('project_id', window.currentProjectId || '');
+                formData.append('project_id', currentProjectId || '');
                 var infoOverrides = window._clearanceInfoOverrides || {};
                 Object.keys(infoOverrides).forEach(function(k) {
                     if (infoOverrides[k]) formData.append(k, infoOverrides[k]);
@@ -9276,6 +9276,109 @@
         updateComplianceHint();
     }
 
+    // F1-3: 折叠箭头 (Material Symbols expand_more, collapsed=收起旋转)
+    function _clArrow(open) {
+        return '<span class="msi msi-arrow' + (open ? '' : ' collapsed') + '" aria-hidden="true">expand_more</span>';
+    }
+
+    // F1-3: 各章节最高警示级别 (danger/warn/ok)，用于 cl-l1 大标题着色
+    function _clearanceSectionSev(report, sec) {
+        var sev = 'ok';
+        if (sec === 1) {
+            var info = report.basic_info || {};
+            (report.indicators || []).forEach(function(ind) {
+                if (ind.skipped) return;
+                var s = (ind.score || 0) >= 15 ? 'danger' : (ind.score || 0) > 0 ? 'warn' : 'ok';
+                if (s === 'danger') sev = 'danger';
+                else if (s === 'warn' && sev !== 'danger') sev = 'warn';
+            });
+            // 铁证 / 暗标违规 / 硬标记单位 → 直接提升 danger
+            if (info.hard_alarm || (info.hard_evidence || {}).violation_fired) sev = 'danger';
+            if ((report.suspected_units || []).some(function(su) { return su.hard_flag; })) sev = 'danger';
+        } else if (sec === 2) {
+            var cross = report.cross_comparison || {};
+            var maxR = 0;
+            (cross.pairs || []).forEach(function(p) { var r = p.risk || 0; if (r > maxR) maxR = r; });
+            if (maxR > 30) sev = 'danger';
+            else if (maxR > 10) sev = 'warn';
+            var gangs = cross.gangs || [];
+            if (gangs.length) {
+                var gMax = 0;
+                gangs.forEach(function(g) { var r = g.max_risk || 0; if (r > gMax) gMax = r; });
+                if (gMax > 30) sev = 'danger';
+                else if (sev !== 'danger') sev = 'warn';  // 存在集团 → 至少 warn
+            }
+        } else if (sec === 3) {
+            var comp = report.compliance;
+            if (comp && comp.summary) {
+                var cs = comp.summary;
+                if ((cs.critical || 0) > 0 || (cs.violation || 0) > 0) sev = 'danger';
+                else if ((cs.warning || 0) > 0) sev = 'warn';
+            }
+        } else if (sec === 4) {
+            var ai = report.ai_review;
+            if (ai && ai.per_file) {
+                ai.per_file.forEach(function(pf) {
+                    var issues = (((pf || {}).review || {}).issues) || [];
+                    issues.forEach(function(iss) {
+                        var sv = String((iss || {}).severity || '');
+                        if (sv === 'high' || sv === 'critical' || sv === '高') sev = 'danger';
+                        else if ((sv === 'medium' || sv === '中') && sev !== 'danger') sev = 'warn';
+                    });
+                });
+            }
+        }
+        return sev;
+    }
+
+    // F1-3: cl-l1 动态 class 拼装
+    function _l1Cls(report, sec) {
+        var sev = _clearanceSectionSev(report, sec);
+        return 'cl-l1' + (sev === 'danger' ? ' cl-danger' : (sev === 'warn' ? ' cl-warn' : ''));
+    }
+
+    // F1-2: 警示总结表格（报告开头，一表纵览关键信号）
+    function _renderAlertSummary(report) {
+        var info = (report || {}).basic_info || {};
+        var indicators = (report || {}).indicators || [];
+        var suspected = (report || {}).suspected_units || [];
+        var cross = (report || {}).cross_comparison;
+        var compliance = (report || {}).compliance;
+        var he = info.hard_evidence || {};
+
+        var score = info.total_score || 0;
+        var scoreColor = (isClearanceHighRisk(info) || (info.warning_level || '').charAt(0) === '■') ? '#dc2626' : isClearanceMidRisk(info) ? '#d97706' : '#16a34a';
+
+        var hiInd = indicators.filter(function(ind) { return !ind.skipped && (ind.score || 0) >= 15; }).length;
+        var anyInd = indicators.filter(function(ind) { return !ind.skipped && (ind.score || 0) > 0; }).length;
+        var hiUnit = suspected.filter(function(u) { return (u.score || 0) > 10 || u.hard_flag; }).length;
+        // -1 = 数据源缺失，渲染 —
+        var gangN = (cross && cross.gangs) ? cross.gangs.length : -1;
+        var paraN = (cross && cross.paragraph_collusion && cross.paragraph_collusion.shared_segments) ? cross.paragraph_collusion.shared_segments.length : -1;
+        var compN = (compliance && compliance.summary) ? ((compliance.summary.critical || 0) + (compliance.summary.violation || 0)) : -1;
+
+        var rows = [
+            ['冒烟指数', '<span style="color:' + scoreColor + ';font-weight:600;">' + score.toFixed(1) + ' 分</span>'],
+            ['预警级别', '<span style="color:' + scoreColor + ';font-weight:600;">' + _clearanceEscape(info.warning_level || '—') + '</span>'],
+            ['铁证触发', info.hard_alarm ? ('是（' + ((he.items || []).length) + ' 项）') : '否'],
+            ['暗标违规', he.violation_fired ? ('是（' + ((he.violations || []).length) + ' 项）') : '否'],
+            ['高险指标数', '<span class="severity-danger">' + hiInd + '</span> 项高险 · <span class="severity-warn">' + anyInd + '</span> 项预警'],
+            ['高嫌疑单位数', hiUnit + ' 家'],
+            ['疑似集团数', gangN >= 0 ? gangN + ' 个' : '—'],
+            ['段落雷同段数', paraN >= 0 ? paraN + ' 段' : '—'],
+            ['合规严重项', compN >= 0 ? compN + ' 项' : '—']
+        ];
+
+        var html = '<div class="cl-alert-summary" style="margin-bottom:10px;">';
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;">';
+        html += '<tr><th style="width:38%;">项目</th><th>数值</th></tr>';
+        rows.forEach(function(r) {
+            html += '<tr style="border-top:1px solid var(--card-border);"><td style="color:var(--card-muted);">' + r[0] + '</td><td>' + r[1] + '</td></tr>';
+        });
+        html += '</table></div>';
+        return html;
+    }
+
     function buildClearanceReportHtml(result, downloadUrl) {
         var report = result.report || {};
         var cross = report.cross_comparison || {};
@@ -9291,85 +9394,98 @@
             html += '</div>';
         }
 
+        // F1-2: 警示总结表格
+        html += _renderAlertSummary(report);
+
         // ── 一、指标分析 ──
-        html += '<details class="cl-l1"><summary><span class="cl-num">一</span>' + _icon('📊') + ' 指标分析</summary>';
+        html += '<details class="' + _l1Cls(report, 1) + '"><summary><span class="cl-num">一</span>' + _icon('📊') + ' 指标分析' + _clArrow() + '</summary>';
         html += '<div class="cl-l2">' + _renderIndicatorsTab(report) + '</div></details>';
 
         // ── 二、横向对比 ──
         if (cross && (cross.pairs || []).length) {
-            html += '<details class="cl-l1"><summary><span class="cl-num">二</span>' + _icon('🔀') + ' 横向对比</summary>';
+            html += '<details class="' + _l1Cls(report, 2) + '"><summary><span class="cl-num">二</span>' + _icon('🔀') + ' 横向对比' + _clArrow() + '</summary>';
             html += '<div class="cl-l2">' + _renderCrossTab(cross, report._files || []) + '</div></details>';
         }
 
         // ── 三、合规审查 ──
         if (compliance && !compliance.skipped) {
-            html += '<details class="cl-l1"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查</summary>';
+            html += '<details class="' + _l1Cls(report, 3) + '"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查' + _clArrow() + '</summary>';
             html += '<div class="cl-l2">' + _renderComplianceTab(compliance) + '</div></details>';
         } else {
-            html += '<details class="cl-l1"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查</summary>';
+            html += '<details class="' + _l1Cls(report, 3) + '"><summary><span class="cl-num">三</span>' + _icon('⚖️') + ' 合规审查' + _clArrow() + '</summary>';
             html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未提供招标文件，未执行合规审查。</p></div></details>';
         }
 
         // ── 四、AI 评审 ──
         if (ai && ai.per_file && ai.per_file.length) {
-            html += '<details class="cl-l1"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审</summary>';
+            html += '<details class="' + _l1Cls(report, 4) + '"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审' + _clArrow() + '</summary>';
             html += '<div class="cl-l2">' + _renderAITab(ai) + '</div></details>';
         } else {
-            html += '<details class="cl-l1"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审</summary>';
+            html += '<details class="' + _l1Cls(report, 4) + '"><summary><span class="cl-num">四</span>' + _icon('🤖') + ' AI 评审' + _clArrow() + '</summary>';
             html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未检测到 LLM 或审查失败，已跳过。</p></div></details>';
         }
 
         // ── 五、图片随机抽检说明 ──
         if (report.image_sampling && report.image_sampling.length) {
-            html += '<details class="cl-l1"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明</summary>';
+            html += '<details class="' + _l1Cls(report, 5) + '"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明' + _clArrow() + '</summary>';
             html += '<div class="cl-l2">' + _renderImageSamplingTab(report.image_sampling) + '</div></details>';
         } else {
-            html += '<details class="cl-l1"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明</summary>';
+            html += '<details class="' + _l1Cls(report, 5) + '"><summary><span class="cl-num">五</span>' + _icon('🖼️') + ' 图片随机抽检说明' + _clArrow() + '</summary>';
             html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未包含图片或未执行图片抽检。</p></div></details>';
         }
 
         // ── 六、全量审计补充检查 ──
         if (report.audit_supplement && report.audit_supplement.per_file && report.audit_supplement.per_file.length) {
-            html += '<details class="cl-l1"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查</summary>';
+            html += '<details class="' + _l1Cls(report, 6) + '"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查' + _clArrow() + '</summary>';
             html += '<div class="cl-l2">' + _renderAuditSupplementTab(report.audit_supplement) + '</div></details>';
         } else {
-            html += '<details class="cl-l1"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查</summary>';
+            html += '<details class="' + _l1Cls(report, 6) + '"><summary><span class="cl-num">六</span>' + _icon('🛡️') + ' 全量审计补充检查' + _clArrow() + '</summary>';
             html += '<div class="cl-l2"><p style="color:var(--card-muted);font-size:0.72rem;">未包含审计补充数据。</p></div></details>';
         }
 
         return html;
     }
 
+    // F1-4: 图片抽检 → 表格 (文件 / 抽检数 / 说明)，说明内逐样本一行
     function _renderImageSamplingTab(sampling) {
         var html = '<div style="font-size:0.72rem;color:var(--card-muted);margin-bottom:6px;">随机抽取部分图片进行视觉校验，检测可能被忽略的图纸/印章/数据差异。</div>';
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.66rem;">';
+        html += '<tr><th style="width:26%;">文件</th><th style="width:12%;">抽检数</th><th>说明</th></tr>';
         (sampling || []).forEach(function(sf) {
-            html += '<details class="cl-l3"><summary>' + _icon('🖼️') + ' ' + _clearanceEscape(sf.filename || '') + ' (' + (sf.samples || []).length + '张)</summary>';
-            (sf.samples || []).forEach(function(s) {
-                html += '<div style="font-size:0.66rem;border:1px solid var(--card-border);border-radius:6px;padding:4px 8px;margin:4px 0;">';
-                html += '<b>#' + (s.seq || '') + '</b> 位置: ' + _clearanceEscape(s.chapter || '') + '<br>';
-                html += '前文: ' + _clearanceEscape((s.prev || '').substring(0, 10)) + ' | 后文: ' + _clearanceEscape((s.next || '').substring(0, 10)) + '<br>';
-                html += '识别: ' + _clearanceEscape((s.desc || '').substring(0, 120));
-                html += '</div>';
-            });
-            html += '</details>';
+            var samples = sf.samples || [];
+            var desc = samples.map(function(s) {
+                return '<b>#' + (s.seq || '') + '</b> 位置: ' + _clearanceEscape(s.chapter || '') +
+                    ' | 前文: ' + _clearanceEscape((s.prev || '').substring(0, 10)) +
+                    ' | 后文: ' + _clearanceEscape((s.next || '').substring(0, 10)) +
+                    '<br>识别: ' + _clearanceEscape((s.desc || '').substring(0, 120));
+            }).join('<br>') || '—';
+            html += '<tr style="border-top:1px solid var(--card-border);vertical-align:top;">';
+            html += '<td>' + _clearanceEscape(sf.filename || '') + '</td>';
+            html += '<td>' + samples.length + '</td>';
+            html += '<td>' + desc + '</td></tr>';
         });
+        html += '</table>';
         return html;
     }
 
+    // F1-4: 审计补充 → 表格 (文件 / 风格分 / 规则分 / 时间线结论)
     function _renderAuditSupplementTab(au) {
-        var html = '';
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:0.66rem;">';
+        html += '<tr><th style="width:26%;">文件</th><th>风格分</th><th>规则分</th><th>时间线结论</th></tr>';
         (au.per_file || []).forEach(function(pf) {
             var tl = pf.timeline || {};
             var st = pf.style || {};
             var ru = pf.rules || {};
-            html += '<details class="cl-l3"><summary>' + _icon('🛡️') + ' ' + _clearanceEscape(pf.filename || '') + '</summary>';
-            html += '<div style="font-size:0.66rem;padding:4px 8px;">';
-            if (st.score != null) html += '风格分析: <b>' + (st.score || 0).toFixed(1) + '</b> 分 (' + _clearanceEscape(st.findings && st.findings.formality_label || '') + ')<br>';
-            if (ru.count != null) html += '自规则提取: <b>' + (ru.count || 0) + '</b> 条 · 评分 ' + (ru.score || 0).toFixed(1) + '<br>';
-            if (tl.skipped) html += '时间线合规: ' + _clearanceEscape(tl.note || '跳过') + '<br>';
-            else if (tl.score != null) html += '时间线合规: <b>' + (tl.score || 0).toFixed(1) + '</b> 分<br>';
-            html += '</div></details>';
+            var styleTxt = (st.score != null) ? (st.score || 0).toFixed(1) + ' 分 (' + _clearanceEscape(st.findings && st.findings.formality_label || '') + ')' : '—';
+            var ruleTxt = (ru.count != null) ? (ru.score || 0).toFixed(1) + ' 分 / ' + (ru.count || 0) + ' 条' : '—';
+            var tlTxt = tl.skipped ? _clearanceEscape(tl.note || '跳过') : (tl.score != null ? (tl.score || 0).toFixed(1) + ' 分' : '—');
+            html += '<tr style="border-top:1px solid var(--card-border);vertical-align:top;">';
+            html += '<td>' + _clearanceEscape(pf.filename || '') + '</td>';
+            html += '<td>' + styleTxt + '</td>';
+            html += '<td>' + ruleTxt + '</td>';
+            html += '<td>' + tlTxt + '</td></tr>';
         });
+        html += '</table>';
         return html;
     }
 
@@ -9413,6 +9529,14 @@
                 _downloadClearanceReport(dl.getAttribute('href'));
             });
         }
+        // F1-1: 折叠箭头委托 — summary 展开/收起时旋转同步（details 原生开关保留）
+        container.addEventListener('click', function(e) {
+            var sm = e.target.closest('summary');
+            if (sm) {
+                var arrow = sm.querySelector('.msi-arrow');
+                if (arrow) arrow.classList.toggle('collapsed');
+            }
+        });
     }
 
     function _downloadClearanceReport(url) {
@@ -9473,7 +9597,7 @@
             // FIX-016 后续: 红色警报母条目 + 附注
             var warnCount = suspected.filter(function(su){ return (su.score||0) > 10; }).length;
             html += '<details class="alert-parent"><summary>' + _icon('🔴') + ' 预警嫌疑单位 (' + suspected.length + '家)' +
-                '<span class="alert-note">含 ' + warnCount + ' 家高嫌疑</span></summary>';
+                '<span class="alert-note">含 ' + warnCount + ' 家高嫌疑</span>' + _clArrow() + '</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位</th><th>涉及指标</th><th>风险分</th></tr>';
             suspected.forEach(function(su) {
@@ -9488,36 +9612,42 @@
             html += '<p class="severity-ok" style="font-size:0.72rem;margin-bottom:8px;">' + _icon('✅') + ' 未发现预警嫌疑单位</p>';
         }
 
-        html += '<details class="cl-l2"><summary>' + _icon('📊') + ' 指标分析详情 (' + indicators.length + '项)</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('📊') + ' 指标分析详情 (' + indicators.length + '项)' + _clArrow() + '</summary>';
+        // F1-4: 指标 div 卡片 → 汇总表格 (序号 / 指标名称 / 类别 / 得分 / 结果)
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
+        html += '<tr><th style="width:4%;">序号</th><th style="width:22%;">指标名称</th><th style="width:16%;">类别</th><th style="width:8%;">得分</th><th>结果</th></tr>';
         indicators.forEach(function(ind, idx) {
-            var catTag = (ind.category || '') + (ind.skipped ? ' ' + _icon('⏭️') : '');
             var isDanger = ind.score >= 15 && !ind.skipped;
-            html += '<div class="' + (isDanger ? 'alert-item' : '') + '" style="border:1px solid var(--card-border);border-radius:6px;margin-bottom:6px;margin-top:6px;padding:8px 10px;">';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
-            html += '<strong style="font-size:0.75rem;">' + (idx+1) + '. ' + _clearanceEscape(ind.name||'') + '</strong>';
-            html += '<span style="font-size:0.65rem;color:var(--card-muted);">' + _clearanceEscape(catTag) + ' | 得分: <b>' + (ind.score||0).toFixed(1) + '</b></span>';
-            html += '</div>';
-            var resText = ind.result || '';
             // FIX-016 后续 + 阶段 D: 用 severity 字段/score 着色，替代 indexOf(emoji)
             var sev = ind.severity || (ind.score >= 15 ? 'danger' : (ind.score > 0 ? 'warn' : 'ok'));
             var cls = sev === 'danger' ? 'severity-danger' : (sev === 'warn' ? 'severity-warn' : 'severity-ok');
-            html += '<div class="' + cls + '" style="font-size:0.68rem;">' + _clearanceEscape(resText) + '</div>';
+            var resText = ind.skipped ? '○ 跳过（' + (ind.result || '未执行') + '）' : (ind.result || '');
+            html += '<tr' + (isDanger ? ' class="alert-item"' : '') + ' style="border-top:1px solid var(--card-border);">';
+            html += '<td>' + (idx + 1) + '</td>';
+            html += '<td><strong>' + _clearanceEscape(ind.name || '') + '</strong></td>';
+            html += '<td>' + _clearanceEscape(ind.category || '') + (ind.skipped ? ' ' + _icon('⏭️') : '') + '</td>';
+            html += '<td>' + (ind.score || 0).toFixed(1) + '</td>';
+            html += '<td class="' + cls + '">' + _clearanceEscape(resText) + '</td>';
+            html += '</tr>';
+            // 明细折叠行：保留原 details 数据展示（截断 5 条），不外溢
             if (ind.details && ind.details.length > 0 && !ind.skipped) {
+                html += '<tr style="border-top:1px solid var(--card-border);"><td></td><td colspan="4">';
+                html += '<details class="cl-l4"><summary>' + _icon('📋') + ' 明细（' + ind.details.length + '项）' + _clArrow() + '</summary>';
                 html += '<div style="font-size:0.65rem;color:var(--card-muted);margin-top:4px;">';
                 var keys = Object.keys(ind.details[0] || {});
                 ind.details.slice(0, 5).forEach(function(d) {
-                    html += keys.map(function(k) { return _clearanceEscape(k) + ': ' + _clearanceEscape(String(d[k]||'').substring(0, 60)); }).join(' | ');
+                    html += keys.map(function(k) { return _clearanceEscape(k) + ': ' + _clearanceEscape(String(d[k] || '').substring(0, 60)); }).join(' | ');
                     html += '<br>';
                 });
                 if (ind.details.length > 5) html += '...共' + ind.details.length + '项';
-                html += '</div>';
+                html += '</div></details>';
+                html += '</td></tr>';
             }
-            html += '</div>';
         });
-        html += '</details>';
+        html += '</table></details>';
 
         if (personnel.list && personnel.list.length > 0) {
-            html += '<details class="cl-l2"><summary>' + _icon('👥') + ' 关系人员汇总 (' + personnel.total + '人)</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('👥') + ' 关系人员汇总 (' + personnel.total + '人)' + _clArrow() + '</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位</th><th>姓名</th><th>类型</th></tr>';
             personnel.list.slice(0, 20).forEach(function(p) {
@@ -9545,7 +9675,7 @@
 
         if (real.length > 0) {
             var scoreText = (pc.collusion_score != null) ? '，风险分 ' + pc.collusion_score : '';
-            html += '<details class="cl-l2"><summary>' + _icon('🧩') + ' 段落级实质雷同证据（' + real.length + '段' + scoreText + '）</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('🧩') + ' 段落级实质雷同证据（' + real.length + '段' + scoreText + '）' + _clArrow() + '</summary>';
             html += '<div style="font-size:0.62rem;color:var(--card-muted);margin-bottom:4px;">仅列服务承诺段/技术方案段等非模板实质雷同，按惊讶度降序</div>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
             html += '<tr><th>段落类型</th><th>共享单位</th><th>一致率</th><th>惊讶度</th><th>内容预览</th></tr>';
@@ -9562,7 +9692,7 @@
         }
 
         if (templateSegs.length > 0) {
-            html += '<details class="cl-l2"><summary>' + _icon('📄') + ' ' + templateSegs.length + ' 段模板/声明段（投标函·招标条款复述，非串标证据）</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('📄') + ' ' + templateSegs.length + ' 段模板/声明段（投标函·招标条款复述，非串标证据）' + _clArrow() + '</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
             html += '<tr><th>段落类型</th><th>共享单位</th><th>内容预览</th></tr>';
             templateSegs.slice(0, 10).forEach(function(s) {
@@ -9602,21 +9732,25 @@
 
         html += '<div style="font-size:0.78rem;margin-bottom:8px;"><strong>横向对比:</strong> ' + files.length + ' 个投标单位 · ' + pairs.length + ' 对组合 · 点击矩阵单元格查看对详情</div>';
 
-        // ── E2: 帮派 (红色警报) ──
+        // ── E2: 帮派 (红色警报) — F1-4: 文字块 → 表格 (集团/成员数/最高风险/平均风险/成员名单)
         if (gangs && gangs.length) {
-            html += '<details class="alert-parent"><summary>' + _icon('🕸️') + ' 疑似围标集团 (' + gangs.length + '个)<span class="alert-note">红色高嫌疑</span></summary>';
+            html += '<details class="alert-parent"><summary>' + _icon('🕸️') + ' 疑似围标集团 (' + gangs.length + '个)<span class="alert-note">红色高嫌疑</span>' + _clArrow() + '</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
+            html += '<tr><th>集团</th><th>成员数</th><th>最高风险</th><th>平均风险</th><th>成员名单</th></tr>';
             gangs.forEach(function(g, gi) {
-                html += '<div class="alert-item" style="font-size:0.7rem;">';
-                html += '<b>集团' + (gi + 1) + '</b>：' + (g.files || []).map(_clearanceEscape).join(' ' + _icon('⚡') + ' ') +
-                    ' | 成员 ' + (g.members || []).length + ' 家 | 最高风险 ' + (g.max_risk || 0).toFixed(1) +
-                    ' | 平均 ' + (g.avg_risk || 0).toFixed(1);
-                html += '</div>';
+                html += '<tr style="border-top:1px solid var(--card-border);">';
+                html += '<td><b>集团' + (gi + 1) + '</b></td>';
+                html += '<td>' + (g.members || []).length + '</td>';
+                html += '<td>' + (g.max_risk || 0).toFixed(1) + '</td>';
+                html += '<td>' + (g.avg_risk || 0).toFixed(1) + '</td>';
+                html += '<td>' + (g.files || []).map(_clearanceEscape).join(' / ') + '</td>';
+                html += '</tr>';
             });
-            html += '</details>';
+            html += '</table></details>';
         }
 
         // ── 多维矩阵切换 ──
-        html += '<details class="cl-l2"><summary>' + _icon('🔀') + ' 风险矩阵</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('🔀') + ' 风险矩阵' + _clArrow() + '</summary>';
         html += '<div style="display:flex;gap:6px;margin:4px 0;">';
         html += '<button class="cm-matrix-btn" data-m="risk" style="border:1px solid var(--card-border);background:#8e44ad;color:#fff;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">综合风险</button>';
         html += '<button class="cm-matrix-btn" data-m="text" style="border:1px solid var(--card-border);background:transparent;border-radius:4px;padding:2px 8px;font-size:0.65rem;cursor:pointer;">文本相似</button>';
@@ -9663,7 +9797,7 @@
         html += '</details>';
 
         // ── C: 全部组合明细 ──
-        html += '<details class="cl-l2"><summary>' + _icon('📋') + ' 全部组合明细 (' + pairs.length + '对)</summary>';
+        html += '<details class="cl-l2"><summary>' + _icon('📋') + ' 全部组合明细 (' + pairs.length + '对)' + _clArrow() + '</summary>';
         var maxP = Math.max.apply(null, pairs.map(function(p) { return p.risk || 0; }));
         var avgP = pairs.reduce(function(s, p) { return s + (p.risk || 0); }, 0) / (pairs.length || 1);
         var hiP = pairs.filter(function(p) { return (p.risk || 0) > 5; }).length;
@@ -9685,7 +9819,7 @@
         // ── 高风险组合 (红色警报) ──
         var high = pairs.filter(function(p) { return (p.risk || 0) > 5; });
         if (high.length > 0) {
-            html += '<details class="alert-parent"><summary>' + _icon('⚠️') + ' 高风险组合 (' + high.length + '对)<span class="alert-note">风险 &gt; 5 需关注</span></summary>';
+            html += '<details class="alert-parent"><summary>' + _icon('⚠️') + ' 高风险组合 (' + high.length + '对)<span class="alert-note">风险 &gt; 5 需关注</span>' + _clArrow() + '</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>风险</th><th>文本相似</th><th>属性雷同</th></tr>';
             high.forEach(function(p) {
@@ -9701,7 +9835,7 @@
 
         // ── 重点信息雷同 ──
         if (keyInfo.length > 0) {
-            html += '<details class="cl-l2"><summary>' + _icon('🔑') + ' 重点信息雷同 (' + keyInfo.length + '组)</summary>';
+            html += '<details class="cl-l2"><summary>' + _icon('🔑') + ' 重点信息雷同 (' + keyInfo.length + '组)' + _clArrow() + '</summary>';
             html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-top:4px;">';
             html += '<tr><th>单位1</th><th>单位2</th><th>共同关键词</th></tr>';
             keyInfo.slice(0, 20).forEach(function(ki) {
@@ -9759,17 +9893,35 @@
     function _renderComplianceTab(comp) {
         var html = '';
         var summary = comp.summary || {};
+        var perFiles = comp.per_file || [];
         html += '<div style="font-size:0.78rem;margin-bottom:8px;">' + _icon('⚖️') + ' 基于招标文件《' + _clearanceEscape(comp.tender_name||'') + '》' + (comp.rules||[]).length + ' 条规则</div>';
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">';
-        html += '<span style="background:#16a34a;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">通过 ' + (summary.pass||0) + '</span>';
-        html += '<span style="background:#d97706;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">警告 ' + (summary.warning||0) + '</span>';
-        html += '<span style="background:#dc2626;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">违规 ' + (summary.violation||0) + '</span>';
-        html += '<span style="background:#7f1d1d;color:#fff;border-radius:6px;padding:3px 10px;font-size:0.7rem;">严重 ' + (summary.critical||0) + '</span>';
-        html += '</div>';
-
-        (comp.per_file || []).forEach(function(pf, pi) {
+        // F1-4: 徽章行 → 表格 (文件 / 通过 / 警告 / 违规 / 严重)
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.7rem;margin-bottom:8px;">';
+        html += '<tr><th>文件</th><th>通过</th><th>警告</th><th>违规</th><th>严重</th></tr>';
+        perFiles.forEach(function(pf) {
             var s = pf.summary || {};
-            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('📄') + ' ' + _clearanceEscape(pf.filename||'') + ' — 通过' + (s.pass||0) + ' 警告' + (s.warning||0) + ' 违规' + (s.violation||0) + ' 严重' + (s.critical||0) + '</summary>';
+            html += '<tr style="border-top:1px solid var(--card-border);">';
+            html += '<td>' + _clearanceEscape(pf.filename || '') + '</td>';
+            html += '<td style="color:#16a34a;">' + (s.pass || 0) + '</td>';
+            html += '<td style="color:#d97706;">' + (s.warning || 0) + '</td>';
+            html += '<td style="color:#dc2626;">' + (s.violation || 0) + '</td>';
+            html += '<td style="color:#7f1d1d;">' + (s.critical || 0) + '</td>';
+            html += '</tr>';
+        });
+        if (perFiles.length > 1) {
+            html += '<tr style="border-top:2px solid var(--card-border);font-weight:600;">';
+            html += '<td>合计</td>';
+            html += '<td style="color:#16a34a;">' + (summary.pass || 0) + '</td>';
+            html += '<td style="color:#d97706;">' + (summary.warning || 0) + '</td>';
+            html += '<td style="color:#dc2626;">' + (summary.violation || 0) + '</td>';
+            html += '<td style="color:#7f1d1d;">' + (summary.critical || 0) + '</td>';
+            html += '</tr>';
+        }
+        html += '</table>';
+
+        perFiles.forEach(function(pf, pi) {
+            var s = pf.summary || {};
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('📄') + ' ' + _clearanceEscape(pf.filename||'') + ' — 通过' + (s.pass||0) + ' 警告' + (s.warning||0) + ' 违规' + (s.violation||0) + ' 严重' + (s.critical||0) + _clArrow(pi === 0) + '</summary>';
             var results = pf.results || [];
             if (results.length) {
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:4px;">';
@@ -9792,16 +9944,28 @@
         (ai.per_file || []).forEach(function(pf, pi) {
             var r = pf.review || {};
             var scores = r.scores || {};
-            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('🤖') + ' ' + _clearanceEscape(pf.filename||'') + ' — ' + (r.verdict||'') + ' (' + (r.overall||0) + '/10)</summary>';
-            if (Object.keys(scores).length) {
-                html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;">';
-                Object.keys(scores).forEach(function(k) {
+            html += '<details ' + (pi === 0 ? 'open' : '') + ' class="cl-l3"><summary>' + _icon('🤖') + ' ' + _clearanceEscape(pf.filename||'') + ' — ' + (r.verdict||'') + ' (' + (r.overall||0) + '/10)' + _clArrow(pi === 0) + '</summary>';
+            // F1-4: 评分徽章 → 小表格 (文件 / 综合评分 / 结论)，置于 issues 表头上方
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin:6px 0;">';
+            html += '<tr><th>文件</th><th>综合评分</th><th>结论</th></tr>';
+            html += '<tr style="border-top:1px solid var(--card-border);">';
+            var ov = r.overall || 0;
+            var oc = ov >= 7 ? '#16a34a' : (ov >= 5 ? '#d97706' : '#dc2626');
+            html += '<td>' + _clearanceEscape(pf.filename || '') + '</td>';
+            html += '<td style="color:' + oc + ';font-weight:600;">' + ov + '/10</td>';
+            html += '<td>' + _clearanceEscape(r.verdict || '—') + '</td></tr>';
+            // 各维度评分并入同一小表格，保留原徽章数据与着色
+            var dimKeys = Object.keys(scores);
+            if (dimKeys.length) {
+                html += '<tr style="border-top:1px solid var(--card-border);"><td>维度评分</td><td colspan="2" style="color:var(--card-muted);">';
+                html += dimKeys.map(function(k) {
                     var v = scores[k];
-                    var c = v >= 7 ? '#16a34a' : (v >= 5 ? '#d97706' : '#dc2626');
-                    html += '<span style="background:' + c + ';color:#fff;border-radius:6px;padding:3px 8px;font-size:0.7rem;"><b>' + _clearanceEscape(k) + ': ' + v + '</b></span>';
-                });
-                html += '</div>';
+                    var cc = v >= 7 ? '#16a34a' : (v >= 5 ? '#d97706' : '#dc2626');
+                    return _clearanceEscape(k) + ': <span style="color:' + cc + ';font-weight:600;">' + v + '</span>';
+                }).join(' · ');
+                html += '</td></tr>';
             }
+            html += '</table>';
             if (r.issues && r.issues.length) {
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.65rem;">';
                 html += '<tr><th>维度</th><th>严重度</th><th>问题</th><th>建议</th></tr>';

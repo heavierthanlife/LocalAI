@@ -1881,3 +1881,24 @@ body.dark .comparison-report .alert-item { background: rgba(220,38,38,.15); }
 
 /* 图标与文字对齐 */
 .comparison-report .msi, .msi { vertical-align: middle; }
+
+/* ===== F1: 清标报告 — 章节大标题警示着色 + 警示总结表格 ===== */
+/* 章节标题颜色跟随下属最高警示（danger 红 / warn 橙），JS 输出 cl-danger/cl-warn */
+.comparison-report details.cl-danger > summary { color:#dc2626; border-left:4px solid #dc2626; }
+.comparison-report details.cl-warn > summary { color:#d97706; border-left:4px solid #d97706; }
+
+/* 警示总结表格（报告开头，一表纵览关键信号） */
+.comparison-report .cl-alert-summary {
+    background: #f8fafc;
+    border: 1px solid var(--card-border, #e2e8f0);
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+body.dark .comparison-report .cl-alert-summary { background: rgba(148,163,184,.08); }
+.comparison-report .cl-alert-summary th {
+    text-align: left;
+    font-size: 0.68rem;
+    color: var(--card-muted, #94a3b8);
+    padding: 2px 4px;
+}
+.comparison-report .cl-alert-summary td { padding: 2px 4px; }
