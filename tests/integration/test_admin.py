@@ -1,5 +1,6 @@
-"""Integration tests for admin routes."""
+﻿"""Integration tests for admin routes."""
 
+import io
 import json
 import pytest
 
@@ -1546,3 +1547,44 @@ class TestAdminTaskDepositTransfer:
     def test_transfer_admin_required(self, auth_client):
         resp = auth_client.post(self.ROUTE + "/transfer/1")
         assert resp.status_code == 403
+
+
+class TestAdminVLTest:
+    ROUTE = "/admin/vl_test"
+
+    def test_admin_required(self, auth_client):
+        resp = auth_client.post(self.ROUTE, data={"image": (io.BytesIO(b"x"), "a.png")},
+                                content_type="multipart/form-data")
+        assert resp.status_code == 403
+
+    def test_missing_file_400(self, admin_client):
+        resp = admin_client.post(self.ROUTE, data={}, content_type="multipart/form-data")
+        assert resp.status_code == 400
+
+    def test_returns_description_and_reasoning(self, admin_client, monkeypatch):
+        from app.services import vl_model as vm
+        monkeypatch.setattr(
+            vm.vl_model, "describe_image_v2",
+            lambda b: {"description": "图中有报价表", "reasoning": "已识别表格"})
+        resp = admin_client.post(
+            self.ROUTE,
+            data={"image": (io.BytesIO(b"\xff\xd8\xff\xe0 fakejpeg"), "test.jpg")},
+            content_type="multipart/form-data")
+        d = resp.get_json()
+        assert resp.status_code == 200
+        assert d["status"] == "ok"
+        assert d["data"]["description"] == "图中有报价表"
+        assert d["data"]["reasoning"] == "已识别表格"
+
+    def test_error_status_when_vl_fails(self, admin_client, monkeypatch):
+        from app.services import vl_model as vm
+        monkeypatch.setattr(
+            vm.vl_model, "describe_image_v2",
+            lambda b: {"description": "⚠️ VL模型不可用，请检查API密钥。", "reasoning": ""})
+        resp = admin_client.post(
+            self.ROUTE,
+            data={"image": (io.BytesIO(b"\xff\xd8\xff\xe0 fakejpeg"), "test.jpg")},
+            content_type="multipart/form-data")
+        d = resp.get_json()
+        assert d["status"] == "error"
+        assert "API密钥" in d.get("error", "")

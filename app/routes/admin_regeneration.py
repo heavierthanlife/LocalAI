@@ -1468,6 +1468,38 @@ def admin_vl_status():
     })
 
 
+@admin_bp.route('/admin/vl_test', methods=['POST'])
+@admin_required
+def admin_vl_test():
+    """VL 模型连通性测试：上传一张图片 → 返回描述 + 推理（若有）。
+
+    FIX-2026-09-09-021: review.js handleVLTest POST /admin/vl_test 此前 404
+    （路由从未实现）。响应为裸 jsonify（前端判定 `d.status === 'ok'`）：
+      成功 → {"status":"ok","data":{"description":…,"reasoning":…}}
+      失败 → {"status":"error","error":…}
+    """
+    file = request.files.get('image')
+    if not file or not file.filename:
+        return jsonify({"status": "error", "error": "未收到图片文件"}), 400
+    try:
+        image_bytes = file.read()
+        if not image_bytes:
+            return jsonify({"status": "error", "error": "图片内容为空"}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"读取图片失败: {str(e)[:100]}"}), 400
+
+    try:
+        from app.services.vl_model import vl_model
+        result = vl_model.describe_image_v2(image_bytes)
+        description = result.get('description', '')
+        reasoning = result.get('reasoning', '')
+        if description.startswith('⚠️'):
+            return jsonify({"status": "error", "error": description})
+        return jsonify({"status": "ok", "data": {"description": description, "reasoning": reasoning}})
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"VL 分析失败: {str(e)[:200]}"})
+
+
 # ── Mail: admin compose and send email ──
 @admin_bp.route('/admin/send_mail', methods=['POST'])
 @admin_required

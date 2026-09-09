@@ -209,4 +209,4 @@ _(6/6 verified automatically)_
 
 **Verification rate**: 133/137 auto-verified (97%)
 
-> Round-013 note: clearance target_threads json-serialized; custom LLM providers via runtime_config + .env keys; reasoning_effort default high.
+> Round-014 note: /admin/vl_test route added (multipart image -> description+reasoning).

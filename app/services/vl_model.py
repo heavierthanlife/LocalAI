@@ -200,6 +200,53 @@ class VLModel:
             else:
                 return f"⚠️ 图片描述失败: {error_msg[:100]}"
 
+    def describe_image_v2(self, image_bytes, prompt="请详细描述这张图片的内容"):
+        """描述单张图片，同时返回推理过程（reasoning，若有）。
+
+        FIX-2026-09-09-021: admin VL 测试组件需要展示模型 reasoning_content
+        （mimo 等推理 VL 模型会返回）。一次性 chat 调用读取 content + 
+        reasoning_content；非推理模型 reasoning 为空。
+
+        Returns {'description': str, 'reasoning': str}。失败时 description 以
+        ⚠️ 开头（沿用 describe_image 的错误串模式），reasoning 为空。
+        """
+        self._ensure_current()
+        if not self.is_available():
+            return {"description": "⚠️ VL模型不可用，请检查API密钥。", "reasoning": ""}
+        try:
+            base64_image = self.encode_image_to_base64(image_bytes)
+            response = self._client.chat.completions.create(
+                model=self._model_name,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                        {"type": "text", "text": prompt}
+                    ]
+                }],
+                max_tokens=1500,
+                temperature=0.3,
+                timeout=90.0
+            )
+            message = response.choices[0].message
+            description = getattr(message, "content", None) or ""
+            reasoning = getattr(message, "reasoning_content", None) or ""
+            if not description.strip():
+                description = "⚠️ 未获得图片描述，请稍后重试。"
+            return {"description": description.strip(), "reasoning": reasoning.strip()}
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"VL image description failed: {error_msg}")
+            if "InvalidModel" in error_msg or "model not found" in error_msg:
+                desc = f"⚠️ 模型 {self.model_name} 不可用，请检查模型名称或API密钥。"
+            elif "rate limit" in error_msg.lower():
+                desc = "⚠️ 请求过于频繁，请稍后再试。"
+            elif "content policy" in error_msg.lower():
+                desc = "⚠️ 图片内容不符合安全规范，无法描述。"
+            else:
+                desc = f"⚠️ 图片描述失败: {error_msg[:100]}"
+            return {"description": desc, "reasoning": ""}
+
     def describe_images_batch(self, images, prompt=None):
         """Describe up to N images in a SINGLE API call (multi-image content).
 

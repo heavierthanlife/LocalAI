@@ -712,3 +712,23 @@ fixes:
       - type: grep
         file: app/routes/clearance.py
         pattern: "json.dumps"
+
+
+  - id: FIX-2026-09-09-021
+    title: "admin /vl_test 路由必须存在并返回 status/ok 契约"
+    severity: high
+    rationale: >
+      admin VL 测试组件（review.js handleVLTest）POST /admin/vl_test 此前路由
+      未实现 → 404 HTML → 前端 JSON 解析失败。修复后端点必须存在、返回
+      {status:ok, data:{description, reasoning}} 或 {status:error, error}，
+      describe_image_v2 提供 reasoning_content 读取。
+    checks:
+      - type: grep
+        file: app/routes/admin_regeneration.py
+        pattern: "def admin_vl_test"
+      - type: grep
+        file: app/services/vl_model.py
+        pattern: "def describe_image_v2"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_vl_describe_image_v2_content_and_reasoning"

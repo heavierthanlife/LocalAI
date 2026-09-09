@@ -8,6 +8,21 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — admin VL 测试组件 404 修复 + 推理展示（FIX-2026-09-09-021）
+
+### Fixed
+- **`/admin/vl_test` 404**：admin VL 测试组件（review.js `handleVLTest`）上传图片 POST 到从未实现的路由 → HTML 404 → 前端报 "Unexpected token '<'... is not valid JSON"。新增 `POST /admin/vl_test`（multipart `image`，`@admin_required`），响应裸 jsonify 匹配前端契约（`{status:'ok', data:{description, reasoning}}` / 无文件 400 / ⚠️ 失败串→`{status:'error'}`）
+
+### Added
+- **`vl_model.describe_image_v2`**：单图描述同时返回 `reasoning_content`（mimo 等推理 VL 模型）；失败沿用 ⚠️ 错误串模式；现有 `describe_image` 字符串调用方零影响
+
+### regression: 124/124 tests passed · verify_fixes 102/102 · check_system 133/137
+- +3 单测（describe_image_v2 content+reasoning / 非推理空 reasoning / 不可用 ⚠️）+ test_admin.py `TestAdminVLTest` 4 用例（db 标记）
+- 容器实机：真实 mimo-v2.5 调用 PASS（图→描述 + reasoning 正确）；路由三态 PASS
+- 测试文件上传改用 `io.BytesIO`（werkzeug 对 raw bytes tuple 不当文件解析）
+
+---
+
 ## [2026-09-09] — 紧急 500 修复 + LLM provider/model 选择器改造
 
 ### Fixed

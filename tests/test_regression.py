@@ -1221,3 +1221,77 @@ def test_tech_seal_seal_marker_weak_signal():
         f"泄露时盖章类提示应作辅助证据: {r1['evidence']}"
     assert any('公司名' in e for e in r1['evidence']), \
         f"evidence 必须含公司名条目: {r1['evidence']}"
+
+
+def test_vl_describe_image_v2_content_and_reasoning(monkeypatch):
+    """describe_image_v2 读取 content + reasoning_content；非推理模型 reasoning 为空。"""
+    from app.services import vl_model as vm
+
+    class FakeMsg:
+        content = '图片中有项目表格与报价数字'
+        reasoning_content = '先定位表格区域，再提取报价关键数字'
+
+    class FakeChoice:
+        message = FakeMsg()
+
+    class FakeResp:
+        choices = [FakeChoice()]
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return FakeResp()
+
+    class FakeChatAPI:
+        completions = FakeCompletions()
+
+    class FakeChat:
+        chat = FakeChatAPI()
+
+    monkeypatch.setattr(vm.vl_model, '_client', FakeChat())
+    monkeypatch.setattr(vm.vl_model, '_ensure_current', lambda: None)
+    monkeypatch.setattr(vm.vl_model, 'is_available', lambda: True)
+    out = vm.vl_model.describe_image_v2(b'fake-image-bytes')
+    assert out['description'] == '图片中有项目表格与报价数字'
+    assert out['reasoning'] == '先定位表格区域，再提取报价关键数字'
+
+
+def test_vl_describe_image_v2_no_reasoning_model(monkeypatch):
+    """非推理模型（无 reasoning_content）→ reasoning 空串。"""
+    from app.services import vl_model as vm
+
+    class FakeMsg:
+        content = '一张图片'
+        reasoning_content = None
+
+    class FakeChoice:
+        message = FakeMsg()
+
+    class FakeResp:
+        choices = [FakeChoice()]
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return FakeResp()
+
+    class FakeChatAPI:
+        completions = FakeCompletions()
+
+    class FakeChat:
+        chat = FakeChatAPI()
+
+    monkeypatch.setattr(vm.vl_model, '_client', FakeChat())
+    monkeypatch.setattr(vm.vl_model, '_ensure_current', lambda: None)
+    monkeypatch.setattr(vm.vl_model, 'is_available', lambda: True)
+    out = vm.vl_model.describe_image_v2(b'fake-image-bytes')
+    assert out['description'] == '一张图片'
+    assert out['reasoning'] == ''
+
+
+def test_vl_describe_image_v2_unavailable(monkeypatch):
+    """VL 不可用 → description 以 ⚠️ 开头，reasoning 空。"""
+    from app.services import vl_model as vm
+    monkeypatch.setattr(vm.vl_model, '_ensure_current', lambda: None)
+    monkeypatch.setattr(vm.vl_model, 'is_available', lambda: False)
+    out = vm.vl_model.describe_image_v2(b'fake-image-bytes')
+    assert out['description'].startswith('⚠️'), out['description']
+    assert out['reasoning'] == ''
