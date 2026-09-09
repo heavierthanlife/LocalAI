@@ -33,7 +33,7 @@
 - CHANGELOG [2026-09-09] round-012 条目 + SYSTEM_CHECKLIST 再生。
 
 ## ⑦ PUSH
-- `4933d63..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `4933d63..fead0e6` 已推送（LocalAI master），工作树干净。last_head=fead0e6。
 
 ## ⑧ 验证
 - 回归 **121/121** · verify_fixes **101/101** · check_system 133/137 · node --check app.js · 后端 syntax OK
