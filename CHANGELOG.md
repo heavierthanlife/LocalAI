@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 铁证双层判定：铁证信号独立成硬警报，不再被复合指数稀释（FIX-2026-09-09-017）
+
+### Added
+- **铁证双层判定层** `app/services/hard_evidence.py`：铁证信号不参与加权复合指数打分（软嫌疑度指数保留），独立判定层 **veto 只提升展示级别**（`warning_level`），不重写指数
+  - **T1 确认级（单命中即 veto → `■ 高度预警（铁证触发）`）**：`lastModifiedBy` 同人（guard 排除 Administrator/User/微软用户/lenovo 等通用值）、平台加密锁/文件码雷同（仅交易平台来源）、联系人+电话同组双命中、段落同对 ≥2 段或 1 段 ≥3 家共享
+  - **T2 强嫌疑（需 ≥2 类共证才 veto）**：author 雷同（guard）、上传/解密 IP 同、段落单段共享
+- **暗标违规独立轨道**：`tech_seal` 泄露（单家违规非串通证据）触发 `■ 高度预警（暗标违规）`，不进串通铁证；铁证与违规可各自独立出现，同时触发时串标优先、违规附加
+- **报告接入**：`run_analysis` basic_info 新增 `hard_alarm`/`hard_label`/`hard_evidence`；`run_clearance` 最终出口补入横向层段落雷同后终判；DOCX 封面铁证/违规红色警示段 + 预警单位 `★`（hard_flag）；`suspected_units.hard_flag`
+- **前端**：`app.js` 清标结果按 `hard_alarm`/`warning_level` 联合着色（修"绿分+红字"矛盾），历史列表 `★铁证` 红标
+
+### Fixed
+- 铁证被加权稀释：`_weighted_total_score` 分母含所有非 skip 指标，铁证权重最高 0.10 → 单铁证实际贡献 ~5 分；段落级逐字雷同（最强证据）此前不计入复合指数，封面与证据脱节
+
+### regression: 119/119 tests passed · verify_fixes 96/96 · check_system 133/137 · app.js node --check OK
+- 新增 4 回归测试：lastModifiedBy 铁证升级（指数不被改写）/ guard 反例（Administrator 不触发）/ T2 双类共证 / 暗标违规独立触发
+- **真实 3 文件复测 PASS**：元丰+中昌华美 `lastModifiedBy='超彩赵'`（物美='唯一的麦麦儿'）→ T1 veto `fired=True label='■ 高度预警（铁证触发）'`
+- 复合指数/基线 scores.json 19.0/DB max_risk 不变（veto 只升展示级，历史可比性保留）
+
+---
+
 ## [2026-09-08] — 46 项指标语义错配系统修复：联系人/关系/暗标/投标数（FIX-2026-09-07-QA-C4）
 
 ### Fixed

@@ -378,9 +378,32 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
         violations = sum(p['summary'].get('violation', 0) for p in comp['per_file'])
         total_score += min(criticals * 5 + violations * 2, 20)
     merged['basic_info']['total_score'] = round(total_score, 1)
-    merged['basic_info']['warning_level'] = (
-        '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
-    )
+
+    # FIX-2026-09-09-QA: 清标最终出口——补入横向层段落级雷同后终判铁证级别。
+    # 铁证信号不参与复合指数（软嫌疑指数保留），veto 只提升展示级别。
+    try:
+        from app.services.hard_evidence import assess_hard_evidence
+        from app.services.document_analysis_svc import resolve_warning_level
+        hard_ctx = dict(merged['basic_info'].get('_hard_ctx') or {})
+        pc = (merged.get('cross_comparison') or {}).get('paragraph_collusion')
+        hard_ctx['paragraph_collusion'] = pc or {}
+        hard = assess_hard_evidence(merged.get('indicators', []), hard_ctx)
+        merged['basic_info']['hard_alarm'] = bool(hard.get('fired'))
+        merged['basic_info']['hard_label'] = hard.get('label')
+        merged['basic_info']['hard_evidence'] = hard
+        merged['basic_info'].pop('_hard_ctx', None)
+        merged['basic_info']['warning_level'] = resolve_warning_level(
+            merged['basic_info'].get('total_score', 0), hard)
+        # 铁证/违规成员标记（suspected_units 标红）
+        hard_files = {f for it in hard.get('items', []) for f in it.get('files', [])}
+        hard_files |= {f for v in hard.get('violations', []) for f in v.get('files', [])}
+        for su in merged.get('suspected_units', []):
+            su['hard_flag'] = bool(su.get('hard_flag')) or su.get('name') in hard_files
+    except Exception as e:
+        logger.warning(f"Hard-evidence final adjudication failed: {e}")
+        merged['basic_info']['warning_level'] = (
+            '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
+        )
 
     return merged
 

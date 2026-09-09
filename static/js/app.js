@@ -361,6 +361,14 @@
         });
     }
 
+    // 清标风险判定：铁证触发(hard_alarm)或高分按红/黄预警，供各渲染路径统一着色
+    function isClearanceHighRisk(info) {
+        return !!(info && (info.hard_alarm || (info.total_score || 0) >= 60));
+    }
+    function isClearanceMidRisk(info) {
+        return !!(info && !info.hard_alarm && (info.total_score || 0) >= 30);
+    }
+
     window.showSkillFeedback = function(containerEl, data, source, fileId) {
         const preview = escapeHtml(data.skill_content || '').slice(0, 300);
         const hasMore = (data.skill_content || '').length > 300;
@@ -6208,7 +6216,7 @@
                             <div>
                                 <span>📦 ${r.file_count}个文件 · ${r.pair_count}对</span>
                                 <small style="color:var(--card-muted);"> · ${escapeHtml(r.created_by_name || '?')} · ${new Date(r.created_at).toLocaleString()}</small>
-                                ${r.max_risk > 10 ? `<span style="color:#dc2626;font-size:.65rem;"> ⚠${r.max_risk.toFixed(0)}</span>` : ''}
+                                ${r.max_risk > 10 ? `<span style="color:#dc2626;font-size:.65rem;"> ⚠${r.max_risk.toFixed(0)}</span>` : ''}${r.hard_alarm ? `<span style="color:#dc2626;font-size:.65rem;font-weight:bold;"> ★铁证</span>` : ''}
                             </div>
                             <div>
                                 <a href="/batch_result/${r.task_id}" class="file-btn" style="padding:2px 8px; text-decoration:none;" download>📥 下载</a>
@@ -8446,14 +8454,16 @@
         const info = report.basic_info || {};
         const totalScore = info.total_score;
         const warning = info.warning_level || '';
+        // 铁证触发(hard_alarm/■前缀)时优先红，否则按分数分级，避免"绿分+红字"
+        const scoreColor = (isClearanceHighRisk(info) || warning.charAt(0) === '■') ? '#dc2626' : isClearanceMidRisk(info) ? '#d97706' : '#16a34a';
         const indicatorCount = (report.indicators || []).length;
         const crossPairCount = ((report.cross_comparison || {}).pairs || []).length;
 
         let html = '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;color:#16a34a;">✅ ' + escapeHtml(label) + ' 完成</div>';
         html += '<div style="font-size:0.78rem;margin-bottom:14px;line-height:1.8;">';
         if (fileCount) html += '<div>📂 投标文件数: <b>' + fileCount + '</b></div>';
-        if (totalScore !== undefined && totalScore !== null) html += '<div>📊 综合评分: <b style="color:' + (totalScore > 50 ? '#dc2626' : totalScore > 20 ? '#d97706' : '#16a34a') + '">' + totalScore + ' 分</b></div>';
-        if (warning) html += '<div>⚠️ 预警级别: <b>' + escapeHtml(warning) + '</b></div>';
+        if (totalScore !== undefined && totalScore !== null) html += '<div>📊 综合评分: <b style="color:' + scoreColor + '">' + totalScore + ' 分</b></div>';
+        if (warning) html += '<div>⚠️ 预警级别: <b style="color:' + scoreColor + '">' + escapeHtml(warning) + '</b></div>';
         if (indicatorCount) html += '<div>📋 指标分析: <b>' + indicatorCount + '</b> 项</div>';
         if (crossPairCount) html += '<div>🔀 横向对比: <b>' + crossPairCount + '</b> 对组合</div>';
         html += '</div>';
@@ -9452,8 +9462,10 @@
 
         html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
         html += '<strong>投标单位:</strong> ' + (info.bidder_count||0);
-        html += ' | <strong>综合评分:</strong> <span style="color:' + ((info.total_score||0) >= 60 ? '#e74c3c' : (info.total_score||0) >= 30 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
-        html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
+        // 铁证触发(hard_alarm/■前缀)时优先红，否则按分数分级
+        var scoreColor = (isClearanceHighRisk(info) || (info.warning_level || '').charAt(0) === '■') ? '#e74c3c' : isClearanceMidRisk(info) ? '#e67e22' : '#27ae60';
+        html += ' | <strong>综合评分:</strong> <span style="color:' + scoreColor + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>预警:</strong> <span style="color:' + scoreColor + '">' + (info.warning_level || '—') + '</span>';
         html += '</div>';
 
         if (suspected.length > 0) {
@@ -9466,7 +9478,7 @@
             suspected.forEach(function(su) {
                 var danger = (su.score||0) > 30;
                 html += '<tr class="' + (danger ? 'alert-item' : '') + '">';
-                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + _clearanceEscape((su.name||'').substring(0,30)) + '</td>';
+                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + (su.hard_flag ? '<span style="color:#e74c3c;">★</span>' : '') + _clearanceEscape((su.name||'').substring(0,30)) + '</td>';
                 html += '<td>' + (su.indicators_triggered||0) + '</td>';
                 html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
             });
@@ -9771,8 +9783,10 @@
         // Basic info
         html += '<div style="font-size:0.82rem;margin-bottom:10px;padding:8px 10px;background:var(--card-highlight);border-radius:6px;">';
         html += '<strong>投标单位:</strong> ' + info.bidder_count;
-        html += ' | <strong>综合评分:</strong> <span style="color:' + (info.total_score >= 60 ? '#e74c3c' : info.total_score >= 30 ? '#e67e22' : '#27ae60') + '">' + (info.total_score||0).toFixed(1) + '分</span>';
-        html += ' | <strong>预警:</strong> ' + (info.warning_level || '—');
+        // 铁证触发(hard_alarm/■前缀)时优先红，否则按分数分级
+        var scoreColor = (isClearanceHighRisk(info) || (info.warning_level || '').charAt(0) === '■') ? '#e74c3c' : isClearanceMidRisk(info) ? '#e67e22' : '#27ae60';
+        html += ' | <strong>综合评分:</strong> <span style="color:' + scoreColor + '">' + (info.total_score||0).toFixed(1) + '分</span>';
+        html += ' | <strong>预警:</strong> <span style="color:' + scoreColor + '">' + (info.warning_level || '—') + '</span>';
         if (downloadUrl) html += ' | <a href="' + downloadUrl + '" download style="color:#16a34a;text-decoration:none;">' + _icon('📥') + ' 下载DOCX报告</a>';
         html += '</div>';
 
@@ -9785,7 +9799,7 @@
             suspected.forEach(function(su) {
                 var danger = (su.score||0) > 30;
                 html += '<tr class="' + (danger ? 'alert-item' : '') + '">';
-                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
+                html += '<td>' + ((su.score||0) > 10 ? _icon('★') : '') + (su.hard_flag ? '<span style="color:#e74c3c;">★</span>' : '') + escapeHtml((su.name||'').substring(0,30)) + '</td>';
                 html += '<td>' + (su.indicators_triggered||0) + '</td>';
                 html += '<td style="color:' + (danger ? '#e74c3c' : '#e67e22') + '">' + (su.score||0).toFixed(1) + '</td></tr>';
             });

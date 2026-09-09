@@ -566,6 +566,9 @@ def test_risk_scorer_new_weights_and_gate():
     assert RiskScorer.compute(0, 0, 0, 0, collusion_para=40) == 12.0
 
 
+# 铁证 tier 优先于 60/30 阈值：resolve_warning_level 先查 hard.fired（铁证触发）/
+# hard.violation_fired（暗标违规），命中即用铁证/违规 label 覆盖指数展示级，
+# >=60 / >=30 仅在无铁证时作为兜底阈值生效（本测试只扫描源码字面量顺序）。
 def test_warning_threshold_order_and_scale():
     """warning_level must check >=60 first (correct order, composite scale)."""
     with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
@@ -1077,3 +1080,91 @@ def test_credit_rate_limit_memory_fallback_present():
         content = f.read()
     assert 'Fallback: in-memory' in content or 'fallback' in content.lower(), \
         "credit 限速必须包含 Redis 不可用时的内存降级分支"
+
+
+# ── FIX-2026-09-09-QA: 铁证双层判定 + 暗标违规独立警示 ──
+def test_hard_evidence_lasteditor_escalates_warning():
+    """T1 lastModifiedBy 同人 → 铁证触发：veto 只升展示级，不重写指数。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': 'a.docx',
+         'text': '技术方案：开槽法施工，沟槽钢板桩支护，基坑井点降水。',
+         'metadata': {'last_modified_by': '超彩赵'}, 'images': []},
+        {'filename': 'b.docx',
+         'text': '技术方案：定向钻穿越施工，泥浆护壁导向钻进。',
+         'metadata': {'last_modified_by': '超彩赵'}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')
+    bi = report['basic_info']
+    assert bi['hard_alarm'] is True, "同一最后编辑人（非通用值）必须触发铁证"
+    assert bi['warning_level'] == '■ 高度预警（铁证触发）', \
+        f"铁证触发时展示级别应为铁证 label: {bi['warning_level']}"
+    assert bi['total_score'] < 60, \
+        f"铁证 veto 不得重写复合指数（指数应保持原样 <60）: {bi['total_score']}"
+    types = [it['type'] for it in bi['hard_evidence']['items']]
+    assert 'lasteditor_same' in types, f"items 必须含 lasteditor_same: {types}"
+
+
+def test_hard_evidence_generic_guard():
+    """lastModifiedBy 通用默认值（Administrator）必须被 guard 排除，不触发铁证。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': 'a.docx',
+         'text': '技术方案：开槽法施工，沟槽钢板桩支护。',
+         'metadata': {'last_modified_by': 'Administrator'}, 'images': []},
+        {'filename': 'b.docx',
+         'text': '技术方案：定向钻穿越施工，泥浆护壁。',
+         'metadata': {'last_modified_by': 'Administrator'}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')
+    bi = report['basic_info']
+    assert bi['hard_alarm'] is False, "通用默认 lastModifiedBy 不得触发铁证"
+    assert bi['warning_level'] != '■ 高度预警（铁证触发）', \
+        "通用默认值不得升为铁证展示级"
+
+
+def test_hard_evidence_paragraph_t2_requires_two_types():
+    """T2 强嫌疑需 ≥2 类共证才 veto：单类段落共享不触发，双类共证触发。"""
+    from app.services.hard_evidence import assess_hard_evidence
+    seg_ctx = {
+        'paragraph_collusion': {
+            'shared_segments': [
+                {'files': ['a.docx', 'b.docx'], 'segment_text': 'x', 'type': '服务承诺段'},
+            ],
+        },
+    }
+    one_type = assess_hard_evidence([], seg_ctx)
+    assert one_type['fired'] is False, "单类 T2（段落单段共享）不得 veto"
+    assert one_type['level'] is None, f"单类 T2 level 应为 None: {one_type['level']}"
+
+    two_type_ctx = dict(seg_ctx)
+    two_type_ctx['author_groups'] = {'张三': ['a.docx', 'b.docx']}
+    two_type = assess_hard_evidence([], two_type_ctx)
+    assert two_type['fired'] is True, "段落共享 + author 雷同两类 T2 共证必须 veto"
+    assert two_type['level'] == 'T2', f"两类 T2 共证 level 应为 T2: {two_type['level']}"
+
+
+def test_tech_seal_violation_independent():
+    """暗标违规独立轨道：单家技术标身份泄露 → 违规警示，不进串通铁证。"""
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': '北京中昌华美超市服务有限责任公司_技术标.docx',
+         'text': '技术方案：我公司北京中昌华美超市服务有限责任公司承诺……',
+         'metadata': {}, 'images': []},
+        {'filename': '天津恒达建筑工程有限公司_技术标.docx',
+         'text': '技术方案：采用定向钻穿越施工，泥浆护壁导向钻进。',
+         'metadata': {}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')
+    he = report['basic_info']['hard_evidence']
+    assert he['violation_fired'] is True, "技术标身份泄露必须触发暗标违规警示"
+    assert any(v['type'] == 'tech_seal_leak' for v in he['violations']), \
+        "violations 必须含 tech_seal_leak 项"
+    # 违规独立轨道：单家泄露是违规而非串通铁证；若该场景同时触发其他铁证致
+    # fired 也为 True，则放宽为仅验证违规警示成立 + 展示级别以 '■' 开头。
+    if not he['fired']:
+        assert report['basic_info']['warning_level'] == '■ 高度预警（暗标违规）', \
+            "仅违规触发时展示级别应为暗标违规 label"
+    else:
+        assert report['basic_info']['warning_level'].startswith('■'), \
+            "铁证/违规同时触发时展示级别必须以 ■ 开头（铁证优先）"

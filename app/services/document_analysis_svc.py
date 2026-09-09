@@ -100,6 +100,41 @@ def _weighted_total_score(indicators: list[dict]) -> float:
     return round(num / den * 100, 1) if den > 0 else 0.0
 
 
+# ── 铁证双层判定 (FIX-2026-09-09-QA) ──────────────────────────────────
+# 铁证信号不参与复合指数打分（软嫌疑度指数保留），独立判定层 veto 只提升
+# 展示级别。T1 单命中即 veto；T2 需 ≥2 类共证；暗标违规独立轨道。
+def resolve_warning_level(total_score: float, hard: dict | None = None) -> str:
+    """复合指数级别 + 铁证/违规判定 → 最终展示级别。
+
+    铁证触发（串通）优先；否则暗标违规；否则按 60/30 阈值。
+    （保持 >=60 先于 >=30 的判定顺序，test_warning_threshold_order_and_scale 锁定）
+    """
+    hard = hard or {}
+    if hard.get('fired'):
+        return hard.get('label') or '● 高度预警'
+    if hard.get('violation_fired'):
+        return hard.get('violation_label') or '● 高度预警'
+    if total_score >= 60:
+        return '● 高度预警'
+    if total_score >= 30:
+        return '◆ 中等预警'
+    return '◇ 正常'
+
+
+def _build_hard_context(checker_data: dict, open_info_results: dict) -> dict:
+    """从检查器/开标表上下文收集铁证判定所需的原始信号。"""
+    from app.services.hard_evidence import PLATFORM_INDICATORS
+    attr_data = checker_data.get('file_attr', {})
+    platform = {k: v for k, v in open_info_results.items() if k in PLATFORM_INDICATORS}
+    return {
+        'lasteditor_groups': attr_data.get('lasteditor_groups', {}),
+        'author_groups': attr_data.get('author_groups', {}),
+        'contact_data': checker_data.get('contact', {}),
+        'platform': platform,
+        'seal_data': checker_data.get('tech_seal', {}),
+    }
+
+
 def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_stop_words=None):
     """Run a single checker with try-except, returns dict or None."""
     try:
@@ -605,6 +640,12 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     # 0-100 权重复合指数 (FIX-010)，替代裸加总
     total_score = _weighted_total_score(indicators)
 
+    # FIX-2026-09-09-QA: 铁证双层判定（veto 只提升展示级别，不重写指数）
+    from app.services.hard_evidence import assess_hard_evidence
+    hard_ctx = _build_hard_context(checker_data, open_info_results)
+    hard = assess_hard_evidence(indicators, hard_ctx)
+    warning_level = resolve_warning_level(total_score, hard)
+
     # Fill per-file indicator trigger counts: an indicator fired for a file if
     # its details reference that file by name, or it's a non-skipped pairwise
     # finding whose pair names include the file.
@@ -625,6 +666,12 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             if referenced:
                 count += 1
         su['indicators_triggered'] = count
+        # FIX-2026-09-09-QA: 铁证/违规成员标记（★ 标红用）
+        su['hard_flag'] = any(
+            fname in (it.get('files') or []) for it in hard.get('items', [])
+        ) or any(
+            fname in (v.get('files') or []) for v in hard.get('violations', [])
+        )
 
     return {
         '_pairs': pairs,
@@ -635,9 +682,13 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             'bidder_count': n,
             'analysis_date': _ts,
             'total_score': total_score,
-            'warning_level': (
-                '● 高度预警' if total_score >= 60 else ('◆ 中等预警' if total_score >= 30 else '◇ 正常')
-            ),
+            'warning_level': warning_level,
+            # FIX-2026-09-09-QA: 铁证/违规判定结果（前端 + DOCX 展示用）
+            'hard_alarm': bool(hard.get('fired')),
+            'hard_label': hard.get('label'),
+            'hard_evidence': hard,
+            # 供 run_clearance 合并后补入 paragraph_collusion 再终判（内部键，不进前端）
+            '_hard_ctx': hard_ctx,
             # 样本量太小 → 复合指数统计意义有限（P-D 免责声明）
             'sample_note': f'本次共 {n} 家投标人，样本量小，复合指数仅供参考' if n < 5 else '',
             # FIX-2026-09-04-QA-B1: 缺招标文件 → 文本/关键词类指标未计入，指数为下限估计
@@ -795,6 +846,26 @@ def _build_standard_sections(doc, report):
         rn.font.size = Pt(FINE)
         rn.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
 
+    # FIX-2026-09-09-QA: 铁证/违规警示段（红色加粗，冒烟指数仅供参考）
+    if info.get('hard_alarm'):
+        hard_items = info.get('hard_evidence', {}).get('items', [])
+        types = '；'.join(_safe(it.get('evidence', '')) for it in hard_items[:4])
+        p = doc.add_paragraph()
+        rn = p.add_run(f"⚠ 铁证触发：{types or '检测到铁证级串通信号'}。"
+                       f"已直接判定为「{info.get('hard_label', '高度预警')}」，冒烟指数仅供参考。")
+        rn.bold = True
+        rn.font.size = Pt(BODY)
+        rn.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
+    if info.get('hard_evidence', {}).get('violation_fired'):
+        viol = info.get('hard_evidence', {}).get('violations', [])
+        vtypes = '；'.join(_safe(v.get('evidence', '')) for v in viol[:3])
+        p = doc.add_paragraph()
+        rn = p.add_run(f"⚠ 暗标违规：{vtypes or '检测到暗标身份泄露'}。"
+                       f"已按「{info.get('hard_evidence', {}).get('violation_label', '高度预警')}」警示。")
+        rn.bold = True
+        rn.font.size = Pt(BODY)
+        rn.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
+
     # ── Section 2: 预警单位汇总 ──
     _add_heading(doc, '二、预警单位汇总', H1)
     suspected = report.get('suspected_units', [])
@@ -807,7 +878,7 @@ def _build_standard_sections(doc, report):
     _set_cell(su_table.cell(0, 0), '单位名称', bold=True, shade=True)
     _set_cell(su_table.cell(0, 1), '涉及指标数量', bold=True, shade=True)
     for si, su in enumerate(suspected):
-        _set_cell(su_table.cell(si + 1, 0), (('★ ' if su['score'] > 10 else '  ') + _safe(su['name'])))
+        _set_cell(su_table.cell(si + 1, 0), (('★ ' if (su.get('hard_flag') or su['score'] > 10) else '  ') + _safe(su['name'])))
         _set_cell(su_table.cell(si + 1, 1), str(su.get('indicators_triggered', 0)))
 
     doc.add_paragraph()

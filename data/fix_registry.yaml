@@ -637,3 +637,37 @@ fixes:
       - type: grep
         file: app/routes/chat_config.py
         pattern: "get_free_models"
+
+
+  - id: FIX-2026-09-09-017
+    title: "铁证双层判定：T1 单命中 veto / T2 共证 / 暗标违规独立轨道"
+    severity: high
+    rationale: >
+      铁证信号（lastModifiedBy 同人、平台加密锁/文件码、联系人+电话双命中、
+      段落逐字雷同）此前被加权复合指数稀释（最高贡献 ~5 分），封面与证据脱节。
+      现独立成硬警报判定层（veto 只提升 warning_level，不重写指数）：
+      T1 单命中即 '高度预警（铁证触发）'，T2 需 >=2 类共证；tech_seal 泄露
+      单家违规独立轨道 '高度预警（暗标违规）'。guard 排除 Administrator/User
+      等通用元数据值防误报。
+    checks:
+      - type: grep
+        file: app/services/hard_evidence.py
+        pattern: "def assess_hard_evidence"
+      - type: grep
+        file: app/services/hard_evidence.py
+        pattern: "HARD_LABEL_COLLUSION = '■ 高度预警（铁证触发）'"
+      - type: grep
+        file: app/services/hard_evidence.py
+        pattern: "GENERIC_METADATA_VALUES"
+      - type: grep
+        file: app/services/document_analysis_svc.py
+        pattern: "def resolve_warning_level"
+      - type: grep
+        file: app/services/clearance_engine.py
+        pattern: "assess_hard_evidence"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_hard_evidence_lasteditor_escalates_warning"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_tech_seal_violation_independent"
