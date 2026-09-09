@@ -43,7 +43,7 @@
 - CHANGELOG [2026-09-09] round-010 条目（本文件）。
 
 ## ⑦ PUSH
-- `142aafd..<待填>` 已推送（LocalAI master）。last_head 更新。
+- `142aafd..3a0c5b3` 已推送（LocalAI master），工作树干净。last_head=3a0c5b3。
 
 ## ⑧ 验证
 - 回归 **119/119 passed** · verify_fixes **96/96** · check_system 133/137 · node --check app/bid-audit/chat 全过 · admin_ops 语法 OK
