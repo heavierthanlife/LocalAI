@@ -159,6 +159,40 @@ def assert_no_page_errors(page, ledger, surface):
         ledger.err(surface, f"pageerror: {errs[:3]}")
 
 
+def _api_login(ctx, username, pin):
+    """Log in via the auth API so the context cookie jar carries the session."""
+    import json as _json
+    r = ctx.request.post(BASE + "/login",
+                         data=_json.dumps({"username": username, "pin": pin}),
+                         headers={"content-type": "application/json"}, timeout=20000)
+    return r.status, r.text()[:120]
+
+
+def _tour(page, ledger, mode, names, drain):
+    """For each (name, selector-or-None) try to open then walk. Selector None = walk current."""
+    if names is None:
+        run_surface(page, f"{mode}-home", [], ledger, None)
+        drain(f"{mode}-home")
+        return [f"{mode}-home"]
+    walked = []
+    for name, sel in names:
+        try:
+            el = page.query_selector(sel) if sel else None
+            if sel and (el is None or not el.is_visible()):
+                ledger.add(name, {"kind": "panel", "text": sel, "id": sel}, False,
+                           reason="not-visible-in-current-role")
+                continue
+            if el:
+                el.click(force=True, timeout=2500)
+                time.sleep(1.8)
+            run_surface(page, name, [], ledger, None)
+            drain(name)
+            walked.append(name)
+        except Exception as e:
+            ledger.err(name, f"open-walk: {str(e)[:100]}")
+    return walked
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gate", action="store_true")
@@ -168,98 +202,95 @@ def main():
 
     from playwright.sync_api import sync_playwright
     ledger = Ledger()
-    result = {"surfaces": [], "summary": {}}
+    result = {"surfaces": [], "summary": {}, "logins": {}}
+
+    TAB_TOUR = [
+        ("tab-chat", "#chatTabBtn"),
+        ("tab-projects", "#adminTabBtn"),
+        ("tab-recycle", "#recycleBinTabBtn"),
+        ("tab-analytics", "#analyticsTabBtn"),
+        ("tab-sidebar-stats", "#sidebar-stats-pane"),
+        ("panel-quote-history", "#sidebarQuoteAnomalyResultsBtn"),
+        ("panel-relationship-history", "#sidebarRelationshipResultsBtn"),
+        ("panel-typo-history", "#sidebarTypoResultsBtn"),
+        ("panel-audit-log", "#sidebarAuditLogBtn"),
+        ("panel-clear-cache", "#sidebarClearCacheBtn"),
+        ("panel-templates", "#sidebar-templates-pane"),
+        ("panel-wiki", "#sidebar-wiki-pane"),
+        ("panel-cases", "#sidebar-cases-pane"),
+    ]
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=[
             "--no-sandbox", "--ignore-certificate-errors", "--disable-gpu"])
-        ctx = browser.new_context(ignore_https_errors=True, viewport={"width": 1500, "height": 950})
-        page = ctx.new_page()
-        page.set_default_timeout(12000)
 
-        net_errors = []
-        page_errors = []
-        console_errors = []
-        page.on("pageerror", lambda e: page_errors.append(str(e)[:200]))
-        page.on("console", lambda m: console_errors.append(m.text[:160]) if m.type == "error" else None)
-        page.on("response", lambda r: net_errors.append(
-            {"url": r.url, "status": r.status}) if r.status >= 400 else None)
+        def make_ctx():
+            ctx = browser.new_context(ignore_https_errors=True, viewport={"width": 1500, "height": 950})
+            page = ctx.new_page()
+            page.set_default_timeout(9000)
+            net_errors, page_errors, console_errors = [], [], []
+            page.on("pageerror", lambda e: page_errors.append(str(e)[:180]))
+            page.on("console", lambda m: console_errors.append(m.text[:140]) if m.type == "error" else None)
+            page.on("response", lambda r: net_errors.append(
+                {"url": r.url, "status": r.status}) if r.status >= 400 else None)
 
-        def drain(surface):
-            for e in page_errors:
-                ledger.err(surface, f"pageerror: {e}")
-            for t in console_errors:
-                ledger.err(surface, f"console.error: {t}")
-            for n in net_errors:
-                ledger.err(surface, f"HTTP {n['status']} {n['url'][:120]}")
-            net_errors.clear(); page_errors.clear(); console_errors.clear()
+            def drain(surface):
+                for e in page_errors:
+                    ledger.err(surface, f"pageerror: {e}")
+                for t in console_errors:
+                    ledger.err(surface, f"console.error: {t}")
+                for n in net_errors:
+                    ledger.err(surface, f"HTTP {n['status']} {n['url'][:120]}")
+                net_errors.clear(); page_errors.clear(); console_errors.clear()
+            return ctx, page, drain
 
-        # ── Load, attempt login FIRST on a fresh page, then walk the active surface ──
+        # ── Admin session (API login → tab tour) ──
+        ctx, page, drain = make_ctx()
+        st, body = _api_login(ctx, "CEO", "123456")
+        result["logins"]["admin"] = {"status": st}
         page.goto(BASE, wait_until="domcontentloaded")
-        time.sleep(2.0)
-        pw = page.query_selector("input[type=password]")
-        mode = "anon"
-        if pw:
-            try:
-                user = page.query_selector("input[type=text], input[name=username], input[name=user_id]")
-                if user:
-                    user.fill("CEO")
-                pw.fill("123456")
-                btn = page.query_selector("button[type=submit], .login-btn, #loginBtn")
-                if btn:
-                    btn.click()
-                time.sleep(3)
-                mode = "admin"
-            except Exception as e:
-                ledger.err("login", f"login-walk: {str(e)[:120]}")
-        run_surface(page, f"{mode}-home", [], ledger, None)
-        drain(f"{mode}-home")
-        result["surfaces"].append(f"{mode}-home")
+        time.sleep(2.5)
+        result["surfaces"] += _tour(page, ledger, "admin", TAB_TOUR, drain)
+        ctx.close()
 
-        # ── Deep admin surfaces by visible id/text ──
-        deep = [
-            ("sidebarReview", "admin-review"),
-            ("sidebarQuoteAnomalyResultsBtn", "admin-quote-history"),
-            ("sidebarRelationshipResultsBtn", "admin-relationship-history"),
-        ]
-        for sel, name in deep:
-            try:
-                el = page.query_selector(f"#{sel}")
-                if el and el.is_visible():
-                    el.click()
-                    time.sleep(2)
-                    run_surface(page, name, [], ledger, None)
-                    result["surfaces"].append(name)
-            except Exception as e:
-                ledger.add(name, {"kind": "button", "text": sel, "id": sel}, False,
-                           reason=f"open-fail:{str(e)[:60]}")
+        # ── Normal user session ──
+        ctx, page, drain = make_ctx()
+        st, body = _api_login(ctx, "e2euser", "123456")
+        result["logins"]["user"] = {"status": st}
+        page.goto(BASE, wait_until="domcontentloaded")
+        time.sleep(2.5)
+        result["surfaces"] += _tour(page, ledger, "user", TAB_TOUR, drain)
+        ctx.close()
+
+        # ── Anonymous (short walk) ──
+        ctx, page, drain = make_ctx()
+        page.goto(BASE, wait_until="domcontentloaded")
+        time.sleep(2.5)
+        result["surfaces"] += _tour(page, ledger, "anon", None, drain)
+        ctx.close()
 
         # ── T2-flavored real trips (optional — audit_trips.py is a next-round target) ──
-        trips = [
-            ("trip_clearance_run", "clearance-run"),
-            ("trip_vl_test", "vl-test"),
-            ("trip_plagiarism", "plagiarism-compare"),
-            ("trip_provider_refresh", "provider-refresh"),
-        ]
+        trips = ["trip_clearance_run", "trip_vl_test", "trip_plagiarism", "trip_provider_refresh"]
+        ctx, page, drain = make_ctx()
+        _api_login(ctx, "CEO", "123456")
+        page.goto(BASE, wait_until="domcontentloaded")
+        time.sleep(2.0)
         try:
             import audit_trips as at
-            available = {"clearance-run": at.trip_clearance_run, "vl-test": at.trip_vl_test,
-                         "plagiarism-compare": at.trip_plagiarism,
-                         "provider-refresh": at.trip_provider_refresh}
         except Exception:
-            available = {}
-        for _fnname, name in trips:
-            if name in available:
+            at = None
+        for tname in trips:
+            if at and hasattr(at, tname):
                 try:
-                    available[name](page, ledger, FIX_DIR)
-                    result["surfaces"].append(name)
+                    getattr(at, tname)(page, ledger, FIX_DIR)
+                    result["surfaces"].append(tname)
+                    drain(tname)
                 except Exception as e:
-                    ledger.err(name, f"{str(e)[:150]}")
+                    ledger.err(tname, f"{str(e)[:150]}")
             else:
-                ledger.add(name, {"kind": "trip", "text": name, "id": name}, False,
+                ledger.add(tname, {"kind": "trip", "text": tname, "id": tname}, False,
                            reason="audit_trips-not-implemented")
-
-        page.screenshot(path=os.path.join(args.out, "final_state.png"), full_page=False)
+        ctx.close()
         browser.close()
 
     acted = sum(1 for i in ledger.items if i["acted"])
