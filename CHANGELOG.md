@@ -8,6 +8,24 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 紧急 500 修复 + LLM provider/model 选择器改造
+
+### Fixed
+- **`/clearance/run` 500**（FIX-2026-09-09-020）：round-012 把 `target_threads`（list）塞进 `TaskBus.register_queued(extra)` 直写 Redis → `DataError`。改为 `json.dumps(target_threads)` 序列化
+- **`/admin/runtime_config` 500**：镜像构建烘焙的 `data/runtime_config.json`/`llm_catalog.json` 为 root 属主，app(uid=1000) 写入 `PermissionError`。容器 `chown -R localai:localai /app/data` 修复（Dockerfile 已有 `COPY --chown` 保障新卷）
+
+### Added
+- **自定义 LLM Provider**：admin LLM 组新增 `llm_custom_providers`（json-list 行式编辑器：id/name/base_url/api_key_env，增删行）；API key 存 `.env`（`LLM_CUSTOM_KEY_<ID>`，provider 记录只存环境变量名）；`llm_provider.get_merged_provider_config()` 防御性拷贝叠加自定义（内置永不覆盖）
+- **provider 校验**：`validate_custom_provider`（id 非空/`^[A-Za-z0-9_-]+$`/非内置冲突；base_url `https://` 开头，localhost 豁免；api_key_env 合法 env 名）；`runtime_config.update` 整批拒绝非法（含重复 id、reasoning_effort 越界）
+- **实时模型拉取**：`GET /llm_providers/<pid>/models?refresh=1`（chat + admin 双端点）；带 key→匿名→catalog 缓存→静态 models 四级兜底，失败返回 `stale:true`；`llm_catalog._fetch_provider_models(base_url, api_key, free_only)` 参数化，refresh 遍历静态+自定义
+- **统一 high thinking**：`_create_chat_model_direct`（17 个调用点统一工厂）加 `extra_body={"reasoning_effort": ...}`，默认 high，admin 可调 `llm_reasoning_effort`（low/medium/high）；顺带接入死配置 `llm_temperature`/`llm_max_tokens`
+- **前端**：模型下拉"刷新模型"按钮（loading + 在途防抖 + stale/错误提示）；`auth.py has_llm` 补 OPENROUTER/NVIDIA key（修恒 false，影响 AI 评审开关）；`.env.example` 补 `LLM_CUSTOM_KEY_<ID>` 说明
+
+### regression: 121/121 tests passed · verify_fixes 101/101 · check_system 133/137 · node ×2 OK
+- P1-A 22 断言（合并防覆盖/校验 7 用例/签名保留）· P1-B 18 断言（合法入库/非法与重复拒绝/离线不崩）· P1-C 15 断言（实时端点四级兜底/未知 404/has_llm）· 容器 R1/R2 实机验证
+
+---
+
 ## [2026-09-09] — 清标报告 UI 改造 + 归属双写 + DOCX 警示表格式化
 
 ### Added

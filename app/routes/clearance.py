@@ -164,7 +164,8 @@ def run_clearance_route():
     # window before the Celery worker calls bus.start() (which upgrades it).
     from app.services.task_bus import TaskBus
     TaskBus(task_id, 'clearance', '清标分析').register_queued(
-        extra={'thread_id': thread_id or '', 'target_threads': target_threads})
+        extra={'thread_id': thread_id or '',
+               'target_threads': json.dumps(target_threads, ensure_ascii=False)})
 
     info_overrides = {}
     for field in ('bid_number', 'bid_open_time', 'bidder_name', 'agent_name',

@@ -40,13 +40,12 @@ def list_llm_providers():
     catalog) so the frontend can build a fully dynamic selector.
     """
     try:
-        from app.services.llm_provider import get_available_providers, get_active_provider, PROVIDER_CONFIG
+        from app.services.llm_provider import get_available_providers, get_active_provider, get_merged_provider_config
     except ImportError:
         return jsonify({"available": [], "active": None, "error": "llm_provider module not loaded"})
     active = get_active_provider()
     providers = {}
-    for pid in get_available_providers():
-        cfg = PROVIDER_CONFIG.get(pid, {})
+    for pid, cfg in get_merged_provider_config().items():
         models = list(cfg.get('models', []))
         # enrich with free-model catalog (whitelist-first)
         try:
@@ -67,6 +66,60 @@ def list_llm_providers():
         "active": active,
         "providers": providers,
     })
+
+@chat_bp.route('/llm_providers/<pid>/models', methods=['GET'])
+def get_llm_provider_models(pid):
+    """实时获取某 provider 的模型列表（refresh=1 直连 /models，四级兜底）。"""
+    from app.services.llm_provider import get_provider_config, get_merged_provider_config
+    cfg = None
+    try:
+        cfg = get_provider_config(pid)
+    except Exception:
+        cfg = None
+    if cfg is None:
+        # 自定义 provider 不在静态 PROVIDER_CONFIG，回退到合并视图
+        cfg = get_merged_provider_config().get(pid)
+    if cfg is None:
+        return jsonify({'error': 'unknown provider'}), 404
+
+    refresh = request.args.get('refresh')
+    if refresh == '1':
+        # 实时拉取：自定义 provider 用其 env_key 读 API key，免费过滤仅限内置 provider
+        api_key = os.getenv(cfg.get('env_key', '')) or None
+        free_only = not cfg.get('custom')
+        models = []
+        try:
+            from app.services import llm_catalog
+            models = llm_catalog._fetch_provider_models(
+                cfg.get('base_url'), api_key=api_key, free_only=free_only)
+        except Exception:
+            models = []
+        if models:
+            return jsonify({'models': [m['id'] for m in models], 'stale': False})
+        # 实时失败/空 → 回退 catalog 缓存 → 再回退静态 models
+        stale_models = []
+        try:
+            from app.services.llm_catalog import get_free_models
+            cat_models = get_free_models(pid)
+            if cat_models:
+                stale_models = [m['id'] for m in cat_models]
+        except Exception:
+            stale_models = []
+        if not stale_models:
+            stale_models = list(cfg.get('models', []))
+        return jsonify({'models': stale_models, 'stale': True})
+
+    # 非 refresh → 返回当前缓存 models（静态 + catalog 免费）
+    cached = list(cfg.get('models', []))
+    try:
+        from app.services.llm_catalog import get_free_models
+        cat_models = get_free_models(pid, max_results=15)
+        if cat_models:
+            cat_ids = [m['id'] for m in cat_models]
+            cached = [m for m in cached if m not in cat_ids] + cat_ids
+    except Exception:
+        pass
+    return jsonify({'models': cached})
 
 @chat_bp.route('/llm_providers/set', methods=['POST'])
 def set_llm_provider():

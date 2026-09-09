@@ -4,7 +4,7 @@ Load order: factory presets → runtime_config.json overrides → env var overri
 Factory presets are an immutable baseline saved once; admin can restore to factory at any time.
 """
 
-import os, json, logging
+import os, json, logging, re
 from threading import Lock
 from pathlib import Path
 
@@ -24,6 +24,10 @@ DEFAULTS = {
     "llm_max_tokens_max":       4800,
     "llm_temperature":          0.7,
     "llm_batch_timeout_seconds": 90,
+
+    # Custom LLM providers (admin-managed) & reasoning effort
+    "llm_custom_providers":     [],        # [{id, name, base_url, api_key_env}]
+    "llm_reasoning_effort":     "high",    # 'low' | 'medium' | 'high'
 
     # Active LLM provider & model (NOT factory — admin selects, "" = auto-detect)
     "active_llm_provider":      "",
@@ -184,8 +188,68 @@ def get(key: str, default=None):
         return cfg.get(key, default)
 
 
+_LLM_REASONING_EFFORTS = ("low", "medium", "high")
+_CUSTOM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]*$")
+_BUILTIN_PROVIDER_IDS = None
+
+
+def _builtin_provider_ids() -> set:
+    """Return set of built-in (static) LLM provider IDs, cached."""
+    global _BUILTIN_PROVIDER_IDS
+    if _BUILTIN_PROVIDER_IDS is None:
+        ids = set()
+        try:
+            from app.services.llm_provider import PROVIDER_CONFIG
+            ids.update(PROVIDER_CONFIG.keys())
+        except Exception:
+            pass
+        _BUILTIN_PROVIDER_IDS = ids
+    return _BUILTIN_PROVIDER_IDS
+
+
+def _validate_custom_providers(value) -> list:
+    """Validate admin-provided custom LLM providers (whole-batch semantics).
+
+    Every entry must pass `llm_provider.validate_custom_provider` (fallback:
+    basic non-empty/id/url check if that helper is unavailable). Duplicate ids
+    and ids colliding with built-in providers are rejected. On any invalid
+    entry the entire batch is rejected — raises ValueError, nothing persisted.
+    Returns the validated list (stored natively in the JSON file).
+    """
+    if not isinstance(value, list):
+        raise ValueError("llm_custom_providers 必须是数组")
+    try:
+        from app.services.llm_provider import validate_custom_provider
+    except Exception:
+        validate_custom_provider = None
+
+    seen_ids = set()
+    validated = []
+    for i, entry in enumerate(value, start=1):
+        if not isinstance(entry, dict):
+            raise ValueError(f"自定义 provider 第 {i} 项非法: 必须是对象")
+        if validate_custom_provider is not None:
+            ok, msg = validate_custom_provider(entry)
+            if not ok:
+                raise ValueError(f"自定义 provider 第 {i} 项非法: {msg or '校验失败'}")
+        pid = str(entry.get("id") or "").strip()
+        if not _CUSTOM_ID_RE.match(pid):
+            raise ValueError(f"自定义 provider 第 {i} 项非法: id 为空或含非法字符: {pid!r}")
+        if pid in _builtin_provider_ids():
+            raise ValueError(f"自定义 provider 第 {i} 项非法: id 与内置 provider 冲突: {pid}")
+        if pid in seen_ids:
+            raise ValueError(f"自定义 provider id 重复: {pid}")
+        seen_ids.add(pid)
+        validated.append({**entry, "id": pid})
+    return validated
+
+
 def update(updates: dict) -> dict:
-    """Merge admin-provided updates into the runtime JSON file. Returns the new full config."""
+    """Merge admin-provided updates into the runtime JSON file. Returns the new full config.
+
+    Raises ValueError on invalid `llm_custom_providers` / `llm_reasoning_effort`
+    values (whole batch rejected, nothing persisted).
+    """
     with _lock:
         # Build current state
         current = dict(DEFAULTS)
@@ -203,7 +267,17 @@ def update(updates: dict) -> dict:
                 pass
 
         for k, v in updates.items():
-            if k in DEFAULTS:
+            if k not in DEFAULTS:
+                continue
+            if k == "llm_custom_providers":
+                current[k] = _validate_custom_providers(v)
+            elif k == "llm_reasoning_effort":
+                if v not in _LLM_REASONING_EFFORTS:
+                    raise ValueError(
+                        f"llm_reasoning_effort 必须是 {'/'.join(_LLM_REASONING_EFFORTS)} 之一，收到: {v!r}"
+                    )
+                current[k] = v
+            else:
                 current[k] = v
 
         # Persist only keys that differ from factory (or DEFAULTS if no factory)

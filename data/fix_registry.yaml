@@ -699,3 +699,16 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_tech_seal_default_off"
+
+
+  - id: FIX-2026-09-09-020
+    title: "target_threads 写 Redis 需 json 序列化（/clearance/run 500）"
+    severity: critical
+    rationale: >
+      round-012 把 target_threads（Python list）直接塞进 TaskBus.register_queued
+      extra，task_bus hset 写 Redis 抛 DataError Invalid input of type 'list'，
+      导致 /clearance/run 每次 500。必须 json.dumps 序列化为字符串。
+    checks:
+      - type: grep
+        file: app/routes/clearance.py
+        pattern: "json.dumps"

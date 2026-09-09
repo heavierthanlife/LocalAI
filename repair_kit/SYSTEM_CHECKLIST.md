@@ -209,4 +209,4 @@ _(6/6 verified automatically)_
 
 **Verification rate**: 133/137 auto-verified (97%)
 
-> Round-012 note: clearance report dual-write (project + latest personal thread), DOCX warning-details section. Verified by regression + resolve_clearance_threads cases.
+> Round-013 note: clearance target_threads json-serialized; custom LLM providers via runtime_config + .env keys; reasoning_effort default high.

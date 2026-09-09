@@ -1263,6 +1263,10 @@ def get_runtime_config_schema():
         "llm_batch_timeout_seconds":  {"label": "批量对比超时", "unit": "秒", "type": "int", "group": "LLM/AI Model", "min": 10, "max": 600},
         "llm_max_tokens_min":         {"label": "用户最小Token", "unit": "tokens", "type": "int", "group": "LLM/AI Model", "min": 1, "max": 500},
         "llm_max_tokens_max":         {"label": "用户最大Token", "unit": "tokens", "type": "int", "group": "LLM/AI Model", "min": 500, "max": 16384},
+        "llm_custom_providers":       {"label": "自定义 LLM Provider", "unit": "", "type": "json-list", "group": "LLM/AI Model",
+                                         "description": "自定义 LLM 服务商列表。每项 {id, name, base_url, api_key_env}，API key 放 .env（LLM_CUSTOM_KEY_<ID>）"},
+        "llm_reasoning_effort":       {"label": "思考力度", "unit": "", "type": "select", "group": "LLM/AI Model",
+                                         "options": ['low', 'medium', 'high']},
         # ── Search cache ──
         "search_cache_ttl_hours":     {"label": "搜索缓存有效期", "unit": "小时", "type": "float", "group": "Search & Cache", "min": 0, "max": 720, "step": 0.5},
         "headroom_enabled":           {"label": "Headroom 压缩", "unit": "", "type": "bool", "group": "Search & Cache"},
@@ -1351,24 +1355,25 @@ def get_runtime_config_schema():
 @admin_required
 def admin_llm_providers():
     """Return full provider info with model lists for admin config panel."""
-    from app.services.llm_provider import PROVIDER_CONFIG
+    from app.services.llm_provider import get_merged_provider_config
     from app.services.runtime_config import get as rc_get
 
     active_provider = rc_get('active_llm_provider', '') or 'auto'
     active_model = rc_get('active_llm_model', '') or 'auto'
 
+    merged = get_merged_provider_config()
     providers = {}
-    for pid, cfg in PROVIDER_CONFIG.items():
+    for pid, cfg in merged.items():
         providers[pid] = {
-            'name': cfg['name'],
-            'models': cfg['models'],
-            'default_model': cfg['default_model'],
+            'name': cfg.get('name', pid),
+            'models': cfg.get('models', []),
+            'default_model': cfg.get('default_model', ''),
         }
 
     # Build dynamic model list for active provider
     model_options = ['auto']
-    if active_provider != 'auto' and active_provider in PROVIDER_CONFIG:
-        model_options = ['auto'] + PROVIDER_CONFIG[active_provider]['models']
+    if active_provider != 'auto' and active_provider in merged:
+        model_options = ['auto'] + merged[active_provider].get('models', [])
 
     # Also return what session currently has (live state, may differ if not yet applied)
     from flask import session as flask_session
@@ -1384,6 +1389,62 @@ def admin_llm_providers():
         "session_provider": session_provider,
         "session_model": session_model,
     })
+
+
+@admin_bp.route('/admin/llm_providers/<pid>/models', methods=['GET'])
+@admin_required
+def admin_llm_provider_models(pid):
+    """实时获取某 provider 的模型列表（refresh=1 直连 /models，四级兜底，admin 版）。"""
+    from app.services.llm_provider import get_provider_config, get_merged_provider_config
+    cfg = None
+    try:
+        cfg = get_provider_config(pid)
+    except Exception:
+        cfg = None
+    if cfg is None:
+        # 自定义 provider 不在静态 PROVIDER_CONFIG，回退到合并视图
+        cfg = get_merged_provider_config().get(pid)
+    if cfg is None:
+        return err('unknown provider', 'NOT_FOUND', 404)
+
+    refresh = request.args.get('refresh')
+    if refresh == '1':
+        # 实时拉取：自定义 provider 用其 env_key 读 API key，免费过滤仅限内置 provider
+        api_key = os.getenv(cfg.get('env_key', '')) or None
+        free_only = not cfg.get('custom')
+        models = []
+        try:
+            from app.services import llm_catalog
+            models = llm_catalog._fetch_provider_models(
+                cfg.get('base_url'), api_key=api_key, free_only=free_only)
+        except Exception:
+            models = []
+        if models:
+            return ok({"models": [m['id'] for m in models], "stale": False})
+        # 实时失败/空 → 回退 catalog 缓存 → 再回退静态 models
+        stale_models = []
+        try:
+            from app.services.llm_catalog import get_free_models
+            cat_models = get_free_models(pid)
+            if cat_models:
+                stale_models = [m['id'] for m in cat_models]
+        except Exception:
+            stale_models = []
+        if not stale_models:
+            stale_models = list(cfg.get('models', []))
+        return ok({"models": stale_models, "stale": True})
+
+    # 非 refresh → 返回当前缓存 models（静态 + catalog 免费）
+    cached = list(cfg.get('models', []))
+    try:
+        from app.services.llm_catalog import get_free_models
+        cat_models = get_free_models(pid, max_results=15)
+        if cat_models:
+            cat_ids = [m['id'] for m in cat_models]
+            cached = [m for m in cached if m not in cat_ids] + cat_ids
+    except Exception:
+        pass
+    return ok({"models": cached})
 
 
 @admin_bp.route('/admin/vl_status', methods=['GET'])

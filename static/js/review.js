@@ -910,6 +910,22 @@
             html += `<details open style="margin-bottom:8px;border:1px solid var(--card-border);border-radius:8px;padding:8px 12px;background:var(--card-bg);">
                 <summary style="font-weight:600;font-size:.8rem;cursor:pointer;color:var(--card-muted);">${groupLabels[gn]||gn} (${groups[gn].length})</summary>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px;margin-top:8px;">`;
+            // 自定义 Provider 行式编辑器（json-list）行模板
+            function providerRowHtml(r) {
+                const row = (r && typeof r === 'object') ? r : {};
+                return `<div class="json-list-row" style="display:flex;align-items:center;gap:4px;margin-bottom:3px;padding:3px 4px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);font-size:.65rem;flex-wrap:wrap;">
+                    <span style="color:var(--card-muted);flex-shrink:0;">id</span>
+                    <input class="json-list-id" placeholder="如 openai" value="${escapeHtml(row.id || '')}" style="width:90px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <span style="color:var(--card-muted);flex-shrink:0;">name</span>
+                    <input class="json-list-name" placeholder="显示名" value="${escapeHtml(row.name || '')}" style="width:110px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <span style="color:var(--card-muted);flex-shrink:0;">base_url</span>
+                    <input class="json-list-base-url" placeholder="https://..." value="${escapeHtml(row.base_url || '')}" style="flex:1;min-width:150px;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <span style="color:var(--card-muted);flex-shrink:0;">api_key_env</span>
+                    <input class="json-list-api-key-env" placeholder="LLM_CUSTOM_KEY_xxx" value="${escapeHtml(row.api_key_env || '')}" style="width:150px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <button class="json-list-remove" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.85rem;padding:0 2px;flex-shrink:0;" title="删除此 Provider">×</button>
+                </div>`;
+            }
+
             for (const item of groups[gn]) {
                 const labelStyle = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
                 if (item.type === 'ordered-list') {
@@ -934,6 +950,20 @@
                     chainHtml += `<button class="chain-add" style="width:100%;padding:4px;border:1px dashed var(--card-border);border-radius:4px;background:transparent;color:var(--card-muted);cursor:pointer;font-size:.65rem;margin-top:2px;">+ 添加服务商</button>`;
                     chainHtml += '</div>';
                     html += chainHtml;
+                } else if (item.type === 'json-list') {
+                    const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
+                    const rows = Array.isArray(item.value) ? item.value : [];
+                    let listHtml = `<div style="grid-column:1/-1;" title="${escapeHtml(item.label)}">
+                        <div style="display:flex;align-items:center;gap:4px;font-size:.7rem;margin-bottom:4px;">
+                            <label style="${labelStyle}">${item.label}${nfMark}</label>
+                        </div>
+                        <div data-key="${item.key}" data-type="json-list" style="margin-left:4px;">`;
+                    for (const row of rows) listHtml += providerRowHtml(row);
+                    listHtml += `<div class="json-list-hint" style="display:none;color:#ef4444;font-size:.65rem;margin:2px 0;"></div>
+                            <button class="json-list-add" style="width:100%;padding:4px;border:1px dashed var(--card-border);border-radius:4px;background:transparent;color:var(--card-muted);cursor:pointer;font-size:.65rem;margin-top:2px;">+ 添加 Provider</button>
+                        </div>
+                    </div>`;
+                    html += listHtml;
                 } else if (item.type === 'select') {
                     const options = item.options || [];
                     const labels = item.option_labels || {};
@@ -942,6 +972,9 @@
                     html += `<div style="display:flex;align-items:center;gap:4px;font-size:.7rem;" title="${escapeHtml(item.label)}">
                         <label style="${labelStyle}">${item.label}${nfMark}</label>
                         <select data-key="${item.key}" data-type="select" style="width:130px;flex-shrink:0;padding:3px 4px;border-radius:4px;border:1px solid var(--card-border);font-size:.68rem;">${selOpts}</select>
+                        ${item.key === 'active_llm_model'
+                            ? '<button class="file-btn" id="llmRefreshModelsBtn" style="padding:2px 6px;font-size:.65rem;flex-shrink:0;" title="实时拉取该 provider 的模型列表">刷新模型</button><span id="llmRefreshStatus" style="font-size:.6rem;color:var(--card-muted);flex-shrink:0;"></span>'
+                            : ''}
                     </div>`;
                 } else if (item.type === 'bool') {
                     const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
@@ -994,7 +1027,58 @@
         // LLM provider change -> reload model options
         const provSelect = panel.querySelector('select[data-key="active_llm_provider"]');
         const modelSelect = panel.querySelector('select[data-key="active_llm_model"]');
+        const refreshBtn = document.getElementById('llmRefreshModelsBtn');
+        const refreshStatus = document.getElementById('llmRefreshStatus');
         if (provSelect && modelSelect && llmInfo) {
+            // 刷新模型按钮：loading + in-flight 防抖（pid 为空/auto 时禁用）
+            let refreshing = false;
+            const updateRefreshBtn = () => {
+                const pid = provSelect.value;
+                const canRefresh = !!pid && pid !== 'auto';
+                if (refreshBtn) {
+                    refreshBtn.disabled = refreshing || !canRefresh;
+                    if (!refreshing) refreshBtn.textContent = '刷新模型';
+                }
+            };
+            if (refreshBtn && refreshStatus) {
+                refreshBtn.addEventListener('click', async () => {
+                    const pid = provSelect.value;
+                    if (refreshing || !pid || pid === 'auto') return;
+                    refreshing = true;
+                    refreshBtn.disabled = true;
+                    refreshBtn.textContent = '刷新中...';
+                    refreshStatus.textContent = '';
+                    try {
+                        const r = await fetch('/admin/llm_providers/' + encodeURIComponent(pid) + '/models?refresh=1', { credentials: 'include' });
+                        const d = await r.json().catch(() => ({}));
+                        if (r.ok && d && Array.isArray(d.models)) {
+                            const fresh = ['auto', ...d.models.filter(m => m && m !== 'auto')];
+                            const labels = llmInfo.providers[pid]?.name
+                                ? { auto: 'Auto (use ' + llmInfo.providers[pid].name + ' default)' }
+                                : { auto: 'Auto (provider default)' };
+                            const cur = modelSelect.value;
+                            modelSelect.innerHTML = fresh.map(m => `<option value="${escapeHtml(m)}"${m === cur ? ' selected' : ''}>${escapeHtml(labels[m] || m)}</option>`).join('');
+                            if (!fresh.includes(cur)) modelSelect.value = 'auto';
+                            if (llmInfo.providers[pid]) llmInfo.providers[pid].models = fresh.slice(1);
+                            // 模型选择变化 → 同步 dirty 标记
+                            _rcDirty['active_llm_model'] = modelSelect.value !== (_rcData['active_llm_model'] || '') ? modelSelect.value : undefined;
+                            if (_rcDirty['active_llm_model'] === undefined) delete _rcDirty['active_llm_model'];
+                            const modDot = document.getElementById('rcModifiedDot');
+                            if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+                            refreshStatus.textContent = d.stale ? '（使用缓存，实时拉取失败）' : '';
+                            refreshStatus.style.color = '#94a3b8';
+                        } else {
+                            refreshStatus.textContent = '刷新失败: ' + escapeHtml(d.error || '服务不可用');
+                            refreshStatus.style.color = '#ef4444';
+                        }
+                    } catch (_) {
+                        refreshStatus.textContent = '刷新失败: 网络错误';
+                        refreshStatus.style.color = '#ef4444';
+                    }
+                    refreshing = false;
+                    updateRefreshBtn();
+                });
+            }
             provSelect.addEventListener('change', () => {
                 const pid = provSelect.value;
                 const models = (pid !== 'auto' && llmInfo.providers[pid])
@@ -1011,6 +1095,8 @@
                 if (_rcDirty['active_llm_model'] === undefined) delete _rcDirty['active_llm_model'];
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+                if (refreshStatus) refreshStatus.textContent = '';
+                updateRefreshBtn();
             });
             modelSelect.addEventListener('change', () => {
                 _rcDirty['active_llm_model'] = modelSelect.value !== (_rcData['active_llm_model']||'') ? modelSelect.value : undefined;
@@ -1018,6 +1104,7 @@
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
             });
+            updateRefreshBtn();
         }
 
         // VL provider change → reload VL model options from schema
@@ -1146,6 +1233,37 @@
             chainContainer.addEventListener('drop', e => { e.preventDefault(); });
         }
 
+        // Custom providers list widget — add/remove rows, mark dirty
+        const providersContainer = document.querySelector('[data-key="llm_custom_providers"][data-type="json-list"]');
+        if (providersContainer) {
+            const providersMarkDirty = () => {
+                const now = Array.from(providersContainer.querySelectorAll('.json-list-row')).map(r => ({
+                    id: r.querySelector('.json-list-id')?.value.trim() || '',
+                    name: r.querySelector('.json-list-name')?.value.trim() || '',
+                    base_url: r.querySelector('.json-list-base-url')?.value.trim() || '',
+                    api_key_env: r.querySelector('.json-list-api-key-env')?.value.trim() || '',
+                }));
+                const orig = _rcData['llm_custom_providers'];
+                const nowStr = JSON.stringify(now);
+                _rcDirty['llm_custom_providers'] = (nowStr !== JSON.stringify(orig ?? [])) ? now : undefined;
+                if (_rcDirty['llm_custom_providers'] === undefined) delete _rcDirty['llm_custom_providers'];
+                const modDot = document.getElementById('rcModifiedDot');
+                if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
+            };
+            providersContainer.addEventListener('input', e => {
+                if (e.target.closest('.json-list-row')) providersMarkDirty();
+            });
+            providersContainer.addEventListener('click', e => {
+                if (e.target.classList.contains('json-list-remove')) {
+                    e.target.closest('.json-list-row')?.remove();
+                    providersMarkDirty();
+                } else if (e.target.classList.contains('json-list-add')) {
+                    providersContainer.querySelector('.json-list-add').insertAdjacentHTML('beforebegin', providerRowHtml({}));
+                    providersMarkDirty();
+                }
+            });
+        }
+
         // VL test widget — drag-drop image analysis
         const vlGroup = document.querySelector('details summary');
         const vlTestHtml = `<div style="margin-top:10px;border:1px dashed var(--card-border);border-radius:8px;padding:12px;text-align:center;">
@@ -1251,6 +1369,17 @@
             else if (sch?.type === 'ordered-list') {
                 const parsed = typeof v === 'string' ? (() => { try { return JSON.parse(v); } catch(_) { return v; } })() : v;
                 payload[k] = parsed;
+            }
+            else if (sch?.type === 'json-list') {
+                const arr = Array.isArray(v) ? v : [];
+                // 客户端轻校验：空 id/base_url 行红色提示但不阻断（后端 validate_custom_provider 是权威）
+                const emptyRows = arr.filter(r => !String(r.id || '').trim() || !String(r.base_url || '').trim()).length;
+                const hintEl = document.querySelector('[data-key="llm_custom_providers"] .json-list-hint');
+                if (hintEl) {
+                    hintEl.style.display = emptyRows ? 'block' : 'none';
+                    hintEl.textContent = emptyRows ? `⚠ ${emptyRows} 行 Provider 缺少 id 或 base_url（已一并提交，以后端校验为准）` : '';
+                }
+                payload[k] = arr;
             }
             else if (sch?.type === 'float') { payload[k] = parseFloat(v); }
             else { payload[k] = parseInt(v); }

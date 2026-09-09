@@ -53,6 +53,7 @@ def check_auth():
         "user_id": user_id,
         "has_llm": any(os.getenv(k) for k in (
             'DEEPSEEK_API_KEY', 'ZHIPU_API_KEY', 'QWEN_API_KEY', 'SILICONFLOW_API_KEY',
+            'OPENROUTER_API_KEY', 'NVIDIA_API_KEY',
         ))
     })
 

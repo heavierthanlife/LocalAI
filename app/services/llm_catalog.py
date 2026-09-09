@@ -69,70 +69,98 @@ def _save_local(catalog: dict):
         logger.warning(f"llm_catalog save failed: {e}")
 
 
-def _fetch_openrouter() -> list[dict]:
-    import urllib.request
-    url = 'https://openrouter.ai/api/v1/models'
-    req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'localai-catalog/1.0'})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        payload = json.loads(resp.read().decode('utf-8'))
-    models = []
-    for m in payload.get('data', []):
-        mid = m.get('id', '')
-        pricing = m.get('pricing', {}) or {}
-        def _z(v):
-            try:
-                return float(v) if v else 0.0
-            except (TypeError, ValueError):
-                return 0.0
-        prompt_cost = _z(pricing.get('prompt'))
-        comp_cost = _z(pricing.get('completion'))
-        is_free = mid.endswith(':free') or (prompt_cost == 0.0 and comp_cost == 0.0)
-        if is_free:
-            models.append({
-                'id': mid,
-                'context_length': m.get('context_length'),
-                'reasoning': bool(m.get('reasoning')),
-                'provider': 'openrouter',
-            })
-    return models
+def _fetch_provider_models(base_url, api_key=None, free_only=False) -> list[dict]:
+    """Fetch /models from an OpenAI-compatible base_url.
 
-
-def _fetch_nvidia() -> list[dict]:
+    - GET {base_url}/models with an optional `Authorization: Bearer <api_key>`.
+    - free_only: keep only ids ending ':free' or zero-priced entries (OpenRouter
+      semantics; built-in providers use it, custom providers don't).
+    Returns a list of {id, context_length, reasoning}. Any error → [] (logged).
+    """
     import urllib.request
-    url = 'https://integrate.api.nvidia.com/v1/models'
-    req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'localai-catalog/1.0'})
+    url = str(base_url).rstrip('/') + '/models'
+    headers = {'Accept': 'application/json', 'User-Agent': 'localai-catalog/1.0'}
+    if api_key:
+        headers['Authorization'] = 'Bearer ' + api_key
     try:
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode('utf-8'))
     except Exception as e:
-        logger.warning(f"NVIDIA /models fetch failed: {e}")
+        logger.warning(f"Catalog /models fetch failed ({url}): {e}")
         return []
+
+    def _z(v):
+        try:
+            return float(v) if v else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
     models = []
-    for m in payload.get('data', []):
+    for m in (payload.get('data', None) or []):
         mid = m.get('id', '')
-        if mid:
-            models.append({
-                'id': mid,
-                'context_length': None,
-                'reasoning': False,
-                'provider': 'nvidia',
-            })
+        if not mid:
+            continue
+        if free_only:
+            pricing = m.get('pricing', {}) or {}
+            is_free = mid.endswith(':free') or (
+                _z(pricing.get('prompt')) == 0.0 and _z(pricing.get('completion')) == 0.0
+            )
+            if not is_free:
+                continue
+        models.append({
+            'id': mid,
+            'context_length': m.get('context_length'),
+            'reasoning': bool(m.get('reasoning')),
+        })
     return models
 
 
+def _iter_providers():
+    """Yield (provider_id, cfg) for static + admin custom providers.
+
+    Prefers `llm_provider.get_merged_provider_config()` (includes custom
+    providers flagged `custom=True`); falls back to PROVIDER_CONFIG if it
+    cannot be imported (catalog→provider one-way import, no cycle).
+    """
+    merged = None
+    try:
+        from app.services.llm_provider import get_merged_provider_config
+        merged = get_merged_provider_config()
+    except Exception:
+        merged = None
+    if not isinstance(merged, dict) or not merged:
+        try:
+            from app.services.llm_provider import PROVIDER_CONFIG
+            merged = dict(PROVIDER_CONFIG)
+        except Exception:
+            merged = {}
+    for pid, cfg in merged.items():
+        if isinstance(cfg, dict) and str(cfg.get('base_url') or '').strip():
+            yield pid, cfg
+
+
 def refresh_catalog() -> dict:
-    """Fetch free model lists from both providers and persist. Returns catalog dict."""
+    """Fetch model lists from all configured providers and persist. Returns catalog dict."""
     catalog = {'updated_at': _utc(), 'models': [], 'whitelist': WHITELIST}
+    static_ids = set()
     try:
-        catalog['models'].extend(_fetch_openrouter())
-    except Exception as e:
-        logger.warning(f"OpenRouter catalog refresh failed: {e}")
-    try:
-        catalog['models'].extend(_fetch_nvidia())
-    except Exception as e:
-        logger.warning(f"NVIDIA catalog refresh failed: {e}")
+        from app.services.llm_provider import PROVIDER_CONFIG
+        static_ids.update(PROVIDER_CONFIG.keys())
+    except Exception:
+        pass
+    for pid, cfg in _iter_providers():
+        base_url = str(cfg.get('base_url') or '').strip()
+        if not base_url:
+            continue
+        api_key = os.getenv(str(cfg.get('env_key') or ''), '').strip() or None
+        free_only = (pid in static_ids) or (cfg.get('custom') is not True)
+        models = _fetch_provider_models(base_url, api_key=api_key, free_only=free_only)
+        for m in models:
+            m['provider'] = pid
+        catalog['models'].extend(models)
     _save_local(catalog)
-    logger.info(f"LLM catalog refreshed: {len(catalog['models'])} free models")
+    logger.info(f"LLM catalog refreshed: {len(catalog['models'])} models")
     return catalog
 
 

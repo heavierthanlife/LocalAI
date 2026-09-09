@@ -6,6 +6,10 @@ Both use OpenAI-compatible chat completions API.
 Legacy providers (deepseek/zhipu/qwen/siliconflow/mimo) are COMMENTED OUT
 but preserved for reference — user decided to consolidate on the two free
 sources. See `data/fix_registry.yaml` FIX-2026-09-01-016.
+
+Custom providers (admin-configured via runtime_config `llm_custom_providers`)
+are dynamically merged on top of PROVIDER_CONFIG; built-in providers are
+never overridden. See `get_merged_provider_config()`.
 """
 import os
 import logging
@@ -73,12 +77,62 @@ PROVIDER_CONFIG = {
 # }
 
 
+def get_merged_provider_config() -> dict:
+    """PROVIDER_CONFIG 防御性拷贝 + 自定义 provider 动态叠加（内置永不覆盖）。"""
+    from app.services.runtime_config import get as rc_get
+    merged = {k: dict(v) for k, v in PROVIDER_CONFIG.items()}
+    try:
+        customs = rc_get('llm_custom_providers', []) or []
+    except Exception:
+        customs = []
+    for cp in customs:
+        pid = (cp.get('id') or '').strip()
+        if not pid or pid in merged:   # 防自定义覆盖内置（id='openrouter' 等）
+            continue
+        models = cp.get('models') or []
+        merged[pid] = {
+            'name': cp.get('name') or pid,
+            'env_key': (cp.get('api_key_env') or '').strip(),
+            'base_url': (cp.get('base_url') or '').strip(),
+            'default_model': models[0] if models else '',
+            'models': models,
+            'custom': True,
+        }
+    return merged
+
+
+def validate_custom_provider(entry) -> tuple:
+    """校验自定义 provider 条目，返回 (ok, error_msg)。"""
+    import re
+    if not isinstance(entry, dict):
+        return False, "条目必须是 dict"
+    pid = (entry.get('id') or '').strip()
+    if not pid:
+        return False, "id 不能为空"
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', pid):
+        return False, "id 只能包含字母/数字/下划线/中划线"
+    if pid in PROVIDER_CONFIG:
+        return False, f"id '{pid}' 与内置 provider 冲突"
+    base_url = (entry.get('base_url') or '').strip()
+    if not base_url.startswith('https://') and not (
+        base_url.startswith('http://localhost') or base_url.startswith('http://127.0.0.1')
+    ):
+        return False, "base_url 必须以 https:// 开头（http://localhost 或 http://127.0.0.1 本地豁免）"
+    api_key_env = (entry.get('api_key_env') or '').strip()
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', api_key_env):
+        return False, "api_key_env 必须是合法环境变量名"
+    return True, ''
+
+
 def get_available_providers() -> list[str]:
     """Return list of provider IDs that have API keys configured."""
+    merged = get_merged_provider_config()
     available = []
-    for pid, cfg in PROVIDER_CONFIG.items():
-        key = os.getenv(cfg['env_key'], '').strip()
-        if key:
+    for pid, cfg in merged.items():
+        env_key = (cfg.get('env_key') or '').strip()
+        if not env_key:
+            continue
+        if os.getenv(env_key, '').strip():
             available.append(pid)
     return available
 
@@ -91,11 +145,14 @@ def get_active_provider() -> Optional[str]:
 
 def get_provider_config(provider_id: Optional[str] = None) -> dict:
     """Get config dict for a provider. Falls back to first available if none specified."""
-    if provider_id and provider_id in PROVIDER_CONFIG:
-        return PROVIDER_CONFIG[provider_id]
+    merged = get_merged_provider_config()
+    if provider_id:
+        cfg = merged.get(provider_id)
+        if cfg is not None:
+            return cfg
     active = get_active_provider()
     if active:
-        return PROVIDER_CONFIG[active]
+        return merged[active]
     raise RuntimeError(
         "No LLM provider configured. Set one of: "
         + ", ".join(cfg['env_key'] for cfg in PROVIDER_CONFIG.values())
@@ -116,7 +173,9 @@ def _create_chat_model_direct(
     FIX-016: this function exists so llm_fallback can build models directly
     (previously referenced a non-existent symbol → runtime ImportError).
     Both active providers (openrouter/nvidia) use OpenAI-compatible ChatOpenAI.
+    Custom providers (llm_custom_providers) are also supported via the merged view.
     """
+    from app.services.runtime_config import get as rc_get
     cfg = get_provider_config(provider_id)
     api_key = os.getenv(cfg['env_key'], '').strip()
     if not api_key:
@@ -124,8 +183,14 @@ def _create_chat_model_direct(
     final_model = model or cfg['default_model']
     base_url = cfg['base_url']
     logger.info(f"Creating LLM: provider={cfg['name']}, model={final_model}, streaming={streaming}")
-    from langchain_openai import ChatOpenAI
-    return ChatOpenAI(
+    # 运行时死配置覆盖默认温度/最大长度；无值则沿用函数参数
+    rt_temp = rc_get('llm_temperature')
+    if rt_temp is not None:
+        temperature = rt_temp
+    rt_max = rc_get('llm_max_tokens')
+    if rt_max is not None:
+        max_tokens = rt_max
+    kwargs = dict(
         model=final_model,
         api_key=api_key,
         base_url=base_url,
@@ -134,6 +199,12 @@ def _create_chat_model_direct(
         streaming=streaming,
         request_timeout=timeout,
     )
+    # 统一 high thinking：reasoning_effort 注入（自定义 provider 若 supports_reasoning=False 跳过）
+    effort = rc_get('llm_reasoning_effort', 'high')
+    if effort and cfg.get('supports_reasoning', True):
+        kwargs['extra_body'] = {'reasoning_effort': effort}
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(**kwargs)
 
 
 def create_chat_model(
