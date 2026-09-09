@@ -1296,9 +1296,30 @@
                 const r = await fetch('/admin/vl_test', { method:'POST', credentials:'include', body:fd });
                 const d = await r.json();
                 if (d.status === 'ok') {
-                    const txt = escapeHtml(d.data?.description || '');
-                    const reasoning = d.data?.reasoning ? escapeHtml(d.data.reasoning) : '';
-                    vlTestResult.innerHTML = (reasoning ? `<div style="color:#94a3b8;font-size:.65rem;margin-bottom:6px;border-left:2px solid #4a5a6a;padding-left:8px;"><b>推理:</b> ${reasoning}</div>` : '') + `<div>${txt}</div>`;
+                    const dd = d.data || {};
+                    const txt = escapeHtml(dd.description || '');
+                    const reasoning = dd.reasoning ? escapeHtml(dd.reasoning) : '';
+                    const ocr = dd.ocr ? escapeHtml(dd.ocr) : '';
+                    const provider = escapeHtml(dd.provider || '');
+                    const verifierDesc = dd.verifier_desc ? escapeHtml(dd.verifier_desc) : '';
+                    const consistent = dd.consistent !== false;
+                    // OCR 对照——一眼判断弱 VL 是否读对（FIX-2026-09-09-022）
+                    let html = '';
+                    if (ocr) {
+                        html += '<div style="margin-bottom:6px;padding:6px 8px;background:#0f172a;border:1px solid #1e293b;border-radius:5px;">' +
+                            '<b style="color:#34d399;">OCR 识别文字:</b><br><span style="color:#e2e8f0;white-space:pre-wrap;">' + ocr + '</span></div>';
+                    }
+                    const badge = consistent
+                        ? '<span style="color:#34d399;">一致</span>'
+                        : '<span style="color:#f87171;font-weight:bold;">⚠ 复核差异</span>';
+                    html += '<div style="margin-bottom:6px;"><b style="color:#60a5fa;">VL 描述 (' + provider + '):</b> ' + badge + '</div>';
+                    html += '<div>' + txt + '</div>';
+                    if (reasoning) html += '<div style="color:#94a3b8;font-size:.65rem;margin-top:4px;border-left:2px solid #4a5a6a;padding-left:8px;"><b>推理:</b> ' + reasoning + '</div>';
+                    if (!consistent && verifierDesc) {
+                        html += '<div style="color:#94a3b8;font-size:.65rem;margin-top:4px;border-left:2px solid #f87171;padding-left:8px;"><b>另一模型复核:</b> ' + verifierDesc.substring(0, 300) + '</div>';
+                    }
+                    if (dd.note) html += '<div style="color:#64748b;font-size:.6rem;margin-top:4px;">' + escapeHtml(dd.note) + '</div>';
+                    vlTestResult.innerHTML = html;
                 } else {
                     vlTestResult.innerHTML = `<span style="color:#ef4444;">${escapeHtml(d.error||'分析失败')}</span>`;
                 }

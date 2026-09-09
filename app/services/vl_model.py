@@ -32,6 +32,10 @@ VL_PROVIDER_CONFIG = {
     },
 }
 
+# FIX-2026-09-09-022: 质量排序（越大越强）。auto 解析按此选最强有 key 的 provider；
+# 交叉验证的 verifier 也取与 primary 不同且最强有 key 的 provider。
+VL_STRENGTH = {'dashscope': 3, 'nvidia': 2, 'mimo': 1}
+
 
 def _get_active_vl_config():
     cfg = {'provider_id': 'nvidia', 'model': 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
@@ -45,7 +49,8 @@ def _get_active_vl_config():
         model_id = 'auto'
 
     if provider_id == 'auto':
-        for pid in ['nvidia', 'dashscope', 'mimo']:
+        # FIX-2026-09-09-022: 最强有 key 优先（dashscope → nvidia → mimo）
+        for pid in sorted(VL_PROVIDER_CONFIG.keys(), key=lambda p: -VL_STRENGTH.get(p, 0)):
             pcfg = VL_PROVIDER_CONFIG.get(pid, {})
             key = os.getenv(pcfg.get('env_key', ''), '').strip()
             if key:
@@ -72,6 +77,28 @@ def _get_active_vl_config():
         'base_url': pcfg['base_url'],
         'api_key_valid': bool(api_key),
     }
+
+
+def select_vl_pair():
+    """(primary, verifier) provider id 对。
+
+    FIX-2026-09-09-022: primary = 当前激活 provider（auto 时已解析为最强有 key）；
+    verifier = 与 primary 不同且最强有 key 的 provider（无则 ''）。
+    """
+    try:
+        primary = _get_active_vl_config().get('provider_id', 'nvidia')
+    except Exception:
+        primary = 'nvidia'
+    order = sorted(VL_PROVIDER_CONFIG.keys(), key=lambda p: -VL_STRENGTH.get(p, 0))
+    verifier = ''
+    for pid in order:
+        if pid == primary:
+            continue
+        key = os.getenv(VL_PROVIDER_CONFIG.get(pid, {}).get('env_key', ''), '').strip()
+        if key:
+            verifier = pid
+            break
+    return primary, verifier
 
 
 class VLModel:
@@ -246,6 +273,87 @@ class VLModel:
             else:
                 desc = f"⚠️ 图片描述失败: {error_msg[:100]}"
             return {"description": desc, "reasoning": ""}
+
+    def _call_provider(self, provider_id, image_bytes, prompt):
+        """按指定 provider 配置临时建 client 做单图描述（用于交叉验证 verifier）。"""
+        pcfg = VL_PROVIDER_CONFIG.get(provider_id)
+        if not pcfg:
+            return {"description": "", "reasoning": ""}
+        key = os.getenv(pcfg.get('env_key', ''), '').strip()
+        if not key:
+            return {"description": "", "reasoning": ""}
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=key, base_url=pcfg['base_url'], timeout=90.0)
+            model = pcfg.get('default_model', pcfg['models'][0])
+            b64 = self.encode_image_to_base64(image_bytes)
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    {"type": "text", "text": prompt},
+                ]}],
+                max_tokens=1200,
+                temperature=0.2,
+                timeout=90.0,
+            )
+            msg = resp.choices[0].message
+            return {
+                "description": (getattr(msg, "content", None) or "").strip(),
+                "reasoning": (getattr(msg, "reasoning_content", None) or "").strip(),
+            }
+        except Exception as e:
+            logger.warning(f"VL verifier {provider_id} call failed: {e}")
+            return {"description": "", "reasoning": ""}
+
+    def verify_image(self, image_bytes, prompt=None):
+        """OCR-empty 图像的正确性判定路径（FIX-2026-09-09-022）。
+
+        primary 用当前激活 provider（auto 时=最强有 key），verifier 用最强不同
+        provider（无第二 key 则单模型）。两模型描述做数字集/长度一致性比对。
+
+        Returns dict:
+          description / reasoning        primary 描述与推理
+          verifier_desc                 第二 provider 描述（'' = 无 verifier）
+          consistent / note              是否一致 + 说明
+        """
+        prompt = prompt or "请详细描述这张图片的内容，特别注意其中的文字、数字与表格。"
+        primary = self.describe_image_v2(image_bytes, prompt)
+        verifier_desc = ""
+        consistent = True
+        note = "单模型（无第二provider可用）"
+        try:
+            # 按强度序遍历候选 verifier，跳过 primary；取第一个能返回内容的（容忍坏 key）
+            order = sorted(VL_PROVIDER_CONFIG.keys(), key=lambda p: -VL_STRENGTH.get(p, 0))
+            for pid in order:
+                if pid == primary:
+                    continue
+                key = os.getenv(VL_PROVIDER_CONFIG.get(pid, {}).get('env_key', ''), '').strip()
+                if not key:
+                    continue
+                v = self._call_provider(pid, image_bytes, prompt)
+                if v.get("description"):
+                    verifier_desc = v.get("description", "")
+                    try:
+                        from app.services.prompt_safety import vl_cross_check
+                        chk = vl_cross_check(primary.get("description", ""), verifier_desc)
+                    except Exception:
+                        chk = {'consistent': True, 'note': 'cross-check skipped'}
+                    consistent = bool(chk.get('consistent', True))
+                    note = chk.get('note', '') or '一致'
+                    break
+                logger.warning(f"VL verifier {pid} returned empty, trying next")
+            else:
+                note = "无可用第二provider，单模型判定"
+        except Exception as e:
+            logger.warning(f"verify_image verifier error: {e}")
+        return {
+            "description": primary.get("description", ""),
+            "reasoning": primary.get("reasoning", ""),
+            "verifier_desc": verifier_desc,
+            "consistent": consistent,
+            "note": note,
+        }
 
     def describe_images_batch(self, images, prompt=None):
         """Describe up to N images in a SINGLE API call (multi-image content).

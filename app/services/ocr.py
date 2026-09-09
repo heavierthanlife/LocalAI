@@ -82,6 +82,33 @@ class OCRManager:
             logger.error(f"OCR run error: {e}")
             return ""
 
+    def ocr_text_from_bytes(self, image_bytes):
+        """EasyOCR on raw image bytes → joined text lines (deterministic).
+
+        FIX-2026-09-09-022: VL 抽检的 OCR ground-truth 层——文本/数字密集的标书图
+        用 OCR 读出精确文字，mimo 等弱 VL 不再单独承担"读数"职责。
+        """
+        if self.reader is None:
+            return ""
+        try:
+            import numpy as np
+            from PIL import Image as _PIL
+            import io
+            img = _PIL.open(io.BytesIO(image_bytes))
+            if img.mode in ('RGBA', 'P', 'CMYK'):
+                img = img.convert('RGB')
+            max_dim = 2000
+            if max(img.size) > max_dim:
+                ratio = max_dim / max(img.size)
+                img = img.resize((int(img.size[0] * ratio), int(img.size[1] * ratio)),
+                                 _PIL.Resampling.LANCZOS)
+            arr = np.array(img)
+            return self.run_ocr(arr)
+        except Exception as e:
+            logger.error(f"OCR bytes error: {e}")
+            return ""
+
 
 ocr_manager = OCRManager()
 run_ocr = ocr_manager.run_ocr
+ocr_text_from_bytes = ocr_manager.ocr_text_from_bytes

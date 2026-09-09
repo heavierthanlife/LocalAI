@@ -1471,12 +1471,15 @@ def admin_vl_status():
 @admin_bp.route('/admin/vl_test', methods=['POST'])
 @admin_required
 def admin_vl_test():
-    """VL 模型连通性测试：上传一张图片 → 返回描述 + 推理（若有）。
+    """VL 模型连通性测试：上传一张图片 → 返回描述 + 推理 + OCR 对照。
 
     FIX-2026-09-09-021: review.js handleVLTest POST /admin/vl_test 此前 404
     （路由从未实现）。响应为裸 jsonify（前端判定 `d.status === 'ok'`）：
-      成功 → {"status":"ok","data":{"description":…,"reasoning":…}}
+      成功 → {"status":"ok","data":{"description":…,"reasoning":…,
+              "ocr":…, "provider":…, "verifier_desc":…, "consistent":…, "note":…}}
       失败 → {"status":"error","error":…}
+
+    FIX-2026-09-09-022: 附 EasyOCR 文本对照 + 交叉验证——弱 VL 是否读对，一眼可辨。
     """
     file = request.files.get('image')
     if not file or not file.filename:
@@ -1488,14 +1491,32 @@ def admin_vl_test():
     except Exception as e:
         return jsonify({"status": "error", "error": f"读取图片失败: {str(e)[:100]}"}), 400
 
+    # OCR ground-truth（不影响 VL 主流程，失败静默置空）
+    ocr_text = ""
     try:
-        from app.services.vl_model import vl_model
-        result = vl_model.describe_image_v2(image_bytes)
+        from app.services.ocr import ocr_manager
+        if ocr_manager.is_available():
+            ocr_text = ocr_manager.ocr_text_from_bytes(image_bytes)
+    except Exception:
+        pass
+
+    try:
+        from app.services.vl_model import vl_model, select_vl_pair
+        provider_id, _ = select_vl_pair()
+        result = vl_model.verify_image(image_bytes)
         description = result.get('description', '')
         reasoning = result.get('reasoning', '')
         if description.startswith('⚠️'):
             return jsonify({"status": "error", "error": description})
-        return jsonify({"status": "ok", "data": {"description": description, "reasoning": reasoning}})
+        return jsonify({"status": "ok", "data": {
+            "description": description,
+            "reasoning": reasoning,
+            "ocr": ocr_text,
+            "provider": provider_id,
+            "verifier_desc": result.get('verifier_desc', ''),
+            "consistent": result.get('consistent', True),
+            "note": result.get('note', ''),
+        }})
     except Exception as e:
         return jsonify({"status": "error", "error": f"VL 分析失败: {str(e)[:200]}"})
 

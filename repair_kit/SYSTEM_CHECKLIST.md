@@ -210,3 +210,5 @@ _(6/6 verified automatically)_
 **Verification rate**: 133/137 auto-verified (97%)
 
 > Round-014 note: /admin/vl_test route added (multipart image -> description+reasoning).
+
+> Round-015 note: image sampling is OCR-first with [source] tags; verify_image cross-model; auto VL resolves strongest provider.

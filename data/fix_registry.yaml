@@ -732,3 +732,29 @@ fixes:
       - type: grep
         file: tests/test_regression.py
         pattern: "test_vl_describe_image_v2_content_and_reasoning"
+
+
+  - id: FIX-2026-09-09-022
+    title: "VL 识别可靠性：OCR ground-truth + 最强provider + 交叉验证"
+    severity: high
+    rationale: >
+      mimo 等弱 VL 可能自信读错文本/数字。修复：图片抽检 OCR-first（OCR 命中
+      即确定性文本，不再调弱 VL）；OCR-empty 走 verify_image（primary + 按强度
+      序候选 verifier 数字集交叉，不一致→需人工复核）；auto 解析最强有 key
+      provider；vl_test 返回 OCR 对照。不可回退为纯单模型 VL 读数。
+    checks:
+      - type: grep
+        file: app/services/vl_model.py
+        pattern: "VL_STRENGTH"
+      - type: grep
+        file: app/services/vl_model.py
+        pattern: "def verify_image"
+      - type: grep
+        file: app/services/ocr.py
+        pattern: "def ocr_text_from_bytes"
+      - type: grep
+        file: app/services/file_processing.py
+        pattern: "ocr_manager.ocr_text_from_bytes"
+      - type: grep
+        file: tests/test_regression.py
+        pattern: "test_vl_verify_image_cross_model_mismatch"

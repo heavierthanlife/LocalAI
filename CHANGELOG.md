@@ -8,6 +8,24 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — VL 识别可靠性：OCR ground-truth + 最强 provider + 交叉验证（FIX-2026-09-09-022）
+
+### Changed
+- **VL provider 质量排序**：auto 解析 dashscope → nvidia → mimo（`VL_STRENGTH`）；显式 pin 尊重但受 OCR+verifier 守卫
+
+### Added
+- **OCR ground-truth 层**：`ocr.py ocr_text_from_bytes`；图片抽检 OCR-first（确定性读文本/数字，命中即不再调弱 VL）；OCR-empty 子集才走 VL
+- **`verify_image()` 交叉验证**：primary（当前激活）+ 按强度序候选 verifier（数字集/长度一致性比对，容忍坏 key 顺延）；无第二 key 单模型标注
+- **不静默丢**：抽检行带 `[来源]` 标签（OCR / VL识别 / VL+复核 / 需人工复核 / 无法识别），无法识别显式标注
+- **`/admin/vl_test` 升级**：响应含 `ocr/provider/verifier_desc/consistent/note`；前端并列展示 OCR 识别文字 + VL 描述 + 一致/复核徽标 + 推理 + 复核文本——弱 VL 是否读对一眼可辨
+- 抽检入口守卫放宽：OCR 或 VL 任一可用即可跑（VL 熔断不再阻断 OCR 抽检）
+
+### regression: 128/128 tests passed · verify_fixes 105/105 · check_system 133/137
+- +4 VL 单测（select_vl_pair 排序 / 交叉数字不一致→复核 / 一致 / 无 verifier 单模型）
+- 容器实机：OCR 精确读出生成图 `12345.67`/`88000`；真实 verify_image：mimo 主读正确 → dashscope 401 → 顺延 nvidia 交叉一致（坏 key 容忍 PASS）
+
+---
+
 ## [2026-09-09] — admin VL 测试组件 404 修复 + 推理展示（FIX-2026-09-09-021）
 
 ### Fixed

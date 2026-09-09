@@ -111,18 +111,21 @@ def _trunc(s, n):
 
 
 def _describe_sampled_images(items, filename):
-    """Describe a sampled list of (image_bytes, anchor) with batched multi-image
-    VL calls (VL_BATCH default 5) across a bounded thread pool (VL_PARALLEL=2).
-    Returns (description_lines, sample_info_rows).
+    """Describe a sampled list of (image_bytes, anchor) — OCR-first + VL fallback.
 
-    items: list of dicts {blob, chapter, prev, next, prompt}
+    FIX-2026-09-09-022: 文本/数字密集图像先跑 EasyOCR（确定性 ground-truth），
+    OCR 命中即用 OCR 文本（来源=OCR，不再调用弱 VL）。OCR 为空（照片/图表等）
+    才对 OCR-empty 子集走 verify_image（primary=最强 provider + verifier 交叉，
+    数字集不一致 → 来源=需人工复核）。不再静默丢无法识别的样本（→ 无法识别）。
+
+    Returns (description_lines, sample_info_rows):
+      rows: [{seq, chapter, prev, next, source, desc}]  desc 带 [来源] 前缀标签。
     """
     import random
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     max_img = int(os.getenv('VL_MAX_IMAGES_PER_FILE', '20'))
     parallel = int(os.getenv('VL_PARALLEL', '2'))
-    batch = int(os.getenv('VL_BATCH', '5'))
     total = len(items)
     chosen = random.sample(items, min(max_img, total))
 
@@ -130,49 +133,89 @@ def _describe_sampled_images(items, filename):
     rows = []
     lock = threading.Lock()
 
-    def _run_batch(batch_items, base_seq):
-        """One multi-image VL call; returns list of per-item results."""
-        if _vl_broken:
-            return [None] * len(batch_items)
-        blobs = [it['blob'] for it in batch_items]
-        descs = vl_model.describe_images_batch(
-            blobs, '请逐一描述下列每张图片。每张图严格用单独一行，行首是序号：图1、图2、…，'
-                   '然后是本图内容摘要（40字内，含主要文字/数字）。不要添加任何多余段落。'
-                   '如果某张图看不清，该行写：图N：无法识别。')
-        out = []
-        for i, it in enumerate(batch_items):
-            desc = (descs[i] if descs else None)
-            if desc and not desc.startswith('⚠'):
-                _vl_note_success()
-                out.append({'seq': base_seq + i, 'chapter': it.get('chapter', ''),
-                            'prev': it.get('prev', ''), 'next': it.get('next', ''), 'desc': desc})
-            elif descs is None:
-                # whole API call failed — counts toward the breaker
+    _SRC_TAG = {'OCR': '[OCR]', 'VL识别': '[VL识别]', 'VL+复核': '[VL+复核]',
+                '需人工复核': '[需人工复核]', '无法识别': '[无法识别]'}
+
+    def _row(seq, it, source, desc):
+        tag = _SRC_TAG.get(source, f'[{source}]')
+        body = f'{tag} {desc}' if desc else tag
+        return {'seq': seq, 'chapter': it.get('chapter', ''),
+                'prev': it.get('prev', ''), 'next': it.get('next', ''),
+                'source': source, 'desc': body}
+
+    # Pass 1 — OCR ground-truth（确定性，优先）
+    from app.services.ocr import ocr_manager
+    ocr_ok = ocr_manager.is_available()
+    resolved = []   # (seq, item, source, desc)
+    need_vl = []    # (seq, item)
+
+    def _ocr_one(seq, it):
+        try:
+            txt = ocr_manager.ocr_text_from_bytes(it.get('blob', b''))
+        except Exception:
+            txt = ''
+        return seq, it, (txt or '').strip()
+
+    if ocr_ok:
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            futs = [pool.submit(_ocr_one, i + 1, it) for i, it in enumerate(chosen)]
+            for fut in as_completed(futs):
+                seq, it, txt = fut.result()
+                if txt:
+                    with lock:
+                        resolved.append((seq, it, 'OCR', _trunc(txt, 300)))
+                else:
+                    with lock:
+                        need_vl.append((seq, it))
+    else:
+        need_vl = [(i + 1, it) for i, it in enumerate(chosen)]
+
+    # Pass 2 — VL on OCR-empty only（verify_image：primary + verifier 交叉）
+    if need_vl and _vl_available():
+        def _vl_one(seq, it):
+            try:
+                res = vl_model.verify_image(it.get('blob', b''),
+                                            prompt=it.get('prompt') or None)
+            except Exception as e:
+                logger.warning(f"VL verify failed for sample {seq}: {e}")
                 _vl_note_failure()
-                out.append(None)
-            else:
-                # model returned empty/unparseable for this image — API OK, skip silently
-                out.append(None)
-        return out
+                return seq, it, '无法识别', ''
+            desc = (res.get('description') or '').strip()
+            if desc.startswith('⚠') or not desc:
+                _vl_note_failure()
+                if _vl_broken:
+                    return seq, it, '无法识别', ''
+                return seq, it, '无法识别', ''
+            _vl_note_success()
+            verifier_desc = (res.get('verifier_desc') or '').strip()
+            if res.get('consistent') is False:
+                return seq, it, '需人工复核', f"{desc} ｜复核差异: {res.get('note') or '数字不一致'}（另一模型: {_trunc(verifier_desc, 80)}）"
+            note = res.get('note') or ''
+            if verifier_desc and res.get('consistent') is not False:
+                return seq, it, 'VL+复核', _trunc(desc, 300)
+            return seq, it, 'VL识别', _trunc(desc, 300)
 
-    batches = [chosen[i:i + batch] for i in range(0, len(chosen), batch)]
-    with ThreadPoolExecutor(max_workers=parallel) as pool:
-        futures = [pool.submit(_run_batch, b, i * batch + 1) for i, b in enumerate(batches)]
-        for fut in as_completed(futures):
-            res = fut.result() or []
-            with lock:
-                for r in res:
-                    if r is None:
-                        continue
-                    rows.append(r)
-                    lines.append(
-                        f"[抽检图片{r['seq']}/{len(chosen)} 位置:{_trunc(r.get('chapter', ''), 40)}]: {r['desc']}")
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            futs = [pool.submit(_vl_one, seq, it) for seq, it in need_vl]
+            for fut in as_completed(futs):
+                seq, it, source, desc = fut.result()
+                with lock:
+                    resolved.append((seq, it, source, desc))
+    else:
+        # 无 VL 可用：OCR-empty 样本标记无法识别（不静默丢）
+        for seq, it in need_vl:
+            resolved.append((seq, it, '无法识别', ''))
 
-    rows.sort(key=lambda r: r['seq'])
+    resolved.sort(key=lambda r: r[0])
+    for seq, it, source, desc in resolved:
+        row = _row(seq, it, source, desc)
+        rows.append(row)
+        lines.append(f"[抽检图片{seq}/{len(chosen)} 位置:{_trunc(row.get('chapter', ''), 40)}]: {row['desc']}")
+
     if total > len(chosen):
         lines.append(f"[图片抽检说明] 本文件共 {total} 张图片，随机抽检 {len(chosen)} 张；其余 {total - len(chosen)} 张未逐一识别以控制耗时。")
-    if _vl_broken and not lines:
-        lines.append("[图片抽检说明] VL 连续/累计失败已熔断，未识别图片内容。")
+    if _vl_broken and not rows:
+        lines.append("[图片抽检说明] VL 连续/累计失败已熔断；OCR 无法识别的图像未做视觉描述。")
     return lines, rows
 
 
@@ -186,7 +229,13 @@ def describe_images_in_file(file_bytes, filename, page_texts=None):
       sample_info: [{'seq','chapter','prev','next','desc'}, ...] for the
                    report's 图片随机抽检说明 section.
     """
-    if not _vl_available():
+    # FIX-2026-09-09-022: OCR 是独立确定性层——VL 不可用时 OCR 抽检仍可跑
+    try:
+        from app.services.ocr import ocr_manager as _ocr
+        _ocr_ok = _ocr.is_available()
+    except Exception:
+        _ocr_ok = False
+    if not (_ocr_ok or _vl_available()):
         return "", []
     _vl_reset_file()
     ext = os.path.splitext(filename)[1].lower()

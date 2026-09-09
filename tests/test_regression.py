@@ -1,4 +1,4 @@
-"""Regression tests — verify known bug fixes don't silently regress.
+﻿"""Regression tests — verify known bug fixes don't silently regress.
 
 These tests encode invariants from permanently-fixed bugs.
 If any test fails, the corresponding fix has been accidentally undone.
@@ -1295,3 +1295,75 @@ def test_vl_describe_image_v2_unavailable(monkeypatch):
     out = vm.vl_model.describe_image_v2(b'fake-image-bytes')
     assert out['description'].startswith('⚠️'), out['description']
     assert out['reasoning'] == ''
+
+
+def test_vl_select_vl_pair_verifier_ordering(monkeypatch):
+    """select_vl_pair: primary 用激活 provider，verifier = 最强不同有 key 的 provider。"""
+    import os
+    from app.services import vl_model as vm
+
+    # primary=mimo（显式/激活），dashscope+nvidia 都有 key → verifier=dashscope（最强）
+    monkeypatch.setattr(vm, '_get_active_vl_config',
+                        lambda: {'provider_id': 'mimo', 'api_key_valid': True})
+    for k in ('DASHSCOPE_API_KEY', 'NVIDIA_API_KEY', 'MIMO_API_KEY'):
+        os.environ.pop(k, None)
+    os.environ['DASHSCOPE_API_KEY'] = 'd1'
+    os.environ['NVIDIA_API_KEY'] = 'n1'
+    primary, verifier = vm.select_vl_pair()
+    assert primary == 'mimo'
+    assert verifier == 'dashscope', f"应取最强不同 provider, got {verifier}"
+
+    # 只有 mimo 有 key → verifier 空
+    os.environ.pop('DASHSCOPE_API_KEY', None)
+    os.environ.pop('NVIDIA_API_KEY', None)
+    primary, verifier = vm.select_vl_pair()
+    assert primary == 'mimo'
+    assert verifier == '', f"无第二 key 应空, got {verifier}"
+
+    # primary=dashscope，只有 nvidia 另一 key → verifier=nvidia
+    monkeypatch.setattr(vm, '_get_active_vl_config',
+                        lambda: {'provider_id': 'dashscope', 'api_key_valid': True})
+    os.environ['NVIDIA_API_KEY'] = 'n1'
+    primary, verifier = vm.select_vl_pair()
+    assert primary == 'dashscope'
+    assert verifier == 'nvidia'
+
+
+def test_vl_verify_image_cross_model_mismatch(monkeypatch):
+    """verify_image：两模型数字集不一致 → consistent False + 需人工复核信号。"""
+    monkeypatch.setenv('NVIDIA_API_KEY', 'n1')
+    from app.services import vl_model as vm
+    monkeypatch.setattr(vm.vl_model, 'describe_image_v2',
+                        lambda b, prompt=None: {'description': '报价 12345.67 元，日期 2026-09-01', 'reasoning': ''})
+    monkeypatch.setattr(vm.vl_model, '_call_provider',
+                        lambda pid, b, prompt=None: {'description': '报价 99999.99 元，日期 2026-09-01', 'reasoning': ''})
+    monkeypatch.setattr(vm, 'select_vl_pair', lambda: ('mimo', 'dashscope'))
+    out = vm.vl_model.verify_image(b'fake')
+    assert out['consistent'] is False, f"数字不一致应判复核: {out}"
+    assert '12345' in out['description'] and '99999' in out['verifier_desc']
+
+
+def test_vl_verify_image_cross_model_consistent(monkeypatch):
+    """verify_image：两模型数字一致 → consistent True（VL+复核）。"""
+    monkeypatch.setenv('NVIDIA_API_KEY', 'n1')
+    from app.services import vl_model as vm
+    monkeypatch.setattr(vm.vl_model, 'describe_image_v2',
+                        lambda b, prompt=None: {'description': '合同金额 88000 元', 'reasoning': ''})
+    monkeypatch.setattr(vm.vl_model, '_call_provider',
+                        lambda pid, b, prompt=None: {'description': '合同总价 88000 元整', 'reasoning': ''})
+    monkeypatch.setattr(vm, 'select_vl_pair', lambda: ('mimo', 'nvidia'))
+    out = vm.vl_model.verify_image(b'fake')
+    assert out['consistent'] is True, out
+    assert out['note']
+
+
+def test_vl_verify_image_no_verifier_single_model(monkeypatch):
+    """verify_image：无第二 provider → 单模型，note 说明。"""
+    from app.services import vl_model as vm
+    monkeypatch.setattr(vm.vl_model, 'describe_image_v2',
+                        lambda b, prompt=None: {'description': '一张凭证', 'reasoning': ''})
+    monkeypatch.setattr(vm, 'select_vl_pair', lambda: ('mimo', ''))
+    out = vm.vl_model.verify_image(b'fake')
+    assert out['consistent'] is True
+    assert '单模型' in out['note']
+
