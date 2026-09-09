@@ -348,6 +348,45 @@ def get_skill_audit():
         logger.error(f"Skill audit failed: {e}")
         return jsonify({"error": "审计分析失败，请稍后重试"}), 500
 
+@knowledge_bp.route('/knowledge_lab/feedback', methods=['POST'])
+def submit_knowledge_feedback():
+    """FIX-2026-09-09-023: 技能文件点赞/点踩此前 404（无此路由）。
+    Payload: {file_id, source, rating: 1|-1} → 落 user_feedback + 训练日志。"""
+    data = request.get_json(silent=True) or {}
+    file_id = data.get('file_id', '')
+    source = data.get('source', 'skill')
+    rating = data.get('rating')
+    if not file_id or rating is None:
+        return jsonify({"success": False, "error": "缺少必填参数"}), 400
+    if rating not in (-1, 1):
+        return jsonify({"success": False, "error": "rating 必须为 -1 或 1"}), 400
+    user_id = session.get('user_id', '')
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_feedback (user_id, source, target_id, rating)
+                    VALUES (%s, %s, %s, %s)
+                """, (user_id or '', source, str(file_id), rating))
+                conn.commit()
+        try:
+            from app.services.training_logger import log_interaction
+            _rating_map = {1: 5, -1: 1}
+            log_interaction(
+                thread_id=f"skillfb_{str(file_id)[:36]}",
+                user_msg=f"技能反馈: file_id={file_id} source={source}",
+                assistant_response=f"用户评分: {rating}",
+                rating=_rating_map.get(rating, 3),
+                source='skill_feedback',
+            )
+        except Exception:
+            logger.warning("Failed to log skill feedback to training", exc_info=True)
+        return jsonify({"success": True, "message": "感谢反馈!"})
+    except Exception as e:
+        logger.error(f"Skill feedback error: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @knowledge_bp.route('/admin/skill_merge', methods=['POST'])
 def merge_skills():
     """Merge two similar skills."""

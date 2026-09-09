@@ -352,6 +352,7 @@ def check_typos_endpoint():
 
 
 @batch_bp.route('/plagiarism/compare', methods=['POST'])
+@batch_bp.route('/batch/plagiarism/compare', methods=['POST'])
 def plagiarism_compare():
     """Plagiarism mode: two-file comparison (FIX-016 后续).
 

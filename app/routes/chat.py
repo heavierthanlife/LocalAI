@@ -983,6 +983,15 @@ def set_image_analysis():
     session['analyze_images'] = enabled
     return jsonify({"success": True})
 
+
+@chat_bp.route('/set_video_analysis', methods=['POST'])
+def set_video_analysis():
+    """FIX-2026-09-09-023: 前端视频分析开关此前 404（无此路由）。镜像图片开关。"""
+    data = request.get_json()
+    enabled = data.get('enabled', True)
+    session['analyze_videos'] = enabled
+    return jsonify({"success": True})
+
 @chat_bp.route('/search_chat', methods=['GET'])
 def search_chat():
     if session.get('consent_value', 0) != 1:

@@ -2774,18 +2774,19 @@ let currentProjectName = '';
         if (!confirm(`检测到新上传的文件与以下 ${overlaps.length} 个同分类技能高度相似，是否合并？\n\n${msg}\n\n选择「确定」合并，「取消」忽略`)) return;
         // Merge the top overlap into the new file
         const top = overlaps[0];
-        fetch('/admin/skill_supersession/respond', {
+        // FIX-2026-09-09-023: 此前 POST /admin/skill_supersession/respond 无此路由（404）。
+        // 合并能力在 /admin/skill_merge，响应用 {status:'ok'/'failed'}。
+        fetch('/admin/skill_merge', {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                action: 'merge',
                 keep_id: newFileId,
                 merge_id: top.id,
                 source: sourceTable || 'company_knowledge_base'
             })
         }).then(r => r.json()).then(data => {
-            if (data.success) showToast(`✅ 已与「${top.name}」合并`, 'success', 3000);
+            if (data.status === 'ok' || data.success) showToast(`✅ 已与「${top.name}」合并`, 'success', 3000);
             else showToast('❌ 合并失败: ' + (data.error || ''), 'error', 5000);
         }).catch(() => showToast('❌ 合并请求失败', 'error', 3000));
     }
