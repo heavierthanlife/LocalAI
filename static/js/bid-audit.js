@@ -3,7 +3,6 @@
     var _auditFunctionLabels = {
         rule_extraction: '规则提取',
         compliance_check: '合规审查',
-        typo_detection: '错别字检测',
         quote_anomaly: '报价异常',
         relationship_extraction: '关系分析',
         ai_doc_review: 'AI文档审查',
@@ -18,9 +17,6 @@
         compliance_check: [
             {key: 'critical', label: '严重违规≥', type: 'int', default: 1},
             {key: 'violation', label: '一般违规≥', type: 'int', default: 3}
-        ],
-        typo_detection: [
-            {key: 'penalty_per_10k', label: '每万字扣分', type: 'int', default: 5}
         ],
         quote_anomaly: [
             {key: 'same_rate', label: '雷同报价阈值', type: 'float', default: 0.05},

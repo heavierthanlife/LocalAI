@@ -5,10 +5,10 @@
       "投标文件_商务技术标.docx"
     ],
     "n_bidders": 2,
-    "date": "2026-09-08",
-    "note": "FIX-2026-09-07-QA-C4 刷新: contact 改真实比对, relationship 真 skip, tech_seal 真检测, bidder_count 本地"
+    "date": "2026-09-09",
+    "note": "FIX-2026-09-09-027: typo/economic_error_similar 系统删除 (46->45)"
   },
-  "composite_score": 19.0,
+  "composite_score": 16.1,
   "warning_level": "◇ 正常",
   "indicators": {
     "file_attr_lasteditor_same": {
@@ -40,11 +40,6 @@
       "score": 0,
       "skipped": false,
       "result": "√ 未发现联系人雷同。"
-    },
-    "economic_error_similar": {
-      "score": 0.0,
-      "skipped": false,
-      "result": "√ 未发现文本质量问题。"
     },
     "bid_ip_same": {
       "score": 0.0,
@@ -134,7 +129,7 @@
     "high_price_abnormal": {
       "score": 20,
       "skipped": false,
-      "result": "▲ 发现2个投标单位报价疑义。最高风险评分90.0。"
+      "result": "▲ 发现2个投标单位报价疑义。最高风险评分93.0。"
     },
     "extension_abnormal": {
       "score": 0.0,
@@ -207,9 +202,9 @@
       "result": "○ 需外部数据源（交易平台/评标系统数据）"
     },
     "tech_seal_check": {
-      "score": 30,
-      "skipped": false,
-      "result": "▲ 发现 2 份投标文件暗标身份泄露（技术标含可识别身份信息）。"
+      "score": 0,
+      "skipped": true,
+      "result": "○ 跳过（未开启暗标违规检查）"
     },
     "expert_bidder_closeness": {
       "score": 0.0,
@@ -245,13 +240,15 @@
   "suspected": [
     {
       "name": "投标文件_价格标.docx",
-      "indicators_triggered": 2,
-      "score": 7.8
+      "indicators_triggered": 1,
+      "score": 8.1,
+      "hard_flag": false
     },
     {
       "name": "投标文件_商务技术标.docx",
-      "indicators_triggered": 2,
-      "score": 9.0
+      "indicators_triggered": 1,
+      "score": 9.3,
+      "hard_flag": false
     }
   ]
 }

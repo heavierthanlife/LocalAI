@@ -755,7 +755,6 @@ def _run_table_creation(cur: "PgCursor"):
         defaults = [
             ('rule_extraction', True, 40, 15.0, '{"min_extracted_rules": 5}'),
             ('compliance_check', True, 50, 25.0, '{"critical": 1, "violation": 3}'),
-            ('typo_detection', True, 60, 10.0, '{"penalty_per_10k": 5}'),
             ('quote_anomaly', True, 50, 20.0, '{"same_rate": 0.05, "drop": 0.15}'),
             ('relationship_extraction', True, 60, 10.0, '{"risk_signal_weight": 15}'),
             ('ai_doc_review', True, 50, 15.0, '{"min_chars": 500}'),
@@ -1006,30 +1005,6 @@ def _run_table_creation(cur: "PgCursor"):
     cur.execute("CREATE INDEX IF NOT EXISTS idx_entity_rel_source ON entity_relationships(source_entity)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_entity_rel_target ON entity_relationships(target_entity)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_entity_rel_type ON entity_relationships(relation_type)")
-
-    # ── Typo / misspelling detection results ──
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS typo_detection_results (
-            id              SERIAL PRIMARY KEY,
-            user_id         TEXT REFERENCES users(user_id),
-            task_id         TEXT NOT NULL,
-            doc_name        TEXT NOT NULL,
-            layer           TEXT NOT NULL,
-            suspect_text    TEXT NOT NULL,
-            context_snippet TEXT,
-            suggestions     JSONB DEFAULT '[]',
-            confidence      REAL DEFAULT 0,
-            position_start  INTEGER,
-            position_end    INTEGER,
-            is_daxie_error  BOOLEAN DEFAULT FALSE,
-            daxie_expected  TEXT,
-            daxie_actual    TEXT,
-            user_action     TEXT,
-            checked_at      TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_typo_results_task ON typo_detection_results(task_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_typo_results_layer ON typo_detection_results(layer)")
 
     # ── Relationship extraction risk summary (cross-document aggregated score) ──
     cur.execute("""
@@ -1283,3 +1258,6 @@ def _run_table_creation(cur: "PgCursor"):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_user_prompts_user_kind ON user_prompts(user_id, kind)")
+
+    # ── 已下线：错别字检测结果表（旧库幂等清理） ──
+    cur.execute("DROP TABLE IF EXISTS typo_detection_results")

@@ -130,15 +130,6 @@ DEFAULTS = {
     "relation_extraction_llm_fallback":  True,        # use LLM for relationship classification
     "relation_tianyancha_enabled":       False,       # 天眼查 API toggle
     "relation_tianyancha_api_key":       "",          # 天眼查 API key (encrypted at rest)
-
-    # ── Typo detection ──
-    "typo_chinese_enabled":       True,
-    "typo_english_enabled":       True,
-    "typo_numeric_enabled":       True,
-    "typo_daxie_enabled":         True,              # 大写金额 validation
-    "typo_auto_correct":          False,             # false = suggest only
-    "typo_diff_review_enabled":   False,             # opt-in before/after diff mode
-    "typo_min_confidence":        0.70,              # minimum confidence to suggest
 }
 
 # Keys that are NOT part of factory presets (admin-only runtime choices)

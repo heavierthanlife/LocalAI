@@ -371,17 +371,6 @@ def detect_gangs(risk_matrix, files, threshold=15.0, min_members=2,
 # Sub-checker registry
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _run_typo_check(file_data, user_id, thread_id, project_id=None, audit=None):
-    try:
-        from app.services.typo_detector import detect_typos_batch, save_typo_results as save_typo
-        results = detect_typos_batch(file_data, audit=audit)
-        save_typo(user_id, thread_id, results)
-        return results
-    except Exception as e:
-        logger.warning(f"Typo detection failed (non-blocking): {e}")
-        return None
-
-
 def _run_relationship_check(file_data, user_id, thread_id, project_id=None, audit=None):
     try:
         from app.services.relationship_extractor import (
@@ -412,7 +401,6 @@ def _run_quote_check(file_data, user_id, thread_id, project_id=None, audit=None)
 
 # Registry: add a new checker = one line here + one HTML section method
 SUB_CHECKERS = {
-    'typo': _run_typo_check,
     'relationship': _run_relationship_check,
     'quote': _run_quote_check,
 }
@@ -689,7 +677,7 @@ def build_pair_report_html(file_data, pairs, risk_matrix):
 
 
 def build_full_report_html(file_data, pairs, risk_matrix,
-                           typo_results=None, rel_report=None, quote_result=None,
+                           rel_report=None, quote_result=None,
                            ai_analysis_html=""):
     """Build the complete HTML report document.
 
@@ -751,37 +739,6 @@ th{{background:#f1f5f9}}.highlight{{background:#fef9c3}}</style></head><body>
         if p['blocks']:
             html_out += f'<p>匹配段落数: {len(p["blocks"])} · 总匹配字符: {sum(b["size"] for b in p["blocks"])}</p>'
         html_out += '</div>'
-
-    # Typo section
-    if typo_results:
-        total_typos = sum(r.total_suspects for r in typo_results.values())
-        total_crit = sum(r.critical_count for r in typo_results.values())
-        if total_typos > 0:
-            html_out += '<h2>📝 错别字检测</h2>'
-            html_out += (
-                f'<div class="card"><p><strong>疑似错别字:</strong> {total_typos} 处 | '
-                f'<strong>严重:</strong> {total_crit} 处</p>'
-                '<table style="font-size:0.85rem;">'
-                '<tr><th>文件</th><th>层次</th><th>疑似文本</th><th>建议</th><th>置信度</th><th>严重性</th></tr>'
-            )
-            for doc_name, report in typo_results.items():
-                for f in report.findings[:30]:
-                    sev_class = 'risk-high' if f.severity == 'critical' else ('risk-warn' if f.severity == 'warning' else '')
-                    html_out += (
-                        f'<tr><td>{html.escape(doc_name[:20])}</td>'
-                        f'<td>{f.layer}</td>'
-                        f'<td><code>{html.escape(f.suspect_text[:40])}</code></td>'
-                        f'<td>{html.escape(", ".join(f.suggestions[:3]) if f.suggestions else "—")}</td>'
-                        f'<td>{f.confidence:.0%}</td>'
-                        f'<td class="{sev_class}">{f.severity}</td></tr>'
-                    )
-            html_out += '</table>'
-            if total_typos > 30:
-                html_out += (
-                    f'<p style="color:#64748b;font-size:.85rem;">'
-                    f'（仅显示前30项，共{total_typos}项）</p>'
-                )
-            html_out += '</div>'
 
     # Relationship section
     if rel_report and rel_report.red_flags:

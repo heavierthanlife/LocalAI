@@ -67,7 +67,7 @@ def start_audit():
     user_id = session.get('user_id')
 
     # Validate functions
-    all_funcs = ['rule_extraction', 'compliance_check', 'typo_detection', 'quote_anomaly',
+    all_funcs = ['rule_extraction', 'compliance_check', 'quote_anomaly',
                  'relationship_extraction', 'ai_doc_review', 'style_analysis']
     if not enabled_functions:
         # Load defaults from config

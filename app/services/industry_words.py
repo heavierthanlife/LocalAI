@@ -5,7 +5,6 @@ Purpose: in the same-industry tender, generic industry vocabulary (设备/施工
 evidence. These tables discount such generic words in:
   - text/keyword similarity stop-words merging
   - paragraph "surprise" scoring (near-verbatim substantive segments)
-  - cross-file shared-typo guard (domain word = legitimate usage)
 
 Data files: data/industry_words/{engineering,goods,services}.txt
   - two layers per file: `# === 国家标准词 ===` (official classification from

@@ -269,27 +269,6 @@ def admin_quote_anomaly_detail(id):
     return ok(dict(row))
 
 
-# ── Typo detection admin routes ──
-
-@admin_bp.route('/admin/typo_results', methods=['GET'])
-@admin_required
-def admin_typo_results():
-    """List stored typo detection results."""
-    limit = request.args.get('limit', 50, type=int)
-    offset = request.args.get('offset', 0, type=int)
-    with get_db_connection() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT t.*, u.username FROM typo_detection_results t
-                LEFT JOIN users u ON t.user_id = u.user_id
-                ORDER BY t.checked_at DESC LIMIT %s OFFSET %s
-            """, (limit, offset))
-            results = cur.fetchall()
-            cur.execute("SELECT COUNT(*) as total FROM typo_detection_results")
-            total = cur.fetchone()['total']
-    return ok({"results": [dict(r) for r in results], "total": total})
-
-
 # ── Relationship extraction admin routes ──
 
 @admin_bp.route('/admin/relationship_results', methods=['GET'])

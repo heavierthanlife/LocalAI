@@ -941,9 +941,6 @@ def test_clearance_baseline_classified_normal():
     composite = snap['composite_score']
     # FIX-015 校准后：正常基线复合指数应 <30（不再误报中等预警）
     assert 0 < composite < 30, f"baseline composite {composite} 应 <30 (正常): 过度报警"
-    # typo 指标不再误报
-    assert snap['indicators']['economic_error_similar']['score'] == 0.0, \
-        "正常文档 typo 指标不应误报"
 
 
 # ── 剽窃检测模式 (Plagiarism Mode, FIX-016 后续) ──

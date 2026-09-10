@@ -22,7 +22,6 @@ AUDIT_REPORTS_DIR = DATA_DIR / 'audit_reports'
 FUNCTION_LABELS = {
     'rule_extraction': 'Rule Extraction',
     'compliance_check': 'Compliance Check',
-    'typo_detection': 'Typo Detection',
     'quote_anomaly': 'Quote Anomaly',
     'relationship_extraction': 'Relationship Analysis',
     'ai_doc_review': 'AI Document Review',
@@ -32,7 +31,6 @@ FUNCTION_LABELS = {
 FUNCTION_LABELS_ZH = {
     'rule_extraction': '规则提取',
     'compliance_check': '合规审查',
-    'typo_detection': '错别字检测',
     'quote_anomaly': '报价异常',
     'relationship_extraction': '关系分析',
     'ai_doc_review': 'AI文档审查',
@@ -84,15 +82,6 @@ def _get_scoring_rationale(func_name: str, findings: dict,
         fail_count = warnings + violations + critical
         if fail_count > 0:
             deductions.append({'reason': f'警告{warnings}项、违规{violations}项、严重{critical}项', 'amount': round(base - actual, 1)})
-
-    elif func_name == 'typo_detection':
-        flist = findings.get('findings', [])
-        count = len(flist) if isinstance(flist, list) else findings.get('total_findings', 0)
-        from app.services.audit_engine import SCORING_FUNCTIONS
-        actual = SCORING_FUNCTIONS[func_name](findings, text_length or 500)
-        formula = f'基准分{base}分 - (每万字错别字数 × 扣分权重)'
-        if count > 0:
-            deductions.append({'reason': f'发现{count}个错别字', 'amount': round(base - actual, 1)})
 
     elif func_name == 'quote_anomaly':
         sev = findings.get('severity_index', 0)
@@ -315,9 +304,6 @@ def _risk_detail(fr: dict) -> str:
     if status == 'skipped':
         return 'File skipped — no text content'
     func_name = fr.get('function_name', '')
-    if func_name == 'typo_detection':
-        count = findings.get('total_findings', 0)
-        return f'{count} typo(s) found'
     if func_name == 'compliance_check':
         summary = findings.get('summary', {})
         critical = summary.get('critical', 0)
@@ -527,17 +513,6 @@ def _write_function_findings(doc, func_name: str, findings: dict):
                 doc.add_paragraph(
                     f"    - [{r.get('verdict', '')}] {r.get('description', str(r))[:150]}",
                     style='List Bullet')
-
-    elif func_name == 'typo_detection':
-        findings_list = findings.get('findings', [])
-        if findings_list:
-            doc.add_paragraph(f"  Found {len(findings_list)} typo(s):")
-            for f in findings_list[:10]:
-                if isinstance(f, dict):
-                    doc.add_paragraph(
-                        f"    - {f.get('original', '')} -> {f.get('corrected', '')} "
-                        f"[{f.get('type', '')}] {f.get('context', '')[:50]}",
-                        style='List Bullet')
 
     elif func_name == 'quote_anomaly':
         flags = findings.get('flags', [])
@@ -749,8 +724,6 @@ def _summarize_findings(func_name: str, findings: dict) -> str:
     if func_name == 'compliance_check':
         s = findings.get('summary', {})
         return f"通过:{s.get('pass',0)} 警告:{s.get('warning',0)} 违规:{s.get('violation',0)} 严重:{s.get('critical',0)}"
-    if func_name == 'typo_detection':
-        return f"发现{findings.get('total_findings', 0)}个错别字 ({', '.join(findings.get('layers_run', []))})"
     if func_name == 'quote_anomaly':
         return f"严重度:{findings.get('severity_index', '?')}, 异常标志:{len(findings.get('flags', []))}"
     if func_name == 'relationship_extraction':

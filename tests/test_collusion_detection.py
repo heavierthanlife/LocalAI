@@ -7,7 +7,6 @@ Covers:
   - legitimate same-industry bidders NOT flagged
   - RiskScorer template-missing gate (no tender → text_sim contributes 0)
   - truncate_filename tiny-width fix (matrix headers were collapsing to ".docx")
-  - cross-file shared typo detection
 """
 
 import difflib
@@ -131,31 +130,6 @@ def test_truncate_filename_tiny_width_not_extension_only():
     short = truncate_filename(name, 8)
     assert short != ".docx", f"max_len=8 不应只剩扩展名: {short!r}"
     assert len(short) <= 8, f"截断后长度应 ≤8: {short!r}"
-
-
-# ── 5. 跨文件共享错别字 ─────────────────────────────────────────
-def test_find_shared_typos_cross_file():
-    """三家写同一错别字 → 检出；各家不同错别字 → 不共享。"""
-    from app.services.typo_detector import find_shared_typos, detect_typos_batch
-    docs = [
-        {"filename": "a.docx", "text": "双方签定合同后生效，签定补充协议需书面确认。"},
-        {"filename": "b.docx", "text": "中标后签定施工合同，逾期视为放弃。"},
-        {"filename": "c.docx", "text": "先签定框架协议，再按需签定订单。"},
-    ]
-    batch = detect_typos_batch(docs)
-    r = find_shared_typos(docs, ptype="engineering", precomputed=batch, min_confidence=0.70)
-    assert r["shared_typo_count"] >= 1, "共享错别字必须检出"
-    texts = {s["suspect_text"] for s in r["shared_typos"]}
-    assert "签定" in texts or any("签定" in s["suspect_text"] for s in r["shared_typos"])
-
-    docs2 = [
-        {"filename": "a.docx", "text": "质量检查合格证齐全，必须严格按照标准执行。"},
-        {"filename": "b.docx", "text": "工期紧任务重，应当合理安排施工计划。"},
-        {"filename": "c.docx", "text": "安全生产责任制落实到岗到人。"},
-    ]
-    batch2 = detect_typos_batch(docs2)
-    r2 = find_shared_typos(docs2, ptype="engineering", precomputed=batch2, min_confidence=0.70)
-    assert r2["shared_typo_count"] == 0, "无跨文件共享错别字时不应误报"
 
 
 # ── 6. 性能上限（FIX-2026-09-07-QA-C2）────────────────────────

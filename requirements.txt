@@ -190,17 +190,6 @@ chromadb==1.5.9
 # If not installed, falls back to regex-based extraction.
 # hanlp
 
-# Optional: Chinese typo detection
-#   pip install pycorrector
-# If not installed, falls back to domain dictionary + rule-based detection.
-# pycorrector
-
-# Optional: English spell checking for embedded English in Chinese docs
-#   pip install pyspellchecker
-# Or for speed: pip install symspellpy
-# If neither is installed, English layer is skipped.
-# pyspellchecker
-
 # Optional: 天眼查 API integration for company relationship verification
 # Requires API key — configure via admin panel (runtime_config)
 # No pip dependency; uses httpx (already included)

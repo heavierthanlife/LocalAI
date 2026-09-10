@@ -267,6 +267,12 @@
     "methods": [
       "GET"
     ],
+    "rule": "/admin/llm_providers/<pid>/models"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
     "rule": "/admin/notifications"
   },
   {
@@ -783,18 +789,6 @@
     "methods": [
       "GET"
     ],
-    "rule": "/admin/system_prompt"
-  },
-  {
-    "methods": [
-      "POST"
-    ],
-    "rule": "/admin/system_prompt"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
     "rule": "/admin/task_deposit"
   },
   {
@@ -915,12 +909,6 @@
     "methods": [
       "GET"
     ],
-    "rule": "/admin/typo_results"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
     "rule": "/admin/user_assets"
   },
   {
@@ -976,6 +964,12 @@
       "GET"
     ],
     "rule": "/admin/vl_status"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/admin/vl_test"
   },
   {
     "methods": [
@@ -1048,6 +1042,84 @@
       "POST"
     ],
     "rule": "/archive_session/<thread_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/config"
+  },
+  {
+    "methods": [
+      "PUT"
+    ],
+    "rule": "/audit/config"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/download/<int:run_id>/docx"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/download/<int:run_id>/xlsx"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/history/<int:project_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/audit/preflight"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/progress/<int:run_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/result/<int:run_id>"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/audit/running/<int:project_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/audit/start"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/batch/plagiarism/compare"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/batch/plagiarism/run"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/batch/plagiarism/status/<task_id>"
   },
   {
     "methods": [
@@ -1162,12 +1234,6 @@
       "GET"
     ],
     "rule": "/check_storage"
-  },
-  {
-    "methods": [
-      "POST"
-    ],
-    "rule": "/check_typos"
   },
   {
     "methods": [
@@ -1605,6 +1671,12 @@
     "methods": [
       "POST"
     ],
+    "rule": "/knowledge_lab/feedback"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
     "rule": "/knowledge_lab/generate_skill/<int:file_id>"
   },
   {
@@ -1660,6 +1732,12 @@
       "GET"
     ],
     "rule": "/llm_providers"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/llm_providers/<pid>/models"
   },
   {
     "methods": [
@@ -1779,7 +1857,55 @@
     "methods": [
       "POST"
     ],
+    "rule": "/plagiarism/run"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/plagiarism/status/<task_id>"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
     "rule": "/project_files/<int:file_id>/generate_skill"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/prompts/activate"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/prompts/default"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/prompts/delete"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/prompts/migrate_templates"
+  },
+  {
+    "methods": [
+      "GET"
+    ],
+    "rule": "/prompts/mine"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/prompts/save"
   },
   {
     "methods": [
@@ -1852,6 +1978,12 @@
       "POST"
     ],
     "rule": "/set_max_tokens"
+  },
+  {
+    "methods": [
+      "POST"
+    ],
+    "rule": "/set_video_analysis"
   },
   {
     "methods": [

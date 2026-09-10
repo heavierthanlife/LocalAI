@@ -222,3 +222,5 @@ _(6/6 verified automatically)_
 > Round-019: batch compare endpoints accept file_ids (large-file); async plagiarism_task + run/status routes.
 
 > Round-020: per-user prompts (user_prompts table, /prompts/* routes); immutable default; message templates moved to DB.
+
+> Round-021: typo detection subsystem removed entirely (46->45 indicators); /check_typos & /admin/typo_results gone; jieba retained.

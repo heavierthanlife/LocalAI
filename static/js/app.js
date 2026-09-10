@@ -10249,16 +10249,12 @@
     function initAdminResultViewers() {
         const quoteBtn = document.getElementById('sidebarQuoteAnomalyResultsBtn');
         const relBtn = document.getElementById('sidebarRelationshipResultsBtn');
-        const typoBtn = document.getElementById('sidebarTypoResultsBtn');
 
         if (quoteBtn) {
             quoteBtn.onclick = () => showResultHistoryModal('报价异常检测记录', '/admin/quote_anomaly_results', renderQuoteAnomalyHistory);
         }
         if (relBtn) {
             relBtn.onclick = () => showResultHistoryModal('关联关系分析记录', '/admin/relationship_results', renderRelationshipHistory);
-        }
-        if (typoBtn) {
-            typoBtn.onclick = () => showResultHistoryModal('错别字检测记录', '/admin/typo_results', renderTypoHistory);
         }
     }
 
@@ -10384,27 +10380,6 @@
         });
         html += '</details>';
         return html;
-    }
-
-    function renderTypoHistory(data, container) {
-        const results = data.results || [];
-        if (results.length === 0) { container.innerHTML = '<p>暂无错别字检测记录</p>'; return; }
-        let html = `<p>共 ${data.total||results.length} 条记录</p>`;
-        html += '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;">';
-        html += '<tr><th>ID</th><th>文档</th><th>层次</th><th>疑似文本</th><th>建议</th><th>置信度</th><th>严重性</th><th>时间</th><th>用户</th></tr>';
-        results.forEach(r => {
-            html += `<tr>`;
-            html += `<td>${escapeHtml(String(r.id))}</td><td>${escapeHtml((r.doc_name||'').substring(0,20))}</td>`;
-            html += `<td>${escapeHtml(r.layer||'')}</td>`;
-            html += `<td><code>${escapeHtml((r.suspect_text||'').substring(0,25))}</code></td>`;
-            html += `<td>${escapeHtml((r.suggestions||'[]').substring(0,30))}</td>`;
-            html += `<td>${((r.confidence||0)*100).toFixed(0)}%</td>`;
-            html += `<td>${escapeHtml(r.severity||'info')}</td>`;
-            html += `<td>${escapeHtml(String(r.checked_at||'')).substring(0,16)}</td>`;
-            html += `<td>${escapeHtml(r.username||'')}</td></tr>`;
-        });
-        html += '</table>';
-        container.innerHTML = html;
     }
 
     // ======================== Unified Bid Audit ========================

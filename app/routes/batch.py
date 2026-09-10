@@ -326,60 +326,6 @@ def extract_relationships_endpoint():
     })
 
 
-# ── Standalone typo detection endpoint ──
-
-@batch_bp.route('/check_typos', methods=['POST'])
-def check_typos_endpoint():
-    """Standalone endpoint: detect typos in a single document."""
-    if session.get('consent_value', 0) != 1:
-        return err("Consent not given", "FORBIDDEN", 403)
-    user_id = session.get('user_id')
-    if not user_id:
-        return err("Not logged in", "AUTH_REQUIRED", 401)
-
-    diff_mode = request.form.get('diff_mode', 'false').lower() == 'true'
-
-    docs = _collect_docs(max_files=1, min_files=1)
-    if not docs:
-        return err("No file uploaded / could not extract text", "VALIDATION_ERROR", 400)
-    _doc = docs[0]
-    text, fname = _doc['text'], _doc['filename']
-
-    from app.services.typo_detector import detect_typos, save_typo_results
-    from app.services.audit_logger import AuditLogger
-
-    _audit = AuditLogger("typo_detection", fname)
-    report = detect_typos(text, doc_name=fname, audit=_audit)
-
-    thread_id = session.get('thread_id', '')
-    save_typo_results(user_id, thread_id or str(uuid.uuid4()), {fname: report})
-    _audit.result(total=report.total_suspects, critical=report.critical_count,
-                  layers=','.join(report.layers_run))
-
-    result = {
-        "doc_name": fname,
-        "total_suspects": report.total_suspects,
-        "critical_count": report.critical_count,
-        "layers_run": report.layers_run,
-        "findings": [{
-            'layer': f.layer,
-            'suspect_text': f.suspect_text,
-            'suggestions': f.suggestions,
-            'confidence': f.confidence,
-            'context_snippet': f.context_snippet,
-            'severity': f.severity,
-            'is_daxie_error': f.is_daxie_error,
-            'daxie_expected': f.daxie_expected,
-            'daxie_actual': f.daxie_actual,
-        } for f in report.findings],
-    }
-
-    if diff_mode and report.diff_text:
-        result['diff_text'] = report.diff_text[:5000]
-
-    return ok(result)
-
-
 @batch_bp.route('/plagiarism/compare', methods=['POST'])
 @batch_bp.route('/batch/plagiarism/compare', methods=['POST'])
 def plagiarism_compare():

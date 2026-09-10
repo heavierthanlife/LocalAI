@@ -65,7 +65,7 @@ class TestAuditStart:
             json={
                 "folder_ids": [fid],
                 "project_id": pid,
-                "enabled_functions": ["typo_detection"],
+                "enabled_functions": ["quote_anomaly"],
             },
         )
         assert resp.status_code == 200

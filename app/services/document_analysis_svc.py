@@ -29,7 +29,7 @@ INDICATOR_WEIGHTS = {
     # 触发指标
     'same_machine_code': 0.10, 'same_file_code': 0.10, 'same_dongle': 0.10,
     'tech_section_similar': 0.10, 'contact_person_same': 0.04,
-    'economic_error_similar': 0.04, 'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
+    'bid_ip_same': 0.10, 'decrypt_ip_same': 0.10,
     'download_ip_same': 0.10, 'cross_file_code_same': 0.06,
     'cross_contact_same': 0.03,
     'file_attr_lasteditor_same': 0.10,  # FIX-2026-09-07-QA-C3: 同一最后编辑人硬信号
@@ -58,7 +58,7 @@ DEFAULT_INDICATOR_WEIGHT = 0.03
 # 每指标得分上限（归一化用）；超过视为已触发
 INDICATOR_SCORE_CAPS = {
     'same_machine_code': 30, 'same_file_code': 30, 'same_dongle': 30,
-    'tech_section_similar': 30, 'contact_person_same': 40, 'economic_error_similar': 15,
+    'tech_section_similar': 30, 'contact_person_same': 40,
     'bid_ip_same': 30, 'decrypt_ip_same': 30, 'download_ip_same': 30,
     'cross_file_code_same': 30, 'cross_contact_same': 40,
     'file_attr_lasteditor_same': 30,  # FIX-2026-09-07-QA-C3
@@ -216,11 +216,6 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
             from app.services.tech_seal_detector import detect_tech_seal_leak
             return {'results': detect_tech_seal_leak(file_data)}
 
-        elif name == 'typo':
-            from app.services.typo_detector import detect_typos_batch
-            results = detect_typos_batch(file_data)
-            return {'results': results}
-
         elif name == 'relationship':
             from app.services.relationship_extractor import extract_relationships
             report = extract_relationships(file_data)
@@ -340,13 +335,6 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             for i in range(n):
                 if file_data[i]['filename'] in files:
                     file_scores[i] += 10.0
-
-    typo_data = checker_data.get('typo', {})
-    if typo_data.get('results'):
-        for name, report in typo_data['results'].items():
-            for i in range(n):
-                if file_data[i]['filename'] == name:
-                    file_scores[i] += min(report.total_suspects * 0.5, 10)
 
     rel_data = checker_data.get('relationship', {})
     if rel_data.get('report') and hasattr(rel_data['report'], 'risk_score'):
@@ -490,41 +478,6 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 score = 0
                 result_text = "√ 未发现技术标暗标身份泄露。"
                 details = []
-            if skipped:
-                result_text = f"○ 跳过（{error_msg}）"
-
-        elif ind['checker'] == 'typo':
-            # FIX-2026-09-04-QA-B2: 错误雷同按"跨文件共享错别字"计分（围标信号），
-            # 总数只作参考。pycorrector 的随机误报不会跨文件逐字相同，被自然排除。
-            typos = typo_data.get('results', {})
-            if typos:
-                total = sum(r.total_suspects for r in typos.values())
-                critical = sum(r.critical_count for r in typos.values())
-                shared = {}
-                try:
-                    from app.services.typo_detector import find_shared_typos
-                    shared = find_shared_typos(file_data, ptype=ptype, precomputed=typos)
-                except Exception as e:
-                    logger.warning(f"find_shared_typos failed: {e}")
-                shared_count = shared.get('shared_typo_count', 0)
-                if shared_count > 0:
-                    score = min(shared_count * 10 + critical * 2, 15)
-                    result_text = (f"▲ 发现 {shared_count} 个跨文件共享错别字"
-                                   f"（疑似共同制作/抄袭）；文件内错别字共 {total} 处。")
-                    details = [
-                        {'错别字': s.get('suspect_text', ''),
-                         '出现文件': ', '.join(s.get('shared_in_files', [])),
-                         '置信度': f"{s.get('confidence', 0):.2f}"}
-                        for s in shared.get('shared_typos', [])[:10]
-                    ]
-                elif total > 0:
-                    result_text = f"○ 文件内发现 {total} 处错别字（其中严重{critical}处），但无跨文件共享，不作雷同信号。"
-                    details = [{'file': n, 'total': r.total_suspects, 'critical': r.critical_count}
-                              for n, r in typos.items() if r.total_suspects > 0][:10]
-                else:
-                    result_text = "√ 未发现文本质量问题。"
-            else:
-                result_text = "√ 文本质量检测未发现异常。"
             if skipped:
                 result_text = f"○ 跳过（{error_msg}）"
 

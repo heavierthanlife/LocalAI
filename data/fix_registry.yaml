@@ -569,12 +569,6 @@ fixes:
         file: app/services/file_processing.py
         pattern: "tokenize_for_tfidf\\(raw_text, stop_words=stop_words\\).split"
       - type: grep
-        file: app/services/typo_detector.py
-        pattern: "MAX_TYPO_FINDINGS"
-      - type: grep
-        file: app/services/typo_whitelist.py
-        pattern: "def is_allowed"
-      - type: grep
         file: app/services/quote_anomaly.py
         pattern: "def _is_price_like"
       - type: grep
@@ -862,3 +856,26 @@ fixes:
       - type: grep_not
         file: app/globals.py
         pattern: "def save_prompt"
+
+
+  - id: FIX-2026-09-09-027
+    title: "彻底删除错别字检测系统（误报：把正确常用词当错字）"
+    severity: high
+    rationale: >
+      手写混淆词表把正确常用词当可疑词逐次标记 → 每份标书数百假警，并污染
+      共享错别字/审计错字率。删除 typo_detector/typo_whitelist + 指标
+      economic_error_similar + /check_typos + /admin/typo_results + 审计
+      typo_detection + 图谱 typo 边 + DB 表；保留 jieba 与 relationship 独立启发式。
+    checks:
+      - type: grep_not
+        file: app/services/document_analysis_svc.py
+        pattern: "economic_error_similar"
+      - type: grep_not
+        file: app/services/indicator_defs.py
+        pattern: "economic_error_similar"
+      - type: grep_not
+        file: tests/fixtures/routes_snapshot.json
+        pattern: "/check_typos"
+      - type: grep_not
+        file: tests/fixtures/routes_snapshot.json
+        pattern: "/admin/typo_results"

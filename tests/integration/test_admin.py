@@ -357,21 +357,6 @@ class TestAdminQuoteAnomalyResults:
         assert data["total"] == 0
 
 
-class TestAdminTypoResults:
-    ROUTE = "/admin/typo_results"
-
-    def test_admin_required(self, auth_client):
-        resp = auth_client.get(self.ROUTE)
-        assert resp.status_code == 403
-
-    def test_returns_empty_list(self, admin_client):
-        resp = admin_client.get(self.ROUTE)
-        data = resp.get_json()
-        assert data["success"] is True
-        assert isinstance(data["results"], list)
-        assert data["total"] == 0
-
-
 class TestAdminRelationshipResults:
     ROUTE = "/admin/relationship_results"
 

@@ -48,7 +48,6 @@ def collusion_graph():
     _merge_entity_relationships(task_ids, nodes, edges)
     _merge_quote_anomalies(task_ids, nodes, edges)
     _merge_text_similarity(task_ids, nodes, edges, threshold)
-    _merge_typo_cross(task_ids, nodes, edges)
 
     return ok(to_graph_response(
         list(nodes.values()), list(edges.values()), 'collusion'
@@ -166,16 +165,6 @@ def _get_project_task_ids(project_id):
                     task_ids.update(r['task_id'] for r in cur.fetchall())
                 except Exception:
                     pass
-
-            try:
-                cur.execute("""
-                    SELECT t.task_id FROM typo_detection_results t
-                    INNER JOIN audit_runs ar ON ar.task_id = t.task_id
-                    WHERE ar.project_id = %s AND t.task_id IS NOT NULL
-                """, (project_id,))
-                task_ids.update(r['task_id'] for r in cur.fetchall())
-            except Exception:
-                pass
 
             if not task_ids:
                 cur.execute("SELECT user_id FROM projects WHERE id = %s", (project_id,))
@@ -297,46 +286,6 @@ def _merge_text_similarity(task_ids, nodes, edges, threshold):
                 weight = max(float(sim) / 100, 0.1) if sim else 0.5
                 edges[eid] = GraphEdge(
                     source=fa, target=fb, label='text_similar', weight=min(weight, 1.0),
-                )
-
-
-def _merge_typo_cross(task_ids, nodes, edges):
-    if not task_ids:
-        return
-    placeholders = ','.join(['%s'] * len(task_ids))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"SELECT doc_name, suspect_text FROM typo_detection_results "
-                f"WHERE task_id IN ({placeholders})",
-                task_ids,
-            )
-            rows = cur.fetchall()
-
-    doc_typos = {}
-    for row in rows:
-        dn = row['doc_name']
-        doc_typos.setdefault(dn, []).append(row['suspect_text'])
-
-    doc_names = list(doc_typos.keys())
-    for i in range(len(doc_names)):
-        for j in range(i + 1, len(doc_names)):
-            a_set = set(doc_typos[doc_names[i]])
-            b_set = set(doc_typos[doc_names[j]])
-            common = a_set & b_set
-            if common:
-                nid_a = f'file-{doc_names[i]}'
-                nid_b = f'file-{doc_names[j]}'
-                if nid_a not in nodes:
-                    nodes[nid_a] = GraphNode(id=nid_a, label=doc_names[i], type='document')
-                if nid_b not in nodes:
-                    nodes[nid_b] = GraphNode(id=nid_b, label=doc_names[j], type='document')
-
-                eid = f'{doc_names[i]}-{doc_names[j]}-typo_cross'
-                weight = min(len(common) * 0.1, 1.0)
-                edges[eid] = GraphEdge(
-                    source=doc_names[i], target=doc_names[j],
-                    label='collusion_signal', weight=weight,
                 )
 
 

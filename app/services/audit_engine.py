@@ -47,26 +47,6 @@ def _score_compliance_check(findings: dict) -> float:
     return (passed / len(results)) * 100
 
 
-def _score_typo_detection(findings: dict, text_length: int) -> float:
-    findings_list = findings.get('findings', [])
-    if not findings_list:
-        return 100.0
-    penalty = 5
-    try:
-        from app.database import get_db_connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT severity_thresholds FROM audit_config WHERE function_name = 'typo_detection'")
-                row = cur.fetchone()
-                if row and row[0]:
-                    penalty = row[0].get('penalty_per_10k', 5)
-    except Exception:
-        pass
-    per_10k = len(findings_list) / max(text_length / 10000, 0.01)
-    return max(0.0, 100 - per_10k * penalty)
-
-
 def _score_quote_anomaly(findings: dict) -> float:
     severity = findings.get('severity_index', 50)
     return max(0.0, 100 - severity)
@@ -127,7 +107,6 @@ def _score_timeline_compliance(findings: dict) -> float:
 SCORING_FUNCTIONS = {
     'rule_extraction': _score_rule_extraction,
     'compliance_check': _score_compliance_check,
-    'typo_detection': _score_typo_detection,
     'quote_anomaly': _score_quote_anomaly,
     'relationship_extraction': _score_relationship_extraction,
     'ai_doc_review': _score_ai_review,
@@ -293,19 +272,6 @@ def _call_function(func_name: str, text: str, doc_name: str, file_id: int,
         rules = rules_cache.get('rules', []) if rules_cache else []
         checker = ComplianceChecker()
         return checker.check(text, rules, doc_name, use_ai=True)
-
-    elif func_name == 'typo_detection':
-        from app.services.typo_detector import detect_typos
-        report = detect_typos(text, doc_name)
-        return {
-            'findings': [
-                {'type': f.layer, 'original': f.original, 'corrected': f.corrected,
-                 'context': f.context, 'severity': f.severity}
-                for f in report.findings
-            ],
-            'layers_run': report.layers_run,
-            'total_findings': len(report.findings),
-        }
 
     elif func_name == 'quote_anomaly':
         from app.services.quote_anomaly import check_quote_anomaly
@@ -581,10 +547,7 @@ def run_audit(run_id: int, folder_ids: list[int], enabled_functions: list[str],
                         findings = _call_function(func_name, text, filename, file_id, rules_cache)
                         if func_name == 'rule_extraction':
                             rules_cache = findings
-                        if func_name == 'typo_detection':
-                            score = SCORING_FUNCTIONS[func_name](findings, text_len)
-                        else:
-                            score = SCORING_FUNCTIONS[func_name](findings)
+                        score = SCORING_FUNCTIONS[func_name](findings)
                     except Exception as e:
                         logger.warning("Function %s failed on %s, retrying: %s", func_name, filename, e)
                         time.sleep(3)
@@ -593,10 +556,7 @@ def run_audit(run_id: int, folder_ids: list[int], enabled_functions: list[str],
                             findings = _call_function(func_name, text, filename, file_id, rules_cache)
                             if func_name == 'rule_extraction':
                                 rules_cache = findings
-                            if func_name == 'typo_detection':
-                                score = SCORING_FUNCTIONS[func_name](findings, text_len)
-                            else:
-                                score = SCORING_FUNCTIONS[func_name](findings)
+                            score = SCORING_FUNCTIONS[func_name](findings)
                         except Exception as e2:
                             logger.error("Function %s failed on %s after retry: %s", func_name, filename, e2)
                             status = 'error'

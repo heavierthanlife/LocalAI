@@ -325,37 +325,5 @@ class TestExtractRelationships:
 
 
 # ==================== Check Typos ====================
+# (removed: typo detection subsystem deleted FIX-2026-09-09-027)
 
-class TestCheckTypos:
-    URL = "/check_typos"
-
-    def test_no_file(self, auth_client):
-        resp = auth_client.post(self.URL, data={}, content_type="multipart/form-data")
-        assert resp.status_code == 400
-
-    def test_valid_file(self, auth_client, test_bid_file):
-        with open(test_bid_file, "rb") as f:
-            resp = auth_client.post(
-                self.URL,
-                data={"file": (f, "bid.txt")},
-                content_type="multipart/form-data",
-            )
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["success"]
-        assert "findings" in data
-
-    def test_diff_mode(self, auth_client, test_bid_file):
-        with open(test_bid_file, "rb") as f:
-            resp = auth_client.post(
-                self.URL,
-                data={"file": (f, "bid.txt"), "diff_mode": "true"},
-                content_type="multipart/form-data",
-            )
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["success"]
-
-    def test_no_consent(self, client):
-        resp = client.post(self.URL, data={}, content_type="multipart/form-data")
-        assert resp.status_code == 403

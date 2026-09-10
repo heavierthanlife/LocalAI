@@ -129,16 +129,6 @@ INDICATOR_DEFS = [
         'local': True,
     },
     {
-        'id': 'economic_error_similar',
-        'name': '同标段经济标错误雷同',
-        'category': '触发指标',
-        'problem': '不同投标文件经济标出现相同/雷同的错误（含错别字、计算错误）。',
-        'rule': '同一标段 ≥2 份投标文件经济标出现相同疑似错误 ≥3 处，记为疑似，每组得 30 分。',
-        'rule_ref': _rule_ref('002_tender_regs', '第四十条', '招标投标法实施条例'),
-        'checker': 'typo',
-        'local': True,
-    },
-    {
         'id': 'bid_ip_same',
         'name': '同标段投标IP雷同',
         'category': '触发指标',

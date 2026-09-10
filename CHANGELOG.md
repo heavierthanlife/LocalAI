@@ -8,6 +8,25 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 彻底删除错别字检测系统（FIX-2026-09-09-027）
+
+### Removed
+- **错别字检测子系统整体删除**：误报根因是手写 `_BIDDING_CONFUSION_PAIRS` 把 **正确常用词**（必须/截止/权利/签订/缴纳/期间/形式/权力/制定/定金/截至/其间/订金/交纳/必需）当可疑词逐次标记（每份标书数百假警）；`pycorrector`/`symspellpy` 未安装（英文/中文层实为空）。**与 jieba 无关**（typo_detector 不用 jieba）
+- 删除文件：`app/services/typo_detector.py`、`app/services/typo_whitelist.py`
+- 清标指标 `economic_error_similar`（**46→45 项**）+ 权重/cap + `_run_checker` typo 分支 + 文件分加成 + 指标构建分支
+- 投标审计 `typo_detection`：`audit.py all_funcs`、`audit_engine`（评分/dispatch/执行/回读）、`audit_report` 标签与扣分分支、`bid-audit.js` 标签/阈值
+- 路由：`/check_typos`(batch)、`/admin/typo_results`(admin_ops)；图谱 `_merge_typo_cross`；`batch_orchestrator` typo 子检查器与报告段
+- DB：`typo_detection_results` 表/索引/`audit_config` 种子 + 幂等 `DROP TABLE`（丢历史）
+- `runtime_config` 7 个 `typo_*` 键；前端 `#sidebarTypoResultsBtn` + `renderTypoHistory`；`requirements.txt` pycorrector/pyspellchecker/symspellpy（**jieba 保留**）
+
+### Changed
+- 基线 `scores.json` 刷新（45 项，composite 19.0→16.1）；`routes_snapshot.json` 重新生成（383→405，纳入此前未入快照的路由）+ `test_route_preservation` expected_len 重定；fix_registry FIX-015 移除指向已删文件的检查
+
+### regression: 130/130 tests passed · verify_fixes 128/128 · T0 no_route=0
+- 保留 `relationship_extractor` 独立"相同格式/元数据"启发式（非 typo_detector，不产生 300+ 假警）
+
+---
+
 ## [2026-09-09] — 主 agent 提示词：不可变默认 + 每用户自定义（≤2）+ 消息模板统一（FIX-2026-09-09-026）
 
 ### Changed

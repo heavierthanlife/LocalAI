@@ -1668,7 +1668,6 @@ body.dark ::-webkit-scrollbar-thumb:hover { background:#475569; }
     /* ── Compliance / quote / relationship panels ── */
     #quoteAnomalyToggle .action-group,
     #relationshipToggle .action-group,
-    #typoDetectionToggle .action-group,
     #complianceToggle .action-group { flex-direction: column; align-items: flex-start; gap: 4px; }
 
     /* ── Doc review panel ── */
