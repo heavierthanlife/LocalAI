@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — UI 审计 T2 深度之旅揪出 3 个 schema/类型真 bug + anon 守门 + hard gate（FIX-2026-09-09-024）
+
+### Fixed（T2 真实链路发现）
+- **`batch_comparison_results` 缺 `project_id` 列**：clearance 写入 INSERT 引用但 DDL 无 → 全新库 `column "project_id" does not exist`。补 CREATE 列 + 幂等 `ALTER TABLE`
+- **`batch_pair_results` 表全新库不存在**：clearance/document_analysis INSERT 与 graph SELECT 都用到 → 补建表（含 `UNIQUE(task_id,file_a,file_b)` 供 ON CONFLICT + task 索引）
+- **numpy 标量泄漏入 SQL**：`np.float32/float64` 直接作 psycopg2 参数 → `schema "np" does not exist`。`clearance_engine`/`document_analysis_svc` 写入处 `float()/int()` 归一 + `json.dumps(default=float)`
+- **anon 引导特权请求**：`/check_storage`×3、`/notebook`、`/admin/projects`、`/cases`、`/templates` 在未登录时仍发起（服务器 401/403 + 控制台噪声）。fetch 拦截器移至 `index.html <head>` 内联脚本（早于 templates.js/cases.js 自跑 loader），匿名短路为合成 401
+
+### Added
+- `scripts/audit_trips.py`：4 趟真实深度之旅（clearance fixture 端到端 46 指标 / VL 实图 / 剽窃对比 / provider 实时刷新），provider 503/429 容错
+- `run_ui_audit.py --gate`：coverage ledger 三态（acted/blocked:reason/unexplained）+ benign 白名单（anon 引导 401/403）→ hard gate **PASS**（319 元素 / 236 acted / unexplained 0 / real failures 0）
+
+### regression: 128/128 tests passed · verify_fixes 115/115 · e2e gate exit 0 · T2 4/4 绿
+
+---
+
 ## [2026-09-09] — UI/interaction "find-all" 审计 T0：静态死链交叉检查（FIX-2026-09-09-023）
 
 ### Added

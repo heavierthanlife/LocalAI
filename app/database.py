@@ -881,6 +881,7 @@ def _run_table_creation(cur: "PgCursor"):
             id              SERIAL PRIMARY KEY,
             user_id         TEXT REFERENCES users(user_id),
             task_id         TEXT UNIQUE NOT NULL,
+            project_id      INTEGER,
             file_count      INTEGER DEFAULT 0,
             pair_count      INTEGER DEFAULT 0,
             max_risk        REAL DEFAULT 0,
@@ -889,6 +890,31 @@ def _run_table_creation(cur: "PgCursor"):
             created_at      TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+    # FIX-2026-09-09-024: clearance 写入 INSERT 含 project_id，但旧 DDL 缺列 →
+    # 全新库 (audit T2) 触发 column "project_id" does not exist。幂等补列。
+    cur.execute("""
+        DO $$
+        BEGIN
+            BEGIN ALTER TABLE batch_comparison_results ADD COLUMN IF NOT EXISTS project_id INTEGER; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$;
+    """)
+    # FIX-2026-09-09-024: batch_pair_results 被 clearance/graph INSERT/SELECT，但
+    # 全新库无此表（audit T2 触发）。补建（UNIQUE 供 ON CONFLICT）。
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS batch_pair_results (
+            id          SERIAL PRIMARY KEY,
+            task_id     TEXT NOT NULL,
+            file_a      TEXT NOT NULL,
+            file_b      TEXT NOT NULL,
+            similarity  REAL DEFAULT 0,
+            max_risk    REAL DEFAULT 0,
+            risk_scores JSONB DEFAULT '{}',
+            pair_rank   INTEGER DEFAULT 0,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (task_id, file_a, file_b)
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_batch_pair_task ON batch_pair_results(task_id)")
 
     # Compliance check results + user feedback (for LoRA training pipeline)
     cur.execute("""

@@ -28,6 +28,14 @@ with get_db_connection() as conn:
         uid = upsert_user(cur, USER_UNAME, "user")
         conn.commit()
 
+# VL: 固定 nvidia（容器 DASHSCOPE key 可能失效 → auto 会选到坏 key 作 primary）
+try:
+    from app.services.runtime_config import update as rc_update
+    rc_update({"active_vl_provider": "nvidia", "active_vl_model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"})
+    print("vl pinned: nvidia")
+except Exception as e:
+    print("vl pin note:", str(e)[:100])
+
 print("admin CEO:", aid)
 print("user e2euser:", uid)
 print("E2E SEED OK")

@@ -216,3 +216,5 @@ _(6/6 verified automatically)_
 > Round-016 T0 note: audit_bp registered; /knowledge_lab/feedback, /set_video_analysis added; /batch/plagiarism/compare alias; supersession JS → /admin/skill_merge.
 
 > Round-016: T0 audit_js_routes (no_route=0); e2e audit stack compose+seed+driver added.
+
+> Round-018: batch_pair_results table + batch_comparison_results.project_id added; numpy scalars cast in clearance writes; anon fetch gate in index head; audit --gate.

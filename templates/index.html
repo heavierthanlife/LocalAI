@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- FIX-2026-09-09-024: 匿名引导请求守门必须在所有 JS 之前安装（templates.js/
+         cases.js 在 app.js 之前解析且自跑 loader）。匿名时对特权端点短路为合成 401。 -->
+    <script>
+    (function () {
+        var _af = window.fetch;
+        var GATED = ['/cases', '/templates', '/notebook', '/admin/projects', '/check_storage'];
+        window.fetch = function (input, init) {
+            try {
+                var anon = !(sessionStorage.getItem('username') || sessionStorage.getItem('user_id'));
+                if (anon) {
+                    var u = typeof input === 'string' ? input : (input && input.url) || '';
+                    for (var i = 0; i < GATED.length; i++) {
+                        if (u.indexOf(GATED[i]) === 0) {
+                            return Promise.resolve(new Response('{"error":"unauthorized","gated":true}', {
+                                status: 401, headers: { 'Content-Type': 'application/json' }
+                            }));
+                        }
+                    }
+                }
+            } catch (e) { /* fall through to real fetch */ }
+            return _af.apply(this, arguments);
+        };
+    })();
+    </script>
     <title>中联招标智能助手 China United International Engineering AI Services</title>
     <meta name="theme-color" content="#1e293b">
     <meta name="apple-mobile-web-app-capable" content="yes">

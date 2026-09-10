@@ -1835,10 +1835,10 @@ def run_analysis_async(self, file_data, file_specs, user_id, thread_id, task_id,
                             task_id,
                             p.get('name1', ''),
                             p.get('name2', ''),
-                            round(p.get('sim', 0), 2),
-                            round(p.get('risk', 0), 2),
-                            json.dumps(risk_scores, ensure_ascii=False),
-                            rank + 1,
+                            float(round(p.get('sim', 0), 2)),
+                            float(round(p.get('risk', 0), 2)),
+                            json.dumps(risk_scores, ensure_ascii=False, default=float),
+                            int(rank + 1),
                         ))
 
                 conn.commit()

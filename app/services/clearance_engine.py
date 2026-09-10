@@ -587,7 +587,7 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     user_id, task_id, project_id, len(all_file_data), 0,
-                    report['basic_info'].get('total_score', 0),
+                    float(report['basic_info'].get('total_score', 0)),
                     json.dumps(file_names, ensure_ascii=False),
                     to_rel_path(zip_path),
                 ))
@@ -610,8 +610,8 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                                 pair_rank = EXCLUDED.pair_rank
                         """, (
                             task_id, p.get('name1', ''), p.get('name2', ''),
-                            round(p.get('sim', 0), 2), round(p.get('risk', 0), 2),
-                            json.dumps(risk_scores, ensure_ascii=False), rank + 1,
+                            float(round(p.get('sim', 0), 2)), float(round(p.get('risk', 0), 2)),
+                            json.dumps(risk_scores, ensure_ascii=False, default=float), int(rank + 1),
                         ))
 
                 # ── Persist clearance result as an assistant chat message ──

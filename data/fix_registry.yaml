@@ -784,3 +784,29 @@ fixes:
       - type: grep
         file: scripts/audit_js_routes.py
         pattern: "url_map"
+
+
+  - id: FIX-2026-09-09-024
+    title: "clearance 写入 schema/类型修复 + anon 引导守门 + UI audit hard gate"
+    severity: critical
+    rationale: >
+      T2 深度之旅（audit_trips）在真实链路揪出 3 个真 bug：batch_comparison_results
+      缺 project_id 列、batch_pair_results 表全新库不存在、numpy 标量泄漏入 SQL
+      参数（schema "np" does not exist）。并加 anon 引导请求守门（head 拦截器）
+      与 run_ui_audit --gate（coverage ledger + benign 白名单）。
+    checks:
+      - type: grep
+        file: app/database.py
+        pattern: "CREATE TABLE IF NOT EXISTS batch_pair_results"
+      - type: grep
+        file: app/database.py
+        pattern: "ADD COLUMN IF NOT EXISTS project_id INTEGER"
+      - type: grep
+        file: app/services/clearance_engine.py
+        pattern: "default=float"
+      - type: grep
+        file: templates/index.html
+        pattern: "GATED"
+      - type: grep
+        file: scripts/audit_trips.py
+        pattern: "def trip_clearance_run"
