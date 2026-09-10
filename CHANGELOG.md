@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 大文件对比：413 修复 + 异步剽窃任务（FIX-2026-09-09-025）
+
+### Fixed
+- **`/batch/plagiarism/compare` 413（Content Too Large）**：直传 multipart 撞全局 `MAX_CONTENT_LENGTH=50MB`。改为：`batch_bp.before_request` 抬 per-request 上限至 11GB；5 个对比端点（plagiarism/compare、compare_bidders_quotes、check_quote_anomaly、extract_relationships、check_typos）接入共享 `_collect_docs()`——优先 `file_ids`（`/stream_upload` 预上传 → `file_store.resolve` → `extract_text_from_path` 分页、内存恒定），回退直传
+- **大文件同步计算 OOM**：~200MB 纯文本在 web worker 内对比触发 OOM/502。新增异步路径 `POST /batch/plagiarism/run` + `GET /batch/plagiarism/status/<task_id>`（Celery `plagiarism_task` + TaskBus）；`plagiarism/compare` 对 >40MB file_ids 自动转异步；前端剽窃按钮优先预上传 file_ids → 异步 + 进度轮询
+
+### Added
+- `app/services/plagiarism_task.py`（Celery 异步剽窃对比）；`celery_app.py` include 注册
+
+### regression: 128/128 tests passed · verify_fixes 120/120 · T0 no_route=0
+- 大文件上传 206MB×2 成功；异步全链路 PASS（16MB/114k 段 → completed，verdict 高度相似，cosine 0.80）
+
+---
+
 ## [2026-09-09] — UI 审计 T2 深度之旅揪出 3 个 schema/类型真 bug + anon 守门 + hard gate（FIX-2026-09-09-024）
 
 ### Fixed（T2 真实链路发现）

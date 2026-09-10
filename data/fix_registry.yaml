@@ -810,3 +810,29 @@ fixes:
       - type: grep
         file: scripts/audit_trips.py
         pattern: "def trip_clearance_run"
+
+
+  - id: FIX-2026-09-09-025
+    title: "大文件对比支持：file_ids 主路径 + 批端点抬限 + 异步剽窃任务"
+    severity: high
+    rationale: >
+      /batch/plagiarism/compare 直接 multipart 撞全局 50MB MAX_CONTENT_LENGTH → 413。
+      修复：batch_bp.before_request 抬 per-request 上限；共享 _collect_docs 优先
+      file_ids（预上传+分页提取，内存恒定）；大文件走 Celery 异步 plagiarism_task
+      (run/status) 防 web OOM。所有对比端点支持 file_ids。
+    checks:
+      - type: grep
+        file: app/routes/batch.py
+        pattern: "def _collect_docs"
+      - type: grep
+        file: app/routes/batch.py
+        pattern: "_batch_raise_body_limit"
+      - type: grep
+        file: app/routes/batch.py
+        pattern: "def plagiarism_run_async"
+      - type: grep
+        file: app/services/plagiarism_task.py
+        pattern: "def run_plagiarism_async"
+      - type: grep
+        file: celery_app.py
+        pattern: "app.services.plagiarism_task"

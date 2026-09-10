@@ -25,6 +25,7 @@ celery = Celery(
         'app.services.nightly_trainer',
         'app.services.document_analysis_svc',
         'app.services.clearance_engine',
+        'app.services.plagiarism_task',
         'app.cleanup_tasks',
         'app.services.wiki_ingest',
         'app.services.compliance_checker',

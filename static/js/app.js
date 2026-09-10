@@ -9030,15 +9030,50 @@
                 plagResult.innerHTML = '<span class="msi msi-sm">hourglass_empty</span> 正在对比...';
                 try {
                     var fd = new FormData();
-                    fd.append('files', selectedFiles[0]);
-                    fd.append('files', selectedFiles[1]);
-                    if (tenderFile) fd.append('template', tenderFile);
-                    var res = await fetch('/batch/plagiarism/compare', {
-                        method: 'POST', body: fd, credentials: 'include'
-                    });
-                    var d = await res.json();
-                    if (!d.success) throw new Error(d.error || '对比失败');
-                    var r = d.data || {};
+                    // 大文件友好（FIX-2026-09-09-025）：优先用预上传 file_ids，
+                    // 避免整块 multipart 触发全局 50MB 限制 → 413。
+                    var ids = [];
+                    try {
+                        if (!uploadedFileIds || uploadedFileIds.length < Math.min(2, selectedFiles.length)) {
+                            await _preUploadFiles();
+                        }
+                        if (uploadedFileIds && uploadedFileIds.length >= 2) ids = uploadedFileIds.slice(0, 2);
+                    } catch (e) { ids = []; }
+                    var res, r;
+                    if (ids.length >= 2) {
+                        // 异步路径：大文件在 Celery 任务里跑（web 立即返回 task_id），
+                        // 前端轮询状态，避免同步 OOM/502。
+                        ids.forEach(function(u) { fd.append('file_ids', u.id); });
+                        if (tenderFileId) fd.append('template_file_id', tenderFileId);
+                        res = await fetch('/batch/plagiarism/run', {
+                            method: 'POST', body: fd, credentials: 'include'
+                        });
+                        var d0 = await res.json();
+                        if (!d0.success) throw new Error(d0.error || '对比启动失败');
+                        var taskId = d0.task_id;
+                        var deadline = Date.now() + 30 * 60 * 1000;
+                        r = null;
+                        while (Date.now() < deadline) {
+                            await new Promise(function(z) { setTimeout(z, 3000); });
+                            var sr = await fetch('/batch/plagiarism/status/' + encodeURIComponent(taskId), { credentials: 'include' });
+                            var sd = await sr.json();
+                            if (!sd.success) throw new Error(sd.error || '状态查询失败');
+                            if (sd.status === 'completed') { r = sd.result || {}; break; }
+                            if (sd.status === 'failed') throw new Error(sd.error || '对比失败');
+                            plagResult.innerHTML = '<span class="msi msi-sm">hourglass_empty</span> 正在对比... ' + (sd.progress || 0) + '% ' + _clearanceEscape(sd.message || '');
+                        }
+                        if (!r) throw new Error('对比超时');
+                    } else {
+                        fd.append('files', selectedFiles[0]);
+                        fd.append('files', selectedFiles[1]);
+                        if (tenderFile) fd.append('template', tenderFile);
+                        res = await fetch('/batch/plagiarism/compare', {
+                            method: 'POST', body: fd, credentials: 'include'
+                        });
+                        var d = await res.json();
+                        if (!d.success) throw new Error(d.error || '对比失败');
+                        r = d.data || {};
+                    }
                     var vColor = r.verdict === '疑似剽窃' ? '#dc2626' : (r.verdict === '高度相似' ? '#d97706' : '#16a34a');
                     var h = '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">' + _icon('balance') + ' 剽窃对比结果</div>';
                     h += '<div style="margin-bottom:8px;">' + _icon('swap_horiz') + ' <b>' + _clearanceEscape(r.doc_a || '') + '</b> ↔ <b>' + _clearanceEscape(r.doc_b || '') + '</b></div>';

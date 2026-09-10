@@ -39,6 +39,74 @@ from app.services.batch_orchestrator import (
 batch_bp = Blueprint('batch', __name__, template_folder=str(BASE_DIR / 'templates'), static_folder=str(BASE_DIR / 'static'))
 
 
+# ── Large-file support (FIX-2026-09-09-025) ──────────────────────────────
+# 全局 MAX_CONTENT_LENGTH=50MB 会让直传对比端点对大文件 413。策略：主路径改为
+# 预上传 file_ids（/stream_upload 流式落盘 → file_store.resolve → 分页提取，内存恒定）；
+# 直传仍兼容（per-request 上限抬到 11GB，对齐 upload.py）。
+@batch_bp.before_request
+def _batch_raise_body_limit():
+    request.max_content_length = 11 * 1024 * 1024 * 1024
+
+
+def _collect_docs(max_files=10, min_files=1, need_metadata=False):
+    """Collect {filename,text[,metadata]} from file_ids (primary) or files (fallback)."""
+    from app.services import file_store
+    user_id = session.get('user_id')
+    docs = []
+
+    file_ids = request.form.getlist('file_ids')
+    if file_ids:
+        from app.services.file_processing import extract_text_from_path, extract_metadata_from_path
+        for fid in file_ids[:max_files]:
+            r = file_store.resolve(fid, user_id)
+            if not r:
+                continue
+            text, _ = extract_text_from_path(r['abs_path'], r['filename'])
+            if not text or not is_valid_extracted_text(text):
+                continue
+            doc = {'filename': r['filename'], 'text': text, 'abs_path': r['abs_path']}
+            if need_metadata:
+                doc['metadata'] = extract_metadata_from_path(r['abs_path'], r['filename']) or {}
+            docs.append(doc)
+
+    if len(docs) < min_files and 'files' in request.files:
+        for f in request.files.getlist('files')[:max_files]:
+            if not f.filename or not allowed_file(f.filename):
+                continue
+            text, _ = extract_text_from_file(f)
+            if not text or not is_valid_extracted_text(text):
+                continue
+            doc = {'filename': f.filename, 'text': text}
+            if need_metadata:
+                f.seek(0)
+                try:
+                    doc['metadata'] = extract_metadata(f)
+                except Exception:
+                    doc['metadata'] = {}
+            docs.append(doc)
+    return docs
+
+
+def _read_template_text():
+    """招标模板文本：template_file_id（大文件）优先，回退 template 直传。"""
+    from app.services import file_store
+    user_id = session.get('user_id')
+    tid = request.form.get('template_file_id')
+    if tid:
+        r = file_store.resolve(tid, user_id)
+        if r:
+            from app.services.file_processing import extract_text_from_path
+            text, _ = extract_text_from_path(r['abs_path'], r['filename'])
+            if text and not text.startswith("["):
+                return text
+    tf = request.files.get('template')
+    if tf and tf.filename and allowed_file(tf.filename):
+        text, _ = extract_text_from_file(tf)
+        if text and not text.startswith("["):
+            return text
+    return None
+
+
 @batch_bp.route('/batch_result/<task_id>', methods=['GET'])
 def download_batch_result(task_id):
     """Download a permanently-stored batch result ZIP (HTML + Excel)."""
@@ -128,22 +196,18 @@ def check_quote_anomaly_standalone():
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    if 'file' not in request.files:
-        return err("No file uploaded", "VALIDATION_ERROR", 400)
-    f = request.files['file']
-    if not f.filename or not allowed_file(f.filename):
-        return err(f"Unsupported file type: {f.filename}", "VALIDATION_ERROR", 400)
+    docs = _collect_docs(max_files=1, min_files=1)
+    if not docs:
+        return err("No file uploaded / could not extract text", "VALIDATION_ERROR", 400)
+    _doc = docs[0]
+    text, fname = _doc['text'], _doc['filename']
 
     from app.services.quote_anomaly import check_quote_anomaly as run_qa
     from app.services.audit_logger import AuditLogger
 
-    text, _ = extract_text_from_file(f)
-    if not text or text.startswith("["):
-        return err("Could not extract text from file", "VALIDATION_ERROR", 400)
-
-    _audit = AuditLogger("quote_anomaly_standalone", f.filename)
-    result = run_qa(text, doc_name=f.filename, audit=_audit)
-    _audit.result(risk_score=round(result.risk_score, 1), doc_name=f.filename)
+    _audit = AuditLogger("quote_anomaly_standalone", fname)
+    result = run_qa(text, doc_name=fname, audit=_audit)
+    _audit.result(risk_score=round(result.risk_score, 1), doc_name=fname)
 
     return ok({
         "doc_name": result.doc_name,
@@ -169,27 +233,13 @@ def compare_bidders_quotes_endpoint():
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    if 'files' not in request.files:
-        return err("No files uploaded", "VALIDATION_ERROR", 400)
-    files = request.files.getlist('files')
-    if len(files) < 2:
-        return err("Need at least 2 files", "VALIDATION_ERROR", 400)
-    if len(files) > 10:
-        return err("Maximum 10 files allowed", "VALIDATION_ERROR", 400)
+    file_data = _collect_docs(max_files=10, min_files=2)
+    if len(file_data) < 2:
+        return err("Could not extract valid text from at least 2 files", "VALIDATION_ERROR", 400)
+    file_data = [{'filename': d['filename'], 'text': d['text']} for d in file_data]
 
     from app.services.quote_anomaly import compare_bidders_quotes as run_cbq, save_quote_anomaly_results
     from app.services.audit_logger import AuditLogger
-
-    file_data = []
-    for f in files:
-        if not f.filename or not allowed_file(f.filename):
-            continue
-        text, _ = extract_text_from_file(f)
-        if text and not text.startswith("["):
-            file_data.append({'filename': f.filename, 'text': text})
-
-    if len(file_data) < 2:
-        return err("Could not extract valid text from at least 2 files", "VALIDATION_ERROR", 400)
 
     thread_id = session.get('thread_id', '')
     project_id = request.form.get('project_id', type=int)
@@ -242,29 +292,12 @@ def extract_relationships_endpoint():
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    if 'files' not in request.files:
-        return err("No files uploaded", "VALIDATION_ERROR", 400)
-    files = request.files.getlist('files')
-    if len(files) < 1:
-        return err("Need at least 1 file", "VALIDATION_ERROR", 400)
-    if len(files) > 10:
-        return err("Maximum 10 files allowed", "VALIDATION_ERROR", 400)
+    file_data = _collect_docs(max_files=10, min_files=1, need_metadata=True)
+    if not file_data:
+        return err("Could not extract valid text from any file", "VALIDATION_ERROR", 400)
 
     from app.services.relationship_extractor import extract_relationships, save_relationship_results
     from app.services.audit_logger import AuditLogger
-
-    file_data = []
-    for f in files:
-        if not f.filename or not allowed_file(f.filename):
-            continue
-        text, _ = extract_text_from_file(f)
-        if text and not text.startswith("["):
-            f.seek(0)
-            meta = extract_metadata(f)
-            file_data.append({'filename': f.filename, 'text': text, 'metadata': meta})
-
-    if not file_data:
-        return err("Could not extract valid text from any file", "VALIDATION_ERROR", 400)
 
     thread_id = session.get('thread_id', '')
     task_id = thread_id or str(uuid.uuid4())
@@ -306,29 +339,25 @@ def check_typos_endpoint():
 
     diff_mode = request.form.get('diff_mode', 'false').lower() == 'true'
 
-    if 'file' not in request.files:
-        return err("No file uploaded", "VALIDATION_ERROR", 400)
-    f = request.files['file']
-    if not f.filename or not allowed_file(f.filename):
-        return err(f"Unsupported file type: {f.filename}", "VALIDATION_ERROR", 400)
+    docs = _collect_docs(max_files=1, min_files=1)
+    if not docs:
+        return err("No file uploaded / could not extract text", "VALIDATION_ERROR", 400)
+    _doc = docs[0]
+    text, fname = _doc['text'], _doc['filename']
 
     from app.services.typo_detector import detect_typos, save_typo_results
     from app.services.audit_logger import AuditLogger
 
-    text, _ = extract_text_from_file(f)
-    if not text or text.startswith("["):
-        return err("Could not extract text from file", "VALIDATION_ERROR", 400)
-
-    _audit = AuditLogger("typo_detection", f.filename)
-    report = detect_typos(text, doc_name=f.filename, audit=_audit)
+    _audit = AuditLogger("typo_detection", fname)
+    report = detect_typos(text, doc_name=fname, audit=_audit)
 
     thread_id = session.get('thread_id', '')
-    save_typo_results(user_id, thread_id or str(uuid.uuid4()), {f.filename: report})
+    save_typo_results(user_id, thread_id or str(uuid.uuid4()), {fname: report})
     _audit.result(total=report.total_suspects, critical=report.critical_count,
                   layers=','.join(report.layers_run))
 
     result = {
-        "doc_name": f.filename,
+        "doc_name": fname,
         "total_suspects": report.total_suspects,
         "critical_count": report.critical_count,
         "layers_run": report.layers_run,
@@ -364,26 +393,28 @@ def plagiarism_compare():
     if not session.get('user_id'):
         return err("Not logged in", "AUTH_REQUIRED", 401)
 
-    files = request.files.getlist('files') or []
-    if len(files) < 2:
-        return err("需要上传 2 个文件", "VALIDATION_ERROR", 400)
+    # 大文件安全网：file_ids 且总量超阈值 → 自动转异步任务（避免 web worker OOM）
+    _fids = request.form.getlist('file_ids')
+    if _fids:
+        try:
+            from app.services import file_store as _fs
+            _total = 0
+            for fid in _fids[:2]:
+                _r = _fs.resolve(fid, session.get('user_id'))
+                if _r:
+                    _total += int(_r.get('size', 0) or 0)
+            if _total > 40 * 1024 * 1024:
+                return plagiarism_run_async()
+        except Exception:
+            pass
 
-    texts = []
-    names = []
-    for f in files[:2]:
-        if not f.filename or not allowed_file(f.filename):
-            return err(f"不支持的格式: {f.filename}", "VALIDATION_ERROR", 400)
-        text, _ = extract_text_from_file(f)
-        if not text or not is_valid_extracted_text(text):
-            return err(f"无法提取文本: {f.filename}", "VALIDATION_ERROR", 400)
-        texts.append(text)
-        names.append(f.filename)
+    docs = _collect_docs(max_files=2, min_files=2)
+    if len(docs) < 2:
+        return err("需要上传 2 个文件（或提供 file_ids）", "VALIDATION_ERROR", 400)
 
-    # optional template (招标文件) for boilerplate removal
-    template_text = None
-    tf = request.files.get('template')
-    if tf and tf.filename and allowed_file(tf.filename):
-        template_text, _ = extract_text_from_file(tf)
+    texts = [d['text'] for d in docs[:2]]
+    names = [d['filename'] for d in docs[:2]]
+    template_text = _read_template_text()
 
     from app.services.plagiarism_detector import detect_plagiarism
     report = detect_plagiarism(
@@ -392,3 +423,68 @@ def plagiarism_compare():
         filename_a=names[0], filename_b=names[1],
     )
     return ok(report)
+
+
+@batch_bp.route('/plagiarism/run', methods=['POST'])
+@batch_bp.route('/batch/plagiarism/run', methods=['POST'])
+def plagiarism_run_async():
+    """异步剽窃对比（大文件：数百 MB 不在 web worker 内跑，避免 OOM/502）。
+
+    需 file_ids（/stream_upload 预上传）。返回 {task_id}，前端轮询
+    /batch/plagiarism/status/<task_id>。
+    """
+    if session.get('consent_value', 0) != 1:
+        return err("Consent not given", "FORBIDDEN", 403)
+    user_id = session.get('user_id')
+    if not user_id:
+        return err("Not logged in", "AUTH_REQUIRED", 401)
+
+    from app.services import file_store
+    file_ids = request.form.getlist('file_ids')
+    if len(file_ids) < 2:
+        return err("异步对比需 2 个 file_ids", "VALIDATION_ERROR", 400)
+    docs = []
+    for fid in file_ids[:2]:
+        r = file_store.resolve(fid, user_id)
+        if not r:
+            return err(f"文件不存在或无权限: {fid}", "VALIDATION_ERROR", 400)
+        docs.append({'abs_path': r['abs_path'], 'filename': r['filename']})
+
+    template_path = None
+    tid = request.form.get('template_file_id')
+    if tid:
+        tr = file_store.resolve(tid, user_id)
+        if tr:
+            template_path = tr['abs_path']
+
+    task_id = str(uuid.uuid4())
+    from app.services.task_bus import TaskBus
+    TaskBus(task_id, 'plagiarism', '两文件剽窃对比').register_queued(
+        extra={'file_count': len(docs)})
+    from app.services.plagiarism_task import run_plagiarism_async
+    run_plagiarism_async.delay(task_id, docs, template_path)
+    return ok({'task_id': task_id, 'async': True})
+
+
+@batch_bp.route('/plagiarism/status/<task_id>', methods=['GET'])
+@batch_bp.route('/batch/plagiarism/status/<task_id>', methods=['GET'])
+def plagiarism_status(task_id):
+    """轮询异步剽窃对比状态（复用 TaskBus）。"""
+    from app.services.task_bus import TaskBus
+    meta = TaskBus.get(task_id)
+    if not meta:
+        return err("任务不存在或已过期", "NOT_FOUND", 404)
+    status = meta.get('status', '')
+    result = None
+    if status == 'completed' and meta.get('result'):
+        try:
+            result = json.loads(meta['result'])
+        except Exception:
+            result = None
+    return ok({
+        'status': status,
+        'progress': meta.get('progress', 0),
+        'message': meta.get('message', ''),
+        'result': result,
+        'error': meta.get('error', ''),
+    })
