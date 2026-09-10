@@ -71,37 +71,10 @@ let currentProjectName = '';
                         else showToast('清理失败', 'error');
                     } catch(_) { showToast('网络错误', 'error'); }
                 };
-                if (promptBtn) promptBtn.onclick = async () => {
-                    const modal = createQuickModal('系统提示词');
-                    let currentPrompt = '';
-                    try {
-                        const r = await fetch('/admin/system_prompt', { credentials: 'include' });
-                        const d = await r.json();
-                        currentPrompt = d.prompt || '';
-                    } catch(_) { currentPrompt = '(加载失败)'; }
-                    modal.innerHTML(`<p style="font-size:.7rem;color:var(--card-muted);margin-bottom:8px;">编辑AI助手的系统提示词。修改后立即生效，已持久化到磁盘。</p>
-                        <textarea id="promptEditor" style="width:100%;height:300px;font-family:monospace;font-size:.78rem;padding:8px;border-radius:6px;border:1px solid var(--card-border);resize:vertical;margin-bottom:8px;">${escapeHtml(currentPrompt)}</textarea>
-                        <div style="display:flex;gap:8px;">
-                            <button id="savePromptBtn" class="file-btn" style="background:#16a34a;color:white;padding:6px 16px;">💾 保存</button>
-                            <button id="resetPromptBtn" class="file-btn" style="background:#e2e8f0;color:#334155;padding:6px 16px;">🔄 恢复默认</button>
-                            <span id="promptStatus" style="font-size:.75rem;align-self:center;"></span>
-                        </div>`);
-                    const saveBtn = modal.querySelector('#savePromptBtn');
-                    const resetBtn = modal.querySelector('#resetPromptBtn');
-                    const statusEl = modal.querySelector('#promptStatus');
-                    if (saveBtn) saveBtn.onclick = async () => {
-                        const txt = modal.querySelector('#promptEditor').value.trim();
-                        if (!txt) { statusEl.textContent = '提示词不能为空'; return; }
-                        saveBtn.disabled = true; statusEl.textContent = '保存中...';
-                        try {
-                            const r = await fetch('/admin/system_prompt', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({prompt:txt}) });
-                            const d = await r.json();
-                            if (r.ok) { statusEl.textContent = '✅ '+(d.message||'已保存'); showToast('系统提示词已更新', 'success'); }
-                            else { statusEl.textContent = '❌ '+(d.error||'保存失败'); }
-                        } catch(_) { statusEl.textContent = '❌ 网络错误'; }
-                        saveBtn.disabled = false;
-                    };
-                    if (resetBtn) resetBtn.onclick = () => { modal.querySelector('#promptEditor').value = currentPrompt; statusEl.textContent = '已恢复为最后保存的版本'; };
+                // 旧 /admin/system_prompt 编辑器已退役，统一走 app.js 的 openPromptEditor
+                if (promptBtn) promptBtn.onclick = () => {
+                    if (typeof window.openPromptEditor === 'function') window.openPromptEditor('system');
+                    else showToast('编辑器加载中，请稍后重试', 'error');
                 };
                 if (workReportBtn) workReportBtn.onclick = async () => {
                     const modal = createQuickModal('工作报告');

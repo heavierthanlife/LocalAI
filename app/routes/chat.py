@@ -337,10 +337,11 @@ def send_message_stream():
                     max_tokens=session.get('max_tokens', 1600),
                     timeout=int(os.getenv("LLM_TIMEOUT", "120")),
                 )
+                from app.services.user_prompt import resolve_user_prompt
                 agent = create_agent(
                     model=llm,
                     tools=[get_date, bocha_search],
-                    system_prompt=g.AGENT_SYSTEM_PROMPT,
+                    system_prompt=resolve_user_prompt(session.get('user_id', '')),
                     checkpointer=MemorySaver(),
                 )
                 config = {"configurable": {"thread_id": str(uuid.uuid4())}}
@@ -831,7 +832,9 @@ Keep it concise, professional, in Chinese."""
                 max_tokens=session.get('max_tokens', 1600),
                 timeout=int(os.getenv("LLM_TIMEOUT", "120")),
             )
-            system_prompt = REDTEAM_SYSTEM_PROMPT if is_grilling else g.AGENT_SYSTEM_PROMPT
+            from app.services.user_prompt import resolve_user_prompt
+            system_prompt = (REDTEAM_SYSTEM_PROMPT if is_grilling
+                             else resolve_user_prompt(session.get('user_id', '')))
             checkpointer = MemorySaver()
             isolated_agent = create_agent(
                 model=llm,

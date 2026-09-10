@@ -3345,38 +3345,8 @@
                         else showToast('清理失败', 'error');
                     } catch(_) { showToast('网络错误', 'error'); }
                 };
-                if (promptBtn) promptBtn.onclick = async () => {
-                    const modal = createQuickModal('系统提示词');
-                    let currentPrompt = '';
-                    try {
-                        const r = await fetch('/admin/system_prompt', { credentials: 'include' });
-                        const d = await r.json();
-                        currentPrompt = d.prompt || '';
-                    } catch(_) { currentPrompt = '(加载失败)'; }
-                    modal.innerHTML(`<p style="font-size:.7rem;color:var(--card-muted);margin-bottom:8px;">编辑AI助手的系统提示词。修改后立即生效，已持久化到磁盘。</p>
-                        <textarea id="promptEditor" style="width:100%;height:300px;font-family:monospace;font-size:.78rem;padding:8px;border-radius:6px;border:1px solid var(--card-border);resize:vertical;margin-bottom:8px;">${escapeHtml(currentPrompt)}</textarea>
-                        <div style="display:flex;gap:8px;">
-                            <button id="savePromptBtn" class="file-btn" style="background:#16a34a;color:white;padding:6px 16px;">💾 保存</button>
-                            <button id="resetPromptBtn" class="file-btn" style="background:#e2e8f0;color:#334155;padding:6px 16px;">🔄 恢复默认</button>
-                            <span id="promptStatus" style="font-size:.75rem;align-self:center;"></span>
-                        </div>`);
-                    const saveBtn = modal.querySelector('#savePromptBtn');
-                    const resetBtn = modal.querySelector('#resetPromptBtn');
-                    const statusEl = modal.querySelector('#promptStatus');
-                    if (saveBtn) saveBtn.onclick = async () => {
-                        const txt = modal.querySelector('#promptEditor').value.trim();
-                        if (!txt) { statusEl.textContent = '提示词不能为空'; return; }
-                        saveBtn.disabled = true; statusEl.textContent = '保存中...';
-                        try {
-                            const r = await fetch('/admin/system_prompt', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({prompt:txt}) });
-                            const d = await r.json();
-                            if (r.ok) { statusEl.textContent = '✅ '+(d.message||'已保存'); showToast('系统提示词已更新', 'success'); }
-                            else { statusEl.textContent = '❌ '+(d.error||'保存失败'); }
-                        } catch(_) { statusEl.textContent = '❌ 网络错误'; }
-                        saveBtn.disabled = false;
-                    };
-                    if (resetBtn) resetBtn.onclick = () => { modal.querySelector('#promptEditor').value = currentPrompt; statusEl.textContent = '已恢复为最后保存的版本'; };
-                };
+                // 旧 /admin/system_prompt 编辑器已退役，统一走 openPromptEditor
+                if (promptBtn) promptBtn.onclick = () => openPromptEditor('system');
                 if (workReportBtn) workReportBtn.onclick = async () => {
                     const modal = createQuickModal('工作报告');
                     let users = [];
@@ -3594,6 +3564,305 @@
             api.querySelector('.quick-modal-card');
             return api;
         }
+
+        // ======================== 统一提示词编辑器 ========================
+        // 面向所有登录用户：系统提示词（多版本，≤agent_max）+ 消息模板（≤template_max）
+        // 依赖 createQuickModal / escapeHtml / showToast / loadTemplates（全局）
+        async function openPromptEditor(initialTab = 'system') {
+            const modal = createQuickModal('提示词');
+            let activeTab = initialTab === 'template' ? 'template' : 'system';
+            let data = null;          // GET /prompts/mine 缓存
+            let defaultPrompt = null; // GET /prompts/default 原始版缓存
+            let migrating = false;    // 防止并发重复迁移
+
+            modal.innerHTML(`
+                <h3 style="margin:0 0 8px;">✏️ 提示词</h3>
+                <div id="peTabs" style="display:flex;gap:4px;border-bottom:1px solid var(--card-border);margin-bottom:10px;">
+                    <button class="pe-tab" data-tab="system" style="border:none;background:transparent;padding:6px 12px;cursor:pointer;font-size:.82rem;">系统提示词</button>
+                    <button class="pe-tab" data-tab="template" style="border:none;background:transparent;padding:6px 12px;cursor:pointer;font-size:.82rem;">消息模板</button>
+                </div>
+                <div id="peBody" style="font-size:.8rem;"><span style="color:var(--card-muted);">加载中...</span></div>
+            `);
+
+            const bodyEl = () => modal.querySelector('#peBody');
+            const tabsEl = modal.querySelector('#peTabs');
+
+            // 标签页高亮
+            function renderTabs() {
+                tabsEl.querySelectorAll('.pe-tab').forEach(btn => {
+                    const on = btn.dataset.tab === activeTab;
+                    btn.style.color = on ? 'var(--accent,#2563eb)' : 'var(--card-muted)';
+                    btn.style.fontWeight = on ? '600' : '400';
+                    btn.style.borderBottom = on ? '2px solid var(--accent,#2563eb)' : '2px solid transparent';
+                    btn.style.marginBottom = '-1px';
+                });
+            }
+
+            // 拉取「我的」提示词，缓存于 data
+            async function loadMine(force) {
+                if (data && !force) return data;
+                try {
+                    const r = await fetch('/prompts/mine', { credentials: 'include' });
+                    const d = await r.json();
+                    if (d && d.success) data = d;
+                    else { showToast((d && d.error) || '加载失败', 'error'); data = { agent: [], templates: [], agent_active_id: null, agent_max: 2, template_max: 5 }; }
+                } catch (_) {
+                    showToast('加载失败', 'error');
+                    data = { agent: [], templates: [], agent_active_id: null, agent_max: 2, template_max: 5 };
+                }
+                return data;
+            }
+
+            // 通用保存（kind: agent|template）
+            async function savePrompt(kind, payload) {
+                try {
+                    const r = await fetch('/prompts/save', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                        body: JSON.stringify(Object.assign({ kind }, payload))
+                    });
+                    const d = await r.json();
+                    if (d && d.success) { showToast('已保存', 'success'); data = null; await render(); return true; }
+                    showToast((d && d.error) || '保存失败', 'error');
+                } catch (_) { showToast('网络错误', 'error'); }
+                return false;
+            }
+
+            // 通用删除
+            async function deletePrompt(kind, id) {
+                const label = kind === 'agent' ? '版本' : '模板';
+                if (!(await window.confirm(`确定删除该${label}？此操作不可恢复。`))) return;
+                try {
+                    const r = await fetch('/prompts/delete', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                        body: JSON.stringify({ id: Number(id) })
+                    });
+                    const d = await r.json();
+                    if (d && d.success) { showToast('已删除', 'success'); data = null; await render(); }
+                    else showToast((d && d.error) || '删除失败', 'error');
+                } catch (_) { showToast('网络错误', 'error'); }
+            }
+
+            // ---- 系统提示词标签页 ----
+            async function renderSystem() {
+                await loadMine();
+                if (defaultPrompt === null) {
+                    try {
+                        const r = await fetch('/prompts/default', { credentials: 'include' });
+                        const d = await r.json();
+                        defaultPrompt = (d && d.success && d.prompt) ? d.prompt : '';
+                    } catch (_) { defaultPrompt = ''; }
+                }
+                const agents = data.agent || [];
+                const activeId = data.agent_active_id;
+                const max = data.agent_max || 2;
+                const canNew = agents.length < max;
+                const listHtml = agents.length ? agents.map(a => `
+                    <div class="pe-agent" data-id="${escapeHtml(String(a.id))}" style="border:1px solid ${a.id === activeId ? '#2563eb' : 'var(--card-border)'};${a.id === activeId ? 'background:#eff6ff;' : ''}border-radius:8px;padding:8px;margin-bottom:6px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer;">
+                                <input type="radio" name="peActive" value="${escapeHtml(String(a.id))}" ${a.id === activeId ? 'checked' : ''} style="cursor:pointer;">
+                                <strong>${escapeHtml(a.name || '未命名版本')}</strong>
+                            </label>
+                            ${a.id === activeId ? '<span style="font-size:.65rem;color:#2563eb;">生效中</span>' : ''}
+                        </div>
+                        <div style="color:var(--card-muted);font-size:.72rem;white-space:pre-wrap;margin:4px 0 6px;max-height:54px;overflow:hidden;">${escapeHtml((a.content || '').slice(0, 160))}${(a.content || '').length > 160 ? '…' : ''}</div>
+                        <div style="display:flex;gap:6px;">
+                            <button class="file-btn pe-agent-edit" data-id="${escapeHtml(String(a.id))}" style="font-size:.7rem;padding:2px 10px;">编辑</button>
+                            <button class="file-btn pe-agent-rename" data-id="${escapeHtml(String(a.id))}" style="font-size:.7rem;padding:2px 10px;">重命名</button>
+                            <button class="file-btn pe-agent-del" data-id="${escapeHtml(String(a.id))}" style="font-size:.7rem;padding:2px 10px;background:#fef2f2;color:#dc2626;">删除</button>
+                        </div>
+                    </div>`).join('') : '<p style="color:var(--card-muted);">暂无自定义版本，点击「新建版本」创建。未创建时使用原始版。</p>';
+
+                bodyEl().innerHTML = `
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:.72rem;color:var(--card-muted);margin-bottom:4px;">原始版（只读参考）</div>
+                        <textarea readonly style="width:100%;height:120px;font-family:monospace;font-size:.72rem;padding:6px;border-radius:6px;border:1px solid var(--card-border);background:var(--card-bg);resize:vertical;box-sizing:border-box;">${escapeHtml(defaultPrompt || '')}</textarea>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <strong style="font-size:.78rem;">我的版本（${agents.length}/${max}）</strong>
+                        <button id="peNewAgent" class="file-btn" ${canNew ? '' : 'disabled'} style="font-size:.72rem;padding:3px 12px;${canNew ? 'background:#16a34a;color:#fff;' : 'opacity:.5;cursor:not-allowed;'}">+ 新建版本</button>
+                    </div>
+                    ${canNew ? '' : '<p style="font-size:.68rem;color:#d97706;margin-bottom:6px;">最多 2 个版本，请先删除一个。</p>'}
+                    <div id="peAgentList">${listHtml}</div>
+                    <div id="peEditorWrap" style="display:none;margin-top:10px;"></div>
+                `;
+
+                // 设为生效
+                bodyEl().querySelectorAll('input[name="peActive"]').forEach(radio => {
+                    radio.onchange = async () => {
+                        try {
+                            const r = await fetch('/prompts/activate', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                body: JSON.stringify({ id: Number(radio.value) })
+                            });
+                            const d = await r.json();
+                            if (d && d.success) { showToast('已切换生效版本', 'success'); data = null; await render(); }
+                            else showToast((d && d.error) || '切换失败', 'error');
+                        } catch (_) { showToast('网络错误', 'error'); }
+                    };
+                });
+                const newBtn = bodyEl().querySelector('#peNewAgent');
+                if (newBtn && !newBtn.disabled) newBtn.onclick = () => showAgentEditor(null);
+                bodyEl().querySelectorAll('.pe-agent-edit').forEach(b => b.onclick = () => showAgentEditor(agents.find(a => String(a.id) === b.dataset.id)));
+                bodyEl().querySelectorAll('.pe-agent-rename').forEach(b => b.onclick = async () => {
+                    const a = agents.find(x => String(x.id) === b.dataset.id);
+                    if (!a) return;
+                    const name = await window.prompt('重命名版本', a.name || '');
+                    if (name === null) return;
+                    if (!name.trim()) { showToast('名称不能为空', 'error'); return; }
+                    await savePrompt('agent', { id: a.id, name: name.trim(), content: a.content || '' });
+                });
+                bodyEl().querySelectorAll('.pe-agent-del').forEach(b => b.onclick = () => deletePrompt('agent', b.dataset.id));
+            }
+
+            // 新建/编辑 agent 版本的内联编辑器
+            function showAgentEditor(agent) {
+                const wrap = bodyEl().querySelector('#peEditorWrap');
+                if (!wrap) return;
+                wrap.style.display = 'block';
+                wrap.innerHTML = `
+                    <div style="border-top:1px solid var(--card-border);padding-top:8px;">
+                        <input id="peAgentName" placeholder="版本名称（可选）" value="${escapeHtml(agent ? (agent.name || '') : '')}" style="width:100%;margin-bottom:6px;padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:.78rem;box-sizing:border-box;">
+                        <textarea id="peAgentContent" placeholder="系统提示词内容" style="width:100%;height:180px;font-family:monospace;font-size:.75rem;padding:6px;border:1px solid var(--card-border);border-radius:6px;resize:vertical;box-sizing:border-box;">${escapeHtml(agent ? (agent.content || '') : '')}</textarea>
+                        <div style="display:flex;gap:8px;margin-top:6px;">
+                            <button id="peAgentSave" class="file-btn" style="background:#16a34a;color:#fff;padding:4px 16px;font-size:.75rem;">💾 保存</button>
+                            <button id="peAgentCancel" class="file-btn" style="padding:4px 16px;font-size:.75rem;">取消</button>
+                        </div>
+                    </div>`;
+                wrap.querySelector('#peAgentCancel').onclick = () => { wrap.style.display = 'none'; wrap.innerHTML = ''; };
+                wrap.querySelector('#peAgentSave').onclick = async () => {
+                    const name = wrap.querySelector('#peAgentName').value.trim();
+                    const content = wrap.querySelector('#peAgentContent').value.trim();
+                    if (!content) { showToast('提示词内容不能为空', 'error'); return; }
+                    const payload = { content };
+                    if (agent) payload.id = agent.id;
+                    if (name) payload.name = name;
+                    await savePrompt('agent', payload);
+                };
+                wrap.querySelector('#peAgentContent').focus();
+            }
+
+            // ---- 消息模板标签页 ----
+            async function renderTemplates() {
+                await loadMine();
+                await maybeMigrateTemplates();
+                const templates = (data && data.templates) || [];
+                const max = data.template_max || 5;
+                const canNew = templates.length < max;
+                const listHtml = templates.length ? templates.map(t => `
+                    <div class="pe-template" data-id="${escapeHtml(String(t.id))}" style="border:1px solid var(--card-border);border-radius:8px;padding:8px;margin-bottom:6px;">
+                        <strong>${escapeHtml(t.name || '未命名模板')}</strong>
+                        <div style="color:var(--card-muted);font-size:.72rem;white-space:pre-wrap;margin:4px 0 6px;max-height:54px;overflow:hidden;">${escapeHtml((t.content || '').slice(0, 160))}${(t.content || '').length > 160 ? '…' : ''}</div>
+                        <div style="display:flex;gap:6px;">
+                            <button class="file-btn pe-tpl-use" data-id="${escapeHtml(String(t.id))}" style="font-size:.7rem;padding:2px 10px;">📥 使用</button>
+                            <button class="file-btn pe-tpl-rename" data-id="${escapeHtml(String(t.id))}" style="font-size:.7rem;padding:2px 10px;">重命名</button>
+                            <button class="file-btn pe-tpl-del" data-id="${escapeHtml(String(t.id))}" style="font-size:.7rem;padding:2px 10px;background:#fef2f2;color:#dc2626;">删除</button>
+                        </div>
+                    </div>`).join('') : '<p style="color:var(--card-muted);">暂无模板，点击「新建模板」创建。</p>';
+
+                bodyEl().innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <strong style="font-size:.78rem;">我的模板（${templates.length}/${max}）</strong>
+                        <button id="peNewTpl" class="file-btn" ${canNew ? '' : 'disabled'} style="font-size:.72rem;padding:3px 12px;${canNew ? 'background:#16a34a;color:#fff;' : 'opacity:.5;cursor:not-allowed;'}">+ 新建模板</button>
+                    </div>
+                    ${canNew ? '' : '<p style="font-size:.68rem;color:#d97706;margin-bottom:6px;">最多 5 个模板，请先删除一个。</p>'}
+                    <div id="peTplList">${listHtml}</div>
+                    <div id="peTplEditorWrap" style="display:none;margin-top:10px;"></div>
+                `;
+
+                // 使用：插入消息输入框并关闭（保留原行为）
+                bodyEl().querySelectorAll('.pe-tpl-use').forEach(b => b.onclick = () => {
+                    const t = templates.find(x => String(x.id) === b.dataset.id);
+                    if (!t) return;
+                    if (messageInput) { messageInput.value = t.content || ''; messageInput.focus(); }
+                    modal.close();
+                });
+                const newBtn = bodyEl().querySelector('#peNewTpl');
+                if (newBtn && !newBtn.disabled) newBtn.onclick = () => showTemplateEditor(null);
+                bodyEl().querySelectorAll('.pe-tpl-rename').forEach(b => b.onclick = async () => {
+                    const t = templates.find(x => String(x.id) === b.dataset.id);
+                    if (!t) return;
+                    const name = await window.prompt('重命名模板', t.name || '');
+                    if (name === null) return;
+                    if (!name.trim()) { showToast('名称不能为空', 'error'); return; }
+                    await savePrompt('template', { id: t.id, name: name.trim(), content: t.content || '' });
+                });
+                bodyEl().querySelectorAll('.pe-tpl-del').forEach(b => b.onclick = () => deletePrompt('template', b.dataset.id));
+            }
+
+            // 新建/编辑模板的内联编辑器（新建时预填当前输入框内容）
+            function showTemplateEditor(tpl) {
+                const wrap = bodyEl().querySelector('#peTplEditorWrap');
+                if (!wrap) return;
+                wrap.style.display = 'block';
+                wrap.innerHTML = `
+                    <div style="border-top:1px solid var(--card-border);padding-top:8px;">
+                        <input id="peTplName" placeholder="模板名称（可选）" value="${escapeHtml(tpl ? (tpl.name || '') : '')}" style="width:100%;margin-bottom:6px;padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:.78rem;box-sizing:border-box;">
+                        <textarea id="peTplContent" placeholder="模板内容" style="width:100%;height:140px;font-family:monospace;font-size:.75rem;padding:6px;border:1px solid var(--card-border);border-radius:6px;resize:vertical;box-sizing:border-box;">${escapeHtml(tpl ? (tpl.content || '') : (messageInput ? messageInput.value : ''))}</textarea>
+                        <div style="display:flex;gap:8px;margin-top:6px;">
+                            <button id="peTplSave" class="file-btn" style="background:#16a34a;color:#fff;padding:4px 16px;font-size:.75rem;">💾 保存</button>
+                            <button id="peTplCancel" class="file-btn" style="padding:4px 16px;font-size:.75rem;">取消</button>
+                        </div>
+                    </div>`;
+                wrap.querySelector('#peTplCancel').onclick = () => { wrap.style.display = 'none'; wrap.innerHTML = ''; };
+                wrap.querySelector('#peTplSave').onclick = async () => {
+                    const name = wrap.querySelector('#peTplName').value.trim();
+                    const content = wrap.querySelector('#peTplContent').value.trim();
+                    if (!content) { showToast('模板内容不能为空', 'error'); return; }
+                    const payload = { content };
+                    if (tpl) payload.id = tpl.id;
+                    if (name) payload.name = name;
+                    await savePrompt('template', payload);
+                };
+            }
+
+            // 首次打开自动迁移旧 localStorage 模板（成功后清空 key，避免重复迁移）
+            async function maybeMigrateTemplates() {
+                if (migrating) return;
+                let local = [];
+                try { local = loadTemplates(); } catch (_) { local = []; }
+                if (!Array.isArray(local) || !local.length) return;
+                const payload = local
+                    .map(t => ({ name: (t && (t.name || (t.text || '').slice(0, 30))) || '', content: (t && t.text) || '' }))
+                    .filter(t => t.content);
+                if (!payload.length) { localStorage.removeItem('promptTemplates'); return; }
+                migrating = true;
+                try {
+                    const r = await fetch('/prompts/migrate_templates', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                        body: JSON.stringify({ templates: payload })
+                    });
+                    const d = await r.json();
+                    if (d && d.success) {
+                        localStorage.removeItem('promptTemplates');
+                        showToast(`已迁移 ${d.imported != null ? d.imported : payload.length} 个本地模板`, 'success');
+                        data = null;
+                        await loadMine(true);
+                    } else {
+                        showToast((d && d.error) || '模板迁移失败', 'error');
+                    }
+                } catch (_) {
+                    showToast('模板迁移网络错误', 'error');
+                } finally {
+                    migrating = false;
+                }
+            }
+
+            // 渲染当前标签页
+            async function render() {
+                renderTabs();
+                bodyEl().innerHTML = '<span style="color:var(--card-muted);">加载中...</span>';
+                if (activeTab === 'system') await renderSystem();
+                else await renderTemplates();
+            }
+
+            tabsEl.querySelectorAll('.pe-tab').forEach(btn => {
+                btn.onclick = () => { activeTab = btn.dataset.tab; render(); };
+            });
+
+            render();
+        }
+        window.openPromptEditor = openPromptEditor;
 
         // Audit log handler (defined here so createQuickModal is in scope)
         const auditLogBtn = document.getElementById('sidebarAuditLogBtn');
@@ -7300,71 +7569,27 @@
     }
 
     // ======================== Prompt Templates ========================
+    // 仅保留旧 localStorage 读取，供统一编辑器首次打开时迁移；新数据存后端
     function loadTemplates() {
         try { return JSON.parse(localStorage.getItem('promptTemplates') || '[]'); }
         catch (e) { return []; }
     }
-    function saveTemplates(list) { localStorage.setItem('promptTemplates', JSON.stringify(list)); }
 
+    // 打开统一提示词编辑器（template 标签页）
     const promptTemplatesBtn = document.getElementById('promptTemplatesBtn');
     if (promptTemplatesBtn) {
         promptTemplatesBtn.onclick = function() {
-            const templates = loadTemplates();
-            const modal = document.createElement('div');
-            modal.className = 'modal'; modal.style.display = 'flex';
-            const listHtml = templates.length === 0
-                ? '<p style="color:#999;">暂无模板，在输入框输入内容后点击保存</p>'
-                : templates.map((t, i) => `<div class="template-item" data-idx="${i}">
-                    <span class="template-text">${escapeHtml(t.name || t.text.slice(0,40))}</span>
-                    <div class="template-actions">
-                        <button class="tmpl-use" data-idx="${i}">📥 使用</button>
-                        <button class="tmpl-del" data-idx="${i}">🗑</button>
-                    </div></div>`).join('');
-            modal.innerHTML = `<div class="modal-content" style="width:500px;max-width:90%">
-                <span class="close">&times;</span>
-                <h3>📋 提示词模板</h3>
-                <div style="display:flex;gap:8px;margin-bottom:12px">
-                    <input id="tmplName" placeholder="模板名称(可选)" style="flex:1;padding:6px">
-                </div>
-                <div class="template-list">${listHtml}</div>
-                <button id="saveTemplateBtn" class="file-btn" style="background:#27ae60;color:white;margin-top:10px;">💾 保存当前输入为模板</button>
-            </div>`;
-            document.body.appendChild(modal);
-            modal.querySelector('.close').onclick = () => modal.remove();
-            modal.onclick = e => { if (e.target === modal) modal.remove(); };
+            if (window.openPromptEditor) window.openPromptEditor('template');
+            else showToast('编辑器加载中，请稍后重试', 'error');
+        };
+    }
 
-            // Save
-            modal.querySelector('#saveTemplateBtn').onclick = () => {
-                const text = messageInput.value.trim();
-                if (!text) return;
-                const name = modal.querySelector('#tmplName').value.trim() || text.slice(0, 30);
-                const tmpl = { name, text, time: Date.now() };
-                const list = loadTemplates();
-                list.push(tmpl);
-                saveTemplates(list);
-                showToast('模板已保存', 'success');
-                modal.remove();
-            };
-            // Use
-            modal.querySelectorAll('.tmpl-use').forEach(btn => {
-                btn.onclick = () => {
-                    const idx = parseInt(btn.dataset.idx);
-                    messageInput.value = templates[idx].text;
-                    modal.remove();
-                    messageInput.focus();
-                };
-            });
-            // Delete
-            modal.querySelectorAll('.tmpl-del').forEach(btn => {
-                btn.onclick = () => {
-                    const idx = parseInt(btn.dataset.idx);
-                    const list = loadTemplates();
-                    list.splice(idx, 1);
-                    saveTemplates(list);
-                    modal.remove();
-                    showToast('模板已删除', 'info');
-                };
-            });
+    // 打开统一提示词编辑器（system 标签页）——所有登录用户可见
+    const promptEditorBtn = document.getElementById('promptEditorBtn');
+    if (promptEditorBtn) {
+        promptEditorBtn.onclick = function() {
+            if (window.openPromptEditor) window.openPromptEditor('system');
+            else showToast('编辑器加载中，请稍后重试', 'error');
         };
     }
 

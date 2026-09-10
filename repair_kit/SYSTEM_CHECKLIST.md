@@ -220,3 +220,5 @@ _(6/6 verified automatically)_
 > Round-018: batch_pair_results table + batch_comparison_results.project_id added; numpy scalars cast in clearance writes; anon fetch gate in index head; audit --gate.
 
 > Round-019: batch compare endpoints accept file_ids (large-file); async plagiarism_task + run/status routes.
+
+> Round-020: per-user prompts (user_prompts table, /prompts/* routes); immutable default; message templates moved to DB.

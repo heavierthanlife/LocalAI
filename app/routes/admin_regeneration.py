@@ -963,32 +963,9 @@ def admin_transfer_assets():
 
 
 # ── System Prompt Management ──
-
-@admin_bp.route('/admin/system_prompt', methods=['GET'])
-@admin_required
-def get_system_prompt():
-    """Return the current agent system prompt (admin only)."""
-    from app.globals import AGENT_SYSTEM_PROMPT
-    return ok({"prompt": AGENT_SYSTEM_PROMPT.strip()})
-
-
-@admin_bp.route('/admin/system_prompt', methods=['POST'])
-@admin_required
-def set_system_prompt():
-    """Update the agent system prompt and persist to disk."""
-    from app.globals import save_prompt, AGENT_SYSTEM_PROMPT as _current
-    from app.services.admin_utils import log_admin_action
-    data = request.get_json(silent=True) or {}
-    new_prompt = (data.get('prompt', '') or '').strip()
-    if not new_prompt:
-        return err("Prompt cannot be empty", "VALIDATION_ERROR", 400)
-    if new_prompt == _current.strip():
-        return ok({"message": "No changes"}, "ok")
-    save_prompt(new_prompt)
-    log_admin_action(session.get('user_id', ''), session.get('username', ''),
-                    'PROMPT_EDIT', 'system', None, column_name='agent_system_prompt',
-                    old_value=_current[:80] + '...', new_value=new_prompt[:80] + '...')
-    return ok({"message": "System prompt updated"}, "ok")
+# 已退役：全局默认提示词现为不可变常量（app.globals.get_default_prompt），
+# 每用户自定义版本改由 /prompts/* 端点管理（app/services/user_prompt.py）。
+# 旧的 GET/POST /admin/system_prompt 路由已删除。
 
 
 # ── Search Cache Config ──
@@ -1110,9 +1087,8 @@ def update_runtime_config():
     # Invalidate agent cache if LLM provider/model changed
     if 'active_llm_provider' in sanitized or 'active_llm_model' in sanitized:
         from app import globals as g
-        with g._agent_lock:
-            g._agent = None
-            g._current_max_tokens = None
+        with g._agent_cache_lock:
+            g._agent_cache.clear()
         logger.info("Agent cache invalidated due to LLM config change")
 
     if 'active_vl_provider' in sanitized or 'active_vl_model' in sanitized:

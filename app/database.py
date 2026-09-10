@@ -1266,3 +1266,20 @@ def _run_table_creation(cur: "PgCursor"):
             updated_at  TIMESTAMPTZ DEFAULT NOW()
         )
     """)
+
+    # ── Per-user agent prompts + message templates ──
+    # kind ∈ {'agent','template'}; agent ≤2 rows/user (≤1 active), template ≤5.
+    # Raw content stored; safety guard appended only at resolve time.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_prompts (
+            id          SERIAL PRIMARY KEY,
+            user_id     TEXT,
+            kind        TEXT,
+            name        TEXT,
+            content     TEXT,
+            is_active   BOOLEAN DEFAULT FALSE,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_prompts_user_kind ON user_prompts(user_id, kind)")

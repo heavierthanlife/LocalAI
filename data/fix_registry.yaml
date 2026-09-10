@@ -836,3 +836,29 @@ fixes:
       - type: grep
         file: celery_app.py
         pattern: "app.services.plagiarism_task"
+
+
+  - id: FIX-2026-09-09-026
+    title: "主agent提示词：不可变默认 + 每用户自定义(≤2) + 消息模板入库(≤5)"
+    severity: high
+    rationale: >
+      原管理员可改全局系统提示词(data/agent_prompt.json 影响所有用户)。改为：硬编码
+      _DEFAULT_PROMPT 不可变；每用户 user_prompts 表存 agent 版本(≤2, 单 active)与
+      消息模板(≤5)；resolve_user_prompt 按用户解析并追加安全 guard；chat/agent 按
+      (user_id,prompt_hash,max_tokens) 缓存。禁止任何路由写默认。
+    checks:
+      - type: grep
+        file: app/database.py
+        pattern: "CREATE TABLE IF NOT EXISTS user_prompts"
+      - type: grep
+        file: app/globals.py
+        pattern: "def get_default_prompt"
+      - type: grep
+        file: app/services/user_prompt.py
+        pattern: "def resolve_user_prompt"
+      - type: grep
+        file: app/routes/chat_config.py
+        pattern: "/prompts/default"
+      - type: grep_not
+        file: app/globals.py
+        pattern: "def save_prompt"

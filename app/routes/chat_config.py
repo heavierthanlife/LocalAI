@@ -26,8 +26,8 @@ def set_max_tokens():
     tokens = data.get('max_tokens', 4800)
     tokens = max(100, min(4800, tokens))
     session['max_tokens'] = tokens
-    with g._agent_lock:
-        g._agent = None
+    with g._agent_cache_lock:
+        g._agent_cache.clear()
     return jsonify({"success": True, "max_tokens": tokens})
 
 # ── LLM Provider / Model selection ──
@@ -134,8 +134,8 @@ def set_llm_provider():
     if model:
         session['llm_model'] = model
     # Invalidate agent cache so next request picks up new model
-    with g._agent_lock:
-        g._agent = None
+    with g._agent_cache_lock:
+        g._agent_cache.clear()
     return jsonify({"success": True, "provider": provider, "model": model})
 
 @chat_bp.route('/feedback', methods=['POST'])
@@ -242,3 +242,89 @@ def load_cached_file():
                 add_to_cache(thread_id, filename, content, user_id)
                 return jsonify({"content": content})
     return jsonify({"error": "File not found"}), 404
+
+
+# ── Per-user prompts (immutable default + custom versions + templates) ──
+
+def _prompt_user_id():
+    return session.get('user_id') or ''
+
+
+@chat_bp.route('/prompts/default', methods=['GET'])
+def prompts_default():
+    """返回不可变默认主 agent 提示词（原始版，不含 guard）。"""
+    from app.globals import get_default_prompt
+    return ok({'prompt': get_default_prompt()})
+
+
+@chat_bp.route('/prompts/mine', methods=['GET'])
+def prompts_mine():
+    """返回当前用户的 agent 版本与消息模板。"""
+    user_id = _prompt_user_id()
+    if not user_id:
+        return err("未登录", "AUTH_REQUIRED", 401)
+    from app.services.user_prompt import list_user_prompts
+    return ok(list_user_prompts(user_id))
+
+
+@chat_bp.route('/prompts/save', methods=['POST'])
+def prompts_save():
+    """新建/更新用户提示词或模板。"""
+    user_id = _prompt_user_id()
+    if not user_id:
+        return err("未登录", "AUTH_REQUIRED", 401)
+    data = request.get_json(silent=True) or {}
+    from app.services.user_prompt import save_user_prompt
+    try:
+        pid = save_user_prompt(
+            user_id,
+            data.get('kind'),
+            data.get('content'),
+            name=data.get('name'),
+            pid=data.get('id'),
+        )
+    except ValueError as e:
+        return err(str(e), "VALIDATION_ERROR", 400)
+    return ok({'id': pid})
+
+
+@chat_bp.route('/prompts/activate', methods=['POST'])
+def prompts_activate():
+    """将某个 agent 版本设为当前用户唯一 active。"""
+    user_id = _prompt_user_id()
+    if not user_id:
+        return err("未登录", "AUTH_REQUIRED", 401)
+    data = request.get_json(silent=True) or {}
+    from app.services.user_prompt import activate_prompt
+    try:
+        activate_prompt(user_id, data.get('id'))
+    except ValueError as e:
+        return err(str(e), "VALIDATION_ERROR", 400)
+    return ok({})
+
+
+@chat_bp.route('/prompts/delete', methods=['POST'])
+def prompts_delete():
+    """删除用户提示词/模板（校验归属）。"""
+    user_id = _prompt_user_id()
+    if not user_id:
+        return err("未登录", "AUTH_REQUIRED", 401)
+    data = request.get_json(silent=True) or {}
+    from app.services.user_prompt import delete_prompt
+    try:
+        delete_prompt(user_id, data.get('id'))
+    except ValueError as e:
+        return err(str(e), "VALIDATION_ERROR", 400)
+    return ok({})
+
+
+@chat_bp.route('/prompts/migrate_templates', methods=['POST'])
+def prompts_migrate_templates():
+    """一次性导入消息模板（受 ≤5 约束，超出截断）。"""
+    user_id = _prompt_user_id()
+    if not user_id:
+        return err("未登录", "AUTH_REQUIRED", 401)
+    data = request.get_json(silent=True) or {}
+    from app.services.user_prompt import migrate_templates
+    imported = migrate_templates(user_id, data.get('templates') or [])
+    return ok({'imported': imported})

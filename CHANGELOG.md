@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-09] — 主 agent 提示词：不可变默认 + 每用户自定义（≤2）+ 消息模板统一（FIX-2026-09-09-026）
+
+### Changed
+- **提示词模型重构**：服务器默认 = 硬编码 `_DEFAULT_PROMPT`（**不可变**，任何路由不可写）；退役管理员全局覆盖 `/admin/system_prompt` 与 `data/agent_prompt.json`。**每个登录用户**可查看原始版、保存**自己的 ≤2 个系统提示词版本**（选一生效，无则回退默认），用户提示词自动追加安全 guard
+- **消息模板统一入库**：原聊天输入框的 localStorage 片段模板改为 DB（每用户 ≤5），与系统提示词并入同一编辑器
+
+### Added
+- 表 `user_prompts(id, user_id, kind, name, content, is_active, created_at, updated_at)`（`kind='agent'` ≤2 + 单 active；`kind='template'` ≤5）
+- `app/services/user_prompt.py`：`resolve_user_prompt` / `list_user_prompts` / `save_user_prompt` / `activate_prompt` / `delete_prompt` / `migrate_templates`
+- 路由（任意登录用户）：`GET /prompts/default` · `GET /prompts/mine` · `POST /prompts/save|activate|delete|migrate_templates`
+- 前端统一编辑器 `openPromptEditor`（系统提示词 / 消息模板 两 tab）；入口 `#promptEditorBtn`（全员可见）+ `#promptTemplatesBtn`（模板页）
+
+### Fixed
+- **agent 按用户解析提示词**：`chat.py`（流式/隔离）+ `agent.py get_agent` 改 `resolve_user_prompt(user_id)`；缓存键 `(user_id, prompt_hash, max_tokens)` + LRU 8；移除模块级提示词快照（原 `agent.py:26`）
+
+### regression: 128/128 tests passed · verify_fixes 125/125 · T0 no_route=0
+- 容器 API 实测：default len=782 不可变 · agent v1/v2=200 / v3=400（≤2）· activate 唯一 active · template ≤5 · migrate 满则 imported=0 · 跨用户隔离 · `/admin/system_prompt`→404
+
+---
+
 ## [2026-09-09] — 大文件对比：413 修复 + 异步剽窃任务（FIX-2026-09-09-025）
 
 ### Fixed

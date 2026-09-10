@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 
-# System prompt
-AGENT_SYSTEM_PROMPT = g.AGENT_SYSTEM_PROMPT
+# System prompt is resolved per-user at request time
+# (app.services.user_prompt.resolve_user_prompt) and cached per
+# (user_id, prompt_hash, max_tokens) — see get_agent.
 
 # ---------- Search Cache ----------
 SEARCH_CACHE_DIR = os.path.join(DATA_DIR, "search_cache")
@@ -210,14 +211,27 @@ def bocha_search(query: str) -> str:
 
 def get_agent(max_tokens=None):
     from .. import globals as g
+    from .user_prompt import resolve_user_prompt
 
     if max_tokens is None:
         max_tokens = session.get('max_tokens', 1600)
-    if g._agent is not None and g._current_max_tokens == max_tokens:
-        return g._agent
-    with g._agent_lock:
-        if g._agent is not None and g._current_max_tokens == max_tokens:
-            return g._agent
+
+    # Resolve this user's active system prompt (custom or immutable default)
+    user_id = session.get('user_id', '') or ''
+    prompt = resolve_user_prompt(user_id)
+    prompt_hash = hashlib.sha1(prompt.encode('utf-8')).hexdigest()[:12]
+    cache_key = (user_id, prompt_hash, max_tokens)
+
+    # Fast path — dict.get is atomic under CPython; no lock for the common hit.
+    cached = g._agent_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    with g._agent_cache_lock:
+        # Double-check after acquiring the lock
+        cached = g._agent_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         # Check if admin selected a different model via runtime_config
         provider_id = None
@@ -275,15 +289,22 @@ def get_agent(max_tokens=None):
             with g._async_checkpointer_lock:
                 if g._async_checkpointer is None:
                     _init_async_checkpointer()
-        g._agent = create_agent(
+        agent = create_agent(
             model=llm,
             tools=[get_date, bocha_search],
-            system_prompt=AGENT_SYSTEM_PROMPT,
+            system_prompt=prompt,
             checkpointer=g._async_checkpointer
         )
-        g._current_max_tokens = max_tokens
-        logger.info(f"Agent reinitialized with DeepSeek model, max_tokens={max_tokens}")
-        return g._agent
+        # LRU eviction: drop oldest entry when at capacity (dict keeps insertion order)
+        if len(g._agent_cache) >= 8:
+            oldest_key = next(iter(g._agent_cache))
+            g._agent_cache.pop(oldest_key, None)
+        g._agent_cache[cache_key] = agent
+        logger.info(
+            f"Agent built for user={user_id or 'anon'} prompt={prompt_hash} "
+            f"max_tokens={max_tokens} (cache={len(g._agent_cache)})"
+        )
+        return agent
 
 
 def _init_async_checkpointer():
@@ -308,10 +329,10 @@ def _init_async_checkpointer():
 
 
 def set_max_tokens(tokens):
-    """Set max_tokens and invalidate agent cache."""
+    """Set max_tokens and invalidate the per-user agent cache."""
     from .. import globals as g
     tokens = max(100, min(4800, tokens))
     session['max_tokens'] = tokens
-    with g._agent_lock:
-        g._agent = None
+    with g._agent_cache_lock:
+        g._agent_cache.clear()
     return tokens
