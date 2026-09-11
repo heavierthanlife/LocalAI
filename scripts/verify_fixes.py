@@ -40,6 +40,20 @@ def _check_grep_not(file_rel, pattern):
     return True, None
 
 
+def _check_literal(file_rel, pattern):
+    """Plain substring check — no regex metacharacter handling.
+
+    Use for patterns containing ( ) [ ] . * | etc. that would otherwise be
+    mis-parsed as regex groups (see finding fix-registry-regex-paren).
+    """
+    content = _read_file(file_rel)
+    if content is None:
+        return False, f"file not found: {file_rel}"
+    if pattern in content:
+        return True, None
+    return False, f"literal '{pattern}' NOT found in {file_rel}"
+
+
 def _check_function_order(file_rel, before_name, after_name):
     content = _read_file(file_rel)
     if content is None:
@@ -58,6 +72,7 @@ def _check_function_order(file_rel, before_name, after_name):
 CHECK_RUNNERS = {
     'grep': lambda c: _check_grep(c['file'], c['pattern']),
     'grep_not': lambda c: _check_grep_not(c['file'], c['pattern']),
+    'literal': lambda c: _check_literal(c['file'], c['pattern']),
     'function_order': lambda c: _check_function_order(c['file'], c['before'], c['after']),
 }
 

@@ -204,7 +204,9 @@ Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shar
 
 ## Long-term Backlog
 
-- *(No items — all blueprints have integration tests.)*
+- 清标任务归属校验：`/clearance/status|stream` 目前仅校验登录（consent + user_id），未校验 task 归属。TaskBus 注册时存 user_id、读取时比对，可防他人持 task_id 读取。
+- 清标前端补充「警示详情与处理指引」渲染（当前仅 DOCX 有；前端已补基本信息表 + 开标信息表）。
+- 合规/批量族部分端点无前端（`/compliance/laws/upload`、`/feedback/history`、`/training_data`、`/trends`、`/graph`、`/laws/monitor/events`、`/check_quote_anomaly`、`/compare_bidders_quotes`、`/extract_relationships`）——保留为 API-only。
 
 ## Fix Registry
 

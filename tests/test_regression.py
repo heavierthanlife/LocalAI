@@ -405,16 +405,12 @@ def test_taskbus_register_queued():
         "TaskBus must use the queued status constant"
 
 
-def test_clearance_and_docanalysis_register_queued():
-    """/clearance/run and /document_analysis/analyze must pre-register the task."""
+def test_clearance_register_queued():
+    """/clearance/run must pre-register the task as queued before send_task."""
     with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
         c = f.read()
     assert 'register_queued' in c, \
         "clearance route must pre-register the task as queued before send_task"
-    with open('app/routes/document_analysis.py', 'r', encoding='utf-8') as f:
-        d = f.read()
-    assert 'register_queued' in d, \
-        "document_analysis route must pre-register the task as queued before send_task"
 
 
 def test_clearance_status_precheck_tolerates_404():
@@ -1363,4 +1359,52 @@ def test_vl_verify_image_no_verifier_single_model(monkeypatch):
     out = vm.vl_model.verify_image(b'fake')
     assert out['consistent'] is True
     assert '单模型' in out['note']
+
+
+# ── FIX-2026-09-10-028: shadowed knowledge_bp /feedback route removed ──
+def test_no_shadowed_knowledge_feedback_route():
+    """knowledge.py must not redefine /feedback (shadowed by chat_bp)."""
+    with open('app/routes/knowledge.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert "@knowledge_bp.route('/feedback'" not in src, \
+        "knowledge_bp /feedback was shadowed by chat_bp; must stay deleted"
+    assert 'def submit_knowledge_lab_feedback' not in src, \
+        "dead submit_knowledge_lab_feedback handler must stay deleted"
+    assert "/knowledge_lab/feedback" in src, \
+        "dedicated /knowledge_lab/feedback route must remain"
+
+
+# ── FIX-2026-09-10-029: clearance persistence is opt-in ──
+def test_run_analysis_persist_opt_in():
+    """run_analysis must default persist=False (no DB side effects for unit tests)."""
+    import inspect
+    from app.services import document_analysis_svc as svc
+    sig = inspect.signature(svc.run_analysis)
+    assert sig.parameters['persist'].default is False, \
+        "run_analysis(persist=) must default to False"
+    assert 'task_id' in sig.parameters and 'project_id' in sig.parameters
+    assert hasattr(svc, '_persist_clearance_review')
+
+
+# ── FIX-2026-09-10-031: clearance status/stream require login ──
+def test_clearance_status_stream_require_login():
+    with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'AUTH-GUARD-STATUS(FIX-2026-09-10-031)' in src
+    assert 'AUTH-GUARD-STREAM(FIX-2026-09-10-031)' in src
+    # both guards must actually check consent + user
+    assert src.count("session.get('consent_value', 0) != 1") >= 4, \
+        "consent guard must appear in run + status + stream (+ preview)"
+
+
+# ── FIX-2026-09-10-030: legacy document_analysis blueprint removed ──
+def test_document_analysis_blueprint_removed():
+    import os
+    assert not os.path.exists('app/routes/document_analysis.py'), \
+        "legacy document_analysis route file must stay deleted"
+    with open('app/routes/__init__.py', 'r', encoding='utf-8') as f:
+        assert 'document_analysis_bp' not in f.read()
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        assert 'def run_analysis_async' not in f.read()
+
 

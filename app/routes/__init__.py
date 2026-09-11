@@ -128,11 +128,7 @@ def register_all(flask_app):
     flask_app.register_blueprint(cases_bp)
     logger.info(f"  OK cases_bp ({time.time()-t0:.0f}s)")
 
-    # ── Document Analysis: eager (deep analysis of bidding documents) ──
-    t0 = time.time()
-    from app.routes.document_analysis import document_analysis_bp
-    flask_app.register_blueprint(document_analysis_bp)
-    logger.info(f"  OK document_analysis_bp ({time.time()-t0:.0f}s)")
+    # ── Document Analysis: removed — merged into the unified 清标 entry ──
 
     # ── Clearance: eager (unified 清标 entry, merges compare/analysis/compliance/AI review) ──
     t0 = time.time()

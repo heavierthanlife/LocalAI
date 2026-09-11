@@ -140,6 +140,7 @@ def list_laws():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI. Law-library ingestion entry point.
 @compliance_bp.route('/laws/upload', methods=['POST'])
 @limiter.limit("10/minute")
 @_login_required
@@ -580,6 +581,7 @@ def submit_feedback():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI.
 @compliance_bp.route('/feedback/history', methods=['GET'])
 @_login_required
 def feedback_history():
@@ -621,6 +623,7 @@ def feedback_history():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI.
 @compliance_bp.route('/training_data', methods=['GET'])
 @_login_required
 def export_training_data():
@@ -823,6 +826,7 @@ def get_law_version(law_id: int, version_id: int):
 
 # ── Compliance Trends & Dashboard (U10/U11) ──
 
+# API-only: no frontend UI.
 @compliance_bp.route('/trends', methods=['GET'])
 @_login_required
 def get_trends():
@@ -881,6 +885,7 @@ def get_compare():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI.
 @compliance_bp.route('/graph', methods=['GET'])
 @_login_required
 def get_graph():
@@ -922,6 +927,7 @@ def monitor_impact():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI.
 @compliance_bp.route('/laws/monitor/events', methods=['GET'])
 @_login_required
 def get_change_events():

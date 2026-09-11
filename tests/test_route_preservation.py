@@ -8,7 +8,7 @@ Usage:
     pytest tests/test_route_preservation.py -v
 
 Regenerate snapshot (when intentionally changing routes):
-    python C:\\Users\\nana-\\AppData\\Local\\Temp\\opencode\\dump_routes.py
+    python scripts/dump_routes.py
 """
 import json
 import os
@@ -29,7 +29,7 @@ def _current_routes(app):
     return routes
 
 
-@pytest.mark.parametrize('expected_len', [405])
+@pytest.mark.parametrize('expected_len', [401])
 def test_route_count_stable(app, expected_len):
     """Total non-static route count must match the pre-refactor snapshot."""
     assert len(_current_routes(app)) == expected_len

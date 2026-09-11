@@ -442,46 +442,9 @@ def archive_skill(skill_id):
     invalidate_audit_cache()
     return jsonify({"status": "ok"})
 
-@knowledge_bp.route('/feedback', methods=['POST'])
-def submit_knowledge_lab_feedback():
-    """Submit feedback on a knowledge-lab skill extraction result."""
-    data = request.get_json(silent=True) or {}
-    file_id = data.get('file_id', '')
-    source = data.get('source', '')
-    rating = data.get('rating')
-
-    if not file_id or rating is None:
-        return jsonify({"success": False, "error": "缺少必填参数"}), 400
-    if rating not in (-1, 1):
-        return jsonify({"success": False, "error": "rating 必须为 -1 或 1"}), 400
-
-    user_id = session.get('user_id', '')
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO user_feedback (user_id, source, target_id, rating)
-                    VALUES (%s, %s, %s, %s)
-                """, (user_id, 'knowledge_lab', file_id, rating))
-                conn.commit()
-
-        try:
-            from app.services.training_logger import log_interaction
-            _rating_map = {1: 5, -1: 1}
-            log_interaction(
-                thread_id=f"knowledge_lab_{file_id[:40]}",
-                user_msg=f"知识库技能反馈: file_id={file_id} source={source}",
-                assistant_response=f"用户评分: {rating}",
-                rating=_rating_map.get(rating, 3),
-                source='knowledge_lab',
-            )
-        except Exception:
-            logger.warning("Failed to log knowledge_lab feedback to training", exc_info=True)
-
-        return jsonify({"success": True, "message": "感谢反馈!"})
-    except Exception as e:
-        logger.error(f"Knowledge lab feedback error: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+# NOTE: a duplicate POST /feedback handler used to live here. It was shadowed by
+# chat_bp's /feedback (chat_bp registers first) and is superseded by the
+# dedicated /knowledge_lab/feedback route above (submit_knowledge_feedback).
 
 @knowledge_bp.route('/admin/skill_audit/feedback', methods=['POST'])
 def submit_skill_audit_feedback():

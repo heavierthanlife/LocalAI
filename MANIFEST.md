@@ -100,7 +100,6 @@
 | `templates.py` | 316 | 14 | 模板 CRUD、.docx 导入导出、版本管理、AI 推荐 |
 | `audit.py` | 306 | 8 | 全量审计（**已摘除注册**，功能合并入清标；文件保留） |
 | `cases.py` | 271 | 14 | 案例 CRUD、法律关联、模板关联、auto-generate |
-| `document_analysis.py` | 123 | 3 | 深度分析（1-10 文件 Celery + SSE） |
 | `tasks.py` | 115 | 5 | 任务列表/状态/删除/取消/SSE |
 | `projects.py` | 104 | 1 | 项目路由 + 7 权限检查工具函数 |
 | `clearance.py` | 173 | 3 | 统一清标入口（5 维度 Celery 异步 + status + stream SSE） |

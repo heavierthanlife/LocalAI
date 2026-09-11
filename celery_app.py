@@ -23,7 +23,6 @@ celery = Celery(
         'app.services.ingest_pipeline',
         'app.services.skill_auditor',
         'app.services.nightly_trainer',
-        'app.services.document_analysis_svc',
         'app.services.clearance_engine',
         'app.services.plagiarism_task',
         'app.cleanup_tasks',

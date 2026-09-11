@@ -1531,24 +1531,6 @@
   },
   {
     "methods": [
-      "POST"
-    ],
-    "rule": "/document_analysis/analyze"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/document_analysis/status/<task_id>"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/document_analysis/stream/<task_id>"
-  },
-  {
-    "methods": [
       "GET"
     ],
     "rule": "/download_credit_report/<task_id>"
@@ -1582,12 +1564,6 @@
       "GET"
     ],
     "rule": "/favicon.ico"
-  },
-  {
-    "methods": [
-      "POST"
-    ],
-    "rule": "/feedback"
   },
   {
     "methods": [

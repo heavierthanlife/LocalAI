@@ -1,8 +1,8 @@
 """Document analysis service — runs all checkers and produces structured reports.
 
 Provides:
-  - run_analysis():      runs all available checkers, returns example-structured report
-  - build_analysis_docx(): generates .docx following the bid-rigging clue analysis format
+  - run_analysis():       runs all available checkers, returns example-structured report
+  - build_clearance_docx(): generates the unified 清标 .docx report
 """
 import logging
 import re
@@ -231,8 +231,40 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
         return {'error': str(e), 'skipped': True}
 
 
+def _persist_clearance_review(user_id, task_id, project_id, checker_data):
+    """Persist quote-anomaly + relationship results for the clearance path.
+
+    Idempotent per task_id (DELETE-then-INSERT). Best-effort: failures are
+    logged, never raised, so the clearance report is unaffected.
+    Only invoked when run_analysis(persist=True) — pure-compute callers and
+    unit tests default to persist=False (no DB side effects).
+    """
+    try:
+        quote = (checker_data.get('quote') or {}).get('result') or {}
+        per_bidder = quote.get('per_bidder') or []
+        rel_report = (checker_data.get('relationship') or {}).get('report')
+        if not per_bidder and not rel_report:
+            return
+        from app.database import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM quote_anomaly_results WHERE task_id = %s", (task_id,))
+                cur.execute("DELETE FROM entity_relationships WHERE task_id = %s", (task_id,))
+                cur.execute("DELETE FROM relationship_risk_summary WHERE task_id = %s", (task_id,))
+            conn.commit()
+        if per_bidder:
+            from app.services.quote_anomaly import save_quote_anomaly_results
+            save_quote_anomaly_results(user_id, task_id, per_bidder, quote, project_id)
+        if rel_report:
+            from app.services.relationship_extractor import save_relationship_results
+            save_relationship_results(user_id, task_id, rel_report, project_id)
+    except Exception as e:
+        logger.warning(f"Clearance review persistence failed (non-blocking): {e}")
+
+
 def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
-                 open_info=None, eval_criteria=None, options=None):
+                 open_info=None, eval_criteria=None, options=None,
+                 project_id=None, task_id=None, persist=False):
     """Run all checkers, build a structured report matching the example format.
 
     Args:
@@ -631,6 +663,10 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
         ) or any(
             fname in (v.get('files') or []) for v in hard.get('violations', [])
         )
+
+    # FIX-2026-09-10-CLR: 清标路径落库（opt-in；默认关闭，避免纯计算单测产生副作用）
+    if persist and task_id:
+        _persist_clearance_review(user_id, task_id, project_id, checker_data)
 
     return {
         '_pairs': pairs,
@@ -1284,21 +1320,6 @@ def _new_docx():
     return doc
 
 
-def build_analysis_docx(report, info_overrides=None):
-    """Generate .docx following the bid-rigging clue analysis format."""
-    if info_overrides:
-        report = dict(report)
-        report['basic_info'] = {**report.get('basic_info', {}), **info_overrides}
-    doc = _new_docx()
-    _build_standard_sections(doc, report)
-    _add_date_line(doc, report)
-
-    buf = BytesIO()
-    doc.save(buf)
-    buf.seek(0)
-    return buf.getvalue()
-
-
 # ── 清标 docx：标准五章 + 六横向对比 / 七合规 / 八 AI 评审 ──
 
 def build_clearance_docx(report, info_overrides=None):
@@ -1660,158 +1681,3 @@ def convert_docx_to_pdf(docx_bytes, task_id=''):
             return None
         with open(pdf_path, 'rb') as f:
             return f.read()
-
-
-# ── Celery async task ──
-
-@celery_app.task(bind=True, name='document_analysis_task', max_retries=1,
-                 soft_time_limit=2400, time_limit=2700)
-def run_analysis_async(self, file_data, file_specs, user_id, thread_id, task_id, project_id=None):
-    """Celery task: runs full analysis + generates DOCX + stores ZIP in DB.
-
-    file_data:  pre-extracted dicts (legacy small uploads)
-    file_specs: [{'abs_path','filename'}] — extracted here in the worker,
-                page-by-page (large-file friendly).
-    """
-    from app.services.task_bus import TaskBus
-    from app.services.file_processing import extract_text_from_path, extract_metadata_from_path
-    import os as _os, zipfile, hashlib, json
-
-    # Extraction helpers touch flask.session (analyze_images pref) which
-    # needs a *request* context — test_request_context provides one for the
-    # whole task.
-    from celery_app import init_flask_context
-    _flask_app = init_flask_context()
-    _req_ctx = _flask_app.test_request_context()
-    _req_ctx.push()
-
-    bus = TaskBus(task_id, 'doc_analysis', '投标文档深度分析')
-    bus.start()
-
-    try:
-        # Step 1: Run analysis (25%)
-        bus.progress(5, '正在提取文件内容...')
-
-        # Worker-side extraction for pre-uploaded files (bounded memory)
-        all_file_data = list(file_data or [])
-        for i, spec in enumerate(file_specs or []):
-            fname = spec.get('filename', '')
-            bus.progress(5 + int(15 * i / max(1, len(file_specs))),
-                         f'正在提取文件内容 ({i + 1}/{len(file_specs)}): {fname}...')
-            text, _ = extract_text_from_path(spec['abs_path'], fname)
-            if not text or text.startswith("["):
-                logger.warning(f"Skipping unreadable file: {fname}")
-                continue
-            meta = extract_metadata_from_path(spec['abs_path'], fname)
-            all_file_data.append({
-                'filename': fname,
-                'text': text,
-                'metadata': meta or {},
-                'images': [],
-            })
-
-        if not all_file_data:
-            bus.fail('无可提取文本的文件，任务终止')
-            return
-
-        n = len(all_file_data)
-
-        bus.progress(20, f'开始分析 {n} 个文件...')
-
-        # Step 2: Run all checkers
-        bus.progress(25, '正在进行文本相似度分析...')
-        report = run_analysis(all_file_data, user_id, thread_id)
-
-        bus.progress(40, '正在进行重点信息雷同分析...')
-        bus.progress(55, '正在进行文件属性对比...')
-        bus.progress(65, '正在进行文本质量检测...')
-        bus.progress(75, '正在进行关联关系分析...')
-        bus.progress(85, '正在进行报价异常检测...')
-
-        # Step 3: Generate DOCX + PDF (90%)
-        bus.progress(90, '正在生成分析报告...')
-
-        from app.config import DATA_DIR, to_rel_path
-        docx_bytes = build_analysis_docx(report)
-
-        # Step 4: Convert to PDF via LibreOffice (headless, Docker). Falls back to DOCX-only.
-        pdf_bytes = None
-        try:
-            pdf_bytes = convert_docx_to_pdf(docx_bytes, task_id)
-        except Exception as _e:
-            logger.warning('PDF conversion failed, falling back to DOCX only: %s', _e)
-            bus.progress(95, 'PDF 转换不可用，仅输出 DOCX')
-            pdf_bytes = None
-
-        # Store ZIP in DB
-        batch_dir = _os.path.join(DATA_DIR, 'batch_results')
-        _os.makedirs(batch_dir, exist_ok=True)
-        zip_name = f"doc_analysis_{task_id}.zip"
-        zip_path = _os.path.join(batch_dir, zip_name)
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(f"串通投标线索分析报告_{task_id[:8]}.docx", docx_bytes)
-            if pdf_bytes:
-                zf.writestr(f"串通投标线索分析报告_{task_id[:8]}.pdf", pdf_bytes)
-
-        file_names = [fd['filename'] for fd in all_file_data]
-        from app.database import get_db_connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO batch_comparison_results (user_id, task_id, project_id, file_count, pair_count, max_risk, file_names, zip_path)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    user_id, task_id, project_id, len(all_file_data), 0,
-                    report['basic_info'].get('total_score', 0),
-                    json.dumps(file_names, ensure_ascii=False),
-                    to_rel_path(zip_path),
-                ))
-
-                pairs = report.get('_pairs', [])
-                if pairs:
-                    ranked = sorted(pairs, key=lambda p: p.get('risk', 0), reverse=True)
-                    for rank, p in enumerate(ranked):
-                        risk_scores = {
-                            'text_sim': round(p.get('sim', 0), 2),
-                            'attr_same': p.get('attr_same', 0),
-                            'risk': round(p.get('risk', 0), 2),
-                        }
-                        cur.execute("""
-                            INSERT INTO batch_pair_results (task_id, file_a, file_b, similarity, max_risk, risk_scores, pair_rank)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (task_id, file_a, file_b) DO UPDATE SET
-                                similarity = EXCLUDED.similarity,
-                                max_risk = EXCLUDED.max_risk,
-                                risk_scores = EXCLUDED.risk_scores,
-                                pair_rank = EXCLUDED.pair_rank
-                        """, (
-                            task_id,
-                            p.get('name1', ''),
-                            p.get('name2', ''),
-                            float(round(p.get('sim', 0), 2)),
-                            float(round(p.get('risk', 0), 2)),
-                            json.dumps(risk_scores, ensure_ascii=False, default=float),
-                            int(rank + 1),
-                        ))
-
-                conn.commit()
-
-        from flask import url_for
-        try:
-            download_url = url_for('batch.download_batch_result', task_id=task_id)
-        except Exception:
-            from app.config import BASE_DIR
-            download_url = f'/batch_result/{task_id}'
-
-        bus.progress(100, '分析完成')
-        bus.complete({
-            'report': report,
-            'download_url': download_url,
-            'file_count': len(all_file_data),
-        })
-
-    except Exception as e:
-        logger.error(f"Analysis task failed: {e}", exc_info=True)
-        import traceback as _tb
-        _frames = _tb.format_exc().strip().split('\n')
-        bus.fail(f"{e} | at: {_frames[-1].strip()}"[:500])

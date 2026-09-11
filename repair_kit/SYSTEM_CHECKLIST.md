@@ -20,9 +20,9 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(38/38 verified automatically)_
+_(37/37 verified automatically)_
 
-- [x] Route module files exist: 30
+- [x] Route module files exist: 29
 - [x] Route: admin.py
 - [x] Route: admin_knowledge_lab.py
 - [x] Route: admin_ops.py
@@ -38,7 +38,6 @@ _(38/38 verified automatically)_
 - [x] Route: clearance.py
 - [x] Route: compliance.py
 - [x] Route: credit.py
-- [x] Route: document_analysis.py
 - [x] Route: graph.py
 - [x] Route: knowledge.py
 - [x] Route: knowledge_company_kb.py
@@ -65,7 +64,7 @@ _(38/38 verified automatically)_
 
 _(28/28 verified automatically)_
 
-- [x] Tables defined in database.py: 71
+- [x] Tables defined in database.py: 72
 - [x] PostgreSQL driver (psycopg2)
 - [x] Core table: users
 - [x] Core table: chat_messages
@@ -203,24 +202,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 133 |
+| [x] Pass | 132 |
 | [?] Manual | 4 |
-| **Total** | **137** |
+| **Total** | **136** |
 
-**Verification rate**: 133/137 auto-verified (97%)
-
-> Round-014 note: /admin/vl_test route added (multipart image -> description+reasoning).
-
-> Round-015 note: image sampling is OCR-first with [source] tags; verify_image cross-model; auto VL resolves strongest provider.
-
-> Round-016 T0 note: audit_bp registered; /knowledge_lab/feedback, /set_video_analysis added; /batch/plagiarism/compare alias; supersession JS → /admin/skill_merge.
-
-> Round-016: T0 audit_js_routes (no_route=0); e2e audit stack compose+seed+driver added.
-
-> Round-018: batch_pair_results table + batch_comparison_results.project_id added; numpy scalars cast in clearance writes; anon fetch gate in index head; audit --gate.
-
-> Round-019: batch compare endpoints accept file_ids (large-file); async plagiarism_task + run/status routes.
-
-> Round-020: per-user prompts (user_prompts table, /prompts/* routes); immutable default; message templates moved to DB.
-
-> Round-021: typo detection subsystem removed entirely (46->45 indicators); /check_typos & /admin/typo_results gone; jieba retained.
+**Verification rate**: 132/136 auto-verified (97%)

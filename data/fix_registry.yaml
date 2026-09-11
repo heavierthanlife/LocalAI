@@ -5,7 +5,7 @@
 # The pre-commit hook runs scripts/verify_fixes.py to check all entries.
 #
 # Bypass: SKIP_FIX_CHECK=1 git commit ...
-# Check types: grep | grep_not | function_order
+# Check types: grep | grep_not | literal | function_order
 
 fixes:
   - id: FIX-2026-07-15-001
@@ -379,9 +379,6 @@ fixes:
         pattern: "def register_queued"
       - type: grep
         file: app/routes/clearance.py
-        pattern: "register_queued"
-      - type: grep
-        file: app/routes/document_analysis.py
         pattern: "register_queued"
       - type: grep
         file: static/js/app.js
@@ -879,3 +876,75 @@ fixes:
       - type: grep_not
         file: tests/fixtures/routes_snapshot.json
         pattern: "/admin/typo_results"
+
+
+  - id: FIX-2026-09-10-028
+    title: "删除被 chat_bp 覆盖的 knowledge_bp 死路由 /feedback"
+    severity: medium
+    rationale: >
+      knowledge.py 曾定义 @knowledge_bp.route('/feedback')，与 chat_config.py 的
+      chat_bp /feedback 同 path+method；chat_bp 先注册 → 该 handler 被静默覆盖成
+      死代码。已删除；专用端点 /knowledge_lab/feedback 保留。
+    checks:
+      - type: grep_not
+        file: app/routes/knowledge.py
+        pattern: "def submit_knowledge_lab_feedback"
+      - type: literal
+        file: app/routes/knowledge.py
+        pattern: "/knowledge_lab/feedback"
+
+
+  - id: FIX-2026-09-10-029
+    title: "清标结果落库（opt-in persist，默认关闭避免单测副作用）"
+    severity: high
+    rationale: >
+      quote/relationship 结果此前从不写库 → 管理端 quote_anomaly_results /
+      relationship_risk_summary 面板恒空。run_analysis 增 persist 开关；清标路径
+      persist=True 时先 DELETE task_id 再 save（幂等）。默认 False 保护无 DB 单测。
+    checks:
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "def _persist_clearance_review("
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "persist=False"
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "if persist and task_id:"
+      - type: literal
+        file: app/services/clearance_engine.py
+        pattern: "project_id, task_id, bool(task_id))"
+
+
+  - id: FIX-2026-09-10-030
+    title: "移除历史遗留 document_analysis 蓝图（功能已并入清标）"
+    severity: medium
+    rationale: >
+      /document_analysis/analyze 与清标功能重复且无前端入口。删路由文件 + 蓝图注册 +
+      Celery 任务(run_analysis_async)，保留 document_analysis_svc（清标依赖 run_analysis /
+      build_clearance_docx / convert_docx_to_pdf）。
+    checks:
+      - type: grep_not
+        file: app/routes/__init__.py
+        pattern: "document_analysis_bp"
+      - type: grep_not
+        file: app/services/document_analysis_svc.py
+        pattern: "def run_analysis_async"
+      - type: grep_not
+        file: celery_app.py
+        pattern: "app.services.document_analysis_svc"
+
+
+  - id: FIX-2026-09-10-031
+    title: "清标 status/stream 补登录校验（consent + user_id）"
+    severity: high
+    rationale: >
+      /clearance/status|stream 此前不校验登录 → 匿名可读任务结果。加 consent_value==1
+      + user_id 守卫（与 /clearance/run 一致）。任务归属校验列入 backlog。
+    checks:
+      - type: literal
+        file: app/routes/clearance.py
+        pattern: "AUTH-GUARD-STATUS(FIX-2026-09-10-031)"
+      - type: literal
+        file: app/routes/clearance.py
+        pattern: "AUTH-GUARD-STREAM(FIX-2026-09-10-031)"

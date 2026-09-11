@@ -226,8 +226,13 @@ def preview_criteria():
     return ok(criteria)
 
 
+# AUTH-GUARD-STATUS(FIX-2026-09-10-031): consent + login required
 @clearance_bp.route('/status/<task_id>', methods=['GET'])
 def clearance_status(task_id):
+    if session.get('consent_value', 0) != 1:
+        return err("请先登录", "AUTH_REQUIRED", 401)
+    if not get_user_id():
+        return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
     meta = TaskBus.get(task_id)
     if not meta:
@@ -242,8 +247,13 @@ def clearance_status(task_id):
     })
 
 
+# AUTH-GUARD-STREAM(FIX-2026-09-10-031): consent + login required
 @clearance_bp.route('/stream/<task_id>', methods=['GET'])
 def clearance_stream(task_id):
+    if session.get('consent_value', 0) != 1:
+        return err("请先登录", "AUTH_REQUIRED", 401)
+    if not get_user_id():
+        return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
     return Response(
         TaskBus.subscribe(task_id),

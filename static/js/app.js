@@ -9915,6 +9915,54 @@
             });
             html += '</table></details>';
         }
+
+        // 基本信息表（对齐 DOCX 报告，始终渲染）
+        var basicFields = [
+            ['bid_number', '标段编号'], ['bid_open_time', '开标时间'], ['bidder_name', '招标单位'],
+            ['agent_name', '招标代理'], ['eval_method', '评标办法'], ['award_announce_time', '中标公告发布时间'],
+            ['winner', '中标单位'], ['award_amount', '中标金额'], ['region', '地区'],
+            ['regulator', '监督部门'], ['platform', '真实交易平台'], ['project_name', '项目名称'],
+            ['analysis_date', '分析日期']
+        ];
+        html += '<details class="cl-l2"><summary>' + _icon('📄') + ' 基本信息表' + _clArrow() + '</summary>';
+        html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
+        html += '<tr><th style="width:30%;">字段</th><th>内容</th></tr>';
+        basicFields.forEach(function(f) {
+            var bv = info[f[0]];
+            var bvText = (bv === undefined || bv === null || bv === '') ? '—' : String(bv);
+            html += '<tr style="border-top:1px solid var(--card-border);"><td><strong>' + f[1] + '</strong></td><td>' + _clearanceEscape(bvText) + '</td></tr>';
+        });
+        html += '</table></details>';
+
+        // 开标信息表（仅当存在行数据时渲染）
+        if (report.open_info && report.open_info.rows && report.open_info.rows.length) {
+            var openRows = report.open_info.rows;
+            html += '<details class="cl-l2"><summary>' + _icon('📅') + ' 开标信息表 (' + openRows.length + ' 行)' + _clArrow() + '</summary>';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-top:4px;">';
+            html += '<tr><th style="width:4%;">序号</th><th>开标时间</th><th>投标单位</th><th>联系人</th><th>联系电话</th><th>报价方式</th><th>投标报价</th><th>备注</th></tr>';
+            openRows.forEach(function(row, idx) {
+                var price = row.bid_price;
+                var priceText;
+                if (typeof price === 'number' && !isNaN(price)) {
+                    priceText = price >= 10000 ? (price / 10000).toFixed(2) + '万元' : price.toFixed(2) + '元';
+                } else if (price === undefined || price === null || price === '') {
+                    priceText = '—';
+                } else {
+                    priceText = _clearanceEscape(String(price));
+                }
+                html += '<tr style="border-top:1px solid var(--card-border);">';
+                html += '<td>' + (idx + 1) + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.open_time || '—')) + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.bidder || '—')) + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.contact || '—')) + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.phone || '—')) + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.price_mode || '—')) + '</td>';
+                html += '<td>' + priceText + '</td>';
+                html += '<td>' + _clearanceEscape(String(row.remark || '—')) + '</td>';
+                html += '</tr>';
+            });
+            html += '</table></details>';
+        }
         html += _renderParagraphCollusionEvidence(report);
         return html;
     }

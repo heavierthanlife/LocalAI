@@ -98,11 +98,13 @@ def resolve_clearance_threads(user_id, current_thread_id):
 
 # ── 维度 1: 指标分析（纵向）────────────────────────────────────────
 def _run_indicator_analysis(file_data, user_id, thread_id, tender_text=None,
-                            open_info=None, eval_criteria=None, options=None):
+                            open_info=None, eval_criteria=None, options=None,
+                            project_id=None, task_id=None, persist=False):
     from app.services.document_analysis_svc import run_analysis
     report = run_analysis(file_data, user_id, thread_id,
                           tender_text=tender_text, open_info=open_info,
-                          eval_criteria=eval_criteria, options=options)
+                          eval_criteria=eval_criteria, options=options,
+                          project_id=project_id, task_id=task_id, persist=persist)
     return {
         'basic_info': report['basic_info'],
         'suspected_units': report['suspected_units'],
@@ -355,7 +357,7 @@ def _run_audit_supplement(file_data):
 
 # ── 主编排入口 ─────────────────────────────────────────────────────
 def run_clearance(file_data, tender_text, tender_name, options, user_id=None, thread_id=None, info_overrides=None,
-                  progress_cb=None, open_info=None, eval_criteria=None):
+                  progress_cb=None, open_info=None, eval_criteria=None, project_id=None, task_id=None):
     """执行清标全维度分析，返回合并后的报告 dict。
 
     info_overrides: dict with keys like bid_number, bid_open_time, etc.
@@ -387,7 +389,8 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
         if options.get('indicator_analysis', True):
             futures['indicators'] = pool.submit(
                 _run_indicator_analysis, file_data, user_id, thread_id,
-                tender_text, open_info, eval_criteria, options)
+                tender_text, open_info, eval_criteria, options,
+                project_id, task_id, bool(task_id))
         if options.get('cross_comparison', True):
             futures['cross'] = pool.submit(_run_cross_comparison, file_data, tender_text, ptype)
         if options.get('compliance_check', False) and tender_text:
@@ -549,7 +552,8 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
         report = run_clearance(all_file_data, tender_text, tender_name, options,
                                user_id=user_id, thread_id=thread_id, info_overrides=info_overrides,
                                progress_cb=lambda pct, msg: bus.progress(pct, msg),
-                               open_info=open_info, eval_criteria=eval_criteria)
+                               open_info=open_info, eval_criteria=eval_criteria,
+                               project_id=project_id, task_id=task_id)
 
         # ── 图片随机抽检说明（九章）──
         sampling = take_image_sampling_log()

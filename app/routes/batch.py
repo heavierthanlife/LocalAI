@@ -30,12 +30,6 @@ from app.services.batch_compare_svc import (
     store_batch_comparison_temp, load_batch_comparison_temp
 )
 
-from app.services.batch_orchestrator import (
-    RiskScorer, compute_all_pairs, build_key_info_matches, build_attr_details,
-    build_excel_workbook, build_summary_html, build_pair_report_html,
-    build_full_report_html, run_all_sub_checkers, build_report_docx,
-)
-
 batch_bp = Blueprint('batch', __name__, template_folder=str(BASE_DIR / 'templates'), static_folder=str(BASE_DIR / 'static'))
 
 
@@ -187,6 +181,7 @@ def delete_batch_result(id):
 
 # ── Standalone quote anomaly endpoints ──
 
+# API-only: no frontend UI. Standalone single-doc quote check.
 @batch_bp.route('/check_quote_anomaly', methods=['POST'])
 def check_quote_anomaly_standalone():
     """Standalone endpoint: detect quote anomalies in a single bid document."""
@@ -224,6 +219,7 @@ def check_quote_anomaly_standalone():
     })
 
 
+# API-only: no frontend UI. Standalone cross-bidder quote comparison.
 @batch_bp.route('/compare_bidders_quotes', methods=['POST'])
 def compare_bidders_quotes_endpoint():
     """Standalone endpoint: cross-bidder quote comparison without full batch compare."""
@@ -283,6 +279,7 @@ def quote_anomaly_feedback():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+# API-only: no frontend UI. Standalone relationship extraction.
 @batch_bp.route('/extract_relationships', methods=['POST'])
 def extract_relationships_endpoint():
     """Standalone endpoint: extract entity relationships from bid documents."""
