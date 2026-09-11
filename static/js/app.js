@@ -9753,7 +9753,9 @@
             var tl = pf.timeline || {};
             var st = pf.style || {};
             var ru = pf.rules || {};
-            var styleTxt = (st.score != null) ? (st.score || 0).toFixed(1) + ' 分 (' + _clearanceEscape(st.findings && st.findings.formality_label || '') + ')' : '—';
+            var flabel = (st.findings && st.findings.formality_label) || '';
+            if (flabel === 'unknown') flabel = '';
+            var styleTxt = (st.score != null) ? (st.score || 0).toFixed(1) + ' 分' + (flabel ? ' (' + _clearanceEscape(flabel) + ')' : '') : '—';
             var ruleTxt = (ru.count != null) ? (ru.score || 0).toFixed(1) + ' 分 / ' + (ru.count || 0) + ' 条' : '—';
             var tlTxt = tl.skipped ? _clearanceEscape(tl.note || '跳过') : (tl.score != null ? (tl.score || 0).toFixed(1) + ' 分' : '—');
             html += '<tr style="border-top:1px solid var(--card-border);vertical-align:top;">';

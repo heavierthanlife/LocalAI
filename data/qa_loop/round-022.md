@@ -77,10 +77,16 @@ mimo-vision：待截图（B 完成后）。
 - round-022.md 本文件。
 
 ## ⑦ PUSH
-（待）
+- `git push LocalAI master` — OK（7bb570d + 5963d57 已推送；本轮修复为主 commit）。
 
 ## ⑧ IMAGE
-（待）
+- `python scripts/docker_build.py`（CPU wheel）→ `docker compose up -d --force-recreate app celery-worker celery-beat` — OK。
+- 容器抽查（镜像=HEAD，全部命中）：compliance `region_code`、credit `task_owner_ok`×6、`SESSION_COOKIE_HTTPONLY`、`pg_advisory_xact_lock`、`openProjectFromEl`×3、clearance `_c2`；`ENABLE_SCHEDULER=false`；`/check_auth`=200。
 
 ## ⑨ RE-CHECK
-（待）
+mimo-vision 两路独立复核（截图 `tests/visual_screenshots/`）。主 agent 对照实时 DOM 裁决：
+- **误报（两条 High 均驳回）**：①「报告大面积空白」——实时 DOM 实测报告组 `height=10192px`、内容跨度=10192px、`blankRatio=0%`，为元素截图的观感误判；②「表格文件名截断」——实测 17 张表 `scrollWidth==clientWidth`、0 张溢出，无截断。
+- **有效 Medium（已修，FIX-044）**：全量审计「风格分」渲染后端原始标签 `(unknown)` → 前端改为空/unknown 时不显示括号。
+- **有效 Low（记入 backlog，不阻断）**：emoji 与 Material Symbols 图标混用（报告/侧边栏）；预警 `■` 标记偏小；高风险行红字/浅红底对比度偏低；相似度 100% 无高亮锚点。
+- **新增 Critical/High：0** → 满足停跑闸门（无新 Critical/High）。
+- 备注：`04_qa_alert_parent_1.png` 捕获「警示详情与处理指引 — 铁证 (1项)」，确认 FIX-035 五列表在真实硬证场景下正常渲染。

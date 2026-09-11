@@ -1626,4 +1626,10 @@ def test_input_validation_hardening():
     assert 'secrets.randbelow(10000)' in _read('app/routes/admin_regeneration.py')
 
 
+def test_formality_unknown_label_not_leaked():
+    # FIX-044: audit supplement style score must not show raw '(unknown)'.
+    src = _read('static/js/app.js')
+    assert "if (flabel === 'unknown') flabel = '';" in src
+
+
 

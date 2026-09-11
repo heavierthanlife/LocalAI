@@ -21,6 +21,7 @@ All notable changes to 中联招标智能助手.
 - **SSE 越权 CORS（Medium，FIX-042）**：`/tasks/<id>/stream` 移除 `Access-Control-Allow-Origin: *`。
 - **上传去重 TOCTOU（Medium，FIX-043）**：`file_store` 去重 SELECT 与 INSERT 分属两连接，并发可重复插入。改用 `pg_advisory_xact_lock` 串行化（无 schema 变更）。
 - **输入校验/加固（Medium，FIX-043）**：`delete_law` 的 `law_id` 加白名单校验；`graph` threshold 改 `type=float`（防 500）；账户删除验证码改 `secrets.randbelow`。
+- **风格分原始标签泄露（Medium，FIX-044，视觉复核新增）**：全量审计补充检查的风格分显示「75.0 分 (unknown)」，前端在标签为空/`unknown` 时不再输出括号内容。
 
 ### Changed
 - `database.py` 的 `ADMIN_PIN` 默认值与 `__init__.py` 对齐（`'888888'`→`'123456'`，FIX-042）。

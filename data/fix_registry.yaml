@@ -1198,3 +1198,14 @@ fixes:
       - type: literal
         file: app/routes/admin_regeneration.py
         pattern: "secrets.randbelow(10000)"
+
+  - id: FIX-2026-09-11-044
+    title: "清标报告风格分原始标签 unknown 泄露"
+    severity: medium
+    rationale: >
+      全量审计补充检查的风格分渲染 formality_label 原始值，后端未知分类时显示
+      「75.0 分 (unknown)」。前端在标签为空/unknown 时不再输出括号内容。
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "if (flabel === 'unknown') flabel = '';"
