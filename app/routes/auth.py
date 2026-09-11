@@ -559,18 +559,6 @@ def delete_account_impl(user_id, pin, keep_ids=None):
                         cur.execute("INSERT INTO task_deposit_items (original_user_id, original_username, project_id, project_name, item_type, item_data, stored_path) VALUES (%s,%s,NULL,'批量对比','batch_result',%s,%s)",
                             (user_id, user.get('username','unknown'), json.dumps(dict(br)), br['zip_path']))
 
-                cur.execute("SELECT id, task_id, companies_count, file_path FROM credit_check_reports WHERE user_id = %s", (user_id,))
-                for cr in cur.fetchall():
-                    cur.execute("""INSERT INTO task_deposit_items (original_user_id, original_username, project_id,
-                        project_name, item_type, item_data, stored_path) VALUES (%s,%s,NULL,'征信报告','credit_report',%s,%s)""",
-                        (user_id, user.get('username','unknown'), json.dumps(dict(cr)), cr['file_path']))
-
-                cur.execute("SELECT id, task_id, file_count, pair_count, file_names, zip_path FROM batch_comparison_results WHERE user_id = %s", (user_id,))
-                for br in cur.fetchall():
-                    cur.execute("""INSERT INTO task_deposit_items (original_user_id, original_username, project_id,
-                        project_name, item_type, item_data, stored_path) VALUES (%s,%s,NULL,'批量对比','batch_result',%s,%s)""",
-                        (user_id, user.get('username','unknown'), json.dumps(dict(br)), br['zip_path']))
-
                 cur.execute("DELETE FROM recycle_bin WHERE user_id = %s", (user_id,))
                 cur.execute("UPDATE project_recycle_bin SET uploaded_by = NULL WHERE uploaded_by = %s", (user_id,))
                 cur.execute("UPDATE task_deposit_items SET original_user_id = NULL WHERE original_user_id = %s", (user_id,))

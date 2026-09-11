@@ -73,8 +73,13 @@ def create_app():
     # Session config
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['SESSION_FILE_DIR'] = str(config.SESSION_DIR)
-    app.config['SESSION_PERMANENT'] = False
     app.config['SESSION_USE_SIGNER'] = True
+    # QA-Loop F5: harden session cookie flags. Secure is enabled when serving
+    # over HTTPS (production); left off in local HTTP dev so login still works.
+    _https_only = os.getenv('APP_ENV', '').lower() == 'production'
+    app.config['SESSION_COOKIE_SECURE'] = _https_only
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     secret_key = os.getenv('SECRET_KEY') or os.getenv('FLASK_SECRET_KEY')
     if not secret_key:

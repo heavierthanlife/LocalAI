@@ -283,6 +283,7 @@ class ComplianceChecker:
         bid_doc_name: str = "",
         use_ai: bool = True,
         custom_laws: list[dict] = None,
+        region_code: str = None,
     ) -> dict:
         """Run full compliance check on a bid document.
 
@@ -292,6 +293,7 @@ class ComplianceChecker:
             bid_doc_name: filename for logging
             use_ai: use AI for judgment (False = keyword fallback)
             custom_laws: user-supplied law articles to check against
+            region_code: optional region code for region-specific law selection
 
         Returns:
             dict with:

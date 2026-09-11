@@ -11,6 +11,7 @@ Endpoints:
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -195,6 +196,8 @@ def upload_law():
 @_login_required
 def delete_law(law_id):
     """Delete a user-uploaded law."""
+    if not re.match(r'^[A-Za-z0-9_-]{1,64}$', law_id or ''):
+        return err("非法的法规ID", "INVALID_ID", 400)
     path = os.path.join(LAWS_DIR, f"{law_id}.json")
     if os.path.exists(path):
         os.unlink(path)

@@ -619,34 +619,39 @@ def run_clearance_async(self, file_data, file_specs, tender_text, tender_name, t
                             json.dumps(risk_scores, ensure_ascii=False, default=float), int(rank + 1),
                         ))
 
-                # ── Persist clearance result as an assistant chat message ──
-                # 归属双写：结果跟随当前对话归属，项目对话/个人非最新时额外同步
-                # 到该用户最新个人对话；个人最新线程只写一条。Store the full report
-                # JSON (frontend renders it into a chat bubble via the
-                # CLEARANCE_REPORT marker on both live-complete and session reload).
-                # Reuses this same transaction/connection.
-                target_threads = resolve_clearance_threads(user_id, thread_id)
-                if target_threads:
-                    try:
-                        from flask import url_for as _url_for
-                        _dl = _url_for('batch.download_batch_result', task_id=task_id)
-                    except Exception:
-                        _dl = f'/batch_result/{task_id}'
-                    chat_payload = json.dumps({
-                        'report': report,
-                        'download_url': _dl,
-                        'file_count': len(all_file_data),
-                    }, ensure_ascii=False)
-                    chat_content = '<!-- CLEARANCE_REPORT -->' + chat_payload
-                    for _tid in target_threads:
-                        try:
-                            cur.execute(
+                conn.commit()
+
+        # ── Persist clearance result as an assistant chat message ──
+        # F7: separate transaction from the results above so a chat-message
+        # failure can never roll back batch_comparison_results.
+        # 归属双写：结果跟随当前对话归属，项目对话/个人非最新时额外同步
+        # 到该用户最新个人对话；个人最新线程只写一条。Store the full report
+        # JSON (frontend renders it into a chat bubble via the
+        # CLEARANCE_REPORT marker on both live-complete and session reload).
+        try:
+            target_threads = resolve_clearance_threads(user_id, thread_id)
+            if target_threads:
+                try:
+                    from flask import url_for as _url_for
+                    _dl = _url_for('batch.download_batch_result', task_id=task_id)
+                except Exception:
+                    _dl = f'/batch_result/{task_id}'
+                chat_payload = json.dumps({
+                    'report': report,
+                    'download_url': _dl,
+                    'file_count': len(all_file_data),
+                }, ensure_ascii=False)
+                chat_content = '<!-- CLEARANCE_REPORT -->' + chat_payload
+                with get_db_connection() as _c2:
+                    with _c2.cursor() as _cur2:
+                        for _tid in target_threads:
+                            _cur2.execute(
                                 "INSERT INTO chat_messages (thread_id, role, content, thinking, timestamp) "
                                 "VALUES (%s, 'assistant', %s, NULL, NOW())",
                                 (_tid, chat_content))
-                        except Exception as _ce:
-                            logger.warning(f"Failed to persist clearance chat message for thread {_tid}: {_ce}")
-                conn.commit()
+                    _c2.commit()
+        except Exception as _ce:
+            logger.warning(f"Failed to persist clearance chat message(s): {_ce}")
 
         from flask import url_for
         try:

@@ -139,6 +139,5 @@ def stream_task(task_id: str):
             'X-Accel-Buffering': 'no',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*',
         }
     )

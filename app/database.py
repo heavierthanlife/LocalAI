@@ -150,7 +150,7 @@ def _run_table_creation(cur: "PgCursor"):
 
     # Seed admin accounts: CEO and COO (share same PIN as sys-admin)
     import uuid as _uuid
-    admin_pin = os.getenv('ADMIN_PIN', '888888')
+    admin_pin = os.getenv('ADMIN_PIN', '123456')
     import hashlib as _hl
     _salt = os.urandom(16).hex()
     admin_pin_hash = _salt + ":" + _hl.pbkdf2_hmac('sha256', admin_pin.encode(), _salt.encode(), 100000).hex()
@@ -1258,6 +1258,3 @@ def _run_table_creation(cur: "PgCursor"):
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_user_prompts_user_kind ON user_prompts(user_id, kind)")
-
-    # ── 已下线：错别字检测结果表（旧库幂等清理） ──
-    cur.execute("DROP TABLE IF EXISTS typo_detection_results")

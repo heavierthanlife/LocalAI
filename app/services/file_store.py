@@ -96,9 +96,17 @@ def save_stream(file_storage, user_id: str, thread_id=None) -> dict:
             pass
         raise
 
-    # Dedupe: same user + same hash → reuse existing row
+    # Dedupe: same user + same hash → reuse existing row.
+    # M11: a transaction-scoped advisory lock serializes concurrent uploads of
+    # identical content, closing the SELECT-then-INSERT TOCTOU that could create
+    # duplicate rows. The lock is released automatically at transaction end.
+    final_name = f'{sha}_{int(time.time())}{ext}'
+    final_path = os.path.join(user_dir, final_name)
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                        (f'{user_id}:{sha}',))
             cur.execute(
                 "SELECT id FROM user_files WHERE user_id = %s AND file_hash = %s LIMIT 1",
                 (user_id, sha),
@@ -111,12 +119,7 @@ def save_stream(file_storage, user_id: str, thread_id=None) -> dict:
                     pass
                 return {'file_id': row[0], 'filename': filename, 'size': size, 'sha256': sha}
 
-    final_name = f'{sha}_{int(time.time())}{ext}'
-    final_path = os.path.join(user_dir, final_name)
-    os.replace(tmp_path, final_path)
-
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
+            os.replace(tmp_path, final_path)
             cur.execute("""
                 INSERT INTO user_files (user_id, thread_id, filename, size_bytes,
                                         expires_at, original_stored_path, file_hash,

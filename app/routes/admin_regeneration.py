@@ -9,6 +9,7 @@ import logging
 import os
 import random
 import re
+import secrets
 import shutil
 import time
 import uuid
@@ -872,7 +873,7 @@ def admin_approve_delete(username):
             if not row['deletion_requested']:
                 return err("该用户未申请删除", "VALIDATION_ERROR", 400)
             user_email = row.get('email', '')
-            code = f"{random.randint(1000, 9999)}"
+            code = f"{secrets.randbelow(10000):04d}"
             cur.execute("UPDATE users SET deletion_code = %s WHERE username = %s", (code, username))
             conn.commit()
     from app.utils.mailer import send_email, is_configured

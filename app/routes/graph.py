@@ -30,7 +30,9 @@ def _require_project_access(project_id):
 @login_required
 def collusion_graph():
     project_id = request.args.get('project_id', '').strip()
-    threshold = float(request.args.get('threshold', 0.5))
+    threshold = request.args.get('threshold', 0.5, type=float)
+    if threshold is None:
+        return err('threshold must be a number', 'VALIDATION_ERROR', 400)
     if not project_id:
         return err('project_id is required', 'MISSING_PARAM', 400)
 

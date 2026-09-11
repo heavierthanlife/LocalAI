@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, session, send_file, render_templa
 
 from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, CREDIT_REPORTS_DIR, PROJECT_FILES_ROOT, to_rel_path, resolve_path
 from app.database import get_db_connection, db_transaction
-from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
+from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer, task_owner_ok
 from app.services.credit_task_registry import (
     set_task as _credit_set, get_task as _credit_get,
     patch_task as _credit_patch, task_exists as _credit_exists,
@@ -113,7 +113,8 @@ def start_credit_check():
         'download_url': download_url,
         'error': None,
         'waiting': False,
-        'resume': False
+        'resume': False,
+        'user_id': user_id,
     })
 
     threading.Thread(target=_run_credit_check,
@@ -262,6 +263,8 @@ def credit_check_status(task_id):
     task = _credit_get(task_id)
     if not task:
         return jsonify({"error": "Task not found"}), 404
+    if not task_owner_ok(task, session.get('user_id')):
+        return jsonify({"error": "Forbidden"}), 403
     result = {
         'status': task['status'],
         'progress': task['progress'],
@@ -277,8 +280,12 @@ def credit_check_status(task_id):
 def credit_check_resume(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
-    if _credit_exists(task_id):
-        _credit_patch(task_id, resume=True)
+    task = _credit_get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    if not task_owner_ok(task, session.get('user_id')):
+        return jsonify({"error": "Forbidden"}), 403
+    _credit_patch(task_id, resume=True)
     return jsonify({"status": "ok"})
 
 @credit_bp.route('/get_captcha_image/<task_id>')
@@ -286,7 +293,11 @@ def get_captcha_image(task_id):
     if session.get('consent_value', 0) != 1:
         return "Not authorized", 401
     task = _credit_get(task_id)
-    if not task or not task.get('captcha_needed') or not task.get('captcha_image'):
+    if not task:
+        return "Task not found", 404
+    if not task_owner_ok(task, session.get('user_id')):
+        return "Forbidden", 403
+    if not task.get('captcha_needed') or not task.get('captcha_image'):
         return "No captcha image", 404
     img_bytes = task['captcha_image']
     return send_file(BytesIO(img_bytes), mimetype='image/png')
@@ -295,26 +306,42 @@ def get_captcha_image(task_id):
 def reload_captcha(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
-    if _credit_exists(task_id):
-        _credit_patch(task_id, reload_captcha=True)
+    task = _credit_get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    if not task_owner_ok(task, session.get('user_id')):
+        return jsonify({"error": "Forbidden"}), 403
+    _credit_patch(task_id, reload_captcha=True)
     return jsonify({"status": "reloading"})
 
 @credit_bp.route('/solve_captcha/<task_id>', methods=['POST'])
 def solve_captcha(task_id):
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
+    task = _credit_get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+    if not task_owner_ok(task, session.get('user_id')):
+        return jsonify({"error": "Forbidden"}), 403
     data = request.get_json()
 
     solution = data.get('solution', '')
-    if _credit_exists(task_id):
-        _credit_patch(task_id, captcha_solution=solution)
+    _credit_patch(task_id, captcha_solution=solution)
     return jsonify({"status": "ok"})
 
 @credit_bp.route('/download_credit_report/<task_id>')
 def download_credit_report(task_id):
-    """Any registered user can download any completed credit report."""
+    """Download a completed credit report (owner-only)."""
     if session.get('consent_value', 0) != 1:
         return jsonify({"error": "请先登录"}), 401
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT user_id FROM credit_check_reports WHERE task_id = %s", (task_id,))
+            row = cur.fetchone()
+    if row is None:
+        return "Report not found", 404
+    if str(row[0]) != str(session.get('user_id')):
+        return jsonify({"error": "Forbidden"}), 403
     report_dir = str(CREDIT_REPORTS_DIR)
     file_path = os.path.join(report_dir, f"credit_report_{task_id}.docx")
     if os.path.exists(file_path):

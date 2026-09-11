@@ -353,10 +353,12 @@
 
     function escapeHtml(str) {
         if (str == null) return '';
-        return String(str).replace(/[&<>]/g, function(m) {
+        return String(str).replace(/[&<>"']/g, function(m) {
             if (m === '&') return '&amp;';
             if (m === '<') return '&lt;';
             if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#39;';
             return m;
         });
     }
@@ -2386,6 +2388,20 @@
     // ======================== Admin Panel & Tab Functions ========================
     
     // --- Sidebar content loaders per tab ---
+    // F-H3: open a project from a data-attribute span (no inline JS string
+    // interpolation of user-controlled name/status).
+    if (typeof window.openProjectFromEl !== 'function') {
+        window.openProjectFromEl = function(el) {
+            try {
+                var tab = document.getElementById('adminTabBtn');
+                if (tab) tab.click();
+                if (typeof openProject === 'function' && el && el.dataset) {
+                    openProject(el.dataset.pid, el.dataset.pname, el.dataset.pstatus);
+                }
+            } catch (e) { /* no-op */ }
+        };
+    }
+
     async function loadSidebarProjects(cachedData) {
         const list = document.getElementById('sidebarProjectsList');
         if (!list) return;
@@ -2400,8 +2416,9 @@
                 html = projects.map(p =>
                     `<li style="padding:4px 8px;margin-bottom:4px;border-radius:4px;cursor:pointer;transition:background .15s;display:flex;align-items:center;"
                          onmouseover="this.style.background='var(--card-bg)'" onmouseout="this.style.background=''">
-                         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;"
-                               onclick="document.getElementById('adminTabBtn').click(); if(typeof openProject==='function') openProject(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', '${p.status || 'active'}')">
+                         <span class="admin-project-item" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;"
+                               data-pid="${p.id}" data-pname="${escapeHtml(p.name)}" data-pstatus="${escapeHtml(p.status || 'active')}"
+                               onclick="if(typeof openProjectFromEl==='function') openProjectFromEl(this)">
                          📁 ${escapeHtml(p.name)}
                          ${p.status && p.status !== 'active' ? `<span style="font-size:.7rem;color:var(--card-muted);">${p.status}</span>` : ''}
                          </span>
@@ -2429,7 +2446,7 @@
                     if (allSkills.length > 0) {
                         html += allSkills.slice(0, 15).map(f => {
                             const name = escapeHtml(f._source === 'company' ? f._filename : (f.original_name || f.filename));
-                            const ownerLabel = f._source === 'company' ? '公司' : `<small style="color:var(--card-muted);">(${f.owner})</small>`;
+                            const ownerLabel = f._source === 'company' ? '公司' : `<small style="color:var(--card-muted);">(${escapeHtml(f.owner)})</small>`;
                             return `<li style="padding:3px 6px;font-size:.72rem;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:center;">
                                 <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f._label} ${name} ${ownerLabel}</span>
                                 ${f._source === 'personal' ? `<button data-promote-skill="${f.id}" style="background:#bccfde;color:#1e293b;border:none;border-radius:3px;padding:1px 6px;font-size:.6rem;cursor:pointer;flex-shrink:0;margin-left:4px;" title="加入公司知识库">↑</button>` : ''}
@@ -3124,8 +3141,8 @@
                         const icon = catIcons[s.category] || '📄';
                         const srcLabel = s.source === 'company' ? '🏢' : s.source === 'personal' ? '👤' : '📁';
                         html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--card-bg);border-radius:4px;margin-bottom:3px;font-size:.78rem;">
-                            <span>${icon} ${escapeHtml(s.name)} <small style="color:var(--card-muted);">${srcLabel} ${s.category||'通用'} · ${s.username||'—'}</small></span>
-                            <small style="color:var(--card-muted);">使用${s.usage_count}次 · ${s.uploaded_at||''}</small>
+                            <span>${icon} ${escapeHtml(s.name)} <small style="color:var(--card-muted);">${srcLabel} ${escapeHtml(s.category||'通用')} · ${escapeHtml(s.username||'—')}</small></span>
+                            <small style="color:var(--card-muted);">使用${s.usage_count}次 · ${escapeHtml(s.uploaded_at||'')}</small>
                         </div>`;
                     });
                     html += '</div>';
@@ -3142,12 +3159,12 @@
                             <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;">
                                 <div style="padding:8px;background:#f8fafc;border-radius:6px;">
                                     <strong>${escapeHtml(d.skill_a.name)}</strong>
-                                    <small style="color:var(--card-muted);display:block;">${d.skill_a.owner}</small>
+                                    <small style="color:var(--card-muted);display:block;">${escapeHtml(d.skill_a.owner)}</small>
                                 </div>
                                 <div style="text-align:center;font-weight:600;color:#2563eb;padding:8px;">${d.similarity}%</div>
                                 <div style="padding:8px;background:#f8fafc;border-radius:6px;">
                                     <strong>${escapeHtml(d.skill_b.name)}</strong>
-                                    <small style="color:var(--card-muted);display:block;">${d.skill_b.owner}</small>
+                                    <small style="color:var(--card-muted);display:block;">${escapeHtml(d.skill_b.owner)}</small>
                                 </div>
                             </div>
                             <div class="audit-preview" style="display:none;margin-top:8px;display:none;grid-template-columns:1fr 1fr;gap:8px;">
@@ -3169,7 +3186,7 @@
                     html += '<h4 style="margin:16px 0 8px;">⚠️ 长期未使用</h4>';
                     data.unused.slice(0,8).forEach(u => {
                         html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--card-bg);border-radius:6px;margin-bottom:4px;font-size:.82rem;">
-                            <span>🗑️ ${escapeHtml(u.name)} <small style="color:var(--card-muted);">(${u.owner}) — ${u.days_since_upload}天</small></span>
+                            <span>🗑️ ${escapeHtml(u.name)} <small style="color:var(--card-muted);">(${escapeHtml(u.owner)}) — ${u.days_since_upload}天</small></span>
                             <button class="audit-archive-btn" data-id="${u.skill_id}" data-source="${u.source||'knowledge_lab'}" style="background:#ef4444;color:white;border:none;border-radius:4px;padding:4px 10px;font-size:.72rem;cursor:pointer;">移除技能</button>
                         </div>`;
                     });

@@ -8,6 +8,33 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — QA 全面轮次 022：安全/稳定性加固（FIX-037~043）
+
+### Fixed
+- **合规异步任务必崩（High，FIX-037）**：`compliance_check_task` 调用 `checker.check(..., region_code=region_code)`，但 `ComplianceChecker.check()` 无该形参 → 每次 `TypeError`、任务必失败。为 `check()` 增加 `region_code: str = None`。
+- **征信任务端点越权（High，FIX-038）**：`credit_check_status/resume/get_captcha_image/reload_captcha/solve_captcha/download_credit_report` 仅校验 `consent`，任意登录用户可读/改/下载他人征信任务。建任务时写入 `user_id`，读改端用 `task_owner_ok` 比对；`download` 回退查 `credit_check_reports.user_id`（owner-only）。
+- **前端 XSS（High，FIX-039）**：`escapeHtml` 未转义引号 → ~80 处属性上下文可属性注入。补 `"`→`&quot;`、`'`→`&#39;`；`owner`/`username`/`uploaded_at` 等一律 `escapeHtml`；管理员项目列表内联 `onclick`（拼接 name/status 可绕过）改为 `data-*` + `openProjectFromEl` 委托。
+- **清标结果可能整体丢失（High，FIX-040）**：`clearance_engine` 原在结果事务内 INSERT `chat_messages`，单条失败使事务 aborted → `commit` 失败被外层 `except` 吞掉、`batch_comparison_results` 一并丢失。改为结果先 commit，聊天气泡在独立连接/事务写（失败仅告警）。
+- **账户删除重复 deposit（High，FIX-042）**：`auth.py` 在选择性 deposit(keep_map) 后又无条件全量再插一遍 → 保留项重复、非保留项也被 deposit。删除无条件块。
+- **会话 Cookie 缺安全标志（High，FIX-041）**：补 `SESSION_COOKIE_HTTPONLY=True` / `SESSION_COOKIE_SAMESITE='Lax'`（`SECURE` 于 `APP_ENV=production` 开启）。
+- **Docker 调度重复（High，FIX-041）**：compose `app` 服务补 `ENABLE_SCHEDULER=false`，避免 4 个 gunicorn worker 各跑一份 APScheduler。
+- **SSE 越权 CORS（Medium，FIX-042）**：`/tasks/<id>/stream` 移除 `Access-Control-Allow-Origin: *`。
+- **上传去重 TOCTOU（Medium，FIX-043）**：`file_store` 去重 SELECT 与 INSERT 分属两连接，并发可重复插入。改用 `pg_advisory_xact_lock` 串行化（无 schema 变更）。
+- **输入校验/加固（Medium，FIX-043）**：`delete_law` 的 `law_id` 加白名单校验；`graph` threshold 改 `type=float`（防 500）；账户删除验证码改 `secrets.randbelow`。
+
+### Changed
+- `database.py` 的 `ADMIN_PIN` 默认值与 `__init__.py` 对齐（`'888888'`→`'123456'`，FIX-042）。
+- compose 移除已知默认 secret（`FLASK_SECRET_KEY`/`WTF_CSRF_SECRET_KEY` 改 `:?` 必填）；`postgres`/`redis` 端口绑定 `127.0.0.1`（FIX-041）。
+- 错别字遗留表 `typo_detection_results` 的 `DROP` 从每次启动移入一次性迁移 `migrations/002`（FIX-043）。
+- `chat.js` 轮询清理改 `clearTimeout` + generation/stopped 守卫（防 stop 后 in-flight 续命）。
+
+### Added
+- fix_registry `FIX-2026-09-11-037` ~ `043`；回归测试 11 项（`tests/test_regression.py`）。
+
+### regression: 121/121 regression · route_preservation 3/3 · smoke 7/7 · verify_fixes 185/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-11] — 清标持久化事务化（FIX-036）
 
 ### Fixed

@@ -806,19 +806,26 @@
     // ── Unified real-time polling (common + project chats) ──
     var _pollTimer = null;
     var _pollLastId = 0;
+    var _pollGen = 0;
+    var _pollStop = null;
 
     function startRealtimePoll(projectId) {
         stopRealtimePoll();
         _pollLastId = _lastKnownMessageId || 0;
         var _backoff = 0;
+        var _stopped = false;
+        var gen = ++_pollGen;
+        _pollStop = function() { _stopped = true; };
         const BASE = projectId ? 3000 : 5000;
 
         function _scheduleNext() {
+            if (_stopped || gen !== _pollGen) return;
             var delay = Math.min(BASE * Math.pow(1.3, Math.min(_backoff, 12)), 30000);
             _pollTimer = setTimeout(_poll, delay);
         }
 
         async function _poll() {
+            if (_stopped || gen !== _pollGen) return;
             const currentThread = sessionStorage.getItem('currentThreadId');
             if (!currentThread || isProcessing) { _scheduleNext(); return; }
             if (projectId && currentProjectId != projectId) { _scheduleNext(); return; }
@@ -855,7 +862,8 @@
     }
 
     function stopRealtimePoll() {
-        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        if (_pollStop) { _pollStop(); _pollStop = null; }
+        if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; }
     }
 
     var _lastKnownMessageId = 0;

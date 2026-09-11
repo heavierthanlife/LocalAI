@@ -1071,3 +1071,130 @@ fixes:
       - type: literal
         file: app/services/relationship_extractor.py
         pattern: "conn=None"
+
+  - id: FIX-2026-09-11-037
+    title: "合规异步任务 region_code 接线（check() 签名）"
+    severity: high
+    rationale: >
+      compliance_check_task 调用 checker.check(..., region_code=region_code)，
+      但 ComplianceChecker.check() 无该形参，导致每次调用 TypeError、任务必失败。
+      FIX-033 只补了任务签名/调用，漏了方法签名。check() 现接受 region_code。
+    checks:
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "region_code: optional region code for region-specific law selection"
+
+  - id: FIX-2026-09-11-038
+    title: "征信任务读写端点归属校验（IDOR）"
+    severity: high
+    rationale: >
+      credit 任务 status/resume/captcha/reload/solve/download 仅校验 consent，
+      任意登录用户可读改他人任务。建任务时写 user_id，读端用 task_owner_ok 比对；
+      download 回退查 credit_check_reports.user_id。
+    checks:
+      - type: literal
+        file: app/routes/credit.py
+        pattern: "task_owner_ok(task, session.get('user_id'))"
+      - type: literal
+        file: app/routes/credit.py
+        pattern: "'user_id': user_id,"
+
+  - id: FIX-2026-09-11-039
+    title: "前端 XSS 加固：escapeHtml 引号 + owner 转义 + 项目项去内联 onclick"
+    severity: high
+    rationale: >
+      escapeHtml 未转义引号，80+ 属性上下文可被属性注入；owner/username 等直接
+      进 innerHTML；项目列表内联 onclick 拼接 name/status 可绕过。escapeHtml 补
+      &quot;/&#39;；owner 一律转义；项目项改 data-* + openProjectFromEl 委托。
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "if (m === '\"') return '&quot;';"
+      - type: literal
+        file: static/js/app.js
+        pattern: "window.openProjectFromEl"
+      - type: literal
+        file: static/js/app.js
+        pattern: "escapeHtml(d.skill_a.owner)"
+
+  - id: FIX-2026-09-11-040
+    title: "清标聊天气泡持久化与结果事务解耦"
+    severity: high
+    rationale: >
+      clearance_engine 原在同一事务内 INSERT chat_messages，单条失败使事务
+      aborted → 结果 commit 失败被外层 except 吞掉、全部丢失。改为结果先 commit，
+      聊天气泡在独立连接/事务中写（失败仅告警）。
+    checks:
+      - type: literal
+        file: app/services/clearance_engine.py
+        pattern: "Failed to persist clearance chat message(s)"
+      - type: literal
+        file: app/services/clearance_engine.py
+        pattern: "with get_db_connection() as _c2:"
+
+  - id: FIX-2026-09-11-041
+    title: "会话 Cookie 安全标志 + Docker 调度去重 + 禁默认密钥/端口收敛"
+    severity: high
+    rationale: >
+      SESSION_COOKIE 缺 Secure/HttpOnly/SameSite；Docker 未设 ENABLE_SCHEDULER=false
+      致 4 gunicorn worker 各跑一份 APScheduler；compose 使用已知默认 secret；
+      postgres/redis 端口暴露到 0.0.0.0。
+    checks:
+      - type: literal
+        file: app/__init__.py
+        pattern: "SESSION_COOKIE_HTTPONLY"
+      - type: literal
+        file: app/__init__.py
+        pattern: "SESSION_COOKIE_SAMESITE"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "ENABLE_SCHEDULER=false"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "FLASK_SECRET_KEY must be set in .env"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "127.0.0.1:5433:5432"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "127.0.0.1:6380:6379"
+
+  - id: FIX-2026-09-11-042
+    title: "账户删除重复 deposit 修复 + ADMIN_PIN 默认统一 + SSE CORS 收紧"
+    severity: high
+    rationale: >
+      auth 删除账户时在选择性 deposit 后又无条件全量再插一遍 → 保留项重复、非保留
+      项也被 deposit；database.py ADMIN_PIN 默认 '888888' 与 __init__ '123456' 不一致；
+      tasks SSE 返回 Access-Control-Allow-Origin:* 泄露任务进度。
+    checks:
+      - type: literal_not
+        file: app/routes/auth.py
+        pattern: "FROM credit_check_reports WHERE user_id = %s\", (user_id,))"
+      - type: literal_not
+        file: app/routes/tasks.py
+        pattern: "Access-Control-Allow-Origin"
+      - type: literal
+        file: app/database.py
+        pattern: "os.getenv('ADMIN_PIN', '123456')"
+
+  - id: FIX-2026-09-11-043
+    title: "上传去重 TOCTOU 收紧 + 法规删除校验 + 图阈值/验证码加固"
+    severity: medium
+    rationale: >
+      file_store 去重 SELECT 与 INSERT 分属两连接，并发可重复插入；delete_law 的
+      law_id 未校验；graph threshold float() 未防护 500；账户删除验证码用非 CSPRNG。
+      去重加 pg_advisory_xact_lock 串行化；law_id 白名单；threshold type=float；
+      验证码改 secrets。
+    checks:
+      - type: literal
+        file: app/services/file_store.py
+        pattern: "pg_advisory_xact_lock"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "re.match(r'^[A-Za-z0-9_-]{1,64}$'"
+      - type: literal
+        file: app/routes/graph.py
+        pattern: "type=float"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "secrets.randbelow(10000)"

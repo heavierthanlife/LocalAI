@@ -1542,4 +1542,88 @@ def test_clearance_persistence_atomicity():
         assert f'DELETE FROM {tbl}' in src
 
 
+# ── QA round 022 (FIX-2026-09-11-037..043) ──
+def _read(rel):
+    with open(rel, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def test_compliance_check_accepts_region_code():
+    # FIX-037: Celery task passes region_code= to check(); signature must accept it.
+    import inspect
+    from app.services.compliance_checker import ComplianceChecker
+    sig = inspect.signature(ComplianceChecker.check)
+    assert 'region_code' in sig.parameters
+
+
+def test_credit_task_ownership():
+    # FIX-038: credit task endpoints must enforce ownership.
+    src = _read('app/routes/credit.py')
+    assert "task_owner_ok(task, session.get('user_id'))" in src
+    assert "'user_id': user_id," in src
+
+
+def test_frontend_escape_html_escapes_quotes():
+    # FIX-039: escapeHtml must neutralize both quote characters.
+    src = _read('static/js/app.js')
+    assert '&quot;' in src and '&#39;' in src
+    assert 'window.openProjectFromEl' in src
+    assert 'escapeHtml(d.skill_a.owner)' in src
+
+
+def test_clearance_chat_persistence_decoupled():
+    # FIX-040: chat bubble written in its own connection, not the result txn.
+    src = _read('app/services/clearance_engine.py')
+    assert 'with get_db_connection() as _c2:' in src
+    assert 'Failed to persist clearance chat message(s)' in src
+
+
+def test_auth_no_unconditional_deposit():
+    # FIX-042: the unconditional re-deposit block must be gone.
+    src = _read('app/routes/auth.py')
+    assert 'FROM credit_check_reports WHERE user_id = %s", (user_id,))' not in src
+
+
+def test_session_cookie_flags():
+    # FIX-041
+    src = _read('app/__init__.py')
+    assert 'SESSION_COOKIE_HTTPONLY' in src
+    assert 'SESSION_COOKIE_SAMESITE' in src
+
+
+def test_compose_scheduler_secret_ports():
+    # FIX-041
+    src = _read('docker-compose.yml')
+    assert 'ENABLE_SCHEDULER=false' in src
+    assert 'FLASK_SECRET_KEY must be set in .env' in src
+    assert '127.0.0.1:5433:5432' in src
+    assert '127.0.0.1:6380:6379' in src
+
+
+def test_admin_pin_default_unified():
+    # FIX-042: seed default must match __init__ fallback ('123456').
+    src = _read('app/database.py')
+    assert "os.getenv('ADMIN_PIN', '123456')" in src
+    assert "os.getenv('ADMIN_PIN', '888888')" not in src
+
+
+def test_sse_cors_removed():
+    # FIX-042
+    src = _read('app/routes/tasks.py')
+    assert 'Access-Control-Allow-Origin' not in src
+
+
+def test_file_store_dedup_lock():
+    # FIX-043
+    src = _read('app/services/file_store.py')
+    assert 'pg_advisory_xact_lock' in src
+
+
+def test_input_validation_hardening():
+    # FIX-043
+    assert "re.match(r'^[A-Za-z0-9_-]{1,64}$'" in _read('app/routes/compliance.py')
+    assert 'type=float' in _read('app/routes/graph.py')
+    assert 'secrets.randbelow(10000)' in _read('app/routes/admin_regeneration.py')
+
+
 
