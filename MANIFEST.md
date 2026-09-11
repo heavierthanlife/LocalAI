@@ -49,8 +49,8 @@
 | `nginx.conf` (108 行) | 反向代理，client_max_body_size 12G，HTTPS TLS 1.2/1.3 |
 | `celery_app.py` (90 行) | Redis broker+backend，8 task 模块，6 beat 调度 |
 | `.env.example` (52 行) | 环境变量模板 |
-| `.mcp.json` (45 行) | 5 个 MCP 服务器（filesystem/postgres/git/agentmemory/skill） |
-| `opencode.json` (63 行) | OpenCode 配置（4 MCP + 5 斜杠命令） |
+| `.mcp.json` | 空存根 `{mcpServers:{}}`（项目级 MCP 覆盖已上移到全局配置） |
+| `~/.config/opencode/opencode.jsonc` | OpenCode 全局配置（provider/model/MCP/斜杠命令）；项目级 `opencode.json` 已删除 |
 | `pytest.ini` (11 行) | 4 markers: slow/e2e/db/redis |
 | `.gitignore` / `.dockerignore` | 排除规则 |
 | `skills-lock.json` (35 行) | 5 个外部 skill 锁定 |
@@ -244,7 +244,7 @@ repair_kit/          崩溃恢复参考（SYSTEM_CHECKLIST + SCHEMA_SNAPSHOT + c
 data/                agent_prompt.json, 法规库, 上传文件, 知识库等运行时数据
 docs/                功能规格 + 升级方案
 .audit/              审计增量日志 + state
-.remember/           会话记忆（AI 代理）
+.remember/           会话记忆（AI 代理）；新会话由 session-bootstrap 插件自注入 handoff + unresolved + findings
 .githooks/           提交钩子（pre-commit 校验 fix registry）
 ```
 

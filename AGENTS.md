@@ -4,6 +4,18 @@ AI-powered bidding agency platform. Flask 3.1 / Python 3.12 / PostgreSQL 16 / Re
 
 > **文档导航**：`README.md`（入口）· `MANIFEST.md`（模块清单）· `ARCHITECTURE.md`（深度架构）· `CHANGELOG.md`（变更历史）· `DECISIONS.md`（技术决策）· `SECURITY.md`（安全基线）· `USER_MANUAL.md`（运维手册）· `CONTRIBUTING.md`（开发流程）· 本文件为开发者/Agent 命令与约定指南。
 
+## Session Operating Protocol
+
+新会话自动从此处 + `.remember/`（由 `session-bootstrap` 插件注入）+ agentmemory 恢复上下文。**宣布任务完成前必须自证以下 gate，并附实际输出（不得口头声称"已通过"）**：
+
+1. **改代码** → `node --check <js>`（前端）· `.venv\Scripts\python.exe -m pytest tests/test_regression.py -s`（后端）· `python scripts/verify_fixes.py`。
+2. **合规/清标路径改动** → 追加 3/3 基线回归（工程/货物/服务），commit message 带 `regression: N/3 baseline passed`。
+3. **任何代码修复** → `data/fix_registry.yaml` 记 FIX（pattern 用具名元字符时改用 `type: literal`）+ `tests/test_regression.py` 加回归测试。
+4. **行为/路由/表变化** → 更新 `CHANGELOG.md`（顶部）+ 受影响的 `AGENTS.md`/`MANIFEST.md`；跑 `python scripts/check_system.py`。
+5. **部署** → `python scripts/docker_build.py` + `docker compose up -d --force-recreate app celery-worker celery-beat` + 容器内 grep 抽查（镜像=HEAD）。
+
+**只读复核门禁**：改动命中 `app/services/`、`app/routes/`、`celery_app.py`、`data/fix_registry.yaml`、合规/清标路径之一时，完成前必须交由 `@code-reviewer`（只读）复核；纯前端/文档改动可跳过。`/qa-loop` 始终手动触发（skill 设计上要求逐批审批），不得自动运行。
+
 ## Quick start
 
 ```bash
@@ -201,6 +213,8 @@ Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shar
 | **lmcode** | `D:\AI_Tools\npm-global\lm.cmd` / `lm.ps1` → `--skills-dir` flag | CLI arg |
 
 **236 unique skills** in the shared pool. 4 collisions resolved (grill-me identical, spike hermes-wins, tdd merged, docx merged). Losers archived in `skills/_old/`. Per-tool extensions in `tool-extensions/`.
+
+**会话自举**（`tool-extensions/opencode/plugins/session-bootstrap.ts`，全局 `~/.config/opencode/plugins/`）：新会话首次 system-transform 时一次性注入 `<session-bootstrap>` 块 = Session Operating Protocol + `.remember/handoff.md`(≤2000 字) + `data/unresolved.yaml`(pending/deferred/blocked) + `.remember/findings/*.md`(unresolved,≤5)。每会话去重、文件缺失即 no-op。与 `agentmemory-capture.ts` 分工：前者=本会话交接/门禁，后者=跨会话洞察。
 
 ## Long-term Backlog
 
