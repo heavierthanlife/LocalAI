@@ -974,3 +974,80 @@ fixes:
       - type: literal
         file: .githooks/pre-commit
         pattern: "CHECK_DOC_DRIFT"
+
+
+  - id: FIX-2026-09-11-033
+    title: "异步任务归属校验 + compliance_check_task 修复"
+    severity: high
+    rationale: >
+      所有 TaskBus 读端点（/tasks, /tasks/<id>, /clearance/status|stream,
+      /batch/plagiarism/status）此前不校验任务归属；user_id 从不写入 task meta，
+      且 /tasks 列表对匿名用户返回全部任务、对登录用户返回所有人任务。
+      新增 helpers.task_owner_ok（缺失 user_id 的 legacy 任务 allow+log），
+      register_queued 写入 user_id，全部读端点加归属守卫；列表端点匿名返回空、
+      登录仅返回本人。顺带修复 compliance_check_task 的 TaskBus() 无参构造 +
+      start() 三位置参数（TypeError 且会写 task_meta:None）。
+    checks:
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "def task_owner_ok"
+      - type: literal
+        file: app/routes/tasks.py
+        pattern: "task_owner_ok(meta, user_id)"
+      - type: literal
+        file: app/routes/clearance.py
+        pattern: "from app.utils.helpers import task_owner_ok"
+      - type: literal
+        file: app/routes/batch.py
+        pattern: "task_owner_ok(meta, user_id)"
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "bus = TaskBus(task_id, 'compliance_check'"
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "region_code: str = None"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "TaskBus(task_id, 'compliance_check'"
+      - type: literal_not
+        file: app/services/compliance_checker.py
+        pattern: "bus.start(task_id, 'compliance_check'"
+
+  - id: FIX-2026-09-11-034
+    title: "API-only 同步对比端点加大小守卫（防 web worker OOM）"
+    severity: medium
+    rationale: >
+      /check_quote_anomaly、/compare_bidders_quotes、/extract_relationships
+      在 web worker 内同步跑，大文件会 OOM。新增 _reject_oversize()：file_ids
+      总量或 Content-Length 超 MAX_SYNC_COMPARE_MB(40MB) 返回 413，引导改用
+      异步 /clearance 或 /batch/plagiarism/run。
+    checks:
+      - type: literal
+        file: app/routes/batch.py
+        pattern: "def _reject_oversize"
+      - type: literal
+        file: app/routes/batch.py
+        pattern: "MAX_SYNC_COMPARE_MB"
+
+  - id: FIX-2026-09-11-035
+    title: "警示详情与处理指引：后端标注 guidance（单一数据源）+ 前端渲染"
+    severity: medium
+    rationale: >
+      DOCX 有「警示详情与处理指引」5 表，前端仅有计数。为避免在前端复制
+      guidance 表导致漂移，后端 annotate_warning_details() 在 hard_evidence
+      items/violations 上附加 label/chapter/guidance（复用 _type_label /
+      _CHAPTER_BY_TYPE / _guidance_for），前端 _renderWarningDetails 仅渲染。
+      run_analysis 与 clearance_engine 两处 reassessment 均调用。
+    checks:
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "def annotate_warning_details"
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "hard = annotate_warning_details(hard)"
+      - type: literal
+        file: app/services/clearance_engine.py
+        pattern: "annotate_warning_details"
+      - type: literal
+        file: static/js/app.js
+        pattern: "function _renderWarningDetails"

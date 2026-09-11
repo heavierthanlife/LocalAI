@@ -635,6 +635,7 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
     from app.services.hard_evidence import assess_hard_evidence
     hard_ctx = _build_hard_context(checker_data, open_info_results)
     hard = assess_hard_evidence(indicators, hard_ctx)
+    hard = annotate_warning_details(hard)
     warning_level = resolve_warning_level(total_score, hard)
 
     # Fill per-file indicator trigger counts: an indicator fired for a file if
@@ -831,6 +832,33 @@ def _guidance_for(it_type, verdict=''):
         if verdict == 'VIOLATION':
             return '要求投标人限期说明并整改。'
     return _DEFAULT_GUIDANCE
+
+
+def annotate_warning_details(hard):
+    """Attach display fields (label/chapter/guidance) to each 铁证/违规 item.
+
+    Single source of truth for warning wording: the backend owns the guidance
+    table, the frontend only renders. Mutates and returns ``hard`` (idempotent).
+    """
+    if not isinstance(hard, dict):
+        return hard
+
+    def _annotate(it, verdict=''):
+        if not isinstance(it, dict):
+            return
+        itype = it.get('type', '')
+        it.setdefault('label', _type_label(itype))
+        if itype in _META_NO_TEXT_TYPES or itype.startswith(_PLATFORM_PREFIX):
+            it.setdefault('chapter', '—')
+        else:
+            it.setdefault('chapter', _CHAPTER_BY_TYPE.get(itype, '全文'))
+        it.setdefault('guidance', _guidance_for(itype, verdict))
+
+    for it in (hard.get('items') or []):
+        _annotate(it)
+    for it in (hard.get('violations') or []):
+        _annotate(it, 'VIOLATION')
+    return hard
 
 
 def _locate_chapter(text, keyword):

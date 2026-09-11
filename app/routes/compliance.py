@@ -307,6 +307,9 @@ def start_check():
         task_id = str(uuid.uuid4())
         try:
             from app.services.compliance_checker import compliance_check_task
+            from app.services.task_bus import TaskBus
+            TaskBus(task_id, 'compliance_check', f'合规检查: {bid_name}').register_queued(
+                extra={'user_id': str(session.get('user_id') or '')})
             compliance_check_task.apply_async(
                 args=[task_id, bid_text, rules, bid_name, use_ai, include_laws, region_code],
                 task_id=task_id,

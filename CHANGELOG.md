@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — 清标开放案例清零：任务归属/大小守卫/警示指引（FIX-033~035）
+
+### Fixed
+- **异步任务归属校验（High，FIX-033）**：新增 `helpers.task_owner_ok`（legacy 缺 `user_id` → allow+log）。`user_id` 现于 `register_queued` 写入（clearance/plagiarism）。全部 TaskBus 读端点加归属守卫：`/clearance/status|stream`、`/tasks/<id>`、`/tasks/<id>/stream`、`/tasks/<id>/delete`、`/tasks/<id>/cancel`、`/batch/plagiarism/status`。`/tasks` 列表：**匿名返回空、登录仅返回本人**（此前匿名可见全部任务、登录可见所有人任务）。
+- **`compliance_check_task` 修复**：`TaskBus()` 无参构造 + `start()` 三位置参数（TypeError，且会写 `task_meta:None`）→ 改为 `TaskBus(task_id, 'compliance_check', ...); bus.start()`。
+- **警示详情与处理指引（Medium，FIX-035）**：DOCX 有 5 表、前端仅有计数。后端 `annotate_warning_details()` 在 `hard_evidence.items/violations` 附加 `label/chapter/guidance`（复用 `_type_label`/`_CHAPTER_BY_TYPE`/`_guidance_for`，单一数据源）；`run_analysis` 与 `clearance_engine` 两处 reassessment 均调用；前端 `_renderWarningDetails` 渲染两张表。
+
+### Added
+- **同步对比端点大小守卫（Medium，FIX-034）**：`_reject_oversize()` — `/check_quote_anomaly`、`/compare_bidders_quotes`、`/extract_relationships` 超 `MAX_SYNC_COMPARE_MB`(40MB) 返回 413，引导用异步路径。
+- `verify_fixes.py` 新增 `literal_not` 检查类型（regex-free 缺失断言，根治 `fix-registry-regex-paren`）。
+- 基线校准 `UNRESOLVED-017`（货物/服务类，**blocked**：缺真实文档）。
+
+### regression: 108/108 regression · route_preservation 3/3 · verify_fixes 159/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-11] — 文档全重组 + 计数防漂移（FIX-2026-09-11-032）
 
 ### Changed

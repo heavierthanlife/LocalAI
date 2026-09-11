@@ -9963,7 +9963,47 @@
             });
             html += '</table></details>';
         }
+        html += _renderWarningDetails(report);
         html += _renderParagraphCollusionEvidence(report);
+        return html;
+    }
+
+    // 铁证/暗标违规「警示详情与处理指引」（对齐 DOCX _append_warning_details）:
+    // 数据来自 report.basic_info.hard_evidence，每项已由后端 annotate_warning_details
+    // 附加 label/chapter/guidance（单一数据源在后端，前端仅渲染）。
+    function _renderWarningDetails(report) {
+        var he = ((report || {}).basic_info || {}).hard_evidence || {};
+        var items = he.items || [];
+        var violations = he.violations || [];
+        if (!items.length && !violations.length) return '';
+
+        function table(rows) {
+            var h = '<table style="width:100%;border-collapse:collapse;font-size:0.66rem;margin-top:4px;">';
+            h += '<tr><th style="width:14%;">警示</th><th style="width:6%;">级别</th><th style="width:30%;">原文摘录</th><th style="width:14%;">所在章节</th><th>处理指引</th></tr>';
+            rows.forEach(function(it) {
+                var lvl = _clearanceEscape(it.level || '');
+                var lvlColor = lvl === 'T1' ? '#dc2626' : (lvl === 'T2' ? '#d97706' : '');
+                h += '<tr style="border-top:1px solid var(--card-border);vertical-align:top;">';
+                h += '<td>' + _clearanceEscape(it.label || it.type || '') + '</td>';
+                h += '<td style="color:' + lvlColor + ';font-weight:600;">' + lvl + '</td>';
+                h += '<td>' + _clearanceEscape(String(it.evidence || '').substring(0, 150)) + '</td>';
+                h += '<td>' + _clearanceEscape(it.chapter || '') + '</td>';
+                h += '<td>' + _clearanceEscape(it.guidance || '') + '</td>';
+                h += '</tr>';
+            });
+            h += '</table>';
+            return h;
+        }
+
+        var html = '';
+        if (items.length) {
+            html += '<details class="alert-parent"><summary>' + _icon('🚨') + ' 警示详情与处理指引 — 铁证 (' + items.length + '项)' + _clArrow() + '</summary>';
+            html += table(items) + '</details>';
+        }
+        if (violations.length) {
+            html += '<details class="alert-parent"><summary>' + _icon('🚫') + ' 警示详情与处理指引 — 暗标违规 (' + violations.length + '项)' + _clArrow() + '</summary>';
+            html += table(violations) + '</details>';
+        }
         return html;
     }
 

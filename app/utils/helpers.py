@@ -45,6 +45,24 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def task_owner_ok(meta, user_id) -> bool:
+    """Return True if ``user_id`` may read the task described by ``meta``.
+
+    Ownership is recorded in task meta at register time (``user_id``). Legacy
+    or in-flight tasks created before ownership tracking carry no ``user_id``;
+    those are allowed through with a warning (Redis TTL expires them within 7
+    days). Malformed meta fails closed.
+    """
+    if not isinstance(meta, dict):
+        logger.warning("task_owner_ok: malformed task meta; denying access")
+        return False
+    owner = meta.get('user_id')
+    if not owner:
+        logger.warning("Task meta missing user_id; allowing access (legacy task)")
+        return True
+    return str(user_id) == str(owner)
+
+
 def safe_error_response(user_message="处理文件时出错，请检查文件格式或稍后重试。", log_error=None):
     """Return a standardized error string for file processing failures."""
     if log_error:

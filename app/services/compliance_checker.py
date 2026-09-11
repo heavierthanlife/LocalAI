@@ -477,19 +477,21 @@ try:
     @celery_app.task(bind=True, name='compliance_check_task', max_retries=1)
     def compliance_check_task(self, task_id: str, bid_text: str, rules: list,
                                bid_name: str, use_ai: bool = True,
-                               include_laws: bool = True) -> dict:
+                               include_laws: bool = True,
+                               region_code: str = None) -> dict:
         """Celery task: run full compliance check in background."""
         from app.services.task_bus import TaskBus
 
-        bus = TaskBus()
-        bus.start(task_id, 'compliance_check', f'合规检查: {bid_name}')
+        bus = TaskBus(task_id, 'compliance_check', f'合规检查: {bid_name}')
+        bus.start()
 
         try:
             bus.progress(10, '正在加载适用法规...')
             checker = ComplianceChecker()
 
             bus.progress(30, '正在逐条检查投标文件...')
-            result = checker.check(bid_text, rules, bid_name, use_ai=use_ai)
+            result = checker.check(bid_text, rules, bid_name, use_ai=use_ai,
+                                   region_code=region_code)
 
             bus.progress(70, '正在生成审查报告...')
             report_html = checker.generate_report(

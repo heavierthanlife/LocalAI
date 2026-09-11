@@ -165,6 +165,7 @@ def run_clearance_route():
     from app.services.task_bus import TaskBus
     TaskBus(task_id, 'clearance', '清标分析').register_queued(
         extra={'thread_id': thread_id or '',
+               'user_id': str(user_id or ''),
                'target_threads': json.dumps(target_threads, ensure_ascii=False)})
 
     info_overrides = {}
@@ -227,16 +228,21 @@ def preview_criteria():
 
 
 # AUTH-GUARD-STATUS(FIX-2026-09-10-031): consent + login required
+# OWNER-GUARD(FIX-2026-09-11-033): task must belong to the caller
 @clearance_bp.route('/status/<task_id>', methods=['GET'])
 def clearance_status(task_id):
     if session.get('consent_value', 0) != 1:
         return err("请先登录", "AUTH_REQUIRED", 401)
-    if not get_user_id():
+    user_id = get_user_id()
+    if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
+    from app.utils.helpers import task_owner_ok
     meta = TaskBus.get(task_id)
     if not meta:
         return err("Task not found", "NOT_FOUND", 404)
+    if not task_owner_ok(meta, user_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     completed = meta.get('status') == 'completed'
     return ok({
         'completed': completed,
@@ -248,13 +254,21 @@ def clearance_status(task_id):
 
 
 # AUTH-GUARD-STREAM(FIX-2026-09-10-031): consent + login required
+# OWNER-GUARD(FIX-2026-09-11-033): task must belong to the caller
 @clearance_bp.route('/stream/<task_id>', methods=['GET'])
 def clearance_stream(task_id):
     if session.get('consent_value', 0) != 1:
         return err("请先登录", "AUTH_REQUIRED", 401)
-    if not get_user_id():
+    user_id = get_user_id()
+    if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
+    from app.utils.helpers import task_owner_ok
+    meta = TaskBus.get(task_id)
+    if not meta:
+        return err("Task not found", "NOT_FOUND", 404)
+    if not task_owner_ok(meta, user_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     return Response(
         TaskBus.subscribe(task_id),
         mimetype='text/event-stream',

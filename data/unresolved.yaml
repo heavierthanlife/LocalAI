@@ -63,9 +63,10 @@ unresolved:
 
   - id: UNRESOLVED-005
     title: "Flask dev server stdout/stderr encoding issues"
-    status: deferred
+    status: resolved
     severity: low
     discovered: 2026-07-29
+    resolved: 2026-09-11
     context: >
       run.py applies UTF-8 encoding fixes for emoji/log compatibility on
       Windows. The fix_registry check output showed mojibake characters
@@ -73,8 +74,10 @@ unresolved:
       via subprocess in pre-commit hook. Non-critical but cosmetically ugly.
     blocked_by: ~
     resolution_plan: >
-      Apply same sys.stdout.reconfigure(encoding='utf-8') to verify_fixes.py
-      and pre-commit hook scripts. Mark as low priority.
+      Resolved 2026-09-11: verify_fixes.py and .githooks/pre-commit now call
+      sys.stdout/stderr.reconfigure(encoding='utf-8'); pre-commit subprocess
+      calls use encoding='utf-8', errors='replace'. Fix titles with non-GBK
+      chars (→ · ↔) no longer crash the hook.
 
   - id: UNRESOLVED-006
     title: "Pre-commit hook was advisory-only; all checks printed but never blocked"
@@ -228,3 +231,19 @@ unresolved:
     resolution_plan: >
       保留不删除。如果后续引入 LangChain agent 框架，可以激活此模块。
       如果决定不使用 LangChain agent，则删除此文件。
+
+  - id: UNRESOLVED-017
+    title: "清标基线仅工程类校准（货物/服务缺失）"
+    status: blocked
+    severity: medium
+    discovered: 2026-09-11
+    tags: ["数据依赖"]
+    context: >
+      tests/fixtures/clearance_baseline/meta.json 明确 missing_types:
+      [goods, services] —— 复合指数权重仅基于工程类脱敏文档（价格标金额
+      替换保留尾数）校准。货物/服务类无真实基线文档，无法在代码中完成校准。
+    blocked_by: "需要真实的货物类、服务类招标+投标文档作为基线夹具"
+    resolution_plan: >
+      收集脱敏真实文档 → 放入 tests/fixtures/clearance_baseline/ → 更新
+      meta.json doc_types + 重算 scores.json 快照。在拿到数据前不调整权重
+      （避免用工程类权重误判其他类型）。

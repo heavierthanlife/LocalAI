@@ -61,6 +61,16 @@ def _check_literal(file_rel, pattern):
     return False, f"literal '{pattern}' NOT found in {file_rel}"
 
 
+def _check_literal_not(file_rel, pattern):
+    """Plain substring ABSENCE check — mirror of _check_literal (no regex)."""
+    content = _read_file(file_rel)
+    if content is None:
+        return True, None  # file missing is non-blocking for absence checks
+    if pattern in content:
+        return False, f"forbidden literal '{pattern}' FOUND in {file_rel}"
+    return True, None
+
+
 def _check_function_order(file_rel, before_name, after_name):
     content = _read_file(file_rel)
     if content is None:
@@ -80,6 +90,7 @@ CHECK_RUNNERS = {
     'grep': lambda c: _check_grep(c['file'], c['pattern']),
     'grep_not': lambda c: _check_grep_not(c['file'], c['pattern']),
     'literal': lambda c: _check_literal(c['file'], c['pattern']),
+    'literal_not': lambda c: _check_literal_not(c['file'], c['pattern']),
     'function_order': lambda c: _check_function_order(c['file'], c['before'], c['after']),
 }
 

@@ -1408,3 +1408,118 @@ def test_document_analysis_blueprint_removed():
         assert 'def run_analysis_async' not in f.read()
 
 
+# ── FIX-2026-09-11-033: task ownership guard ──
+def test_task_owner_ok():
+    from app.utils.helpers import task_owner_ok
+    assert task_owner_ok({'user_id': 'u1'}, 'u1') is True
+    assert task_owner_ok({'user_id': 'u1'}, 'u2') is False
+    assert task_owner_ok({'user_id': 123}, '123') is True
+    # legacy task (no user_id) → allowed with warning
+    assert task_owner_ok({}, 'u2') is True
+    # malformed meta → fail closed
+    assert task_owner_ok(None, 'u2') is False
+
+
+def test_compliance_check_task_signature_accepts_region_code():
+    """async compliance task must accept the 7th arg passed by apply_async."""
+    import inspect
+    from app.services.compliance_checker import compliance_check_task
+    params = inspect.signature(compliance_check_task.run).parameters
+    assert 'region_code' in params, "region_code param required (apply_async passes it)"
+    with open('app/routes/compliance.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert "TaskBus(task_id, 'compliance_check'" in src, \
+        "compliance route must register task with user_id"
+
+
+def test_task_ownership_guard_applied():
+    """All TaskBus read endpoints must enforce ownership."""
+    with open('app/routes/tasks.py', 'r', encoding='utf-8') as f:
+        t = f.read()
+    assert t.count('task_owner_ok(meta, user_id)') >= 3, \
+        "tasks get/delete/cancel must check ownership"
+    with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
+        c = f.read()
+    assert 'from app.utils.helpers import task_owner_ok' in c
+    assert c.count('task_owner_ok(meta, user_id)') >= 2, \
+        "clearance status/stream must check ownership"
+    with open('app/routes/batch.py', 'r', encoding='utf-8') as f:
+        b = f.read()
+    assert 'task_owner_ok(meta, user_id)' in b, \
+        "plagiarism status must check ownership"
+    # producers write user_id
+    assert "'user_id': str(user_id or '')" in b or '"user_id"' in b
+
+
+def test_compliance_check_taskbus_arg_fix():
+    """compliance_check_task must construct TaskBus with task_id (no TypeError)."""
+    with open('app/services/compliance_checker.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert "TaskBus(task_id, 'compliance_check'" in src
+    assert "bus.start(task_id, 'compliance_check'" not in src
+
+
+# ── FIX-2026-09-11-034: sync-endpoint size guard ──
+def test_sync_compare_oversize_guard():
+    with open('app/routes/batch.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'def _reject_oversize' in src
+    assert 'MAX_SYNC_COMPARE_MB' in src
+    # applied to all three API-only sync endpoints
+    assert src.count('_reject_oversize()') >= 3
+
+
+# ── FIX-2026-09-11-035: warning-details annotation (single source in backend) ──
+def test_annotate_warning_details():
+    from app.services.document_analysis_svc import annotate_warning_details
+    hard = {
+        'items': [
+            {'type': 'lasteditor_same', 'level': 'T1', 'evidence': 'x', 'files': ['a', 'b']},
+            {'type': 'paragraph_collusion', 'level': 'T2', 'evidence': 'y', 'files': ['a', 'b']},
+        ],
+        'violations': [
+            {'type': 'tech_seal_leak', 'evidence': 'z', 'files': ['a']},
+        ],
+    }
+    out = annotate_warning_details(hard)
+    it0 = out['items'][0]
+    assert it0['label'] and it0['guidance'] and it0['chapter']
+    # meta type → chapter placeholder
+    assert it0['chapter'] == '—'
+    assert out['items'][1]['chapter'] != '—'
+    v0 = out['violations'][0]
+    assert v0['guidance'], "violation must carry guidance"
+    # idempotent
+    again = annotate_warning_details(out)
+    assert again['items'][0]['label'] == it0['label']
+
+
+def test_warning_details_called_both_paths():
+    with open('app/services/document_analysis_svc.py', 'r', encoding='utf-8') as f:
+        assert 'hard = annotate_warning_details(hard)' in f.read()
+    with open('app/services/clearance_engine.py', 'r', encoding='utf-8') as f:
+        assert 'annotate_warning_details' in f.read()
+    with open('static/js/app.js', 'r', encoding='utf-8') as f:
+        assert 'function _renderWarningDetails' in f.read()
+
+
+# ── FIX-2026-09-10 (ext): verify_fixes literal/literal_not types ──
+def test_verify_fixes_literal_types():
+    import os
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+    import verify_fixes as vf
+    assert 'literal' in vf.CHECK_RUNNERS
+    assert 'literal_not' in vf.CHECK_RUNNERS
+    # literal: no regex metachar parsing
+    ok, _ = vf._check_literal('data/fix_registry.yaml', '.')
+    assert ok is True
+    ok2, _ = vf._check_literal('data/fix_registry.yaml', 'zzz_no_match_zzz')
+    assert ok2 is False
+    ok3, _ = vf._check_literal_not('data/fix_registry.yaml', 'zzz_no_match_zzz')
+    assert ok3 is True
+    ok4, _ = vf._check_literal_not('data/fix_registry.yaml', 'fixes:')
+    assert ok4 is False
+
+
+

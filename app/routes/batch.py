@@ -81,6 +81,45 @@ def _collect_docs(max_files=10, min_files=1, need_metadata=False):
     return docs
 
 
+# Sync endpoints (single-doc quote / cross-bidder quote / relationship) run
+# inside the web worker. Guard against large payloads to avoid web-worker OOM;
+# large-file work belongs to the async paths (/clearance, /batch/plagiarism/run).
+# NOTE: when neither file_ids nor a Content-Length is present (chunked transfer
+# encoding), the size cannot be measured here and the guard is a no-op.
+MAX_SYNC_COMPARE_MB = 40
+
+
+def _reject_oversize():
+    """Return a 413 error response if the request exceeds the sync limit, else None.
+
+    Uses pre-uploaded ``file_ids`` sizes when present (the large-file path),
+    otherwise the raw Content-Length of a direct multipart upload.
+    """
+    limit = MAX_SYNC_COMPARE_MB * 1024 * 1024
+    total = int(request.content_length or 0)
+    file_ids = request.form.getlist('file_ids')
+    if file_ids:
+        content_len = total
+        try:
+            from app.services import file_store
+            uid = session.get('user_id')
+            resolved_total = 0
+            for fid in file_ids:
+                r = file_store.resolve(fid, uid)
+                if r:
+                    resolved_total += int(r.get('size', 0) or 0)
+            total = resolved_total
+        except Exception:
+            # resolve failure must not bypass the guard → fall back to Content-Length
+            total = content_len
+    if total > limit:
+        return err(
+            f"文件过大：同步端点上限 {MAX_SYNC_COMPARE_MB}MB，大文件请改用 /clearance "
+            f"或 /batch/plagiarism/run",
+            "PAYLOAD_TOO_LARGE", 413)
+    return None
+
+
 def _read_template_text():
     """招标模板文本：template_file_id（大文件）优先，回退 template 直传。"""
     from app.services import file_store
@@ -190,6 +229,9 @@ def check_quote_anomaly_standalone():
     user_id = session.get('user_id')
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
+    oversize = _reject_oversize()
+    if oversize:
+        return oversize
 
     docs = _collect_docs(max_files=1, min_files=1)
     if not docs:
@@ -228,6 +270,9 @@ def compare_bidders_quotes_endpoint():
     user_id = session.get('user_id')
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
+    oversize = _reject_oversize()
+    if oversize:
+        return oversize
 
     file_data = _collect_docs(max_files=10, min_files=2)
     if len(file_data) < 2:
@@ -288,6 +333,9 @@ def extract_relationships_endpoint():
     user_id = session.get('user_id')
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
+    oversize = _reject_oversize()
+    if oversize:
+        return oversize
 
     file_data = _collect_docs(max_files=10, min_files=1, need_metadata=True)
     if not file_data:
@@ -403,7 +451,7 @@ def plagiarism_run_async():
     task_id = str(uuid.uuid4())
     from app.services.task_bus import TaskBus
     TaskBus(task_id, 'plagiarism', '两文件剽窃对比').register_queued(
-        extra={'file_count': len(docs)})
+        extra={'file_count': len(docs), 'user_id': str(user_id or '')})
     from app.services.plagiarism_task import run_plagiarism_async
     run_plagiarism_async.delay(task_id, docs, template_path)
     return ok({'task_id': task_id, 'async': True})
@@ -413,10 +461,18 @@ def plagiarism_run_async():
 @batch_bp.route('/batch/plagiarism/status/<task_id>', methods=['GET'])
 def plagiarism_status(task_id):
     """轮询异步剽窃对比状态（复用 TaskBus）。"""
+    if session.get('consent_value', 0) != 1:
+        return err("Consent not given", "FORBIDDEN", 403)
+    user_id = session.get('user_id')
+    if not user_id:
+        return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
+    from app.utils.helpers import task_owner_ok
     meta = TaskBus.get(task_id)
     if not meta:
         return err("任务不存在或已过期", "NOT_FOUND", 404)
+    if not task_owner_ok(meta, user_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     status = meta.get('status', '')
     result = None
     if status == 'completed' and meta.get('result'):

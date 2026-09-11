@@ -454,11 +454,12 @@ def run_clearance(file_data, tender_text, tender_name, options, user_id=None, th
     # 铁证信号不参与复合指数（软嫌疑指数保留），veto 只提升展示级别。
     try:
         from app.services.hard_evidence import assess_hard_evidence
-        from app.services.document_analysis_svc import resolve_warning_level
+        from app.services.document_analysis_svc import resolve_warning_level, annotate_warning_details
         hard_ctx = dict(merged['basic_info'].get('_hard_ctx') or {})
         pc = (merged.get('cross_comparison') or {}).get('paragraph_collusion')
         hard_ctx['paragraph_collusion'] = pc or {}
         hard = assess_hard_evidence(merged.get('indicators', []), hard_ctx)
+        hard = annotate_warning_details(hard)
         merged['basic_info']['hard_alarm'] = bool(hard.get('fired'))
         merged['basic_info']['hard_label'] = hard.get('label')
         merged['basic_info']['hard_evidence'] = hard
