@@ -9,10 +9,17 @@ import re
 import sys
 import subprocess
 
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..')
 ENV_EXAMPLE = os.path.join(PROJECT_ROOT, '.env.example')
 CHECKLIST = os.path.join(PROJECT_ROOT, 'repair_kit', 'SYSTEM_CHECKLIST.md')
 CHECK_INTEGRITY = os.path.join(PROJECT_ROOT, 'repair_kit', 'check_integrity.py')
+CHECK_DOC_DRIFT = os.path.join(PROJECT_ROOT, 'scripts', 'check_doc_drift.py')
 AGENTS_MD = os.path.join(PROJECT_ROOT, 'AGENTS.md')
 CONFIG_PY = os.path.join(PROJECT_ROOT, 'app', 'config.py')
 DATABASE_PY = os.path.join(PROJECT_ROOT, 'app', 'database.py')
@@ -26,7 +33,7 @@ _CONFIG_SKIP_LIST = {'EDGEDRIVER_PATH'}
 def _get_changed_files():
     result = subprocess.run(
         ['git', 'diff', '--cached', '--name-only'],
-        capture_output=True, text=True, cwd=PROJECT_ROOT
+        capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=PROJECT_ROOT
     )
     if result.returncode != 0:
         return set()
@@ -64,7 +71,7 @@ def check_integrity():
     """Run check_integrity.py and warn if fails."""
     result = subprocess.run(
         [sys.executable, CHECK_INTEGRITY],
-        capture_output=True, text=True, cwd=PROJECT_ROOT
+        capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=PROJECT_ROOT
     )
     if result.returncode != 0:
         print('[repair_kit] WARNING: Integrity check failed:')
@@ -84,13 +91,33 @@ def check_fix_registry():
         return True
     result = subprocess.run(
         [sys.executable, VERIFY_FIXES],
-        capture_output=True, text=True, cwd=PROJECT_ROOT
+        capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=PROJECT_ROOT
     )
     if result.returncode != 0:
         print('[fix_registry] ERROR: Fix regression detected:')
         for line in result.stdout.strip().split('\n'):
             print(f'  {line}')
         print('  Fix the regression or commit with SKIP_FIX_CHECK=1')
+        return False
+    return True
+
+
+def check_doc_drift():
+    """Run check_doc_drift.py — reject if doc counts drift from code."""
+    if os.getenv('SKIP_DOC_DRIFT'):
+        return True
+    if not os.path.exists(CHECK_DOC_DRIFT):
+        print('[doc_drift] WARNING: scripts/check_doc_drift.py missing')
+        return False
+    result = subprocess.run(
+        [sys.executable, CHECK_DOC_DRIFT],
+        capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=PROJECT_ROOT
+    )
+    if result.returncode != 0:
+        print('[doc_drift] ERROR: Documentation count drift:')
+        for line in result.stdout.strip().split('\n'):
+            print(f'  {line}')
+        print('  Fix the doc number(s) or commit with SKIP_DOC_DRIFT=1')
         return False
     return True
 
@@ -165,6 +192,8 @@ def main():
     if not check_integrity():
         ok = False
     if not check_fix_registry():
+        ok = False
+    if not check_doc_drift():
         ok = False
     if not check_skills():
         ok = False
