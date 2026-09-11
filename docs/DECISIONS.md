@@ -27,7 +27,7 @@
 
 ## 2. 已评估未采纳（Skipped）
 
-> 完整 9 项见 `IMPROVEMENTS_SKIPPED.md`。以下是摘要与理由：
+> 完整 9 项见 [`IMPROVEMENTS_SKIPPED.md`](IMPROVEMENTS_SKIPPED.md)。以下是摘要与理由：
 
 | # | 方案 | 结论 | 关键理由 |
 |---|---|---|---|
@@ -35,7 +35,7 @@
 | 2 | Docling | 弃 → MarkItDown | 中文弱（英文训练）、API 未成熟 |
 | 3 | Marker | 弃 → PyMuPDF | 中文弱、GPL 商用风险 |
 | 4 | Unstructured.io | 弃 → 自研管线 | 6.6GB 过重、当前规模够用 |
-| 5 | GPU / MinerU VLM | 延后 → **已有 2080S，建议启用 GPU** | 重装 CUDA torch 即可，见 `IMPROVEMENTS_SKIPPED.md` §RTX 2080 Super |
+| 5 | GPU / MinerU VLM | 延后 → **已有 2080S，建议启用 GPU** | 重装 CUDA torch 即可，见 [`IMPROVEMENTS_SKIPPED.md`](IMPROVEMENTS_SKIPPED.md) §RTX 2080 Super |
 | 6 | structlog + Loki | 弃 → 纯文本日志 | 单用户单实例，300MB 开销不值 |
 | 7 | 30+ Playwright E2E | 收缩 → 5 冒烟 | 前端选择器未稳定，维护成本高 |
 | 8 | admin.py 全拆分 | 延后 | 纯重构无用户收益，风险高 |
@@ -68,7 +68,7 @@
 | 2026-08-28 | 管理员 PIN fail-closed | 生产无 PIN 即拒绝启动（C6） |
 | 2026-08-28 | 匿名存储 PG JSONB | 弃 per-thread JSON 文件（M3） |
 | 2026-08-28 | credit_tasks 移 Redis | 弃内存共享（M4） |
-| 2026-07-08 | 审计基线 | 见 `SECURITY.md` |
+| 2026-07-08 | 审计基线 | 见 [`SECURITY.md`](SECURITY.md) |
 
 ---
 

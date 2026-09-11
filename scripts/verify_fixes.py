@@ -10,6 +10,13 @@ import re
 import sys
 import yaml
 
+# Console may be GBK on Windows; fix titles contain non-GBK chars (→ · etc.).
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY_PATH = os.path.join(PROJECT_ROOT, 'data', 'fix_registry.yaml')
 

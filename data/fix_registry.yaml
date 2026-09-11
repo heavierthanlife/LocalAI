@@ -948,3 +948,29 @@ fixes:
       - type: literal
         file: app/routes/clearance.py
         pattern: "AUTH-GUARD-STREAM(FIX-2026-09-10-031)"
+
+
+  - id: FIX-2026-09-11-032
+    title: "文档计数防漂移：check_doc_drift 校验代码与文档"
+    severity: medium
+    rationale: >
+      文档（README/AGENTS/ARCHITECTURE/USER_MANUAL）反复复述易变计数（蓝图/表/
+      服务/供应商/指标），且无自动校验 导致必然漂移（曾出现 5 供应商 vs 实际 2、
+      70 表 vs 72、46 指标 vs 45）。新增 scripts/check_doc_drift.py 从代码重算
+      并校验文档声明，接入 pre-commit。ARCHITECTURE 改为不含逐文件行数。
+    checks:
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: "def _count_blueprints"
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: "def _count_providers"
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: "def _count_indicators"
+      - type: literal
+        file: .githooks/pre-commit
+        pattern: "def check_doc_drift"
+      - type: literal
+        file: .githooks/pre-commit
+        pattern: "CHECK_DOC_DRIFT"

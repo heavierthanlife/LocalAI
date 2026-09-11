@@ -1,12 +1,12 @@
 # ARCHITECTURE — Local_AI 深度架构
 
-逐层架构说明：请求流、模块职责、关键设计模式、数据流。配合 [`MANIFEST.md`](MANIFEST.md)（模块清单）与 [`AGENTS.md`](AGENTS.md)（开发命令/约定）阅读。
+逐层架构说明：请求流、模块职责、关键设计模式、数据流。配合 [`MANIFEST.md`](MANIFEST.md)（目录地图）与 [`../AGENTS.md`](../AGENTS.md)（开发命令/约定）阅读。
 
 ---
 
 ## 系统总览
 
-**Local_AI** 是面向中国招标代理业务的 AI 平台。Flask 后端 + SPA 前端，5 个 LLM 提供商，PostgreSQL 存储，Celery 异步重型任务。
+**Local_AI** 是面向中国招标代理业务的 AI 平台。Flask 后端 + SPA 前端，2 个 LLM 提供商（OpenRouter / NVIDIA NIM），PostgreSQL 存储，Celery 异步重型任务。
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -17,8 +17,8 @@
 ┌──────────────▼───────────────────────────────────────────────┐
 │  Flask App Factory (app/__init__.py:create_app)               │
 │    → 17 Blueprints (app/routes/)       → HTTP 端点             │
-│    → 86 Services (app/services/)       → 业务逻辑层            │
-│    → database.py (psycopg2 连接池)     → 70 表初始化            │
+│    → 100 Services (app/services/)      → 业务逻辑层            │
+│    → database.py (psycopg2 连接池)     → 72 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
 │    → celery_app.py (Celery 异步任务)                           │
 │    → templates/index.html (SPA) → static/ (JS/CSS/PWA)         │
@@ -26,7 +26,7 @@
        │                      │
 ┌──────▼───────┐   ┌──────────▼───────────────┐
 │ PostgreSQL 16 │   │ Redis 7 + Celery 5       │
-│ 70 张表       │   │ broker + beat + 缓存      │
+│ 72 张表       │   │ broker + beat + 缓存      │
 └──────────────┘   └──────────────────────────┘
 ```
 
@@ -65,7 +65,7 @@
 ## 服务层核心设计
 
 ### 1. LLM 多供应商路由 `llm_provider.py` + `llm_fallback.py`
-- 5 供应商：DeepSeek / 智谱 / 通义 / SiliconFlow / Mimo
+- 2 供应商（FIX-016）：OpenRouter（`:free` 免费池）/ NVIDIA NIM
 - fallback 链：指数退避 + 熔断器
 - prompt 安全层 `prompt_safety.py`：注入防护 + anti-hallucination
 - `agent_middleware.py`：InvalidToolGuard 幻觉工具调用防护
@@ -82,7 +82,7 @@
 
 ### 4. 清标引擎 `clearance_engine.py` + `document_analysis_svc.py`
 5 维度并行（Celery）：
-- **指标分析**：46 指标（`indicator_defs.py`）+ 0-100 权重复合评分
+- **指标分析**：45 指标（`indicator_defs.py`）+ 0-100 权重复合评分
 - **交叉比较**：RiskScorer + TF-IDF + 组件守卫（FIX-014）
 - **合规检查**：`compliance_checker.py`
 - **AI 审查**：judge 模型二次审查
@@ -142,21 +142,15 @@ graph LR
 
 1. 用户上传文件 + 可选开标信息表
 2. `POST /clearance` → Celery `clearance_engine.py` 启动 5 维度并行
-3. 指标分析：`document_analysis_svc` → `_run_cross_comparison` / 46 指标打分
+3. 指标分析：`document_analysis_svc` → `_run_cross_comparison` / 45 指标打分
 4. 交叉比较：`batch_orchestrator.compute_all_pairs` → TF-IDF + RiskScorer + 组件守卫
 5. 结果 → `task_bus` SSE 推送 → 前端聊天气泡渲染（`CLEARANCE_REPORT` marker）
 6. 落库 `chat_messages`，可下载 DOCX 报告
 
-## 模块规模 Top 5
+## 模块规模
 
-| 文件 | 行数 | 说明 |
-|---|---|---|
-| `static/js/app.js` | 9,798 | 主 SPA |
-| `app/routes/admin.py` | 1,653 | 管理路由（曾 4,820，已拆分） |
-| `app/services/file_processing.py` | 1,551 | 文档处理 |
-| `app/services/document_analysis_svc.py` | 1,288 | 清标分析 |
-| `app/routes/chat.py` | 1,122 | 聊天路由（曾 2,025，已拆分） |
+逐文件行数会随迭代快速漂移，故不在此固化为表格。用 `scripts/codebase_inspection`（或 `pygount`/`cloc`）按需统计。当前体量最大的模块：`static/js/app.js`（主 SPA）· `app/routes/admin.py`（已从 4,820 行拆分）· `app/services/file_processing.py` · `app/services/document_analysis_svc.py` · `app/routes/chat.py`（已拆分）。
 
 ---
 
-*架构文档基于 2026-08-27 审计归纳，2026-09-01 正规化。*
+*架构文档基于 2026-08-27 审计归纳，2026-09-01 正规化，2026-09-11 去计数（改由 `scripts/check_doc_drift.py` 校验）。*

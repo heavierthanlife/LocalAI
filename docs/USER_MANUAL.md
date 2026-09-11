@@ -107,7 +107,7 @@ python scripts/manage_db.py snapshot   # 导出 schema → repair_kit/SCHEMA_SNA
 
 清标统一入口 `POST /clearance`，5 维度并行（Celery 异步）：
 
-1. **指标分析**：46 指标，0-100 权重复合指数
+1. **指标分析**：45 指标，0-100 权重复合指数
 2. **交叉比较**：投标文件两两对比（TF-IDF + RiskScorer + 组件守卫）
 3. **合规检查**：法规库比对
 4. **AI 审查**：LLM 深度审查
@@ -157,7 +157,7 @@ python scripts/manage_db.py snapshot   # 导出 schema → repair_kit/SCHEMA_SNA
 
 ## 8. 备份与恢复
 
-**崩溃恢复**：见 `repair_kit/README.md`（环境检查 → 健康清单 → 迁移检查 → 冒烟测试）。
+**崩溃恢复**：见 [`../repair_kit/README.md`](../repair_kit/README.md)（环境检查 → 健康清单 → 迁移检查 → 冒烟测试）。
 
 **紧急恢复脚本**：
 - `python scripts/recover_all.py` — 从 session 转储紧急恢复

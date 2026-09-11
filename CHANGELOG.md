@@ -3,12 +3,61 @@
 All notable changes to 中联招标智能助手.
 
 **格式**：Keep a Changelog 风格（Added / Changed / Fixed / Removed），日期降序。
-**维护约定**：每次功能升级/修复在顶部新增条目；合规相关改动必须带 `regression: 3/3 baseline passed` 验证（见 `CONTRIBUTING.md` §回归测试）。
+**维护约定**：每次功能升级/修复在顶部新增条目；合规相关改动必须带 `regression: 3/3 baseline passed` 验证（见 `AGENTS.md` §Session Operating Protocol）。
 **详细迭代记录**：2026-08-28 起的完整工作记录见本文件（按日期降序）。
 
 ---
 
-## [2026-09-09] — 彻底删除错别字检测系统（FIX-2026-09-09-027）
+## [2026-09-11] — 文档全重组 + 计数防漂移（FIX-2026-09-11-032）
+
+### Changed
+- **根目录精简至 3 份文档**：`README.md` / `AGENTS.md` / `CHANGELOG.md`；`ARCHITECTURE` / `MANIFEST` / `DECISIONS` / `SECURITY` / `USER_MANUAL` / `IMPROVEMENTS_SKIPPED` 移入 `docs/`（平铺，`git mv` 保历史）。
+- `CONTRIBUTING.md` 并入 `AGENTS.md`（提交与分支 / 测试运行器 / 文档维护约定 / 代码规范 / 评审门禁），原文件删除。
+- `docs/MANIFEST.md` 砍为**纯目录地图**（去统计摘要 + 逐文件行数，杜绝最快腐烂项）。
+- `docs/ARCHITECTURE.md` 移除「模块规模 Top 5」逐文件行数表。
+
+### Added
+- `scripts/check_doc_drift.py`：从代码重算 {蓝图/表/服务/供应商/指标} 并与文档声明比对；接入 `pre-commit`（失败即拒提交，旁路 `SKIP_DOC_DRIFT=1`）。
+- fix_registry `FIX-2026-09-11-032` 锁住该不变式。
+
+### Fixed
+- 修正文档计数漂移：供应商 5→2、表 70→72、指标 46→45、蓝图 15→17；修正全部跨文件相对链接（`docs/`、`repair_kit/`）。
+
+### regression: 文档重组，无代码路径改动（verify_fixes 142→147 通过；check_doc_drift 14/14 claims OK）
+
+---
+
+## [2026-09-11] — 会话自举 + 清理（chore）
+
+### Added
+- **会话自举**：`AGENTS.md` 新增 `Session Operating Protocol`（完成前 gate 自证 + 只读复核门禁 + 交付推送）；全局插件 `session-bootstrap.ts`（镜像 shared-agent-infra）新会话一次性注入 handoff + unresolved + findings。
+- `.githooks/post-commit`：仅写 `data/qa_loop/pending.flag`（待运行标记，不自动跑 loop）；`pending.flag` 加入 `.gitignore`。
+
+### Removed
+- 删除废弃的 `20260827log.md`（内容已沉淀入 CHANGELOG/ARCHITECTURE/DECISIONS）；删除未被引用、含语法错误的 `screenshots/`。
+- 视觉回归统一到 `tests/visual_regression.py` + `tests/visual_screenshots/`（截图不入仓，`manifest.json` 入仓）。
+
+### Fixed
+- 修正 `20260827log.md` / `CONTRIBUTING.md` 的悬空引用。
+
+---
+
+## [2026-09-11] — 清标 P0/P1：死路由/落库/前端补表/删历史蓝图/鉴权（FIX-2026-09-10-028~031）
+
+### Fixed
+- 删除被 `chat_bp` 覆盖的 `knowledge_bp` 死路由 `/feedback`（FIX-028）。
+- 清标结果落库：`run_analysis(persist=False)` opt-in + `_persist_clearance_review` 幂等(DELETE→save)，管理端 quote/relationship 面板不再恒空（FIX-029）。
+- `/clearance/status|stream` 补登录校验（consent + user_id）（FIX-031）。
+
+### Changed
+- 删除历史遗留 `document_analysis` 蓝图/任务（功能已并入清标），保留 `document_analysis_svc`（FIX-030）。
+- 前端补「基本信息表 + 开标信息表」（对齐 DOCX）；删除 `batch_orchestrator` 6 个零调用 builder。
+- `verify_fixes.py` 新增 `literal` 检查类型（纯字符串，规避正则元字符）；routes_snapshot 405→401 + `scripts/dump_routes.py`。
+
+### regression: 121/121 regression+collusion · route_preservation 3/3 · smoke 7/7 · run_tests 28/28
+
+---
+
 
 ### Removed
 - **错别字检测子系统整体删除**：误报根因是手写 `_BIDDING_CONFUSION_PAIRS` 把 **正确常用词**（必须/截止/权利/签订/缴纳/期间/形式/权力/制定/定金/截至/其间/订金/交纳/必需）当可疑词逐次标记（每份标书数百假警）；`pycorrector`/`symspellpy` 未安装（英文/中文层实为空）。**与 jieba 无关**（typo_detector 不用 jieba）

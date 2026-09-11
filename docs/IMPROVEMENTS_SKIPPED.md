@@ -1,7 +1,7 @@
 # Skipped Improvements Record
 
 > **Session**: 2026-07-03 ~ 2026-07-04（原始记录）
-> **Status**: **Historical record** — superseded by `data/unresolved.yaml` as active tracker, and by `DECISIONS.md` for decision rationale.
+> **Status**: **Historical record** — superseded by `../data/unresolved.yaml` as active tracker, and by [`DECISIONS.md`](DECISIONS.md) for decision rationale.
 > **Context**: Full-stack audit, Red Team (质问模式) completion, document pipeline upgrade (EasyOCR→RapidOCR + MinerU), skill-to-app integration planning
 
 ---
