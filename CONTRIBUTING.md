@@ -94,7 +94,6 @@ pip install -r requirements_min.txt   # 无版本锁定
 | `USER_MANUAL.md` | 运维命令/配置/操作变化 |
 | `AGENTS.md` | 开发命令、约定、Gotchas、环境变量 |
 | `repair_kit/SYSTEM_CHECKLIST.md` | 修改系统行为（新路由/表/配置）后由 `check_system.py` 自动更新 |
-| `20260827log.md` | 迭代详细记录（§10.x 追加） |
 
 ---
 

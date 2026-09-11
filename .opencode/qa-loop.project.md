@@ -15,7 +15,7 @@
 - 修复不变量：`data/fix_registry.yaml`、`tests/test_regression.py`、`scripts/verify_fixes.py`
 
 ## 视觉输入
-- 截图目录：`.playwright-mcp/`（Playwright MCP 自动落盘；注意截图是时间戳命名，判定"过期"时对照 commit 时间）
+- 截图目录：`tests/visual_screenshots/`（由 `tests/visual_regression.py` 生成；序号命名，判定"过期"时对照 commit 时间）。`.playwright-mcp/` 保留为 Playwright MCP 原始输出兜底。
 - 补拍建议页：清标报告展开详情、知识图谱（法规影响/全局引用）、审计日志详情、编辑提示词、模板编辑器、文件预览弹窗、窄屏(≤768px)
 
 ## 测试/验证命令

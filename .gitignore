@@ -76,3 +76,6 @@ data/user_laws/
 !tests/fixtures/*.json
 !tests/fixtures/clearance_baseline/*.json
 !tests/fixtures/quote_fixtures/*.json
+# 视觉回归产物：截图不入仓，清单入仓（否定上面的 *.json 全局排除）
+tests/visual_screenshots/*.png
+!tests/visual_screenshots/manifest.json

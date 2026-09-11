@@ -14,7 +14,7 @@
 | 2026-07-04 | OCR 引擎选型 | **保持 EasyOCR**（RapidOCR/PaddleOCR 均未采纳） | EasyOCR 1.7.2 满足中文印刷文档；`OCR_GPU=auto` 支持 GPU | `IMPROVEMENTS_SKIPPED` #1 |
 | 2026-07-04 | 文档解析器 | **MarkItDown + LibreOffice + PyMuPDF**（弃 Docling/Marker/Unstructured） | 中文文档适用；其余英文优化/GPL 风险/6.6GB 过重 | `IMPROVEMENTS_SKIPPED` #2/#3/#4 |
 | 2026-07-06 | 统一投标审计引擎 | 新增 `audit` blueprint + `audit_engine.py`，7 服务作库调用 | 一键全审 + 复合评分 + 持久历史 | `docs/superpowers/` |
-| 2026-08-27 | 全量审计合并入清标 | **摘除 `audit_bp` 注册**，功能并入清标 5 维度 | 避免重复入口；表保留供 graph/cases 依赖 | `20260827log.md` §10 |
+| 2026-08-27 | 全量审计合并入清标 | **摘除 `audit_bp` 注册**，功能并入清标 5 维度 | 避免重复入口；表保留供 graph/cases 依赖 | `CHANGELOG.md` |
 | 2026-08-28 | Prompt 语言 | JUDGE/STRUCTURED 中文化 | 领域术语一致性 | FIX-005 |
 | 2026-08-31 | 无招标文件时 text_sim 处理 | **跳过**该指标 | 模板去除不可用，高余弦是模板重叠非围标 | FIX-012 |
 | 2026-09-01 | 招标高频词并入停用集 | 自适应 k + **TF≥2 守卫** | 避免误杀 TF=1 独特技术参数；长招标覆盖不足 | FIX-014 (方案 Y) |

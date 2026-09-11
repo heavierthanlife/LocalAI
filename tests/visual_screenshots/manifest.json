@@ -1,0 +1,92 @@
+[
+  {
+    "checkpoint": 1,
+    "name": "homepage",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\01_homepage.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Full page - check sidebar icons, search placeholder"
+  },
+  {
+    "checkpoint": 2,
+    "name": "chat_interface",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\02_chat_interface.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Chat area - message input, sidebar sessions, pin buttons"
+  },
+  {
+    "checkpoint": 3,
+    "name": "clearance_tool",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\03_clearance_tool.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Clearance tool area - file upload, plagiarism button"
+  },
+  {
+    "checkpoint": 4,
+    "name": "clearance_report",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\04_clearance_report.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Clearance report - 6 sections, headers with icons"
+  },
+  {
+    "checkpoint": 5,
+    "name": "indicators_tab",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\05_indicators_tab.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Indicators - severity coloring"
+  },
+  {
+    "checkpoint": 6,
+    "name": "paragraph_evidence",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\06_paragraph_evidence.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Paragraph evidence - segment type, bidders, match ratio"
+  },
+  {
+    "checkpoint": 7,
+    "name": "cross_comparison",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\07_cross_comparison.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Cross comparison - risk matrix, pair details"
+  },
+  {
+    "checkpoint": 8,
+    "name": "admin_quote_anomaly",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\08_admin_quote_anomaly.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Admin - quote anomaly history table"
+  },
+  {
+    "checkpoint": 9,
+    "name": "relationship_history",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\09_relationship_history.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Relationship history - tuan huo button, columns"
+  },
+  {
+    "checkpoint": 10,
+    "name": "hard_evidence",
+    "file": "D:\\PyCharm\\Local_AI\\tests\\visual_screenshots\\10_hard_evidence.png",
+    "url": "https://localhost/",
+    "title": "中联招标智能助手 China United International Engineering AI Services",
+    "status": "captured",
+    "desc": "Hard evidence - red coloring, label"
+  }
+]

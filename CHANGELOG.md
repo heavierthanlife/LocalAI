@@ -4,7 +4,7 @@ All notable changes to 中联招标智能助手.
 
 **格式**：Keep a Changelog 风格（Added / Changed / Fixed / Removed），日期降序。
 **维护约定**：每次功能升级/修复在顶部新增条目；合规相关改动必须带 `regression: 3/3 baseline passed` 验证（见 `CONTRIBUTING.md` §回归测试）。
-**详细迭代记录**：2026-08-28 起的完整工作记录见 `20260827log.md` §10。
+**详细迭代记录**：2026-08-28 起的完整工作记录见本文件（按日期降序）。
 
 ---
 
