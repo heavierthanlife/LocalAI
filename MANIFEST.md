@@ -240,7 +240,7 @@ static/              JS/CSS/PWA 资源
 migrations/          迁移 SQL（001 为无操作基线）
 scripts/             运维脚本（16 个）
 tests/               测试（smoke/regression/batch/unit/e2e/integration/factories/mock_data）
-tools/skill-mcp/     自定义 MCP 服务器（236 skill 暴露为 MCP tools）
+D:/AI_Tools/shared-agent-infra/tool-extensions/opencode/skill-mcp/     自定义 MCP 服务器（236 skill 暴露为 MCP tools）
 repair_kit/          崩溃恢复参考（SYSTEM_CHECKLIST + SCHEMA_SNAPSHOT + check_integrity）
 data/                agent_prompt.json, 法规库, 上传文件, 知识库等运行时数据
 docs/                功能规格 + 升级方案
