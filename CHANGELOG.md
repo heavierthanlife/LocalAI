@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — 清标持久化事务化（FIX-036）
+
+### Fixed
+- **清标结果持久化原子性（High，FIX-036）**：`_persist_clearance_review` 原先先 `DELETE` 三表（`quote_anomaly_results` / `entity_relationships` / `relationship_risk_summary`）并 `commit`，再分别调用两个 `save_*`（各自连接、各自 commit）。DELETE 提交后若任一 `save_*` 失败，任务将被清空且无新数据落库（数据丢失窗口）。改为**单连接单事务**：DELETE + `save_quote_anomaly_results(..., conn=conn)` + `save_relationship_results(..., conn=conn)` + 一次 `commit`。两 `save_*` 新增可选 `conn` 参数（默认 `None` → 自持事务并 commit），外部 4 处调用点（`batch.py`×2 / `document_analysis_svc.py`×2）不变。
+
+### Changed
+- `data/qa_loop/last_head` 修正为 `13f5788`（原为无效字面量 `round-021`）。
+
+### Removed
+- 清理 26 张过期 Playwright 截图（`.playwright-mcp/`，2026-09-02/04）与过期 `tests/visual_screenshots/manifest.json`（待重拍再生）。
+
+### regression: 110/110 regression · route_preservation 3/3 · smoke 7/7 · verify_fixes 164/0 · doc_drift 14/14
+> 清标基线：`regression: 1/1 baseline passed`（仅工程类校准，`test_clearance_baseline_scores` 通过；货物/服务缺真实文档 → UNRESOLVED-017）。
+
+---
+
 ## [2026-09-11] — 清标开放案例清零：任务归属/大小守卫/警示指引（FIX-033~035）
 
 ### Fixed

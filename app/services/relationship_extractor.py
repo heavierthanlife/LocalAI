@@ -802,56 +802,73 @@ def save_relationship_results(
     task_id: str,
     report: RelationshipReport,
     project_id: int = None,
+    conn=None,
 ) -> int:
-    """Persist relationship extraction results to DB. Returns count of rows saved."""
-    saved = 0
-    try:
-        from app.database import get_db_connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                for rel in report.relationships:
-                    cur.execute("""
-                        INSERT INTO entity_relationships
-                            (user_id, task_id, project_id, source_entity, target_entity,
-                             relation_type, relation_subtype, confidence,
-                             evidence_text, risk_flag, risk_reason, module)
-                        VALUES (%s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s)
-                    """, (
-                        user_id, task_id, project_id,
-                        rel.source_entity, rel.target_entity,
-                        rel.relation_type, rel.relation_subtype,
-                        rel.confidence, rel.evidence[:1000],
-                        rel.risk_flag, rel.risk_reason[:500],
-                        rel.module,
-                    ))
-                    saved += 1
+    """Persist relationship extraction results to DB. Returns count of rows saved.
 
-                # Save risk summary
-                cur.execute("""
-                    INSERT INTO relationship_risk_summary
-                        (user_id, task_id, total_entities, total_relations,
-                         red_flags, risk_score, modules_run, tianyancha_used, details)
-                    VALUES (%s,%s,%s,%s, %s,%s,%s, %s,%s)
-                    ON CONFLICT (task_id) DO UPDATE SET
-                        total_entities = EXCLUDED.total_entities,
-                        total_relations = EXCLUDED.total_relations,
-                        red_flags = EXCLUDED.red_flags,
-                        risk_score = EXCLUDED.risk_score,
-                        modules_run = EXCLUDED.modules_run
-                """, (
-                    user_id, task_id,
-                    len(report.entities), len(report.relationships),
-                    _json.dumps(report.red_flags, ensure_ascii=False),
-                    report.risk_score,
-                    _json.dumps(report.modules_run),
-                    report.tianyancha_used,
-                    _json.dumps({
-                        'company_personnel_map': report.company_personnel_map,
-                        'communities': report.communities,
-                    }, ensure_ascii=False),
-                ))
-                conn.commit()
+    FIX-2026-09-11-036: when ``conn`` is supplied the caller owns the
+    transaction (we do NOT commit); otherwise we open our own pooled
+    connection and commit.
+    """
+    saved = 0
+
+    def _write(cur):
+        nonlocal saved
+        for rel in report.relationships:
+            cur.execute("""
+                INSERT INTO entity_relationships
+                    (user_id, task_id, project_id, source_entity, target_entity,
+                     relation_type, relation_subtype, confidence,
+                     evidence_text, risk_flag, risk_reason, module)
+                VALUES (%s,%s,%s,%s,%s, %s,%s,%s, %s,%s,%s, %s)
+            """, (
+                user_id, task_id, project_id,
+                rel.source_entity, rel.target_entity,
+                rel.relation_type, rel.relation_subtype,
+                rel.confidence, rel.evidence[:1000],
+                rel.risk_flag, rel.risk_reason[:500],
+                rel.module,
+            ))
+            saved += 1
+
+        # Save risk summary
+        cur.execute("""
+            INSERT INTO relationship_risk_summary
+                (user_id, task_id, total_entities, total_relations,
+                 red_flags, risk_score, modules_run, tianyancha_used, details)
+            VALUES (%s,%s,%s,%s, %s,%s,%s, %s,%s)
+            ON CONFLICT (task_id) DO UPDATE SET
+                total_entities = EXCLUDED.total_entities,
+                total_relations = EXCLUDED.total_relations,
+                red_flags = EXCLUDED.red_flags,
+                risk_score = EXCLUDED.risk_score,
+                modules_run = EXCLUDED.modules_run
+        """, (
+            user_id, task_id,
+            len(report.entities), len(report.relationships),
+            _json.dumps(report.red_flags, ensure_ascii=False),
+            report.risk_score,
+            _json.dumps(report.modules_run),
+            report.tianyancha_used,
+            _json.dumps({
+                'company_personnel_map': report.company_personnel_map,
+                'communities': report.communities,
+            }, ensure_ascii=False),
+        ))
+
+    try:
+        if conn is not None:
+            with conn.cursor() as cur:
+                _write(cur)
+        else:
+            from app.database import get_db_connection
+            with get_db_connection() as c:
+                with c.cursor() as cur:
+                    _write(cur)
+                c.commit()
         logger.info(f"Saved {saved} relationships for task {task_id}, risk_score={report.risk_score}")
     except Exception as e:
         logger.error(f"Failed to save relationship results: {e}", exc_info=True)
+        if conn is not None:
+            raise
     return saved

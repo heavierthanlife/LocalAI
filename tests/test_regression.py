@@ -1522,4 +1522,24 @@ def test_verify_fixes_literal_types():
     assert ok4 is False
 
 
+# ---- FIX-2026-09-11-036: clearance persistence atomicity ----
+def test_clearance_persistence_atomicity():
+    import inspect
+    from app.services import quote_anomaly, relationship_extractor, document_analysis_svc
+
+    q_sig = inspect.signature(quote_anomaly.save_quote_anomaly_results)
+    assert 'conn' in q_sig.parameters
+    assert q_sig.parameters['conn'].default is None
+
+    r_sig = inspect.signature(relationship_extractor.save_relationship_results)
+    assert 'conn' in r_sig.parameters
+    assert r_sig.parameters['conn'].default is None
+
+    src = inspect.getsource(document_analysis_svc._persist_clearance_review)
+    assert 'conn=conn' in src, "persistence must thread the shared connection"
+    assert src.count('commit()') == 1, "must be a single transaction"
+    for tbl in ('quote_anomaly_results', 'entity_relationships', 'relationship_risk_summary'):
+        assert f'DELETE FROM {tbl}' in src
+
+
 

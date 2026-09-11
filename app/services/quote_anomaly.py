@@ -750,45 +750,62 @@ def save_quote_anomaly_results(
     per_bidder: list[dict],
     cross_result: dict,
     project_id: int = None,
+    conn=None,
 ) -> int:
-    """Persist quote anomaly results to the database. Returns count of rows saved."""
+    """Persist quote anomaly results to the database. Returns count of rows saved.
+
+    FIX-2026-09-11-036: when ``conn`` is supplied the caller owns the
+    transaction (we do NOT commit); otherwise we open our own pooled
+    connection and commit.
+    """
     saved = 0
+
+    def _write(cur):
+        nonlocal saved
+        for pb in per_bidder:
+            cur.execute("""
+                INSERT INTO quote_anomaly_results
+                    (user_id, task_id, project_id, doc_name, prices, percentages,
+                     cv, same_rate_flag, abnormal_drop_flag, clustering_flag,
+                     tailing_digits_flag, progression_type,
+                     benford_deviation, risk_score, details, matched_prices,
+                     cross_same_rate, cross_clustering,
+                     cross_tailing_digits, cross_progression, cross_progression_type,
+                     max_cross_risk, avg_cross_cv)
+                VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s)
+            """, (
+                user_id, task_id, project_id, pb['filename'],
+                _json.dumps(pb.get('prices', [])),
+                _json.dumps(pb.get('percentages', [])),
+                pb.get('cv', 0), pb.get('same_rate_flag', False),
+                pb.get('abnormal_drop_flag', False), pb.get('clustering_flag', False),
+                pb.get('tailing_digits_flag', False), pb.get('progression_type', ''),
+                pb.get('benford_deviation', 0), pb.get('risk_score', 0),
+                _json.dumps(pb.get('details', []), ensure_ascii=False),
+                _json.dumps(pb.get('matched_prices', {})),
+                cross_result.get('cross_same_rate', False),
+                cross_result.get('cross_clustering', False),
+                cross_result.get('cross_tailing_digits', False),
+                cross_result.get('cross_progression', False),
+                cross_result.get('cross_progression_type', ''),
+                cross_result.get('max_risk_score', 0),
+                cross_result.get('avg_cv', 0),
+            ))
+            saved += 1
+
     try:
-        from app.database import get_db_connection
-        with get_db_connection() as conn:
+        if conn is not None:
             with conn.cursor() as cur:
-                for pb in per_bidder:
-                    cur.execute("""
-                        INSERT INTO quote_anomaly_results
-                            (user_id, task_id, project_id, doc_name, prices, percentages,
-                             cv, same_rate_flag, abnormal_drop_flag, clustering_flag,
-                             tailing_digits_flag, progression_type,
-                             benford_deviation, risk_score, details, matched_prices,
-                             cross_same_rate, cross_clustering,
-                             cross_tailing_digits, cross_progression, cross_progression_type,
-                             max_cross_risk, avg_cross_cv)
-                        VALUES (%s,%s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s,%s, %s,%s, %s,%s,%s, %s,%s)
-                    """, (
-                        user_id, task_id, project_id, pb['filename'],
-                        _json.dumps(pb.get('prices', [])),
-                        _json.dumps(pb.get('percentages', [])),
-                        pb.get('cv', 0), pb.get('same_rate_flag', False),
-                        pb.get('abnormal_drop_flag', False), pb.get('clustering_flag', False),
-                        pb.get('tailing_digits_flag', False), pb.get('progression_type', ''),
-                        pb.get('benford_deviation', 0), pb.get('risk_score', 0),
-                        _json.dumps(pb.get('details', []), ensure_ascii=False),
-                        _json.dumps(pb.get('matched_prices', {})),
-                        cross_result.get('cross_same_rate', False),
-                        cross_result.get('cross_clustering', False),
-                        cross_result.get('cross_tailing_digits', False),
-                        cross_result.get('cross_progression', False),
-                        cross_result.get('cross_progression_type', ''),
-                        cross_result.get('max_risk_score', 0),
-                        cross_result.get('avg_cv', 0),
-                    ))
-                    saved += 1
-                conn.commit()
+                _write(cur)
+        else:
+            from app.database import get_db_connection
+            with get_db_connection() as c:
+                with c.cursor() as cur:
+                    _write(cur)
+                c.commit()
         logger.info(f"Saved {saved} quote anomaly results for task {task_id}")
     except Exception as e:
         logger.error(f"Failed to save quote anomaly results: {e}", exc_info=True)
+        if conn is not None:
+            raise
     return saved

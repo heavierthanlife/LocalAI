@@ -1051,3 +1051,23 @@ fixes:
       - type: literal
         file: static/js/app.js
         pattern: "function _renderWarningDetails"
+
+  - id: FIX-2026-09-11-036
+    title: "清标持久化事务化：_persist_clearance_review 单事务"
+    severity: high
+    rationale: >
+      _persist_clearance_review 原本先 DELETE 三个表并提交，再分别调用
+      save_quote_anomaly_results / save_relationship_results（各自开连接、独自
+      commit）。DELETE 提交后若任一 save 失败，任务将被清空且无新数据落库
+      （数据丢失窗口）。改为单连接单事务：DELETE + 两个 save（传 conn=）+
+      一次 commit。save_* 新增可选 conn 参数（向后兼容，外部 4 处调用不变）。
+    checks:
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "conn=conn"
+      - type: literal
+        file: app/services/quote_anomaly.py
+        pattern: "conn=None"
+      - type: literal
+        file: app/services/relationship_extractor.py
+        pattern: "conn=None"

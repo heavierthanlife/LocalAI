@@ -246,18 +246,21 @@ def _persist_clearance_review(user_id, task_id, project_id, checker_data):
         if not per_bidder and not rel_report:
             return
         from app.database import get_db_connection
+        from app.services.quote_anomaly import save_quote_anomaly_results
+        from app.services.relationship_extractor import save_relationship_results
+        # FIX-2026-09-11-036: single transaction — DELETE + re-INSERT must be
+        # atomic so a mid-way failure cannot leave a task with no persisted
+        # results (previously DELETE committed before the INSERTs ran).
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM quote_anomaly_results WHERE task_id = %s", (task_id,))
                 cur.execute("DELETE FROM entity_relationships WHERE task_id = %s", (task_id,))
                 cur.execute("DELETE FROM relationship_risk_summary WHERE task_id = %s", (task_id,))
+            if per_bidder:
+                save_quote_anomaly_results(user_id, task_id, per_bidder, quote, project_id, conn=conn)
+            if rel_report:
+                save_relationship_results(user_id, task_id, rel_report, project_id, conn=conn)
             conn.commit()
-        if per_bidder:
-            from app.services.quote_anomaly import save_quote_anomaly_results
-            save_quote_anomaly_results(user_id, task_id, per_bidder, quote, project_id)
-        if rel_report:
-            from app.services.relationship_extractor import save_relationship_results
-            save_relationship_results(user_id, task_id, rel_report, project_id)
     except Exception as e:
         logger.warning(f"Clearance review persistence failed (non-blocking): {e}")
 
