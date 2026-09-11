@@ -170,7 +170,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
                 'text_sim': False, 'key_info': True,
                 'file_attr': False, 'image_sim': False
             }, template_text=tender_text, extra_stop_words=extra_stop_words)
-            key_info_matches = build_key_info_matches(pairs, extra_stop_words=extra_stop_words)
+            key_info_matches = build_key_info_matches(pairs, extra_stop_words=extra_stop_words, template_text=tender_text)
             return {'key_info_matches': key_info_matches}
 
         elif name == 'file_attr':
@@ -305,6 +305,12 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
         except Exception as e:
             logger.warning(f"quote_with_open_price injection failed: {e}")
 
+    # FIX-2026-09-11-046: did authoritative open-bid prices actually get injected?
+    # Without them the quote checker works on regex-extracted raw text (dates /
+    # line items mistaken for prices) → the indicator is downgraded to
+    # "reference only" instead of raising a false 围标 alarm.
+    quote_has_open_prices = any('【开标报价】' in (fd.get('text') or '') for fd in file_data)
+
     # Run all checkers (each in try-except)
     # FIX-2026-09-07-QA-C2: 指标层 key_info/text_sim 也消费行业词表（消除行业词污染）
     try:
@@ -378,7 +384,7 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             file_scores[i] += file_scores_boost
 
     quote_data = checker_data.get('quote', {})
-    if quote_data.get('result'):
+    if quote_data.get('result') and quote_has_open_prices:
         qr = quote_data['result']
         for pb in qr.get('per_bidder', []):
             for i in range(n):
@@ -551,7 +557,14 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
             cross_prog_type = qr.get('cross_progression_type', '')
             is_progression_ind = (ind['id'] == 'quote_proportional_float')
 
-            if not per_bidder:
+            if not quote_has_open_prices:
+                # FIX-2026-09-11-046: no structured open-bid prices → reference only.
+                score = 0.0
+                result_text = "○ 无结构化开标报价，报价异常仅作参考（建议上传开标信息表）"
+                details = [{'bidder': pb.get('filename', ''), 'risk': f'{pb.get("risk_score", 0):.1f}',
+                            'cv': f'{pb.get("cv", 0):.4f}'}
+                           for pb in per_bidder]
+            elif not per_bidder:
                 result_text = "√ 报价分析未发现异常。"
             elif is_progression_ind:
                 # 等比/等差浮动异常：只看报价规律性

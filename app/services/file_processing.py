@@ -436,11 +436,39 @@ def remove_template_content(text, template_text, threshold=0.85):
         return "[Template content fully matched] " + text
     return '\n'.join(kept_paras)
 
-def extract_keywords(text, top_k=20, extra_stop_words=None):
+def _keep_nounish(terms):
+    """FIX-2026-09-11-045: keep only content words (nouns / verb-nouns / English)
+    so generic verbs and adjectives (填写/偏离/提供/负责…) don't masquerade as
+    shared "key information". Falls back to no filtering when POS is unavailable.
+    Terms whose POS cannot be resolved are kept conservatively.
+    """
+    try:
+        from app.services.text_utils import posseg
+    except Exception:
+        return list(terms)
+    tagged = posseg(' '.join(terms))
+    if tagged is None:
+        return list(terms)
+    flags = {}
+    for w, f in tagged:
+        flags.setdefault(w, f)
+    kept = []
+    for w in terms:
+        f = flags.get(w)
+        if f is None or not f or (f[0] == 'n' or f in ('vn', 'eng')):
+            kept.append(w)
+    return kept
+
+
+def extract_keywords(text, top_k=20, extra_stop_words=None, pos_filter=False):
     """Extract keywords using jieba-optimized TF-IDF (works for Chinese).
 
     FIX-2026-09-07-QA-C4: merge extra_stop_words (industry word tables) so
     行业通用词 (超市/收银/理货…) don't dominate keyword overlap.
+    FIX-2026-09-11-045: optional ``pos_filter`` drops function words via
+    _keep_nounish. It is OFF by default because shrinking the keyword set on
+    short texts can push keyword_overlap_similarity below its 4-token guard
+    (destroying discrimination); only the key-info display path opts in.
     """
     if not text.strip():
         return []
@@ -448,14 +476,16 @@ def extract_keywords(text, top_k=20, extra_stop_words=None):
         from app.services.stop_words import DEFAULT_STOP_WORDS
         merged = set(DEFAULT_STOP_WORDS) | set(extra_stop_words)
     else:
-        merged = None
+        from app.services.stop_words import DEFAULT_STOP_WORDS
+        merged = set(DEFAULT_STOP_WORDS)
     vectorizer = _make_vectorizer(stop_words=merged, max_features=top_k)
     try:
         tfidf = vectorizer.fit_transform([text])
         feature_names = vectorizer.get_feature_names_out()
         scores = tfidf.toarray()[0]
         keyword_score = sorted(zip(feature_names, scores), key=lambda x: x[1], reverse=True)
-        return [kw for kw, _ in keyword_score[:top_k]]
+        kws = [kw for kw, _ in keyword_score[:top_k]]
+        return _keep_nounish(kws) if pos_filter else kws
     except Exception:
         return []
 

@@ -120,8 +120,10 @@ def test_snapshot_tfidf_pairwise(bid_texts):
     # ── Snapshot values (locked to current jieba + sklearn + stop-word filter) ──
     # FIX-015 (P0 vectorizer): tokenizer now returns a list, so TF-IDF is computed
     # on real jieba words, not single-char garbage. Values recalibrated to word-level.
-    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.14624584, abs=1e-6)
-    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.77739505, abs=1e-6)
+    # FIX-2026-09-11-045: DEFAULT_STOP_WORDS expanded (公司/工作/检查/…) → cosine
+    # drifts slightly (0.1462→0.1489, 0.7774→0.7717); invariants unchanged.
+    assert results["pair_a_eng_vs_goods"] == pytest.approx(0.14892089, abs=1e-6)
+    assert results["pair_b_eng_vs_similar"] == pytest.approx(0.77167538, abs=1e-6)
 
     # ── Invariants (word-level semantics, FIX-015) ──
     assert sim_b > sim_a, f"eng-vs-similar {sim_b} !> eng-vs-goods {sim_a}"
@@ -163,8 +165,10 @@ def test_snapshot_keyword_overlap(keyword_texts):
     # ── Snapshot values (FIX-013 stop-word filtered + FIX-015 word-level TF-IDF) ──
     # 2026-09-02 (FIX-016 后续): domain_words.txt 扩充 → 注册建造师 成为单 token,
     # keyword_overlap slight_diff 快照从 0.41176471 漂到 0.4。
+    # FIX-2026-09-11-045: DEFAULT_STOP_WORDS 扩容 → slight_diff 0.4→0.3571；
+    # near_identical（0.5556）/no_overlap（0.0）不变，判别力保留。
     assert results["near_identical"] == pytest.approx(0.55555556, abs=1e-6)
-    assert results["slight_diff"] == pytest.approx(0.4, abs=1e-6)
+    assert results["slight_diff"] == pytest.approx(0.35714286, abs=1e-6)
     assert results["no_overlap"] == pytest.approx(0.0, abs=1e-6)
 
 

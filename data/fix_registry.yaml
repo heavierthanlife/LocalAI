@@ -1209,3 +1209,42 @@ fixes:
       - type: literal
         file: static/js/app.js
         pattern: "if (flabel === 'unknown') flabel = '';"
+
+  - id: FIX-2026-09-11-045
+    title: "重点信息雷同假警报根治：停用词扩容 + 词性过滤 + 显著性门槛"
+    severity: high
+    rationale: >
+      两不相关标书必然共享「公司/工作/检查/食品/填写/偏离/提供/负责」等通用词，
+      而 N=2 时共有词 df=2、TF-IDF 无区分力，原 build_key_info_matches 交集非空
+      即输出 → 6.7 表假警报 + file_scores 虚高。修复：DEFAULT_STOP_WORDS 扩容通用
+      业务词；extract_keywords 加 _keep_nounish 词性过滤（丢动词/形容词）；build_key_info_matches
+      改用与 key_sim 一致的预处理/模板去除文本，且仅当共有词≥3 且 Jaccard≥0.15 才输出。
+    checks:
+      - type: literal
+        file: app/services/stop_words.py
+        pattern: "剔除非区分性关键词"
+      - type: literal
+        file: app/services/file_processing.py
+        pattern: "def _keep_nounish"
+      - type: literal
+        file: app/services/batch_orchestrator.py
+        pattern: "len(common) < 3 or jaccard < 0.15"
+
+  - id: FIX-2026-09-11-046
+    title: "无结构化开标报价时报价异常指标降级为仅参考"
+    severity: high
+    rationale: >
+      quote 指标从正文正则抽价，无开标信息表时噪声极大（日期/行项目被当报价），
+      N=2 时统计意义弱，却仍按风险分计分并显示「发现 N 个投标单位报价疑义」。
+      改为：未注入权威开标报价（无【开标报价】标记）时 score=0、result 标注
+      「仅作参考」，与 text_sim 无招标文件时的诚实降级一致。
+    checks:
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "quote_has_open_prices"
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "if quote_data.get('result') and quote_has_open_prices:"
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "无结构化开标报价，报价异常仅作参考"

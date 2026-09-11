@@ -206,24 +206,40 @@ def compute_all_pairs(file_data, check_items, tfidf_matrix=None, template_text=N
     return pairs, risk_matrix
 
 
-def build_key_info_matches(pairs, extra_stop_words=None):
+def build_key_info_matches(pairs, extra_stop_words=None, template_text=None):
     """Post-process key info matches from pairs.
 
     FIX-015 (D4): carry the pair matrix coordinates (i, j) through so the report
     shows real coordinates instead of (-,-) from a mismatched index lookup.
     FIX-2026-09-07-QA-C4: extra_stop_words (industry tables) filter 行业通用词
     from the common keywords.
+    FIX-2026-09-11-045: only emit a pair when the overlap is *significant* —
+    at least 3 shared content keywords AND Jaccard >= 0.15 — computed on the
+    same preprocessed / template-stripped text as key_sim. This prevents
+    generic words (公司/工作/检查/食品…) from being reported as "key
+    information overlap" false alarms.
     """
     matches = []
     for p in pairs:
-        kw1 = set(extract_keywords(p['text1'], 20, extra_stop_words=extra_stop_words))
-        kw2 = set(extract_keywords(p['text2'], 20, extra_stop_words=extra_stop_words))
+        t1 = preprocess_text_for_similarity(p['text1'], template_text, extra_stop_words=extra_stop_words)
+        t2 = preprocess_text_for_similarity(p['text2'], template_text, extra_stop_words=extra_stop_words)
+        if template_text:
+            t1 = remove_template_content(t1, template_text)
+            t2 = remove_template_content(t2, template_text)
+        kw1 = set(extract_keywords(t1, 20, extra_stop_words=extra_stop_words, pos_filter=True))
+        kw2 = set(extract_keywords(t2, 20, extra_stop_words=extra_stop_words, pos_filter=True))
+        common = kw1 & kw2
+        union = kw1 | kw2
+        jaccard = (len(common) / len(union)) if union else 0.0
+        if len(common) < 3 or jaccard < 0.15:
+            continue
         matches.append({
             'name1': p['name1'],
             'name2': p['name2'],
             'i': p.get('i', '-'),
             'j': p.get('j', '-'),
-            'common_keywords': list(kw1 & kw2)[:10],
+            'common_keywords': list(common)[:10],
+            'jaccard': round(jaccard, 3),
         })
     return matches
 

@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — 清标假警报根治：重点信息雷同 + 报价异常降级（FIX-045/046）
+
+### Fixed
+- **「重点信息雷同」假警报（High，FIX-045）**：两不相关标书必然共享「公司/工作/检查/食品/填写/偏离/提供/负责」等通用词，而 N=2 时共有词 df=2、TF-IDF 无区分力，原 `build_key_info_matches` 交集非空即输出 → 6.7 表假警报 + `file_scores` 虚高。修复三处：
+  1. `DEFAULT_STOP_WORDS` 扩容 ~40 个通用业务/名词（`stop_words.py`）。
+  2. `extract_keywords` 新增可选 `pos_filter`，经 `_keep_nounish`（jieba.posseg）剔除动词/形容词；**默认关闭**（短文本可能跌破 key_sim 的 4 词下限），仅 key-info 展示路径启用。
+  3. `build_key_info_matches(pairs, extra_stop_words, template_text)` 改用与 key_sim 一致的预处理/模板去除文本，且仅当 **共有词 ≥3 且 Jaccard ≥0.15** 才输出该对（否则 6.7 表自动隐藏）。
+- **报价异常不可靠假警报（High，FIX-046）**：无开标信息表时 `quote` 指标从正文正则抽价（日期/行项目被当报价），N=2 统计意义弱，却仍计分并显示「发现 N 个投标单位报价疑义」。改为：未注入权威开标报价（无 `【开标报价】` 标记）时 `score=0`、result 标注「○ 无结构化开标报价，报价异常仅作参考（建议上传开标信息表）」，与 text_sim 无招标文件时的诚实降级一致；`file_scores` 同步不计入，避免「重点嫌疑单位」排名被不可靠报价抬分。
+
+### Changed
+- 关键词/停用词扩容使 TF-IDF 余弦轻微漂移，`tests/test_batch_orchestrator.py` 快照重标定（0.1462→0.1489、0.7774→0.7717；slight_diff 0.4→0.3571；near_identical/no_overlap 不变，判别力保留）。
+
+### Added
+- fix_registry `FIX-2026-09-11-045`/`046`；回归测试 4 项（通用词不误报、显著对才输出、报价降级、停用词扩容）。
+
+### regression: 1/1 clearance baseline passed（仅工程类校准）
+126/126 regression · 23/23 collusion+batch · verify_fixes 191/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-11] — QA 全面轮次 022：安全/稳定性加固（FIX-037~043）
 
 ### Fixed

@@ -1632,4 +1632,48 @@ def test_formality_unknown_label_not_leaked():
     assert "if (flabel === 'unknown') flabel = '';" in src
 
 
+# ── FIX-2026-09-11-045/046: 重点信息雷同假警报 + 报价异常降级 ──
+def test_stop_words_expanded():
+    from app.services.stop_words import DEFAULT_STOP_WORDS
+    for w in ('公司', '工作', '检查', '食品', '填写', '偏离', '提供', '负责'):
+        assert w in DEFAULT_STOP_WORDS, f"{w} 应加入停用词表"
+
+
+def test_key_info_generic_only_not_flagged():
+    # 两文档仅共享通用词 → 不输出「重点信息雷同」对
+    from app.services.batch_orchestrator import build_key_info_matches
+    text = '公司 工作 检查 食品 填写 偏离 提供 负责 公司 工作 检查 食品 填写 偏离 提供 负责'
+    pairs = [{'name1': 'a', 'name2': 'b', 'i': 0, 'j': 1, 'text1': text, 'text2': text}]
+    assert build_key_info_matches(pairs) == []
+
+
+def test_key_info_significant_pair_emitted():
+    # 共享 ≥3 个显著技术名词且 Jaccard 达标 → 输出该对
+    from app.services.batch_orchestrator import build_key_info_matches
+    a = '铝合金桥架 防腐涂层 阴极保护 地质勘探 桩基承台 高强螺栓 焊接工艺评定 桥梁支座'
+    b = '铝合金桥架 防腐涂层 阴极保护 地质勘探 桩基承台 高强螺栓 焊接工艺评定 桥梁支座 隧道衬砌'
+    pairs = [{'name1': 'a', 'name2': 'b', 'i': 0, 'j': 1, 'text1': a, 'text2': b}]
+    res = build_key_info_matches(pairs)
+    assert len(res) == 1, res
+    assert len(res[0]['common_keywords']) >= 3
+    assert res[0]['jaccard'] >= 0.15
+
+
+def test_quote_downgraded_without_open_info():
+    # 无开标信息表 → high_price_abnormal 降级为「仅作参考」且 score=0
+    from app.services.document_analysis_svc import run_analysis
+    docs = [
+        {'filename': 'a.docx', 'text': '投标报价 1000000元 工期 730天 施工范围 土建', 'metadata': {}, 'images': []},
+        {'filename': 'b.docx', 'text': '投标报价 2000000元 工期 700天 施工范围 土建', 'metadata': {}, 'images': []},
+    ]
+    report = run_analysis(docs, user_id='t', thread_id='t')
+    inds = {i['id']: i for i in report['indicators']}
+    q = inds['high_price_abnormal']
+    assert '仅作参考' in q['result'], q['result']
+    assert q['score'] == 0, q['score']
+    # file_scores 也不得被不可靠报价抬分（suspected 排名一致性）
+    src = _read('app/services/document_analysis_svc.py')
+    assert "if quote_data.get('result') and quote_has_open_prices:" in src
+
+
 
