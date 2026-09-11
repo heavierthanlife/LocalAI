@@ -55,6 +55,8 @@ msedgedriver.exe
 .playwright-mcp/
 data/pytest_err.txt
 data/pet_command.json
+# qa-loop 待运行标记（post-commit 钩子写，/qa-loop 消费后清空）— 瞬态，不入仓
+data/qa_loop/pending.flag
 data/agent_prompt.json
 data/checkpoints.db
 data/current_state.yaml

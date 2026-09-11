@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+"""Post-commit hook: mark a pending QA-Loop run. NEVER runs the loop.
+
+Install: git config core.hooksPath .githooks
+Bypass:  SKIP_QA_LOOP_HOOK=1 git commit ...
+
+Contract (see .opencode/qa-loop.project.md):
+  - Only writes data/qa_loop/pending.flag (a "to-run" marker).
+  - Does NOT execute /qa-loop or any subagent — that is always manual.
+  - The marker is consumed (and cleared) by the next manual /qa-loop start.
+"""
+import os
+import subprocess
+import sys
+from datetime import datetime
+
+PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..')
+FLAG = os.path.join(PROJECT_ROOT, 'data', 'qa_loop', 'pending.flag')
+
+
+def main():
+    if os.environ.get('SKIP_QA_LOOP_HOOK'):
+        return 0
+    try:
+        sha = subprocess.run(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        ).stdout.strip()
+        branch = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        ).stdout.strip()
+        os.makedirs(os.path.dirname(FLAG), exist_ok=True)
+        with open(FLAG, 'w', encoding='utf-8') as f:
+            f.write(f"sha={sha}\nbranch={branch}\n"
+                    f"at={datetime.now().isoformat(timespec='seconds')}\n")
+    except Exception as e:  # never block a commit
+        print(f'[qa-loop] SKIP: could not write pending flag ({e})')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

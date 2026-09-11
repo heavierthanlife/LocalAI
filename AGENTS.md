@@ -13,6 +13,7 @@ AI-powered bidding agency platform. Flask 3.1 / Python 3.12 / PostgreSQL 16 / Re
 3. **任何代码修复** → `data/fix_registry.yaml` 记 FIX（pattern 用具名元字符时改用 `type: literal`）+ `tests/test_regression.py` 加回归测试。
 4. **行为/路由/表变化** → 更新 `CHANGELOG.md`（顶部）+ 受影响的 `AGENTS.md`/`MANIFEST.md`；跑 `python scripts/check_system.py`。
 5. **部署** → `python scripts/docker_build.py` + `docker compose up -d --force-recreate app celery-worker celery-beat` + 容器内 grep 抽查（镜像=HEAD）。
+6. **交付/推送** → 以上 gate 全过后 `git push LocalAI master`，保持工作树干净、远端 = 本地 HEAD（与 qa-loop 阶段⑦ 对齐）。
 
 **只读复核门禁**：改动命中 `app/services/`、`app/routes/`、`celery_app.py`、`data/fix_registry.yaml`、合规/清标路径之一时，完成前必须交由 `@code-reviewer`（只读）复核；纯前端/文档改动可跳过。`/qa-loop` 始终手动触发（skill 设计上要求逐批审批），不得自动运行。
 
