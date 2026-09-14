@@ -1062,6 +1062,37 @@ def update_runtime_config():
     if not data:
         return err("No update parameters provided", "VALIDATION_ERROR", 400)
 
+    # FIX-2026-09-11-049: LLM custom providers — persist literal API keys to the
+    # env store (never into runtime_config.json) and validate each entry.
+    custom_providers = None
+    if 'llm_custom_providers' in data:
+        from app.services.env_store import write_env_var
+        from app.services.llm_provider import validate_custom_provider
+        raw = data.get('llm_custom_providers') or []
+        if not isinstance(raw, list):
+            return err("llm_custom_providers must be a list", "VALIDATION_ERROR", 400)
+        cleaned = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                return err("llm_custom_providers 条目必须为对象", "VALIDATION_ERROR", 400)
+            entry = dict(entry)
+            pid = (entry.get('id') or '').strip()
+            api_key = (entry.pop('api_key', '') or '').strip()
+            if api_key and api_key != '•••':
+                env_key = (entry.get('api_key_env') or '').strip() or (
+                    'LLM_CUSTOM_KEY_' + re.sub(r'[^A-Za-z0-9_]', '_', pid).upper())
+                entry['api_key_env'] = env_key
+                try:
+                    write_env_var(env_key, api_key)
+                except Exception as e:
+                    return err(f"写入 API key 失败: {e}", "INTERNAL_ERROR", 500)
+            ok_v, msg = validate_custom_provider(entry)
+            if not ok_v:
+                return err(f"provider '{pid}' 校验失败: {msg}", "VALIDATION_ERROR", 400)
+            cleaned.append(entry)
+        data['llm_custom_providers'] = cleaned
+        custom_providers = cleaned
+
     # Validate types against defaults
     from app.services.runtime_config import DEFAULTS
     sanitized = {}
@@ -1096,6 +1127,38 @@ def update_runtime_config():
         from app.services.vl_model import vl_model
         vl_model.reload()
         logger.info("VL model reloaded due to config change")
+
+    # FIX-2026-09-11-049: after saving custom providers, best-effort fetch each
+    # provider's /models (using the just-written key) and re-save the lists so
+    # the selectors reflect real models without a manual refresh.
+    if custom_providers is not None:
+        try:
+            from app.services import llm_catalog
+            refreshed = []
+            for entry in custom_providers:
+                entry = dict(entry)
+                base_url = (entry.get('base_url') or '').strip()
+                env_key = (entry.get('api_key_env') or '').strip()
+                api_key = os.getenv(env_key) or None
+                models = []
+                if base_url:
+                    try:
+                        models = [m['id'] for m in llm_catalog._fetch_provider_models(
+                            base_url, api_key=api_key, free_only=False)]
+                    except Exception as e:
+                        logger.warning(f"model refresh for {entry.get('id')} failed: {e}")
+                if models:
+                    entry['models'] = models
+                    if not entry.get('default_model'):
+                        entry['default_model'] = models[0]
+                refreshed.append(entry)
+            cfg = update({'llm_custom_providers': refreshed})
+            from app import globals as g
+            with g._agent_cache_lock:
+                g._agent_cache.clear()
+            logger.info(f"Refreshed models for {len(refreshed)} custom provider(s)")
+        except Exception as e:
+            logger.warning(f"custom provider post-save refresh failed: {e}")
 
     return ok({"message": f"Updated {len(sanitized)} config keys", "config": cfg}, "ok")
 
@@ -1345,6 +1408,8 @@ def admin_llm_providers():
             'name': cfg.get('name', pid),
             'models': cfg.get('models', []),
             'default_model': cfg.get('default_model', ''),
+            'api_key_set': bool((os.getenv(cfg.get('env_key') or '', '') or '').strip()),
+            'custom': bool(cfg.get('custom')),
         }
 
     # Build dynamic model list for active provider

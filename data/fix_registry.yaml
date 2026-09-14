@@ -1270,3 +1270,49 @@ fixes:
       - type: literal
         file: static/js/accounts.js
         pattern: "addEventListener('click', requestDeleteAccount)"
+
+  - id: FIX-2026-09-11-049
+    title: "LLM 自定义提供商：API key 落 .env + 保存后自动拉取模型"
+    severity: medium
+    rationale: >
+      运行配置的「自定义 LLM Provider」只能填 api_key_env，无法直接粘 key，且保存后不
+      自动拉模型、不失效缓存。新增 app/services/env_store.py（KEY=value upsert，双写
+      data/llm_provider_keys.env 与根 .env[存在时]，并同步 os.environ；启动时
+      app/__init__.py load_provider_keys()，celery worker 经 create_app 覆盖）；
+      update_runtime_config 保存时将字面 api_key 写入 env（明文不入 runtime_config.json），
+      随后对每个自定义 provider 调 /models 回写模型并清 agent 缓存；/admin/llm_providers
+      增 api_key_set。
+    checks:
+      - type: literal
+        file: app/services/env_store.py
+        pattern: "def write_env_var"
+      - type: literal
+        file: app/__init__.py
+        pattern: "load_provider_keys"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "write_env_var(env_key, api_key)"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "Refreshed models for"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "'api_key_set': bool"
+
+  - id: FIX-2026-09-11-050
+    title: "LLM 提供商管理 UI：API Key 输入 + key 状态角标 + 说明"
+    severity: low
+    rationale: >
+      review.js 的 json-list 行编辑器增 API Key 密码框（写入 .env，不回显）与
+      ✓/✗ 状态角标（由 /admin/llm_providers.api_key_set 提供），并加使用说明；
+      dirty 跟踪纳入 api_key。
+    checks:
+      - type: literal
+        file: static/js/review.js
+        pattern: "json-list-api-key"
+      - type: literal
+        file: static/js/review.js
+        pattern: "在此添加/删除提供商"
+      - type: literal
+        file: static/js/review.js
+        pattern: "api_key_set"

@@ -17,7 +17,7 @@
 ┌──────────────▼───────────────────────────────────────────────┐
 │  Flask App Factory (app/__init__.py:create_app)               │
 │    → 17 Blueprints (app/routes/)       → HTTP 端点             │
-│    → 100 Services (app/services/)      → 业务逻辑层            │
+│    → 101 Services (app/services/)      → 业务逻辑层            │
 │    → database.py (psycopg2 连接池)     → 72 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
 │    → celery_app.py (Celery 异步任务)                           │

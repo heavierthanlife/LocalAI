@@ -18,6 +18,15 @@ from dotenv import load_dotenv
 # Load env before anything else
 load_dotenv()
 
+# FIX-2026-09-11-049: admin-added LLM provider keys (persistent env-format file
+# under data/, survives Docker recreate via the app_data volume). Covers the
+# celery worker too, which reaches this module through create_app().
+try:
+    from .services.env_store import load_provider_keys
+    load_provider_keys()
+except Exception:
+    pass
+
 # Package config
 from . import config
 from . import globals as g

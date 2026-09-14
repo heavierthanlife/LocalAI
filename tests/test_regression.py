@@ -1686,4 +1686,53 @@ def test_delete_account_global_helper_single_binding():
     assert "addEventListener('click', requestDeleteAccount)" in acc
 
 
+# ── FIX-2026-09-11-049/050: LLM 自定义提供商 key 落盘 + 自动拉模型 + UI ──
+def test_env_store_upsert_dual_write(tmp_path):
+    import os
+    from app.services.env_store import write_env_var, has_env_var
+    p = tmp_path / 'keys.env'
+    write_env_var('LLM_CUSTOM_KEY_QA_TEST', 'secret1', paths=[str(p)])
+    assert 'LLM_CUSTOM_KEY_QA_TEST=secret1' in p.read_text(encoding='utf-8')
+    assert os.environ.get('LLM_CUSTOM_KEY_QA_TEST') == 'secret1'
+    assert has_env_var('LLM_CUSTOM_KEY_QA_TEST') is True
+    # upsert replaces, does not duplicate
+    write_env_var('LLM_CUSTOM_KEY_QA_TEST', 'secret2', paths=[str(p)])
+    body = p.read_text(encoding='utf-8')
+    assert body.count('LLM_CUSTOM_KEY_QA_TEST') == 1
+    assert 'secret2' in body and 'secret1' not in body
+    # preserves unrelated lines
+    p.write_text('OTHER_KEY=keepme\n' + body, encoding='utf-8')
+    write_env_var('LLM_CUSTOM_KEY_QA_TEST', 'secret3', paths=[str(p)])
+    assert 'OTHER_KEY=keepme' in p.read_text(encoding='utf-8')
+    os.environ.pop('LLM_CUSTOM_KEY_QA_TEST', None)
+
+
+def test_env_store_no_dollar_expansion(tmp_path):
+    # FIX-049 review M1: values with $ must not be expanded by dotenv.
+    from app.services.env_store import write_env_var, _format_line
+    assert _format_line('K', 'a$b').strip() == "K='a$b'"
+    assert _format_line('K', 'plain123').strip() == 'K=plain123'
+    p = tmp_path / 'dollar.env'
+    write_env_var('LLM_CUSTOM_KEY_QA_DOLLAR', 'sk-$abc', paths=[str(p)])
+    from dotenv import dotenv_values
+    import os
+    vals = dotenv_values(str(p))
+    assert vals['LLM_CUSTOM_KEY_QA_DOLLAR'] == 'sk-$abc'
+    os.environ.pop('LLM_CUSTOM_KEY_QA_DOLLAR', None)
+
+
+def test_provider_key_pipeline_source():
+    # backend wiring
+    assert 'def write_env_var' in _read('app/services/env_store.py')
+    assert 'load_provider_keys' in _read('app/__init__.py')
+    adm = _read('app/routes/admin_regeneration.py')
+    assert 'write_env_var(env_key, api_key)' in adm
+    assert 'Refreshed models for' in adm
+    assert "'api_key_set': bool" in adm
+    # frontend editor + badge
+    rev = _read('static/js/review.js')
+    assert 'json-list-api-key' in rev
+    assert 'api_key_set' in rev
+
+
 

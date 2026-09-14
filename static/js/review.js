@@ -913,6 +913,9 @@
             // 自定义 Provider 行式编辑器（json-list）行模板
             function providerRowHtml(r) {
                 const row = (r && typeof r === 'object') ? r : {};
+                const keyBadge = row.api_key_set
+                    ? '<span title="API key 已配置" style="color:#16a34a;flex-shrink:0;">✓</span>'
+                    : '<span title="缺少 API key（请填写或设置 api_key_env）" style="color:#f59e0b;flex-shrink:0;">✗</span>';
                 return `<div class="json-list-row" style="display:flex;align-items:center;gap:4px;margin-bottom:3px;padding:3px 4px;border:1px solid var(--card-border);border-radius:4px;background:var(--card-bg);font-size:.65rem;flex-wrap:wrap;">
                     <span style="color:var(--card-muted);flex-shrink:0;">id</span>
                     <input class="json-list-id" placeholder="如 openai" value="${escapeHtml(row.id || '')}" style="width:90px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
@@ -920,8 +923,11 @@
                     <input class="json-list-name" placeholder="显示名" value="${escapeHtml(row.name || '')}" style="width:110px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
                     <span style="color:var(--card-muted);flex-shrink:0;">base_url</span>
                     <input class="json-list-base-url" placeholder="https://..." value="${escapeHtml(row.base_url || '')}" style="flex:1;min-width:150px;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <span style="color:var(--card-muted);flex-shrink:0;">API Key</span>
+                    <input type="password" class="json-list-api-key" autocomplete="new-password" placeholder="${row.api_key_set ? '已配置（留空=不变）' : '粘贴 key（写入 .env）'}" style="width:150px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    ${keyBadge}
                     <span style="color:var(--card-muted);flex-shrink:0;">api_key_env</span>
-                    <input class="json-list-api-key-env" placeholder="LLM_CUSTOM_KEY_xxx" value="${escapeHtml(row.api_key_env || '')}" style="width:150px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
+                    <input class="json-list-api-key-env" placeholder="自动生成（可留空）" value="${escapeHtml(row.api_key_env || '')}" style="width:150px;flex-shrink:0;padding:2px 4px;border-radius:3px;border:1px solid var(--card-border);font-size:.65rem;">
                     <button class="json-list-remove" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:.85rem;padding:0 2px;flex-shrink:0;" title="删除此 Provider">×</button>
                 </div>`;
             }
@@ -952,7 +958,11 @@
                     html += chainHtml;
                 } else if (item.type === 'json-list') {
                     const nfMark = item.is_not_factory ? ' <span style="color:#f59e0b;font-size:.6rem;" title="不在出厂预设范围内">[非出厂项]</span>' : '';
-                    const rows = Array.isArray(item.value) ? item.value : [];
+                    const providerKeySet = (llmInfo && llmInfo.providers) ? llmInfo.providers : {};
+                    const rows = (Array.isArray(item.value) ? item.value : []).map(r => {
+                        const prov = (r && r.id && providerKeySet[r.id]) ? providerKeySet[r.id] : null;
+                        return Object.assign({}, r, { api_key_set: !!(prov && prov.api_key_set) });
+                    });
                     let listHtml = `<div style="grid-column:1/-1;" title="${escapeHtml(item.label)}">
                         <div style="display:flex;align-items:center;gap:4px;font-size:.7rem;margin-bottom:4px;">
                             <label style="${labelStyle}">${item.label}${nfMark}</label>
@@ -961,6 +971,7 @@
                     for (const row of rows) listHtml += providerRowHtml(row);
                     listHtml += `<div class="json-list-hint" style="display:none;color:#ef4444;font-size:.65rem;margin:2px 0;"></div>
                             <button class="json-list-add" style="width:100%;padding:4px;border:1px dashed var(--card-border);border-radius:4px;background:transparent;color:var(--card-muted);cursor:pointer;font-size:.65rem;margin-top:2px;">+ 添加 Provider</button>
+                            <p style="font-size:.62rem;color:var(--card-muted);margin:4px 0 0;">在此添加/删除提供商（id / name / base_url / API Key）；保存后自动拉取模型列表。API Key 仅写入 .env，不会保存在配置中。</p>
                         </div>
                     </div>`;
                     html += listHtml;
@@ -1237,15 +1248,23 @@
         const providersContainer = document.querySelector('[data-key="llm_custom_providers"][data-type="json-list"]');
         if (providersContainer) {
             const providersMarkDirty = () => {
-                const now = Array.from(providersContainer.querySelectorAll('.json-list-row')).map(r => ({
+                const rowEls = Array.from(providersContainer.querySelectorAll('.json-list-row'));
+                const payload = rowEls.map(r => ({
                     id: r.querySelector('.json-list-id')?.value.trim() || '',
                     name: r.querySelector('.json-list-name')?.value.trim() || '',
                     base_url: r.querySelector('.json-list-base-url')?.value.trim() || '',
                     api_key_env: r.querySelector('.json-list-api-key-env')?.value.trim() || '',
+                    api_key: r.querySelector('.json-list-api-key')?.value.trim() || '',
                 }));
-                const orig = _rcData['llm_custom_providers'];
-                const nowStr = JSON.stringify(now);
-                _rcDirty['llm_custom_providers'] = (nowStr !== JSON.stringify(orig ?? [])) ? now : undefined;
+                const norm = arr => (arr || []).map(o => ({
+                    id: o.id || '', name: o.name || '', base_url: o.base_url || '', api_key_env: o.api_key_env || '',
+                }));
+                const storedNow = payload.map(r => ({
+                    id: r.id, name: r.name, base_url: r.base_url, api_key_env: r.api_key_env,
+                }));
+                const anyKey = payload.some(r => r.api_key);
+                const changed = JSON.stringify(storedNow) !== JSON.stringify(norm(_rcData['llm_custom_providers']));
+                _rcDirty['llm_custom_providers'] = (changed || anyKey) ? payload : undefined;
                 if (_rcDirty['llm_custom_providers'] === undefined) delete _rcDirty['llm_custom_providers'];
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
