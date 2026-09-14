@@ -1106,7 +1106,15 @@
                 if (_rcDirty['active_llm_model'] === undefined) delete _rcDirty['active_llm_model'];
                 const modDot = document.getElementById('rcModifiedDot');
                 if (modDot) modDot.style.display = Object.keys(_rcDirty).length ? 'inline' : 'none';
-                if (refreshStatus) refreshStatus.textContent = '';
+                if (refreshStatus) {
+                    if (pid !== 'auto' && models.length <= 1) {
+                        refreshStatus.textContent = '无模型：请点「刷新模型」或检查 base_url / API Key';
+                        refreshStatus.style.color = '#f59e0b';
+                    } else {
+                        refreshStatus.textContent = '';
+                        refreshStatus.style.color = '';
+                    }
+                }
                 updateRefreshBtn();
             });
             modelSelect.addEventListener('change', () => {

@@ -1316,3 +1316,22 @@ fixes:
       - type: literal
         file: static/js/review.js
         pattern: "api_key_set"
+
+  - id: FIX-2026-09-11-051
+    title: "运行配置 LLM 选择器纳入自定义提供商（可选可保存）"
+    severity: medium
+    rationale: >
+      get_runtime_config_schema 的 active_llm_provider/active_llm_model 选项只从
+      PROVIDER_CONFIG（内置）构建，管理员新增的自定义 provider 无法在运行配置面板选中
+      （能加不能用）。改为从 get_merged_provider_config() 构建；自定义 provider 名称标
+      「（自定义）」。review.js 在所选 provider 无模型时给出提示。
+    checks:
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "build provider/model options from the MERGED config"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "（自定义）"
+      - type: literal
+        file: static/js/review.js
+        pattern: "无模型：请点「刷新模型」或检查 base_url / API Key"

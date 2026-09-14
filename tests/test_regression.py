@@ -1750,4 +1750,12 @@ def test_provider_key_pipeline_source():
     assert 'api_key_set' in rev
 
 
+def test_custom_provider_selectable_in_runtime_schema():
+    # FIX-051: runtime_config_schema must build options from the merged config
+    adm = _read('app/routes/admin_regeneration.py')
+    assert 'build provider/model options from the MERGED config' in adm
+    assert '（自定义）' in adm
+    assert '无模型：请点「刷新模型」或检查 base_url / API Key' in _read('static/js/review.js')
+
+
 

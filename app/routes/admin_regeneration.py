@@ -1275,20 +1275,22 @@ def snapshot_db_schema():
 @admin_required
 def get_runtime_config_schema():
     """Return metadata about each config key (for building smart UI)."""
-    # Build dynamic model list from all configured providers
-    from app.services.llm_provider import PROVIDER_CONFIG
+    # FIX-2026-09-11-051: build provider/model options from the MERGED config so
+    # admin-added custom providers (llm_custom_providers) are selectable, not
+    # just the built-in PROVIDER_CONFIG.
+    from app.services.llm_provider import get_merged_provider_config
+    providers = get_merged_provider_config()
     all_models = ['auto']
     model_labels = {'auto': '自动(服务商默认)'}
-    # FIX-016: dynamic provider options from PROVIDER_CONFIG (openrouter/nvidia)
     provider_options = ['auto']
     provider_labels = {'auto': '自动检测'}
-    for pid, cfg in PROVIDER_CONFIG.items():
+    for pid, cfg in providers.items():
         provider_options.append(pid)
-        provider_labels[pid] = cfg['name']
+        base_name = cfg.get('name') or pid
+        provider_labels[pid] = f"{base_name}（自定义）" if cfg.get('custom') else base_name
         for m in cfg.get('models', []):
-            label = f"{m} ({cfg['name']})"
             all_models.append(m)
-            model_labels[m] = label
+            model_labels[m] = f"{m} ({base_name})"
 
     schema = {
         # ── LLM ──

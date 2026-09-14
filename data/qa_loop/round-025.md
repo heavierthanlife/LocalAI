@@ -31,6 +31,14 @@ json-list 行编辑器 + `/admin/llm_providers/<pid>/models?refresh=1`），缺�
   `llm_provider/llm_fallback/llm_catalog/chat_config/admin_regeneration` 的 key 读取点统一改用 `env_store.get_env`。
 - 复验：重建后 `api_key_set=true`；独立进程 `has_env_var` 亦 True。
 
+## ⑪ 追加（FIX-051，用户反馈"找不到在哪选用自定义提供商+模型"）
+- 根因：`/admin/runtime_config_schema` 的 `active_llm_provider`/`active_llm_model` 选项仅从
+  `PROVIDER_CONFIG` 构建 → 自定义 provider 不在下拉；用户侧 `loadProviderSelector` 为死代码（无调用点）。
+- 决定：不复活用户侧选择器；只修运行配置面板（管理员路径）。
+- 修复：schema 选项改从 `get_merged_provider_config()` 构建（含自定义 + 模型，标「（自定义）」）；
+  review.js 空模型提示。
+- 验证：回归 132/132 · verify_fixes 206/0 · doc_drift 14/14；浏览器实测运行配置 LLM 段出现自定义 provider 并可存 active_llm_provider/model。
+
 ## 备注
 - Docker 内根 `.env` 非挂载（compose 插值注入），故主持久化为 `data/llm_provider_keys.env`（`app_data` 卷）；
   本地开发若根 `.env` 存在则双写。

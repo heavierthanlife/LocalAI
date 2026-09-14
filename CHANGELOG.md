@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — 运行配置 LLM 选择器纳入自定义提供商（FIX-051）
+
+### Fixed
+- **自定义 LLM 提供商"能加不能用"（FIX-051）**：`/admin/runtime_config_schema` 的 `LLM 服务商` / `LLM 模型` 下拉选项只从 `PROVIDER_CONFIG`（内置 openrouter/nvidia）构建 → 管理员新增的自定义 provider **无法在运行配置面板选中**。改为从 `get_merged_provider_config()` 构建（含自定义 provider + 其模型），自定义项名称标「（自定义）」。选中后现有 change 处理器自动切换模型下拉；保存后 `active_llm_provider/active_llm_model` 生效（LLM 调用经 `get_provider_config` + `env_store.get_env` 读 key）。
+- **空模型提示（Low）**：`review.js` 中所选 provider 无模型（如保存时 `/models` 拉取失败）时，在「刷新模型」旁提示「无模型：请点「刷新模型」或检查 base_url / API Key」。
+
+### Added
+- fix_registry `FIX-2026-09-11-051`；回归 `test_custom_provider_selectable_in_runtime_schema`。
+
+### regression: 1/1 clearance baseline passed
+132/132 regression · verify_fixes 206/0 · doc_drift 14/14 · node --check OK
+
+---
+
 ## [2026-09-11] — LLM 提供商管理补齐：key 落 .env + 自动拉模型（FIX-049/050）
 
 ### Added
