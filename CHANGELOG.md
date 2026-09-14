@@ -8,6 +8,21 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-11] — 删除账户功能断裂修复（FIX-047）
+
+### Fixed
+- **删除账户按钮点击无响应（High，FIX-047）**：UI 走查发现 `accounts.js` 调用 `createQuickModal` 抛 `ReferenceError`。根因：`app.js` 的 `createQuickModal` 为**闭包内声明**（不在 `window`），而 `accounts.js` 作为独立 `<script defer>` 无法访问 → 删除账户流程整体断裂。同时 `app.js:915` 与 `accounts.js:88` **双重绑定** `deleteAccountBtn`，一次点击触发两次 `requestDeleteAccount`（双请求/双弹窗）。
+  - 修复：`app.js` 暴露 `window.createQuickModal / escapeHtml / showToast`（后两者原本已是全局，一并显式化以防回退）。
+  - 去重：删除 `app.js` 的 legacy `requestDeleteAccount` / `deleteAccount` / `showConfirmDeleteModal`（共 121 行，与 `accounts.js` 逐字重复）及 `deleteAccountBtn` 绑定 → 收敛为 `accounts.js` 单一事实源。
+
+### Added
+- fix_registry `FIX-2026-09-11-047`；回归 `test_delete_account_global_helper_single_binding`。
+
+### regression: 1/1 clearance baseline passed
+127/127 regression · verify_fixes 195/0 · doc_drift 14/14 · node --check OK
+
+---
+
 ## [2026-09-11] — 清标假警报根治：重点信息雷同 + 报价异常降级（FIX-045/046）
 
 ### Fixed

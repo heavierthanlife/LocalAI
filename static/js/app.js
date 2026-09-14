@@ -912,7 +912,6 @@
                 <button id="logoutBtn" class="file-btn" style="margin-top: 10px;">退出登录</button>
             `;
             document.getElementById('updateAccountBtn')?.addEventListener('click', updateAccount);
-            document.getElementById('deleteAccountBtn')?.addEventListener('click', requestDeleteAccount);
             document.getElementById('logoutBtn')?.addEventListener('click', logout);
             document.getElementById('saveEmailBtn')?.addEventListener('click', saveEmail);
             document.getElementById('requestPinCodeBtn')?.addEventListener('click', requestPinCode);
@@ -1259,127 +1258,6 @@
         const d = await res.json();
         if (res.ok) showToast(d.hint || '验证码已发送', 'info', 5000);
         else alert(d.error || '请求失败');
-    }
-
-    async function requestDeleteAccount() {
-        if (sessionStorage.getItem('deletion_pending') === '1') {
-            showConfirmDeleteModal();
-            return;
-        }
-        const res = await fetch('/request_delete_account', { method:'POST', credentials:'include' });
-        const d = await res.json();
-        if (!res.ok) { alert(d.error || '加载失败'); return; }
-        const inventory = d.inventory || [];
-        const sessionCnt = d.session_count || 0;
-        // Build selection modal
-        const modal = createQuickModal('选择保留数据');
-        let html = `<p style="font-size:.78rem;color:var(--card-muted);margin-bottom:4px;">选择要保留给公司的数据（其余将永久删除）。项目文件默认保留。</p>
-            <p style="font-size:.7rem;margin-bottom:8px;">💬 ${sessionCnt}个聊天会话（将永久删除）</p>
-            <div style="max-height:300px;overflow-y:auto;margin-bottom:8px;">
-            <table style="width:100%;font-size:.73rem;border-collapse:collapse;">`;
-        for (const item of inventory) {
-            const checked = item.choosable ? 'checked' : 'checked disabled';
-            const disabled = item.choosable ? '' : 'disabled';
-            html += `<tr style="border-bottom:1px solid var(--card-border);">
-                <td style="padding:3px 4px;"><input type="checkbox" class="del-keep-cb" data-type="${item.type}" data-id="${item.id}" ${checked} ${disabled}></td>
-                <td>${escapeHtml(item.name)}</td>
-                <td style="color:var(--card-muted);font-size:.65rem;">${item.size_kb > 0 ? item.size_kb+'KB' : ''}</td>
-                <td style="font-size:.6rem;color:var(--card-muted);">${item.note||''}</td>
-            </tr>`;
-        }
-        html += `</table></div>
-            <div style="display:flex;gap:8px;align-items:center;">
-            <button id="delSelectAll" class="file-btn" style="font-size:.7rem;">全选</button>
-            <button id="delDeselectAll" class="file-btn" style="font-size:.7rem;">全不选</button>
-            <button id="delSubmitBtn" class="file-btn" style="background:#e74c3c;color:white;margin-left:auto;font-size:.78rem;">⚠️ 提交删除申请</button>
-            <span id="delStatus" style="font-size:.7rem;"></span></div>`;
-        modal.innerHTML(html);
-        modal.querySelector('#delSelectAll').onclick = () => modal.querySelectorAll('.del-keep-cb:not([disabled])').forEach(c => c.checked = true);
-        modal.querySelector('#delDeselectAll').onclick = () => modal.querySelectorAll('.del-keep-cb:not([disabled])').forEach(c => c.checked = false);
-        modal.querySelector('#delSubmitBtn').onclick = async () => {
-            const keep = [];
-            modal.querySelectorAll('.del-keep-cb:checked').forEach(c => keep.push({type: c.dataset.type, id: parseInt(c.dataset.id)}));
-            if (!confirm(`确定提交删除申请吗？\\n保留 ${keep.length} 项数据给公司，其余 ${inventory.length - keep.length} 项将永久删除。`)) return;
-            const r = await fetch('/submit_delete_choices', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({keep_ids:keep}) });
-            const rd = await r.json();
-            if (r.ok) { showToast(rd.message || '已提交', 'info', 6000); modal.remove(); sessionStorage.setItem('deletion_pending', '1'); showConfirmDeleteModal(); }
-            else alert(rd.error || '提交失败');
-        };
-    }
-
-    async function deleteAccount() {
-        const pin = await prompt('请输入您的PIN以确认删除账户（所有数据将永久丢失）');
-        if (!pin) return;
-        try {
-            const res = await fetch('/delete_account', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ pin })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                alert('账户已删除');
-                location.href = '/';
-            } else alert(data.error || '删除失败');
-        } catch (err) {
-            console.error(err);
-            alert('网络错误，请重试');
-        }
-    }
-
-    function showConfirmDeleteModal() {
-        const modal = createQuickModal('确认删除账户');
-        const lastRequest = sessionStorage.getItem('deletion_last_request') || '';
-        if (lastRequest) {
-            const elapsed = (Date.now() - parseInt(lastRequest)) / 1000;
-            if (elapsed < 300) {
-                modal.innerHTML(`<p>请等待 ${Math.ceil(300 - elapsed)} 秒后重试。</p>`);
-                return;
-            }
-        }
-        modal.innerHTML(`
-            <p style="font-size:.78rem;color:var(--card-muted);margin-bottom:8px;">管理员已发送验证码到您的邮箱，请在此输入。</p>
-            <label>验证码 (4位):</label>
-            <input type="text" id="delConfirmCode" maxlength="4" placeholder="管理员发送的验证码" style="width:100%;margin-bottom:8px;">
-            <label>PIN:</label>
-            <input type="password" id="delConfirmPin" placeholder="您的PIN" style="width:100%;margin-bottom:8px;">
-            <div style="display:flex;gap:8px;">
-                <button id="delConfirmBtn" class="file-btn" style="background:#e74c3c;color:white;">确认删除</button>
-                <button id="delCancelReqBtn" class="file-btn">取消删除请求</button>
-            </div>
-            <span id="delConfirmStatus" style="font-size:.7rem;color:var(--card-muted);"></span>
-        `);
-        modal.querySelector('#delConfirmBtn').onclick = async () => {
-            const code = modal.querySelector('#delConfirmCode').value.trim();
-            const pin = modal.querySelector('#delConfirmPin').value.trim();
-            if (!code || !pin) { modal.querySelector('#delConfirmStatus').textContent = '请填写验证码和PIN'; return; }
-            const btn = modal.querySelector('#delConfirmBtn');
-            btn.disabled = true; btn.textContent = '...';
-            try {
-                const res = await fetch('/confirm_delete_account', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify({code, pin}) });
-                const d = await res.json();
-                if (res.ok) {
-                    sessionStorage.removeItem('deletion_pending');
-                    sessionStorage.setItem('deletion_last_request', Date.now().toString());
-                    showToast('账户已删除', 'success', 3000);
-                    modal.remove();
-                    setTimeout(() => { location.href = '/'; }, 1000);
-                } else {
-                    modal.querySelector('#delConfirmStatus').textContent = d.error || '确认失败';
-                }
-            } catch (_) {
-                modal.querySelector('#delConfirmStatus').textContent = '网络错误';
-            }
-            btn.disabled = false; btn.textContent = '确认删除';
-        };
-        modal.querySelector('#delCancelReqBtn').onclick = async () => {
-            if (!confirm('取消删除请求？')) return;
-            sessionStorage.removeItem('deletion_pending');
-            sessionStorage.setItem('deletion_last_request', Date.now().toString());
-            showToast('删除请求已取消', 'info', 3000);
-            modal.remove();
-        };
     }
 
     var accountSettingsBtn = document.getElementById('accountSettingsBtn');
@@ -3581,6 +3459,12 @@
             api.querySelector('.quick-modal-card');
             return api;
         }
+        // FIX-2026-09-11-047: expose this helper globally. accounts.js loads as a
+        // separate <script defer> and cannot reach this closure-scoped function
+        // (previously caused "ReferenceError: createQuickModal is not defined").
+        window.createQuickModal = createQuickModal;
+        window.escapeHtml = escapeHtml;
+        window.showToast = showToast;
 
         // ======================== 统一提示词编辑器 ========================
         // 面向所有登录用户：系统提示词（多版本，≤agent_max）+ 消息模板（≤template_max）

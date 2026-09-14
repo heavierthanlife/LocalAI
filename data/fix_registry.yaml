@@ -1248,3 +1248,25 @@ fixes:
       - type: literal
         file: app/services/document_analysis_svc.py
         pattern: "无结构化开标报价，报价异常仅作参考"
+
+  - id: FIX-2026-09-11-047
+    title: "删除账户功能断裂：createQuickModal 未全局暴露"
+    severity: high
+    rationale: >
+      app.js 的 createQuickModal 是闭包内声明（不在 window），而 accounts.js 作为独立
+      <script defer> 在 requestDeleteAccount/showConfirmDeleteModal 中直接调用它 →
+      ReferenceError，删除账户按钮点击无响应。且 app.js:915 与 accounts.js:88 双重
+      绑定导致一次点击触发两次 requestDeleteAccount（双请求/双弹窗）。
+      修复：app.js 暴露 window.createQuickModal/escapeHtml/showToast；删除 app.js
+      legacy requestDeleteAccount/deleteAccount/showConfirmDeleteModal 与 deleteAccountBtn
+      绑定，收敛为 accounts.js 单一事实源。
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "window.createQuickModal = createQuickModal;"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "addEventListener('click', requestDeleteAccount)"
+      - type: literal
+        file: static/js/accounts.js
+        pattern: "addEventListener('click', requestDeleteAccount)"

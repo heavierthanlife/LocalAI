@@ -1676,4 +1676,14 @@ def test_quote_downgraded_without_open_info():
     assert "if quote_data.get('result') and quote_has_open_prices:" in src
 
 
+def test_delete_account_global_helper_single_binding():
+    # FIX-047: createQuickModal must be global; delete binding must live only in accounts.js
+    src = _read('static/js/app.js')
+    assert 'window.createQuickModal = createQuickModal;' in src
+    assert "addEventListener('click', requestDeleteAccount)" not in src
+    assert 'async function requestDeleteAccount()' not in src
+    acc = _read('static/js/accounts.js')
+    assert "addEventListener('click', requestDeleteAccount)" in acc
+
+
 
