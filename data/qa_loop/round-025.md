@@ -19,8 +19,17 @@ json-list 行编辑器 + `/admin/llm_providers/<pid>/models?refresh=1`），缺�
 - `docs/ARCHITECTURE.md` 服务数 100→101。
 
 ## ⑧/⑨ 验证
-- 回归 129/129 · verify_fixes 203/0 · doc_drift 14/14 · node --check OK · code-reviewer 复核。
-- 容器抽查 + 浏览器实测：运行配置加测试 provider → 保存 → key 角标 ✓ → 模型下拉自动出现。
+- 回归 131/131 · verify_fixes 203/0 · doc_drift 14/14 · node --check OK · code-reviewer 复核（0 Critical/High，1 Medium `$` 展开已修）。
+- 镜像重建=HEAD（env_store / api_key_set / review.js key 字段 / load_provider_keys 全中），`/check_auth`=200。
+- 浏览器实测：面板新增测试 provider（localhost base_url + key）→ 保存 → 生成 `qa_test`（runtime_config 仅存 api_key_env，
+  明文 key 落 `data/llm_provider_keys.env`）→ `/admin/llm_providers` `api_key_set=true` → 已清理测试 provider 与 env 行。
+
+## ⑩ 追加发现（多 worker 可见性，FIX-049 修正 commit 79a5f19）
+- 现象：保存后 `/admin/llm_providers` 一度 `api_key_set=false`。
+- 根因：gunicorn 4 worker，`write_env_var` 只改了处理保存请求那个进程的 `os.environ`，其余 worker 读不到。
+- 修复：`env_store.get_env()/has_env_var()` 按 mtime **懒加载** `data/llm_provider_keys.env`（override）；
+  `llm_provider/llm_fallback/llm_catalog/chat_config/admin_regeneration` 的 key 读取点统一改用 `env_store.get_env`。
+- 复验：重建后 `api_key_set=true`；独立进程 `has_env_var` 亦 True。
 
 ## 备注
 - Docker 内根 `.env` 非挂载（compose 插值注入），故主持久化为 `data/llm_provider_keys.env`（`app_data` 卷）；
