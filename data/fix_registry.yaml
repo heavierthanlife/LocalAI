@@ -1297,7 +1297,7 @@ fixes:
         pattern: "Refreshed models for"
       - type: literal
         file: app/routes/admin_regeneration.py
-        pattern: "'api_key_set': bool"
+        pattern: "'api_key_set': _env_has"
 
   - id: FIX-2026-09-11-050
     title: "LLM 提供商管理 UI：API Key 输入 + key 状态角标 + 说明"

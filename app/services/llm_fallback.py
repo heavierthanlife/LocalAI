@@ -207,8 +207,9 @@ def create_chat_model_with_fallback(
 
 def _has_api_key(provider_id: str) -> bool:
     from app.services.llm_provider import PROVIDER_CONFIG
+    from app.services.env_store import get_env as _env_get
     cfg = PROVIDER_CONFIG.get(provider_id)
     if not cfg:
         return False
-    key = os.getenv(cfg["env_key"], "").strip()
+    key = (_env_get(cfg["env_key"]) or "").strip()
     return bool(key)

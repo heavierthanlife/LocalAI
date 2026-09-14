@@ -94,7 +94,40 @@ def write_env_var(key, value, paths=None):
 
 
 def has_env_var(key) -> bool:
-    return bool(os.getenv(key or '', '').strip())
+    return bool((get_env(key) or '').strip())
+
+
+_loaded_mtime = None
+
+
+def _ensure_loaded():
+    """Load the persistent provider env file into os.environ if it changed
+    (cheap mtime check). Covers multi-worker setups (gunicorn) where only the
+    worker that handled the save has the var in its own ``os.environ``."""
+    global _loaded_mtime
+    try:
+        mtime = PROVIDER_KEYS_PATH.stat().st_mtime if PROVIDER_KEYS_PATH.exists() else None
+    except OSError:
+        mtime = None
+    if mtime is None or mtime == _loaded_mtime:
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(str(PROVIDER_KEYS_PATH), override=True)
+        _loaded_mtime = mtime
+    except Exception as e:
+        logger.warning(f'env_store: reload provider keys failed: {e}')
+
+
+def get_env(key, default=None):
+    """Read an env var, lazily reloading the persistent provider file so
+    admin-added keys are visible to every worker process."""
+    key = key or ''
+    val = os.getenv(key)
+    if val:
+        return val
+    _ensure_loaded()
+    return os.getenv(key, default)
 
 
 def load_provider_keys():

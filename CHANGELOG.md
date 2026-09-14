@@ -11,7 +11,7 @@ All notable changes to 中联招标智能助手.
 ## [2026-09-11] — LLM 提供商管理补齐：key 落 .env + 自动拉模型（FIX-049/050）
 
 ### Added
-- **`app/services/env_store.py`**：`write_env_var()` 以 `KEY=value` **原子 upsert** 并同步 `os.environ`；**双写** `data/llm_provider_keys.env`（持久，Docker `app_data` 卷）与根 `.env`（存在时，本地开发）；`load_provider_keys()` 启动加载（`app/__init__.py`；celery worker 经 `create_app` 覆盖）。
+- **`app/services/env_store.py`**：`write_env_var()` 以 `KEY=value` **原子 upsert** 并同步 `os.environ`；**双写** `data/llm_provider_keys.env`（持久，Docker `app_data` 卷）与根 `.env`（存在时，本地开发）；`load_provider_keys()` 启动加载（`app/__init__.py`；celery worker 经 `create_app` 覆盖）。**多 worker 修正**：`get_env()`/`has_env_var()` 按 mtime **懒加载**该文件（override），未处理保存请求的 gunicorn worker 也能读到新 key；LLM key 读取点（`llm_provider` / `llm_fallback` / `llm_catalog` / `chat_config` / `admin_regeneration`）统一改用 `env_store.get_env`。
 - **保存即生效**：`update_runtime_config` 保存 `llm_custom_providers` 时，将字面 `api_key` 写入 env 存储（**明文永不落 runtime_config.json**，条目只留 `api_key_env`），并用刚写入的 key **对每个自定义 provider 调 `/models` 回写模型列表** + 清 agent 缓存 → 模型下拉无需手动刷新。
 - **UI（review.js）**：自定义 Provider 行编辑器新增 **API Key 密码框**（只写不回显）+ ✓/✗ **key 状态角标**（来自 `/admin/llm_providers.api_key_set`）+ 使用说明；dirty 跟踪纳入 `api_key`。
 

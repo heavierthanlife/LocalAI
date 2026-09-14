@@ -1139,7 +1139,8 @@ def update_runtime_config():
                 entry = dict(entry)
                 base_url = (entry.get('base_url') or '').strip()
                 env_key = (entry.get('api_key_env') or '').strip()
-                api_key = os.getenv(env_key) or None
+                from app.services.env_store import get_env as _env_get
+                api_key = _env_get(env_key) or None
                 models = []
                 if base_url:
                     try:
@@ -1397,6 +1398,7 @@ def admin_llm_providers():
     """Return full provider info with model lists for admin config panel."""
     from app.services.llm_provider import get_merged_provider_config
     from app.services.runtime_config import get as rc_get
+    from app.services.env_store import has_env_var as _env_has
 
     active_provider = rc_get('active_llm_provider', '') or 'auto'
     active_model = rc_get('active_llm_model', '') or 'auto'
@@ -1408,7 +1410,7 @@ def admin_llm_providers():
             'name': cfg.get('name', pid),
             'models': cfg.get('models', []),
             'default_model': cfg.get('default_model', ''),
-            'api_key_set': bool((os.getenv(cfg.get('env_key') or '', '') or '').strip()),
+            'api_key_set': _env_has(cfg.get('env_key')),
             'custom': bool(cfg.get('custom')),
         }
 
@@ -1452,7 +1454,8 @@ def admin_llm_provider_models(pid):
     refresh = request.args.get('refresh')
     if refresh == '1':
         # 实时拉取：自定义 provider 用其 env_key 读 API key，免费过滤仅限内置 provider
-        api_key = os.getenv(cfg.get('env_key', '')) or None
+        from app.services.env_store import get_env as _env_get
+        api_key = _env_get(cfg.get('env_key')) or None
         free_only = not cfg.get('custom')
         models = []
         try:

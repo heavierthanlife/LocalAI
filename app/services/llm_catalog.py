@@ -153,7 +153,8 @@ def refresh_catalog() -> dict:
         base_url = str(cfg.get('base_url') or '').strip()
         if not base_url:
             continue
-        api_key = os.getenv(str(cfg.get('env_key') or ''), '').strip() or None
+        from app.services.env_store import get_env as _env_get
+        api_key = (_env_get(str(cfg.get('env_key') or '')) or '').strip() or None
         free_only = (pid in static_ids) or (cfg.get('custom') is not True)
         models = _fetch_provider_models(base_url, api_key=api_key, free_only=free_only)
         for m in models:

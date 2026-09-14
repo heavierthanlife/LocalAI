@@ -1721,6 +1721,21 @@ def test_env_store_no_dollar_expansion(tmp_path):
     os.environ.pop('LLM_CUSTOM_KEY_QA_DOLLAR', None)
 
 
+def test_env_store_get_env_lazy_multworker(tmp_path, monkeypatch):
+    # FIX-049: another worker must see a key written by a different worker —
+    # get_env() lazily reloads the persistent file when os.environ lacks it.
+    import os
+    from app.services import env_store
+    p = tmp_path / 'lazy.env'
+    p.write_text('LLM_CUSTOM_KEY_LAZY=fromfile\n', encoding='utf-8')
+    monkeypatch.setattr(env_store, 'PROVIDER_KEYS_PATH', p)
+    monkeypatch.setattr(env_store, '_loaded_mtime', None)
+    os.environ.pop('LLM_CUSTOM_KEY_LAZY', None)
+    assert env_store.get_env('LLM_CUSTOM_KEY_LAZY') == 'fromfile'
+    assert env_store.has_env_var('LLM_CUSTOM_KEY_LAZY') is True
+    os.environ.pop('LLM_CUSTOM_KEY_LAZY', None)
+
+
 def test_provider_key_pipeline_source():
     # backend wiring
     assert 'def write_env_var' in _read('app/services/env_store.py')
@@ -1728,7 +1743,7 @@ def test_provider_key_pipeline_source():
     adm = _read('app/routes/admin_regeneration.py')
     assert 'write_env_var(env_key, api_key)' in adm
     assert 'Refreshed models for' in adm
-    assert "'api_key_set': bool" in adm
+    assert "'api_key_set': _env_has" in adm
     # frontend editor + badge
     rev = _read('static/js/review.js')
     assert 'json-list-api-key' in rev

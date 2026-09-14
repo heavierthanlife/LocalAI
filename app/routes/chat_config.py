@@ -85,7 +85,8 @@ def get_llm_provider_models(pid):
     refresh = request.args.get('refresh')
     if refresh == '1':
         # 实时拉取：自定义 provider 用其 env_key 读 API key，免费过滤仅限内置 provider
-        api_key = os.getenv(cfg.get('env_key', '')) or None
+        from app.services.env_store import get_env as _env_get
+        api_key = _env_get(cfg.get('env_key')) or None
         free_only = not cfg.get('custom')
         models = []
         try:

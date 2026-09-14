@@ -126,13 +126,14 @@ def validate_custom_provider(entry) -> tuple:
 
 def get_available_providers() -> list[str]:
     """Return list of provider IDs that have API keys configured."""
+    from app.services.env_store import get_env as _env_get
     merged = get_merged_provider_config()
     available = []
     for pid, cfg in merged.items():
         env_key = (cfg.get('env_key') or '').strip()
         if not env_key:
             continue
-        if os.getenv(env_key, '').strip():
+        if (_env_get(env_key) or '').strip():
             available.append(pid)
     return available
 
@@ -176,8 +177,9 @@ def _create_chat_model_direct(
     Custom providers (llm_custom_providers) are also supported via the merged view.
     """
     from app.services.runtime_config import get as rc_get
+    from app.services.env_store import get_env as _env_get
     cfg = get_provider_config(provider_id)
-    api_key = os.getenv(cfg['env_key'], '').strip()
+    api_key = (_env_get(cfg['env_key']) or '').strip()
     if not api_key:
         raise RuntimeError(f"API key for {cfg['name']} not set ({cfg['env_key']}).")
     final_model = model or cfg['default_model']
