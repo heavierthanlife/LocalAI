@@ -1335,3 +1335,18 @@ fixes:
       - type: literal
         file: static/js/review.js
         pattern: "无模型：请点「刷新模型」或检查 base_url / API Key"
+
+  - id: FIX-2026-09-11-052
+    title: "Docker HF 模型缓存持久化（HF_HOME → app_data 卷）"
+    severity: medium
+    rationale: >
+      容器无 HF 缓存挂载，sentence-transformers / Headroom-Kompress 模型下到临时层，
+      --force-recreate 后丢失并重复下载。给 app/celery-worker/celery-beat 设
+      HF_HOME=/app/data/hf_cache（既有持久 app_data 卷，三服务共享），Dockerfile 预建目录。
+    checks:
+      - type: literal
+        file: docker-compose.yml
+        pattern: "HF_HOME=/app/data/hf_cache"
+      - type: literal
+        file: Dockerfile
+        pattern: "/app/data/hf_cache"

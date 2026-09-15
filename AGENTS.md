@@ -179,6 +179,7 @@ Every feature upgrade must include regression verification:
 | `BOCHA_API_KEY` | No | Web search tool |
 | `LOG_LEVEL` | No | Root logger level (`INFO`/`DEBUG`). Default: `INFO` |
 | `MAX_CONCURRENT_UPLOADS` | No | Concurrent file processing limit. Default: `3` |
+| `HF_HOME` | No | HuggingFace model cache. Docker 下设为 `/app/data/hf_cache`（落在 `app_data` 卷，跨 recreate 持久；sentence-transformers + Headroom/Kompress 模型只下一次）；本地默认 `~/.cache/huggingface` |
 
 Full list in `.env.example`.
 
@@ -224,6 +225,7 @@ Auto-downloaded via `webdriver-manager` on first use. Can override with `EDGEDRI
 - Windows users: UTF-8 encoding fixes are applied in `run.py` for emoji/log compatibility
 - Celery tasks call `init_flask_context()` to get DB access (one-time per worker)
 - DB connections are validated with `SELECT 1` on checkout from the pool. Stale connections are closed and retried once.
+- **Headroom (`headroom-ai`) 实测基本不压缩**：`ContentRouter` 在上下文压力低时阈值 `min_ratio≈0.85` → 短输入直接 `router:noop`；且 `compress_file_content`/`compress_search_results` 传单条 message，受默认 `protect_recent=4` 保护；Kompress 模型为英文。故其拉取的 Kompress ONNX + ModernBERT tokenizer 模型虽在 HF 缓存中，但大多不产生 token 节省。
 
 ## Shared Agent Infrastructure
 

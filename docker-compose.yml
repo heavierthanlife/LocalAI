@@ -47,6 +47,10 @@ services:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       # Credit Checker
       - CREDIT_BROWSER_HEADLESS=true
+      # HuggingFace cache → persistent app_data volume (survives recreate; shared
+      # by app/worker so sentence-transformers + Headroom/Kompress download once).
+      - HF_HOME=/app/data/hf_cache
+      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
     volumes:
       # Persistent data — survives container restarts
       - app_data:/app/data
@@ -133,6 +137,8 @@ services:
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
       - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
       - LLM_TIMEOUT=120
+      - HF_HOME=/app/data/hf_cache
+      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
@@ -160,6 +166,8 @@ services:
       - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
       - REDIS_URL=redis://redis:6379/0
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
+      - HF_HOME=/app/data/hf_cache
+      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs

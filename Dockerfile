@@ -57,7 +57,7 @@ COPY --chown=localai:localai . .
 # ── Data directories ──
 RUN mkdir -p /app/data/user_files /app/data/project_files /app/data/credit_reports \
     /app/data/temp /app/data/dump /app/data/flask_session /app/data/search_cache \
-    /app/data/notebooks /app/logs /app/cert \
+    /app/data/notebooks /app/data/hf_cache /app/logs /app/cert \
     && chown -R localai:localai /app/data /app/logs
 
 # ── Runtime ──

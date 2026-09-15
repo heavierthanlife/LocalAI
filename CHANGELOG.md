@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-15] — Docker HF 模型缓存持久化（FIX-052）+ Headroom 实测
+
+### Changed
+- **Docker HF 缓存持久化**：`docker-compose.yml` 给 `app` / `celery-worker` / `celery-beat` 增设 `HF_HOME=/app/data/hf_cache`（+ `HF_HUB_DISABLE_SYMLINKS_WARNING=1`），模型缓存落到既有持久 `app_data` 卷；`Dockerfile` 预建 `hf_cache` 目录。此前容器无 HF 缓存，sentence-transformers / Headroom-Kompress 模型会下到临时层、`--force-recreate` 后丢失并重复下载。现跨 recreate 保留（app 与 worker 共享）。
+
+### Findings（实测，无代码改动）
+- **Headroom 基本不压缩**：`headroom-ai 0.27.0` 已接入（`chat.py`/`agent.py`，`runtime_config.headroom_enabled` 默认 True），但实测 `ContentRouter` 在上下文压力低时阈值 `min_ratio≈0.85` → 短/中文本直接 `router:noop`（host Windows 与容器 Linux 均 `saved=0`）；`compress_file_content`/`compress_search_results` 传单条 message 还受默认 `protect_recent=4` 保护；Kompress 为英文模型。结论：其拉取的 Kompress ONNX + ModernBERT tokenizer 模型大多不产生 token 节省。已在 `AGENTS.md` Gotchas 记录。
+
+### Added
+- fix_registry `FIX-2026-09-11-052`（HF_HOME 持久化）；`AGENTS.md` 环境变量表新增 `HF_HOME`。
+
+### regression: 1/1 clearance baseline passed（无代码路径改动）
+132/132 regression · verify_fixes 208/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-11] — 运行配置 LLM 选择器纳入自定义提供商（FIX-051）
 
 ### Fixed
