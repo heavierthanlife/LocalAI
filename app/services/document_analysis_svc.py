@@ -141,7 +141,7 @@ def _run_checker(name, file_data, user_id, thread_id, tender_text=None, extra_st
     try:
         if name == 'skip':
             # Network/data-source dependent indicator — placeholder per design.
-            return {'skipped': True, 'error': '需外部数据源（交易平台/评标系统数据）'}
+            return {'skipped': True, 'error': '需交易平台数据（当前不可用）'}
 
         if name == 'text_sim':
             # 未提供招标文件时，无法去除招标模板 → 高余弦多是模板重叠，不是围标证据。
@@ -600,9 +600,14 @@ def run_analysis(file_data, user_id=None, thread_id=None, tender_text=None,
                 result_text = f"○ 跳过（{error_msg}）"
 
         else:
-            # Data-source dependent indicator — skipped placeholder
+            # Data-source dependent indicator — skipped placeholder. Surface the
+            # indicator's own skip_reason (e.g. "无标段分组输入") so users know
+            # exactly what input is missing (not a system fault).
             skipped = True
-            result_text = '○ 需外部数据源（交易平台/评标系统数据）'
+            skip_reason_text = ind.get('skip_reason', '')
+            result_text = '○ 需交易平台数据（当前不可用）'
+            if skip_reason_text:
+                result_text += f'（{skip_reason_text}）'
 
         # OPEN_INFO / TENDER indicators: override with real computed results
         oi = open_info_results.get(ind['id'])

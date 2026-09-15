@@ -90,6 +90,15 @@
 
 评分体系详见 `AGENTS.md` §清标评分。
 
+#### 休眠指标分类（34/45 项 `checker: 'skip'`）
+这 34 项不接入中国电子招投标平台/评标系统，按能否由**上传数据**激活分两类；未提供数据时报告显示「○ 需交易平台数据（当前不可用）（<skip_reason>）」，属设计行为而非故障：
+
+- **可由"开标信息表 / 评审标准"激活（13 项）** —— `clearance_openinfo.py`（`compute_open_info_indicators` / `_platform_signals`）：`same_dongle`、`bid_ip_same`、`decrypt_ip_same`、`download_ip_same`（开标表平台列：加密锁/上传IP/解密IP/下载IP，跨单位重复即触发）、`candidate_give_up`、`subjective_expert_spread`、`subjective_expert_units`、`clique_expert_scoring`、`clique_expert_consistency`、`objective_score_abnormal`、`extension_abnormal`、`waste_rate_abnormal`、`expert_deviation_abnormal`（需 `EXTRA_COLUMNS`：中标/评分/废标/专家等列）。
+- **恒不可用（21 项，依赖交易平台或评标系统原始数据，无计算路径）**：`cross_file_code_same`、`cross_bid_ip`、`cross_decrypt_ip`、`cross_download_ip`、`cross_dongle`、`cross_machine_code`（跨标段族，`skip_reason`=无标段分组输入）、`tender_query`(招标质疑)、`low_win_rate`/`high_win_rate`(中标率)、`upload_interval_abnormal`、`specific_expert_score`、`tender_fail_abnormal`、`download_no_bid`、`no_show_abnormal`、`bidder_agent_contact`、`expert_tenderer_closeness`/`expert_agent_closeness`/`expert_bidder_closeness`、`bad_expert_score`、`tech_score_abnormal`/`commercial_score_abnormal`。
+
+> 定位：本系统是**投标文件分析工具**，非交易平台对接工具。上述 21 项需各地交易中心/评标系统接口，未纳入开发范围。
+> （注：`same_file_code` / `contact_person_same` / `contact_phone_abnormal` / `bidder_count_abnormal` 等**不属于** skip 族，走各自 checker。）
+
 ### 5. 串通投标检测 `batch_orchestrator.py`
 - RiskScorer（0.375 key + 0.375 attr + 0.25 text）
 - TF-IDF 文本相似度（≥80% 门槛）

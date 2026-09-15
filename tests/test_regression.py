@@ -1758,4 +1758,16 @@ def test_custom_provider_selectable_in_runtime_schema():
     assert '无模型：请点「刷新模型」或检查 base_url / API Key' in _read('static/js/review.js')
 
 
+# ── FIX-2026-09-11-053: 移除 Headroom + 休眠指标文案 ──
+def test_headroom_removed_and_skip_label():
+    req = _read('requirements.txt')
+    assert 'headroom-ai' not in req, "headroom-ai 应已移除"
+    assert 'magika' not in req, "magika 应已移除"
+    assert 'onnxruntime' not in req, "onnxruntime 应已移除"
+    da = _read('app/services/document_analysis_svc.py')
+    assert '需交易平台数据（当前不可用）' in da
+    assert '需外部数据源（交易平台/评标系统数据）' not in da
+    assert '休眠指标分类' in _read('docs/ARCHITECTURE.md')
+
+
 

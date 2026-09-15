@@ -8,6 +8,23 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-15] — 移除 Headroom/Kompress + 休眠指标文案明确化（FIX-053）
+
+### Removed
+- `requirements.txt` 移除 `headroom-ai==0.27.0`、`magika==0.6.3`、`onnxruntime==1.20.1`。实测 headroom 对**中文招标文本零压缩**（Kompress 为英文模型 + `ContentRouter` 上下文压力低时 `min_ratio≈0.85` 直接 `router:noop` + 单条消息受默认 `protect_recent=4` 保护），且其 Kompress/ModernBERT 模型占用 HF 缓存 ~0.85GB。`app/utils/headroom_utils.py` **保留为 soft no-op**（`import headroom` 失败 → `_available=False` → `compress_*` 原样返回），`chat.py`/`agent.py` 调用点不改 → **零回归**。
+
+### Changed
+- **休眠指标文案**：34/45 `checker:'skip'` 指标的占位串由「○ 需外部数据源（交易平台/评标系统数据）」改为「**○ 需交易平台数据（当前不可用）**」，并追加各自 `skip_reason`（如"无标段分组输入"）→ 用户可明确这是**平台对接缺失**而非系统故障。
+- `docs/ARCHITECTURE.md` 清标章节新增「**休眠指标分类**」：13 项可由"开标信息表/评审标准"激活，21 项恒不可用（依赖交易平台/评标系统）。
+
+### Added
+- fix_registry `FIX-2026-09-11-053`；回归 `test_headroom_removed_and_skip_label`。
+
+### regression: 1/1 clearance baseline passed（无清标算法改动）
+133/133 regression · verify_fixes 213/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-15] — Docker HF 模型缓存持久化（FIX-052）+ Headroom 实测
 
 ### Changed

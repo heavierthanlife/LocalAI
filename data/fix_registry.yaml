@@ -1350,3 +1350,29 @@ fixes:
       - type: literal
         file: Dockerfile
         pattern: "/app/data/hf_cache"
+
+  - id: FIX-2026-09-11-053
+    title: "移除 Headroom/Kompress（对中文零压缩）+ 休眠指标文案明确化"
+    severity: medium
+    rationale: >
+      实测 headroom 对中文招标文本零压缩（Kompress 英文模型 + ContentRouter min_ratio≈0.85
+      跳过 + 单条消息 protect_recent=4），且其模型占用 HF 缓存 ~0.85GB。移除 headroom-ai/
+      magika/onnxruntime；headroom_utils 保留为 soft no-op（ImportError→_available=False→原样
+      返回）。同时把休眠指标的占位文案由「需外部数据源（交易平台/评标系统数据）」改为
+      「需交易平台数据（当前不可用）」并附 skip_reason，减少误解。
+    checks:
+      - type: literal_not
+        file: requirements.txt
+        pattern: "headroom-ai"
+      - type: literal_not
+        file: requirements.txt
+        pattern: "magika"
+      - type: literal
+        file: app/services/document_analysis_svc.py
+        pattern: "需交易平台数据（当前不可用）"
+      - type: literal_not
+        file: app/services/document_analysis_svc.py
+        pattern: "需外部数据源（交易平台/评标系统数据）"
+      - type: literal
+        file: docs/ARCHITECTURE.md
+        pattern: "休眠指标分类"
