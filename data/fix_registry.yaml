@@ -1595,3 +1595,6 @@ fixes:
       - type: literal
         file: scripts/check_doc_drift.py
         pattern: "extended_laws.json"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "./data/laws:/app/data/laws:ro"

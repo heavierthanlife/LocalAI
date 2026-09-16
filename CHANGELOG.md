@@ -16,6 +16,7 @@ All notable changes to 中联招标智能助手.
 
 ### Changed
 - **README 法规库口径 4 → 15 部**；`scripts/check_doc_drift.py::_count_laws` 口径同步为「已加载法规数」=15。
+- **`docker-compose.yml` 修复潜在生产缺陷**：为 app/celery-worker/celery-beat 增加 `./data/laws:/app/data/laws:ro` 只读绑定——`/app/data` 是 `app_data` 卷，会遮蔽镜像内 `data/laws`，**此前 Docker 下合规引擎加载 0 部法规**。修复后容器内 `_get_seed_laws()` 返回 15 部/619 条。
 - `data/fix_registry.yaml`：`FIX-2026-09-15-058`（6 不变量）；回归新增 `test_compliance_law_pool_expanded` / `test_compliance_core_law_guard_wired`。
 - `scripts/fetch_extended_laws.py`：解析器加行首约束（剔除正文内交叉引用）+ law-name 校验守卫（错页拒绝）。
 

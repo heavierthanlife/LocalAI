@@ -58,6 +58,10 @@ services:
       # Read-only code asset: industry word tables (baked into image too, but
       # app_data volume would shadow /app/data — bind-mount explicitly)
       - ./data/industry_words:/app/data/industry_words:ro
+      # Read-only code asset: built-in laws (seed_laws + extended_laws).
+      # /app/data is the app_data volume, which shadows the baked data/laws —
+      # without this bind mount the compliance engine loads 0 laws (FIX-058).
+      - ./data/laws:/app/data/laws:ro
       # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
@@ -143,6 +147,10 @@ services:
       - app_data:/app/data
       - app_logs:/app/logs
       - ./data/industry_words:/app/data/industry_words:ro
+      # Read-only code asset: built-in laws (seed_laws + extended_laws).
+      # /app/data is the app_data volume, which shadows the baked data/laws —
+      # without this bind mount the compliance engine loads 0 laws (FIX-058).
+      - ./data/laws:/app/data/laws:ro
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
@@ -172,6 +180,10 @@ services:
       - app_data:/app/data
       - app_logs:/app/logs
       - ./data/industry_words:/app/data/industry_words:ro
+      # Read-only code asset: built-in laws (seed_laws + extended_laws).
+      # /app/data is the app_data volume, which shadows the baked data/laws —
+      # without this bind mount the compliance engine loads 0 laws (FIX-058).
+      - ./data/laws:/app/data/laws:ro
     depends_on:
       postgres:
         condition: service_healthy
