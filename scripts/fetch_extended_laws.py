@@ -41,7 +41,8 @@ UA = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 # national-only (广东省 办法 excluded — see UNRESOLVED-026).
 SOURCES = [
     {"law_name": "政府采购法实施条例", "short_name": "政府采购法实施条例", "category": "行政法规",
-     "query": "政府采购法实施条例 国务院令第658号 全文", "domains": ["gov.cn", "mof.gov.cn"]},
+     "query": "政府采购法实施条例", "domains": ["gov.cn"],
+     "url": "http://www.gov.cn/gongbao/content/2015/content_2827183.htm"},
     {"law_name": "工程建设项目施工招标投标办法", "short_name": "工程施工招标投标办法", "category": "部门规章",
      "query": "工程建设项目施工招标投标办法 七部委30号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"],
      "url": "https://www.gov.cn/zhengce/2021-11/30/content_5713206.htm"},
@@ -52,9 +53,11 @@ SOURCES = [
      "query": "必须招标的工程项目规定 发改委16号令 全文", "domains": ["gov.cn"],
      "url": "https://www.gov.cn/gongbao/content/2018/content_5296544.htm"},
     {"law_name": "政府采购货物和服务招标投标管理办法", "short_name": "政府采购87号令", "category": "部门规章",
-     "query": "政府采购货物和服务招标投标管理办法 财政部87号令 全文", "domains": ["mof.gov.cn", "gov.cn"]},
+     "query": "政府采购货物和服务招标投标管理办法", "domains": ["gov.cn"],
+     "url": "http://www.gov.cn/gongbao/content/2017/content_5241918.htm"},
     {"law_name": "政府采购非招标采购方式管理办法", "short_name": "政府采购74号令", "category": "部门规章",
-     "query": "政府采购非招标采购方式管理办法 财政部74号令 全文", "domains": ["mof.gov.cn", "gov.cn"]},
+     "query": "政府采购非招标采购方式管理办法", "domains": ["gov.cn"],
+     "url": "http://www.gov.cn/gongbao/content/2014/content_2644816.htm"},
     {"law_name": "政府采购质疑和投诉办法", "short_name": "政府采购94号令", "category": "部门规章",
      "query": "政府采购质疑和投诉办法 财政部94号令 全文", "domains": ["mof.gov.cn", "gov.cn"]},
     {"law_name": "电子招标投标办法", "short_name": "电子招标投标办法", "category": "部门规章",
@@ -115,8 +118,27 @@ def _strip_html(src: str) -> str:
     return src.strip()
 
 
+def _gov_search(query: str, n: int = 10):
+    """gov.cn 政策库 search API (searchfield=title) → candidate URLs."""
+    url = ('https://sousuo.www.gov.cn/search-gov/data?t=zhengcelibrary&q='
+           + urllib.parse.quote(query)
+           + '&searchfield=title&sort=score&sortType=1&p=1&n=' + str(n))
+    hdr = dict(UA)
+    hdr['Referer'] = 'https://sousuo.www.gov.cn/'
+    hdr['Accept'] = 'application/json, text/plain, */*'
+    with urllib.request.urlopen(urllib.request.Request(url, headers=hdr), timeout=25) as r:
+        j = json.loads(r.read().decode('utf-8', 'replace'))
+    urls = []
+    for cat in (j.get('catMap') or {}).values():
+        for it in (cat.get('listVO') or []):
+            u = it.get('url')
+            if u and u not in urls:
+                urls.append(u)
+    return urls
+
+
 def _discover_candidates(query: str):
-    """Return candidate result URLs. Bing RSS first (parseable), then DDG html."""
+    """Return candidate result URLs. gov.cn 政策库 API first, then Bing RSS / DDG."""
     out = []
 
     def _abs(u):
@@ -124,7 +146,16 @@ def _discover_candidates(query: str):
             return 'https:' + u
         return u
 
-    # 1) Bing RSS — compact and machine-friendly
+    # 1) gov.cn 政策库 search API — authoritative and reliable
+    try:
+        for link in _gov_search(query):
+            link = _abs(link)
+            if link not in out:
+                out.append(link)
+    except Exception:
+        pass
+
+    # 2) Bing RSS — compact and machine-friendly
     try:
         url = ('https://www.bing.com/search?q=' + urllib.parse.quote(query)
                + '&format=rss&count=20')
@@ -132,15 +163,14 @@ def _discover_candidates(query: str):
             xml = r.read().decode('utf-8', 'replace')
         for link in re.findall(r'<link>(https?://[^<]+)</link>', xml):
             link = _abs(link)
-            if 'bing.com' in link:
+            if 'bing.com' in link or link in out:
                 continue
-            if link not in out:
-                out.append(link)
+            out.append(link)
     except Exception:
         pass
 
-    # 2) DuckDuckGo html (uddg=<urlencoded>) as fallback
-    if not out:
+    # 3) DuckDuckGo html (uddg=<urlencoded>) as last resort
+    if len(out) < 3:
         try:
             url = 'https://duckduckgo.com/html/?q=' + urllib.parse.quote(query)
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=25) as r:
@@ -152,13 +182,6 @@ def _discover_candidates(query: str):
         except Exception:
             pass
     return out
-
-
-def _discover_url(query: str, domains) -> str:
-    for link in _discover_candidates(query):
-        if any(d in link for d in domains):
-            return link
-    return ''
 
 
 def _fetch(url: str) -> str:
@@ -184,6 +207,13 @@ def _parse_articles(text: str):
     accepted = []
     expected = 1
     for m in ART_MARK.finditer(body):
+        # A real article begins a paragraph; an in-text cross-reference (e.g.
+        # "政府采购法第三十条…") does not — require the marker to start a line.
+        j = m.start() - 1
+        while j >= 0 and body[j] in ' \t\u3000':
+            j -= 1
+        if j >= 0 and body[j] != '\n':
+            continue
         n = _cn_num(m.group(0)[1:-1])
         if n == expected:
             accepted.append((m.start(), m.group(0), n))
@@ -193,7 +223,7 @@ def _parse_articles(text: str):
     for i, (pos, marker, n) in enumerate(accepted):
         end = accepted[i + 1][0] if i + 1 < len(accepted) else len(body)
         content = body[pos + len(marker):end].strip()
-        if len(content) < 8:
+        if not content:
             continue
         arts.append({
             'article': f'第{n}条',
@@ -205,42 +235,70 @@ def _parse_articles(text: str):
 
 def process(src: dict, dry: bool):
     law = src['law_name']
-    url = src.get('url') or ''
-    if not url:
+    short = src.get('short_name', law)
+    if src.get('url'):
+        cands = [src['url']]
+    else:
+        cands = []
+        for q in (law, src.get('query', '')):
+            if not q:
+                continue
+            try:
+                cands = _discover_candidates(q)
+            except Exception as e:
+                print(f'  [SEARCH-FAIL] {law}: {e}')
+                continue
+            if len(cands) >= 3:
+                break
+    if not cands:
+        print(f'  [NO-URL] {law}')
+        return None
+
+    # Only trust www.gov.cn/gov.cn pages (国务院公报/政策库 host full texts;
+    # ministry mirrors are often truncated, which would corrupt compliance data).
+    cands = [u for u in dict.fromkeys(cands)
+             if re.match(r'https?://(www\.)?gov\.cn/', u)]
+    if not cands:
+        print(f'  [NO-GOV-URL] {law}: no www.gov.cn source found')
+        return None
+
+    # Prefer gov.cn 公报 / 政策库 full-text pages.
+    def _rank(u):
+        if 'gov.cn/gongbao/' in u:
+            return 0
+        if 'gov.cn/zhengce' in u:
+            return 1
+        return 2
+    cands = sorted(cands, key=_rank)
+
+    for url in cands[:8]:
         try:
-            url = _discover_url(src['query'], src.get('domains', ['gov.cn']))
+            page = _fetch(url)
         except Exception as e:
-            print(f'  [SEARCH-FAIL] {law}: {e}')
-            return None
-    if not url:
-        print(f'  [NO-URL] {law}: no result on {src.get("domains")}')
-        return None
-    try:
-        page = _fetch(url)
-    except Exception as e:
-        print(f'  [FETCH-FAIL] {law}: {e}')
-        return None
-    text = _strip_html(page)
-    if src['law_name'] not in text and src['short_name'] not in text:
-        print(f'  [VALIDATE-FAIL] {law}: page does not contain the law name (wrong URL?)')
-        return None
-    arts = _parse_articles(text)
-    print(f'  {law}: url={url[:80]} articles={len(arts)}')
-    if not arts:
-        return None
-    return {
-        'law_name': law,
-        'short_name': src['short_name'],
-        'category': src['category'],
-        'scope': 'national',
-        'source_url': url,
-        'fetched_at': datetime.date.today().isoformat(),
-        'versions': [{
-            'version_label': src.get('version_label', ''),
-            'is_current': True,
-            'articles': arts,
-        }],
-    }
+            print(f'  [FETCH-FAIL] {law}: {e} ({url[:60]})')
+            continue
+        text = _strip_html(page)
+        if law not in text and short not in text:
+            continue
+        arts = _parse_articles(text)
+        if len(arts) < 3:           # skip 批复/short notice pages
+            continue
+        print(f'  {law}: url={url[:90]} articles={len(arts)}')
+        return {
+            'law_name': law,
+            'short_name': short,
+            'category': src['category'],
+            'scope': 'national',
+            'source_url': url,
+            'fetched_at': datetime.date.today().isoformat(),
+            'versions': [{
+                'version_label': src.get('version_label', ''),
+                'is_current': True,
+                'articles': arts,
+            }],
+        }
+    print(f'  [FAIL] {law}: no candidate yielded valid full text ({len(cands)} tried)')
+    return None
 
 
 def main():
