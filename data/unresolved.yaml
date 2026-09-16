@@ -265,3 +265,103 @@ unresolved:
     resolution_plan: >
       若要接线：在 llm_provider 的模型创建处包裹 create_chat_model_with_fallback，
       并补一个失败切换的回归测试。否则保持文档如实描述单供应商直连。
+
+  # ============================================================================
+  # P2 立项（2026-09-15 审计拍板：仅记录规格，不实现）
+  # ============================================================================
+
+  - id: UNRESOLVED-019
+    title: "P2-立项：多标段分组（激活 6 个 cross_* 串标指标）"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "清标", "规格立项"]
+    context: >
+      清标引擎已实现 6 个跨投标人信号（cross_same_rate / cross_clustering /
+      cross_tailing_digits / cross_progression / cross_progression_type /
+      cross_*），但仅对「同标段」报价聚合。多标段（一个项目拆多个标段）场景下
+      需先按标段分组再聚合信号。
+    resolution_plan: >
+      立项规格：投标人→标段映射表 + 按标段分组聚合 cross_* 指标；投标人跨标段
+      报价一致性检测（同一投标人多个标段报价尾数/梯度雷同）。数据模型与 API
+      契约待定，不实现。
+
+  - id: UNRESOLVED-020
+    title: "P2-立项：工程量清单/综合单价/报价明细勾稽"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "清标", "规格立项"]
+    context: >
+      当前 quote 指标依赖结构化开标报价；工程量清单（BoQ）综合单价×工程量=合价、
+      报价明细与清单项勾稽、不平衡报价检测均未实现。
+    resolution_plan: >
+      立项规格：BoQ 解析（分部分项/措施/其他项目/规费税金）+ 综合单价与合价
+      勾稽 + 不平衡报价/漏项/多项检测。输入格式与置信度门槛待定，不实现。
+
+  - id: UNRESOLVED-021
+    title: "P2-立项：评标办法打分录入/评标报告"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "规格立项"]
+    context: >
+      平台无评标办法（综合评分法/最低价法）结构化管理，无专家打分录入与
+      自动评标报告生成。
+    resolution_plan: >
+      立项规格：评标办法模板（评分项/权重/否决条款）+ 专家打分录入 + 汇总得分
+      与排序 + 评标报告（DOCX/PDF）。后端表结构与前端交互待定，不实现。
+
+  - id: UNRESOLVED-022
+    title: "P2-立项：招标代理流程看板（workflow_service 接线即用）"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "规格立项"]
+    context: >
+      app/services/workflow_service.py 已硬编码 15 里程碑 × 3 步骤
+      （受理/编审/开标评标/定标等），但无前端接线、无项目状态驱动。
+    resolution_plan: >
+      立项规格：按招标方式自动实例化里程碑 → 项目维度看板（当前节点/逾期/提醒）
+      → 节点操作（标记完成/退回）。workflow_service 无需重写，只做接线，
+      不实现。
+
+  - id: UNRESOLVED-023
+    title: "P2-立项：地方法规数据（region_manager + law_regions 表）"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "合规", "规格立项"]
+    context: >
+      compliance_checker 的 region_code 参数当前未生效（见 FIX-055 注释）：
+      law_regions / law_region_bindings 表空置，app/services/region_manager.py
+      已删除。法规库仅 4 部国家法（README 曾宣称 24 部，extended 20 部未接入）。
+    resolution_plan: >
+      立项规格：地方法规数据源/导入流程 + law_region_bindings 填充 + region_code
+      在 _select_relevant_laws 中按地域过滤 + 地区法规版本/效力。数据获取是
+      前置依赖，不实现。
+
+  - id: UNRESOLVED-024
+    title: "P2-立项：异议/澄清工单 + 法定时限"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "规格立项"]
+    context: >
+      无异议/质疑/澄清的工单化管理，无法跟踪法定时限（质疑 7 日/答复、投诉等）。
+    resolution_plan: >
+      立项规格：工单（异议/质疑/澄清/投诉）+ 受理/答复/驳回状态机 + 法定时限
+      倒计时与逾期提醒（挂靠招标项目）。表结构与提醒通道待定，不实现。
+
+  - id: UNRESOLVED-025
+    title: "P2-立项：废标/流标台账"
+    status: deferred
+    severity: low
+    discovered: 2026-09-15
+    tags: ["P2", "规格立项"]
+    context: >
+      无废标/流标记录与管理：废标原因（投标人不足 3 家/资格不符/串标）分类、
+      流标后重新招标流转。
+    resolution_plan: >
+      立项规格：废标/流标事件表（项目、原因分类、依据条款、处理人）+ 重新招标
+      关联 + 统计报表。表结构与流转逻辑待定，不实现。
