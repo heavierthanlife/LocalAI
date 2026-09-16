@@ -1598,3 +1598,35 @@ fixes:
       - type: literal
         file: docker-compose.yml
         pattern: "./data/laws:/app/data/laws:ro"
+
+  - id: FIX-2026-09-15-059
+    title: "Docker 数据资产统一挂载 + 启动 seeding（app/bootstrap）"
+    severity: medium
+    rationale: >
+      .dockerignore 丢弃整个 data/ 且无启动 seeding，导致每个 repo 数据资产都需手工挂载，
+      易静默「0 加载」（FIX-058 的 laws 即此坑）。修复：
+      (1) docker-compose 为 app/celery-worker/celery-beat 增加 ./data:/app/repo_data:ro（通用 seed 源）
+          与 ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro（不可变出厂基线；
+          此前 Docker 下缺失 → restore-to-factory 失效）。
+      (2) 新增 app/bootstrap.py::ensure_seeded()：把 repo_data 中可变种子（domain_words.txt，运行时追加写）
+          在卷缺失时原子复制（copy2→os.replace）进 /app/data；由 create_app() 调用，覆盖 app + celery worker/beat。
+      (3) laws/industry_words 保持 :ro 直挂（随代码最新）；domain_words.txt 不得 :ro 挂载（会破坏追加写）。
+    checks:
+      - type: literal
+        file: docker-compose.yml
+        pattern: "./data:/app/repo_data:ro"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro"
+      - type: literal
+        file: app/bootstrap.py
+        pattern: "def ensure_seeded"
+      - type: literal
+        file: app/bootstrap.py
+        pattern: "os.replace("
+      - type: literal
+        file: app/__init__.py
+        pattern: "from app.bootstrap import ensure_seeded"
+      - type: literal_not
+        file: docker-compose.yml
+        pattern: "./data/domain_words.txt:/app/data/domain_words.txt:ro"

@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — Docker 数据资产统一挂载 + 启动 seeding（FIX-059）
+
+### Fixed
+- **Docker 数据资产「0 加载」根因治理**：`.dockerignore` 丢弃整个 `data/` 且无启动 seeding，导致每个 repo 数据资产都需手工挂载、易静默为空（FIX-058 的 laws 即此坑）。本次：
+  - compose 为 app/celery-worker/celery-beat 增加 `./data:/app/repo_data:ro`（通用 seed 源）；
+  - 补 `./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro` —— 此前 Docker 下该出厂基线缺失，「恢复出厂设置」失效（退化为硬编码 `DEFAULTS`）；
+  - 新增 `app/bootstrap.py::ensure_seeded()`：`domain_words.txt`（运行时追加写，不可 :ro）在卷缺失时**原子复制**进 `/app/data`，由 `create_app()` 调用（覆盖 app + celery worker/beat）；容器内 jieba 领域词典恢复加载。
+
+### Added
+- `app/bootstrap.py`；`fix_registry FIX-2026-09-15-059`（6 不变量）；回归 `test_bootstrap_ensure_seeded` / `test_bootstrap_wired_and_compose_mounts`。
+
+### Notes
+- 卷集合（3 服务一致）：`app_data` + `repo_data:ro` + `laws:ro` + `industry_words:ro` + `runtime_config_factory.json:ro` + EasyOCR/cert。`laws`/`industry_words` 保持直挂（随代码最新，不走 seeding 以免静默过期）。
+- `domain_words.txt` 卷内副本会随「审批领域词」追加而漂移于 repo 基线（预期行为）。
+
+regression: 1/1 clearance baseline passed
+153/153 regression · 163/163 含路由守护+冒烟 · verify_fixes 263/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — 合规法规库扩展：接入 11 部国家级法规全文 + 核心 4 部守卫（FIX-058）
 
 ### Added

@@ -62,6 +62,11 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
+      # Generic read-only repo-data mount — the seed source for boot-time seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      - ./data:/app/repo_data:ro
+      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
       # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
@@ -151,6 +156,11 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
+      # Generic read-only repo-data mount — the seed source for boot-time seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      - ./data:/app/repo_data:ro
+      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
@@ -184,6 +194,11 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
+      # Generic read-only repo-data mount — the seed source for boot-time seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      - ./data:/app/repo_data:ro
+      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
     depends_on:
       postgres:
         condition: service_healthy

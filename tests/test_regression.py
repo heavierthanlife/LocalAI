@@ -1947,3 +1947,36 @@ def test_compliance_core_law_guard_wired():
     # every core law that has any article must be represented (guard contract)
     for c in _CORE_LAW_NAMES:
         assert c in picked, f"core law crowded out: {c}"
+
+
+def test_bootstrap_ensure_seeded():
+    """FIX-2026-09-15-059: ensure_seeded copies missing mutable seeds; idempotent."""
+    import os as _os
+    import tempfile
+    from app import bootstrap
+    with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as dst:
+        with open(_os.path.join(repo, 'domain_words.txt'), 'w', encoding='utf-8') as f:
+            f.write('招标\n投标\n')
+        old_repo, old_data = bootstrap.REPO_DATA, bootstrap.DATA_DIR
+        try:
+            bootstrap.REPO_DATA, bootstrap.DATA_DIR = repo, dst
+            bootstrap.ensure_seeded()
+            out = _os.path.join(dst, 'domain_words.txt')
+            assert _os.path.exists(out) and '招标' in open(out, encoding='utf-8').read()
+            # idempotent: a runtime-mutated volume file is NOT overwritten
+            with open(out, 'a', encoding='utf-8') as f:
+                f.write('追加词\n')
+            bootstrap.ensure_seeded()
+            assert '追加词' in open(out, encoding='utf-8').read()
+            assert not [f for f in _os.listdir(dst) if f.endswith('.seedtmp')]
+        finally:
+            bootstrap.REPO_DATA, bootstrap.DATA_DIR = old_repo, old_data
+
+
+def test_bootstrap_wired_and_compose_mounts():
+    """FIX-2026-09-15-059: seeded from create_app; compose has repo_data + factory mounts."""
+    assert 'from app.bootstrap import ensure_seeded' in _read('app/__init__.py')
+    comp = _read('docker-compose.yml')
+    assert './data:/app/repo_data:ro' in comp
+    assert './data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro' in comp
+    assert './data/domain_words.txt:/app/data/domain_words.txt:ro' not in comp

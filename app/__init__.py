@@ -79,6 +79,11 @@ def create_app():
     # Validate required environment variables
     _validate_env()
 
+    # Seed mutable data assets from the read-only repo mount (Docker only; no-op locally).
+    # Covers gunicorn app + celery worker/beat (all go through create_app).
+    from app.bootstrap import ensure_seeded
+    ensure_seeded()
+
     # Session config
     app.config['SESSION_TYPE'] = 'filesystem'
     app.config['SESSION_FILE_DIR'] = str(config.SESSION_DIR)
