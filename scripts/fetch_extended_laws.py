@@ -43,9 +43,11 @@ SOURCES = [
     {"law_name": "政府采购法实施条例", "short_name": "政府采购法实施条例", "category": "行政法规",
      "query": "政府采购法实施条例 国务院令第658号 全文", "domains": ["gov.cn", "mof.gov.cn"]},
     {"law_name": "工程建设项目施工招标投标办法", "short_name": "工程施工招标投标办法", "category": "部门规章",
-     "query": "工程建设项目施工招标投标办法 七部委30号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"]},
+     "query": "工程建设项目施工招标投标办法 七部委30号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"],
+     "url": "https://www.gov.cn/zhengce/2021-11/30/content_5713206.htm"},
     {"law_name": "评标委员会和评标方法暂行规定", "short_name": "评标委员会规定", "category": "部门规章",
-     "query": "评标委员会和评标方法暂行规定 七部委12号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"]},
+     "query": "评标委员会和评标方法暂行规定 七部委12号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"],
+     "url": "https://www.gov.cn/zhengce/2001-07/05/content_5713201.htm"},
     {"law_name": "必须招标的工程项目规定", "short_name": "必须招标规定", "category": "部门规章",
      "query": "必须招标的工程项目规定 发改委16号令 全文", "domains": ["gov.cn"],
      "url": "https://www.gov.cn/gongbao/content/2018/content_5296544.htm"},
@@ -56,7 +58,8 @@ SOURCES = [
     {"law_name": "政府采购质疑和投诉办法", "short_name": "政府采购94号令", "category": "部门规章",
      "query": "政府采购质疑和投诉办法 财政部94号令 全文", "domains": ["mof.gov.cn", "gov.cn"]},
     {"law_name": "电子招标投标办法", "short_name": "电子招标投标办法", "category": "部门规章",
-     "query": "电子招标投标办法 八部委20号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"]},
+     "query": "电子招标投标办法 八部委20号令 全文", "domains": ["ndrc.gov.cn", "gov.cn"],
+     "url": "https://www.moj.gov.cn/pub/sfbgw/flfggz/flfggzbmgz/201305/t20130530_374184.html"},
     {"law_name": "政府采购促进中小企业发展管理办法", "short_name": "中小企业46号", "category": "规范性文件",
      "query": "政府采购促进中小企业发展管理办法 财库2020 46号 全文", "domains": ["mof.gov.cn", "gov.cn"]},
     {"law_name": "关于促进政府采购公平竞争优化营商环境的通知", "short_name": "营商环境38号", "category": "规范性文件",
@@ -113,7 +116,7 @@ def _strip_html(src: str) -> str:
 
 
 def _discover_candidates(query: str):
-    """Return candidate result URLs. Tries DuckDuckGo html, then Bing."""
+    """Return candidate result URLs. Bing RSS first (parseable), then DDG html."""
     out = []
 
     def _abs(u):
@@ -121,28 +124,29 @@ def _discover_candidates(query: str):
             return 'https:' + u
         return u
 
-    # 1) DuckDuckGo html (uddg=<urlencoded>)
+    # 1) Bing RSS — compact and machine-friendly
     try:
-        url = 'https://duckduckgo.com/html/?q=' + urllib.parse.quote(query)
+        url = ('https://www.bing.com/search?q=' + urllib.parse.quote(query)
+               + '&format=rss&count=20')
         with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=25) as r:
-            page = r.read().decode('utf-8', 'replace')
-        for raw in re.findall(r'uddg=([^&"]+)', page):
-            link = _abs(urllib.parse.unquote(raw))
+            xml = r.read().decode('utf-8', 'replace')
+        for link in re.findall(r'<link>(https?://[^<]+)</link>', xml):
+            link = _abs(link)
+            if 'bing.com' in link:
+                continue
             if link not in out:
                 out.append(link)
     except Exception:
         pass
 
-    # 2) Bing (direct hrefs in result titles)
+    # 2) DuckDuckGo html (uddg=<urlencoded>) as fallback
     if not out:
         try:
-            url = 'https://www.bing.com/search?q=' + urllib.parse.quote(query) + '&count=20'
+            url = 'https://duckduckgo.com/html/?q=' + urllib.parse.quote(query)
             with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=25) as r:
                 page = r.read().decode('utf-8', 'replace')
-            for raw in re.findall(r'href="(https?://[^"]+)"', page):
-                link = raw
-                if 'bing.com' in link or 'microsoft.com' in link or 'msn.com' in link:
-                    continue
+            for raw in re.findall(r'uddg=([^&"]+)', page):
+                link = _abs(urllib.parse.unquote(raw))
                 if link not in out:
                     out.append(link)
         except Exception:
