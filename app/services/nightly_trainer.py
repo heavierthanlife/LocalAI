@@ -179,6 +179,7 @@ def _run_lora_training(jsonl_path: str, adapter_dir: str, industry: str = "biddi
             return {
                 "success": True,
                 "adapter_dir": adapter_dir,
+                "industry": industry,
                 "elapsed_seconds": int(elapsed),
                 "base_model": DEFAULT_BASE_MODEL,
             }
@@ -348,7 +349,12 @@ def _notify_admins_of_training(result: dict):
 
 
 def _update_adapter_registry(adapter_dir: str, training_result: dict):
-    """Update adapter_registry.json with the newly trained adapter."""
+    """Update adapter_registry.json with the newly trained adapter.
+
+    Schema must stay aligned with scripts/run_lora_training.py::_register_adapter
+    and the readers (llm_provider._load_industry_models / lora_trainer.get_adapter_info):
+    top-level key = industry, fields adapter_path / base_model / active.
+    """
     from app.config import DATA_DIR
     import json as _json
 
@@ -362,14 +368,14 @@ def _update_adapter_registry(adapter_dir: str, training_result: dict):
         except Exception:
             registry = {}
 
-    adapter_key = os.path.basename(adapter_dir)
+    industry = training_result.get("industry", "bidding_agency")
     now_ts = datetime.now(timezone.utc).isoformat()
 
-    registry["compliance_checker"] = {
-        "adapter_dir": adapter_dir,
+    registry[industry] = {
+        "adapter_path": adapter_dir,
         "base_model": training_result.get("base_model", DEFAULT_BASE_MODEL),
-        "trained_at": now_ts,
-        "industry": "bidding_agency",
+        "registered_at": now_ts,
+        "active": True,
         "elapsed_seconds": training_result.get("elapsed_seconds"),
         "source": "nightly_training",
     }
@@ -378,7 +384,7 @@ def _update_adapter_registry(adapter_dir: str, training_result: dict):
     with open(registry_path, 'w', encoding='utf-8') as f:
         _json.dump(registry, f, ensure_ascii=False, indent=2)
 
-    logger.info(f"Adapter registry updated: {adapter_key}")
+    logger.info(f"Adapter registry updated: {industry}")
 
 
 # ── Celery task wrapper (for Docker/Beat scheduling) ──

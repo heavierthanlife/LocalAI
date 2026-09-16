@@ -8,6 +8,29 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-15] — P1-A 死代码清理 + LoRA registry schema 对齐（FIX-055）
+
+### Removed
+- **零引用模块**：`app/services/agent_middleware.py`（导入不存在的 `langchain.agents.middleware`，全项目零引用）、`app/services/_save_helper.py`、`app/services/region_manager.py`（`law_regions`/`law_region_bindings` 空置，地方法规接入=P2）。
+- **`auth_jwt.py` 未使用函数**：`jwt_required` / `jwt_optional` / `decode_token`（JWT 只签发不校验，零调用）。保留 `create_token`（`chat_sessions.py` 在用）。
+- **`law_semantic.py::rebuild_law_index`**：零引用，且是唯一能填充 `rag_laws` 索引的函数（故 `semantic_law_search` 实际恒返回 `[]`）。保留 `semantic_law_search`（`compliance_checker` 调用，空索引时优雅返回）。
+
+### Fixed
+- **LoRA registry schema 三处对齐**：`nightly_trainer._update_adapter_registry` 原先写顶层键 `"compliance_checker"` + 字段 `adapter_dir`，而读取方 `llm_provider._load_industry_models` / `lora_trainer.get_adapter_info` 期望 **顶层键 = industry** + 字段 **`adapter_path`**（规范写入方 `scripts/run_lora_training.py::_register_adapter`）→ 夜间训练的适配器永不被加载。改为写 `registry[industry] = {adapter_path, base_model, registered_at, active, source}`；`_run_lora_training` 成功结果补 `industry` 字段供传递。
+
+### Changed
+- `docs/ARCHITECTURE.md`：删 `agent_middleware.py` 宣称；Services 计数 101 → 98。
+- `docs/SECURITY.md`：认证条目改为「session 会话 + JWT 仅签发」；删 InvalidToolGuard 宣称。
+- `data/unresolved.yaml`：`UNRESOLVED-016`（agent_middleware）标记 resolved。
+
+### Added
+- fix_registry `FIX-2026-09-15-055`（12 项 invariant）；回归 `test_dead_service_modules_removed` / `test_auth_jwt_only_issues_tokens` / `test_law_semantic_rebuild_removed_but_search_kept` / `test_nightly_adapter_registry_schema_matches_readers`（含功能性 schema 校验，+4）。
+
+### regression: 1/1 clearance baseline passed（无清标算法改动）
+143/143 regression · 153/153 含路由守护+冒烟 · verify_fixes 233/0 · doc_drift 14/14 · routes 集合未变（401 不变）
+
+---
+
 ## [2026-09-15] — P0 空转修复：hasLLM / _safeHTML / 更多下拉 / fallback 文档降级（FIX-054）
 
 ### Fixed

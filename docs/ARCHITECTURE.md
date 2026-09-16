@@ -17,7 +17,7 @@
 ┌──────────────▼───────────────────────────────────────────────┐
 │  Flask App Factory (app/__init__.py:create_app)               │
 │    → 17 Blueprints (app/routes/)       → HTTP 端点             │
-│    → 101 Services (app/services/)      → 业务逻辑层            │
+│    → 98 Services (app/services/)       → 业务逻辑层            │
 │    → database.py (psycopg2 连接池)     → 72 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
 │    → celery_app.py (Celery 异步任务)                           │
@@ -68,7 +68,6 @@
 - 2 供应商（FIX-016）：OpenRouter（`:free` 免费池）/ NVIDIA NIM
 - fallback 链（指数退避 + 熔断器）尚未接线，当前单供应商直连（`llm_fallback.py` 仅 tests 引用）
 - prompt 安全层 `prompt_safety.py`：注入防护 + anti-hallucination
-- `agent_middleware.py`：InvalidToolGuard 幻觉工具调用防护
 
 ### 2. LangGraph 代理 `agent.py`
 - Bocha 搜索 + get_date 工具，72h 缓存

@@ -1418,3 +1418,60 @@ fixes:
       - type: literal
         file: app/services/compliance_checker.py
         pattern: "当前未生效：law_regions/region_manager 空置"
+
+  - id: FIX-2026-09-15-055
+    title: "P1-A 死代码清理（agent_middleware/_save_helper/region_manager/auth_jwt 装饰器/law_semantic.rebuild）+ LoRA registry schema 对齐"
+    severity: high
+    rationale: >
+      P1 子批 A（无路由改动）：
+      (1) 删除零引用模块 app/services/agent_middleware.py（导入不存在的
+          langchain.agents.middleware）、_save_helper.py、region_manager.py
+          （law_regions 表空置，地方法规接入=P2）。
+      (2) auth_jwt.py 仅保留 create_token（chat_sessions.py 在用）；删除从未被
+          调用的 jwt_required/jwt_optional/decode_token —— JWT 只签发不校验。
+      (3) law_semantic.py 删除零引用的 rebuild_law_index（唯一能填充 rag_laws
+          索引的函数），并修正引用不存在函数 search_relevant_laws 的 docstring；
+          保留被 compliance_checker 调用的 semantic_law_search（索引为空时返回 []）。
+      (4) LoRA registry schema 对齐：nightly_trainer._update_adapter_registry 原先
+          写顶层键 "compliance_checker" + 字段 adapter_dir，而读取方
+          llm_provider._load_industry_models / lora_trainer.get_adapter_info 期望
+          顶层键=industry + 字段 adapter_path（规范写入方 scripts/run_lora_training.py
+          ::_register_adapter）→ 训练产物永不被加载。改为写 registry[industry]，
+          字段 adapter_path/base_model/registered_at/active。
+    checks:
+      - type: literal_not
+        file: docs/ARCHITECTURE.md
+        pattern: "agent_middleware"
+      - type: literal_not
+        file: docs/SECURITY.md
+        pattern: "agent_middleware"
+      - type: literal_not
+        file: docs/SECURITY.md
+        pattern: "session + JWT（`auth_jwt.py`）"
+      - type: literal
+        file: app/services/auth_jwt.py
+        pattern: "def create_token"
+      - type: literal_not
+        file: app/services/auth_jwt.py
+        pattern: "def jwt_required"
+      - type: literal_not
+        file: app/services/auth_jwt.py
+        pattern: "def decode_token"
+      - type: literal
+        file: app/services/law_semantic.py
+        pattern: "def semantic_law_search"
+      - type: literal_not
+        file: app/services/law_semantic.py
+        pattern: "def rebuild_law_index"
+      - type: literal_not
+        file: app/services/law_semantic.py
+        pattern: "search_relevant_laws"
+      - type: literal
+        file: app/services/nightly_trainer.py
+        pattern: "registry[industry] = {"
+      - type: literal_not
+        file: app/services/nightly_trainer.py
+        pattern: 'registry["compliance_checker"]'
+      - type: literal
+        file: app/services/nightly_trainer.py
+        pattern: '"adapter_path": adapter_dir,'

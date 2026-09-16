@@ -219,18 +219,19 @@ unresolved:
 
   - id: UNRESOLVED-016
     title: "agent_middleware.py — 导入不存在的 langchain.agents.middleware，未被项目引用"
-    status: pending
+    status: resolved
     severity: low
     discovered: 2026-07-30
+    resolved: 2026-09-15
     tags: ["待定"]
     context: >
       app/services/agent_middleware.py 实现了 InvalidToolGuard 工具调用循环保护，
       但导入不存在的 langchain.agents.middleware。全项目零引用。
       文件风格与现有代码不一致，似乎是从外部 LangChain 项目复制而来。
-    blocked_by: "需要评估是否需要 LangChain agent 集成"
+    blocked_by: ~
     resolution_plan: >
-      保留不删除。如果后续引入 LangChain agent 框架，可以激活此模块。
-      如果决定不使用 LangChain agent，则删除此文件。
+      Resolved 2026-09-15（FIX-055）：决定不引入 LangChain agent 框架 → 删除该文件。
+      docs/ARCHITECTURE.md 与 docs/SECURITY.md 中的 InvalidToolGuard 宣称同步移除。
 
   - id: UNRESOLVED-017
     title: "清标基线仅工程类校准（货物/服务缺失）"

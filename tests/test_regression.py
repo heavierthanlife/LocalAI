@@ -1811,3 +1811,51 @@ def test_llm_fallback_claims_downgraded():
     assert 'fallback 链 + 熔断器' not in _read('README.md')
     assert 'fallback 链：指数退避 + 熔断器' not in _read('docs/ARCHITECTURE.md')
     assert 'llm_fallback.py' in _read('AGENTS.md'), "backlog note must remain in AGENTS.md"
+
+# ── FIX-2026-09-15-055: P1-A 死代码清理 + LoRA registry schema 对齐 ──
+def test_dead_service_modules_removed():
+    import os
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app', 'services')
+    for name in ('agent_middleware.py', '_save_helper.py', 'region_manager.py'):
+        assert not os.path.exists(os.path.join(root, name)), f"{name} 应已删除"
+
+
+def test_auth_jwt_only_issues_tokens():
+    src = _read('app/services/auth_jwt.py')
+    assert 'def create_token' in src
+    assert 'def jwt_required' not in src
+    assert 'def jwt_optional' not in src
+    assert 'def decode_token' not in src
+    assert 'from app.services.auth_jwt import create_token' in _read('app/routes/chat_sessions.py')
+
+
+def test_law_semantic_rebuild_removed_but_search_kept():
+    src = _read('app/services/law_semantic.py')
+    assert 'def semantic_law_search' in src
+    assert 'def rebuild_law_index' not in src
+    assert 'search_relevant_laws' not in src
+    assert 'semantic_law_search' in _read('app/services/compliance_checker.py')
+
+
+def test_nightly_adapter_registry_schema_matches_readers(tmp_path, monkeypatch):
+    import json
+    import app.config as app_config
+    from app.services.nightly_trainer import _update_adapter_registry
+
+    monkeypatch.setattr(app_config, 'DATA_DIR', tmp_path)
+    adapter_dir = tmp_path / 'training' / 'adapters' / 'bidding_agency_1'
+    adapter_dir.mkdir(parents=True)
+    _update_adapter_registry(str(adapter_dir), {
+        'industry': 'bidding_agency',
+        'base_model': 'Qwen/Qwen2.5-7B-Instruct',
+        'elapsed_seconds': 12,
+    })
+    reg = json.loads((tmp_path / 'training' / 'adapter_registry.json').read_text(encoding='utf-8'))
+    assert 'compliance_checker' not in reg, "bogus top-level key must not be written"
+    assert 'bidding_agency' in reg, "registry must be keyed by industry"
+    info = reg['bidding_agency']
+    assert info['adapter_path'] == str(adapter_dir)
+    assert info['base_model'] == 'Qwen/Qwen2.5-7B-Instruct'
+    assert info['active'] is True
+    # reader contract in llm_provider must stay 'adapter_path'
+    assert "info.get('adapter_path', '')" in _read('app/services/llm_provider.py')
