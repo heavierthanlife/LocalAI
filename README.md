@@ -22,7 +22,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| Web | Flask 3.1 + gunicorn/gevent | App factory，17 Blueprint |
+| Web | Flask 3.1 + gunicorn/gevent | App factory，16 Blueprint |
 | 数据库 | PostgreSQL 16 + psycopg2 连接池 | 72 张表，`CREATE TABLE IF NOT EXISTS` 幂等管理 |
 | 缓存/消息 | Redis 7 + Celery 5 | Broker + Beat 调度 |
 | AI/LLM | LangChain + LangGraph + OpenRouter(:free) / NVIDIA NIM | 2 供应商直连 |

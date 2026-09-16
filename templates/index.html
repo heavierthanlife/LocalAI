@@ -280,7 +280,6 @@
         <!-- Sub-tab bars (shown/hidden based on active main tab) -->
         <div class="sub-tab-bar" id="adminSubTabs" style="display:none; padding: 0 1rem;">
             <button class="sub-tab-btn active" data-panel="adminPanel" data-sidebar="projects"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目</button>
-            <button class="sub-tab-btn" data-panel="timelinePanel" data-sidebar="projects"><span class="msi msi-sm" aria-hidden="true">timer</span> 时间线</button>
         </div>
         <div class="sub-tab-bar" id="knowledgeSubTabs" style="display:none; padding: 0 1rem;">
             <button class="sub-tab-btn active" data-panel="knowledgeLabPanel" data-sidebar="knowledge"><span class="msi msi-sm" aria-hidden="true">folder</span> 知识库</button>
@@ -451,30 +450,6 @@
                 <p style="color:var(--card-muted);">加载中...</p>
             </div>
             <input type="file" id="wikiLegalFileInput" accept=".doc,.docx,.pdf" multiple style="display:none">
-        </div>
-
-        <!-- Timeline Panel -->
-        <div id="timelinePanel" style="display: none; flex: 1; overflow-y: auto; padding: 0.6rem 1rem;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h4 style="margin:0;font-size:0.85rem;"><span class="msi msi-sm" aria-hidden="true">timeline</span> 招标时间线</h4>
-                <span id="timelineStatusBadge" style="font-size:0.65rem;color:var(--card-muted);"></span>
-            </div>
-            <div id="timelineSetup" style="display:none;margin-bottom:12px;padding:10px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);">
-                <p style="font-size:0.75rem;color:var(--card-muted);margin-bottom:6px;">尚未为该招标项目创建时间线。选择类别与采购方式以创建:</p>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <select id="timelineCategorySelect" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
-                        <option value="">选择类别...</option>
-                    </select>
-                    <select id="timelineMethodSelect" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
-                        <option value="">选择方式...</option>
-                    </select>
-                    <input type="date" id="timelineStartDate" style="padding:6px;border:1px solid var(--card-border);border-radius:6px;font-size:0.78rem;">
-                    <button id="timelineCreateBtn" class="file-btn" style="font-size:0.72rem;padding:6px 12px;">创建时间线</button>
-                </div>
-            </div>
-            <div id="timelineContent" style="font-size:0.78rem;">
-                <p style="color:var(--card-muted);">加载中...</p>
-            </div>
         </div>
 
         <!-- Review Panel (Admin + Auditor shared: ingestion + review + training) -->
@@ -813,8 +788,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" crossorigin="anonymous"></script>
 <script defer src="{{ url_for('static', filename='js/graph-view.js') }}?v={{ cache_buster }}"></script>
-<script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/templates.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/cases.js') }}?v={{ cache_buster }}"></script>
     <script defer src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_buster }}"></script>

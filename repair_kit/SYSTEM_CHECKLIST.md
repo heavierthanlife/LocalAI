@@ -20,14 +20,13 @@ _(6/6 verified automatically)_
 
 ## ROUTES
 
-_(37/37 verified automatically)_
+_(36/36 verified automatically)_
 
-- [x] Route module files exist: 29
+- [x] Route module files exist: 28
 - [x] Route: admin.py
 - [x] Route: admin_knowledge_lab.py
 - [x] Route: admin_ops.py
 - [x] Route: admin_regeneration.py
-- [x] Route: audit.py
 - [x] Route: auth.py
 - [x] Route: batch.py
 - [x] Route: cases.py
@@ -202,8 +201,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 132 |
+| [x] Pass | 131 |
 | [?] Manual | 4 |
-| **Total** | **136** |
+| **Total** | **135** |
 
-**Verification rate**: 132/136 auto-verified (97%)
+**Verification rate**: 131/135 auto-verified (97%)

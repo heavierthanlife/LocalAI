@@ -156,6 +156,10 @@ fixes:
   - id: FIX-2026-07-19-002
     title: "XSS via unsanitized report_html and diff_html in compliance.js"
     severity: critical
+    status_note: >
+      FIX-2026-09-15-056: compliance.js deleted (UI downgraded to API-only);
+      the _safeHTML sanitizer now lives in app.js (see FIX-054). Invariant
+      retained by pointing the check at app.js.
     rationale: >
       report_html (AI-generated) and diff_html (difflib HtmlDiff) were
       injected directly via innerHTML and += without sanitization. User
@@ -166,46 +170,36 @@ fixes:
         file: templates/index.html
         pattern: "cdnjs\\.cloudflare\\.com/ajax/libs/dompurify"
       - type: grep
-        file: static/js/compliance.js
-        pattern: "_safeHTML"
+        file: static/js/app.js
+        pattern: "function _safeHTML"
 
   - id: FIX-2026-07-19-003
     title: "Tiptap Mark import from Editor static property unreliable in v2"
     severity: high
     status: superseded
     status_note: >
-      tiptap-editor.js fully rewritten to use ESM dynamic imports
-      (import() from esm.sh CDN). Editor and StarterKit are destructured
-      from dynamic module imports. No Mark class needed in current code.
-      The old static-import-based fix no longer applies.
+      FIX-2026-09-15-056: tiptap-editor.js deleted (compliance-only editor,
+      UI downgraded to API-only). Invariant void.
     rationale: >
       Editor.Mark returned undefined in Tiptap v2 — Mark is a named export,
       not a static property of Editor. Fallback {} was truthy so if(!Mark)
       didn't trigger. Mark.create() would crash at runtime. Fix destructures
       Mark directly from the @tiptap/core import.
-    checks:
-      - type: grep
-        file: static/js/tiptap-editor.js
-        pattern: "import\\(.*@tiptap"
+    checks: []
 
   - id: FIX-2026-07-19-004
     title: "Compliance._taskIds.extracted cleared on check, breaking editor"
     severity: high
     status: superseded
     status_note: >
-      Code refactored to use a closure variable extractedRulesTaskId
-      instead of reading _taskIds.extracted. The Tiptap editor now
-      reads _taskIds[fn] (per-file IDs), not .extracted. The original
-      bug path no longer exists.
+      FIX-2026-09-15-056: compliance.js deleted (UI downgraded to API-only).
+      Invariant void.
     rationale: >
       The check button handler cleared Compliance._taskIds = {} destroying
       the .extracted key set by the extract-rules handler. The Tiptap editor
       reads _taskIds.extracted to get the rules task ID. Fix clears only
       per-file entries while preserving .extracted.
-    checks:
-      - type: grep
-        file: static/js/compliance.js
-        pattern: "_taskIds\\.extracted"
+    checks: []
 
   - id: FIX-2026-07-19-005
     title: "Closed cursor passed to _compute_impact in law_monitor.py"
@@ -759,8 +753,9 @@ fixes:
       修复：scripts/audit_js_routes.py 对全部前端 app-origin URL 做 url_map 解析，
       no_route 必须为 0；audit_bp 已注册、knowledge feedback/set_video_analysis/
       plagiarism alias/skill_merge 均已接线。
+      [FIX-2026-09-15-056] audit_bp 已删除（前端从未加载），该检查改为断言未注册。
     checks:
-      - type: grep
+      - type: grep_not
         file: app/routes/__init__.py
         pattern: "from app.routes.audit import audit_bp"
       - type: grep
@@ -1475,3 +1470,51 @@ fixes:
       - type: literal
         file: app/services/nightly_trainer.py
         pattern: '"adapter_path": adapter_dir,'
+
+  - id: FIX-2026-09-15-056
+    title: "P1-B1 路由/前端降级：删 /audit 蓝图 + compliance/tiptap/timeline UI 摘除（API-only）"
+    severity: high
+    rationale: >
+      P1 子批 B1（含路由集变化）：
+      (1) /audit 蓝图（10 条路由）全死：唯一前端消费者 bid-audit.js 从未被 index.html 加载。
+          删除 app/routes/audit.py + 注册块 + tests/integration/test_audit.py + static/js/bid-audit.js；
+          scripts/check_system.py 的 audit 检查改指向 app/services/audit_engine.py（真正的引擎，清标在用）。
+      (2) compliance UI 降级 API-only：compliance.js 的 23 个 DOM id 在 index.html 全部不存在（加载即空转），
+          tiptap-editor.js 只服务 compliance 编辑器 → 两个文件删除 + index.html 摘除 script 标签。
+          后端 compliance 路由保留（API-only）。
+      (3) timeline UI 降级 API-only：删除 index.html 时间线子标签 + #timelinePanel，删除 app.js 的
+          Timeline Tab 全部前端逻辑与 wiring。后端 timeline 蓝图保留（API-only）。
+      (4) credit / LoRA 确认本就是 API-only（前端零引用），无需改动。
+      路由集由 401 → 391（仅移除 /audit 10 条）；tests/fixtures/routes_snapshot.json 重生成，
+      test_route_preservation.py expected_len 401 → 391。蓝图数 17 → 16（README/AGENTS/ARCHITECTURE 同步）。
+    checks:
+      - type: literal
+        file: app/routes/__init__.py
+        pattern: "Audit: removed (FIX-056)"
+      - type: literal_not
+        file: app/routes/__init__.py
+        pattern: "from app.routes.audit import audit_bp"
+      - type: literal
+        file: scripts/check_system.py
+        pattern: "app/services/audit_engine.py"
+      - type: literal_not
+        file: templates/index.html
+        pattern: "js/compliance.js"
+      - type: literal_not
+        file: templates/index.html
+        pattern: "tiptap-editor.js"
+      - type: literal_not
+        file: templates/index.html
+        pattern: "timelinePanel"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "loadTimelinePanel"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "timelineTabBtn"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "timelineSetup"
+      - type: literal
+        file: tests/test_route_preservation.py
+        pattern: "expected_len', [391]"

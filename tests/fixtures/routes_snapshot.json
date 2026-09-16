@@ -1045,66 +1045,6 @@
   },
   {
     "methods": [
-      "GET"
-    ],
-    "rule": "/audit/config"
-  },
-  {
-    "methods": [
-      "PUT"
-    ],
-    "rule": "/audit/config"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/download/<int:run_id>/docx"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/download/<int:run_id>/xlsx"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/history/<int:project_id>"
-  },
-  {
-    "methods": [
-      "POST"
-    ],
-    "rule": "/audit/preflight"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/progress/<int:run_id>"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/result/<int:run_id>"
-  },
-  {
-    "methods": [
-      "GET"
-    ],
-    "rule": "/audit/running/<int:project_id>"
-  },
-  {
-    "methods": [
-      "POST"
-    ],
-    "rule": "/audit/start"
-  },
-  {
-    "methods": [
       "POST"
     ],
     "rule": "/batch/plagiarism/compare"

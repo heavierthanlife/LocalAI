@@ -8,6 +8,28 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-15] — P1-B1 路由/前端降级：删 /audit + compliance/tiptap/timeline API-only（FIX-056）
+
+### Removed
+- **`/audit` 蓝图（10 条路由，全死）**：唯一前端消费者 `bid-audit.js` 从未被 `index.html` 加载。删除 `app/routes/audit.py` + `__init__.py` 注册块 + `tests/integration/test_audit.py` + `static/js/bid-audit.js`。审计引擎 `app/services/audit_engine.py` 保留（清标在用）。
+- **compliance UI（API-only 降级）**：`compliance.js` 的 23 个 DOM id 在 `index.html` 全部不存在（加载即空转）；`tiptap-editor.js` 仅服务 `#complianceTiptapEditor`。两文件删除 + `index.html` 摘除 script 标签。后端 compliance 路由保留。
+- **timeline UI（API-only 降级）**：`index.html` 时间线子标签 + `#timelinePanel` 删除；`app.js` 的 Timeline Tab 全部前端逻辑/接线删除（`loadTimelinePanel`/`_renderTimelineList`/`_loadTimelineDetail`/`_setupTimelineCreationForm`/`_wireTimelineDetailActions` 等）。后端 timeline 蓝图保留。
+
+### Changed
+- `scripts/check_system.py`：`audit.py` grep 检查改指向 `app/services/audit_engine.py`。
+- **路由集 401 → 391**（仅移除 `/audit` 10 条）：`tests/fixtures/routes_snapshot.json` 重生成；`test_route_preservation.py` `expected_len` 401 → 391。
+- **蓝图数 17 → 16**：`README.md` / `AGENTS.md` / `docs/ARCHITECTURE.md` 同步；`repair_kit/SYSTEM_CHECKLIST.md` 重生成（135 项）。
+- `data/fix_registry.yaml`：`FIX-2026-07-19-002` 检查改指向 `app.js::_safeHTML`；`-003`/`-004` 标 superseded（checks 清空）；`FIX-2026-09-09-023` audit 检查改为断言未注册。
+- 确认 `credit`（9 端点）/ `LoRA`（3 端点）本就是 API-only（前端零引用），无需改动。
+
+### Added
+- fix_registry `FIX-2026-09-15-056`（10 项 invariant）；回归 `test_audit_blueprint_removed` / `test_timeline_api_only_downgrade` / `test_compliance_frontend_removed`（原 tiptap/taskids 两个 superseded 测试替换）。
+
+### regression: 1/1 clearance baseline passed（无清标算法改动）
+143/143 regression · 152/152 含路由守护+冒烟 · run_tests 28/28 · verify_fixes 241/0 · doc_drift 14/14 · audit_js_routes no_route=0
+
+---
+
 ## [2026-09-15] — P1-A 死代码清理 + LoRA registry schema 对齐（FIX-055）
 
 ### Removed

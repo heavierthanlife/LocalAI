@@ -8,8 +8,8 @@
 - 前端：templates/index.html + static/js/*.js（无框架，原生 JS SPA 风格）
 
 ## 收集范围
-- 后端：`app/services/`、`app/routes/`（15 个 blueprint）、`app/database.py`、`app/__init__.py`、`celery_app.py`
-- 前端：`static/js/*.js`（重点 app.js / chat.js / knowledge-lab.js / bid-audit.js）、`static/css/`、`static/icons.js`
+- 后端：`app/services/`、`app/routes/`（16 个 blueprint）、`app/database.py`、`app/__init__.py`、`celery_app.py`
+- 前端：`static/js/*.js`（重点 app.js / chat.js / knowledge-lab.js）、`static/css/`、`static/icons.js`
 - 模板：`templates/index.html`
 - 配置/规范：`AGENTS.md`、`.env.example`、`docker-compose.yml`、`requirements.txt`、`pytest.ini`
 - 修复不变量：`data/fix_registry.yaml`、`tests/test_regression.py`、`scripts/verify_fixes.py`

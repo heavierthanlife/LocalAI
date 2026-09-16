@@ -121,7 +121,7 @@ Every feature upgrade must include regression verification:
 | Layer | Location | Notes |
 |---|---|---|
 | **App factory** | `app/__init__.py` — `create_app()` | Loads `.env`, validates SECRET_KEY, registers all blueprints |
-| **Routes** | `app/routes/` — 17 Blueprints | All eager-loaded in `register_all()` at `app/routes/__init__.py` |
+| **Routes** | `app/routes/` — 16 Blueprints | All eager-loaded in `register_all()` at `app/routes/__init__.py` |
 | **Services** | `app/services/` | LLM providers, RAG, OCR, audit, training, etc. |
 | **Database** | `app/database.py` | psycopg2 pool, schema defined as `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` in `init_postgres_tables()` |
 | **Frontend** | `templates/index.html` + `static/js/app.js` (~10k lines vanilla JS) | SPA with streaming chat, file management, knowledge bases |

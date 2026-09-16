@@ -142,11 +142,8 @@ def register_all(flask_app):
     flask_app.register_blueprint(upload_bp)
     logger.info(f"  OK upload_bp ({time.time()-t0:.0f}s)")
 
-    # ── Audit: eager (bid-audit backend — FIX-2026-09-09-023 was never registered) ──
-    t0 = time.time()
-    from app.routes.audit import audit_bp
-    flask_app.register_blueprint(audit_bp)
-    logger.info(f"  OK audit_bp ({time.time()-t0:.0f}s)")
+    # ── Audit: removed (FIX-056) — /audit blueprint was dead (frontend never loaded);
+    #    the audit engine lives in app/services/audit_engine.py (used by clearance) ──
 
     # ── Graph: eager (spider-web knowledge graphs) ──
     t0 = time.time()

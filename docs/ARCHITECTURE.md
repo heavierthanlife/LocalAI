@@ -16,7 +16,7 @@
                │ HTTP/SSE (nginx HTTPS, 12G body limit)
 ┌──────────────▼───────────────────────────────────────────────┐
 │  Flask App Factory (app/__init__.py:create_app)               │
-│    → 17 Blueprints (app/routes/)       → HTTP 端点             │
+│    → 16 Blueprints (app/routes/)       → HTTP 端点             │
 │    → 98 Services (app/services/)       → 业务逻辑层            │
 │    → database.py (psycopg2 连接池)     → 72 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
@@ -33,7 +33,7 @@
 ## 请求生命周期
 
 1. **HTTP 请求** → nginx（HTTPS 终结，12G body limit）→ gunicorn（4 workers, gevent, 120s timeout）
-2. **Flask** → `create_app()` 注册 17 Blueprint → 路由分发
+2. **Flask** → `create_app()` 注册 16 Blueprint → 路由分发
 3. **路由层**（`app/routes/`）→ 参数校验 + 权限检查 → 调用服务层
 4. **服务层**（`app/services/`）→ 业务逻辑 → DB（`database.py` 连接池）或 LLM（`llm_provider.py`）
 5. **响应** → `ok()`/`err()` 标准化 JSON（`app/utils/helpers.py`）
@@ -48,7 +48,7 @@
 - Flask-Limiter（Redis 后端，全局 120/min；聊天 30/min、上传 10/min、登录 5/min）
 - Admin 密码从 `ADMIN_PIN` 自动 hash
 - 413 错误处理器、cache buster、Swagger
-- 注册 17 Blueprint（`register_all()`）
+- 注册 16 Blueprint（`register_all()`）
 - APScheduler 20+ 定时任务（`cleanup_tasks.py`）
 - `init_services()`：PG 表初始化、WebDriver 延迟加载、LangGraph checkpointer
 
@@ -137,7 +137,7 @@ graph LR
 | 模式 | 位置 | 说明 |
 |---|---|---|
 | App Factory | `app/__init__.py` | 标准可测试 |
-| Blueprint 分层 | `app/routes/` | 17 蓝图职责明确 |
+| Blueprint 分层 | `app/routes/` | 16 蓝图职责明确 |
 | Composition | `compliance_checker` + `TemplateDeviationChecker` | 避免 God class |
 | 三级 DB 连接 | `database.py` | 环境→URI→fallback |
 | LLM 供应商 | `llm_provider.py` | OpenRouter + NVIDIA 直连（fallback 未接线） |

@@ -2796,7 +2796,6 @@
                 { panel: databasePanel, tab: databaseTab },
                 { panel: knowledgeLabPanel, tab: knowledgeLabTab },
                 { panel: wikiPanel, tab: wikiTab },
-                { panel: timelinePanel, tab: timelineTabBtn },
                 { panel: analyticsPanel, tab: analyticsTabBtn },
                 { panel: reviewPanel, tab: reviewTabBtn },
             ];
@@ -2816,13 +2815,11 @@
         const adminTab = document.getElementById('adminTabBtn');
         const recycleTab = document.getElementById('recycleBinTabBtn');
         const analyticsTab = document.getElementById('analyticsTabBtn');
-        const timelineTab = document.getElementById('timelineTabBtn');
 
         if (tabBar) tabBar.style.display = 'flex';
         if (adminTab) adminTab.style.display = 'inline-block';
         if (recycleTab) recycleTab.style.display = 'inline-block';
         if (analyticsTab) analyticsTab.style.display = 'inline-block';
-        if (timelineTab) timelineTab.style.display = currentProjectId ? 'inline-block' : 'none';
     }
 
     // ======================== Sidebar Tab Switching ========================
@@ -2835,7 +2832,7 @@
 
     // Helper: hide all tab panels, then show only the active one
     function switchToPanel(activeId) {
-        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','wikiPanel','timelinePanel','analyticsPanel','reviewPanel','templatesPanel','casesPanel'];
+        const allPanels = ['chatInterface','adminPanel','recycleBinPanel','databasePanel','knowledgeLabPanel','wikiPanel','analyticsPanel','reviewPanel','templatesPanel','casesPanel'];
         allPanels.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = (id === activeId) ? (id === 'chatInterface' ? 'flex' : 'block') : 'none';
@@ -2881,9 +2878,6 @@
 
     function loadSubTabContent(panelId) {
         switch (panelId) {
-            case 'timelinePanel':
-                if (typeof loadTimelinePanel === 'function') loadTimelinePanel();
-                break;
             case 'wikiPanel':
                 if (window._loadWiki && typeof window._loadWiki === 'function') window._loadWiki('');
                 break;
@@ -6539,7 +6533,7 @@
                 updateProjectTabVisibility();
                 setTimeout(() => {
                     const activeTab = restoreActiveTab();
-                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', timeline:'timelineTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
+                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
                     const targetBtn = document.getElementById(tabMap[activeTab] || 'chatTabBtn');
                     _programmaticTabSwitch = true;
                     if (targetBtn) targetBtn.click();
@@ -7656,359 +7650,6 @@
         if (indicator) indicator.textContent = '';
     }
 
-    // ======================== Timeline Tab ========================
-    const timelineTabBtn = document.getElementById('timelineTabBtn');
-    const timelinePanel = document.getElementById('timelinePanel');
-    if (timelineTabBtn && timelinePanel) {
-        timelineTabBtn.onclick = async () => {
-            stopRealtimePoll();
-            saveActiveTab('timeline');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            timelineTabBtn.classList.add('active');
-            switchToPanel('timelinePanel');
-            switchSidebarPane('projects');
-            showSubTabBar('projects');
-            loadTimelinePanel();
-        };
-    }
-
-    async function loadTimelinePanel() {
-        if (!currentProjectId) {
-            const content = document.getElementById('timelineContent');
-            if (content) content.innerHTML = '<p style="color:var(--card-muted);">请先在"项目"标签页中选择一个项目。</p>' +
-                '<button id="timelineGotoProjectBtn" class="file-btn" style="margin-top:8px;font-size:0.75rem;">选择项目</button>';
-            const gotoBtn = document.getElementById('timelineGotoProjectBtn');
-            if (gotoBtn) gotoBtn.onclick = () => {
-                const adminBtn = document.getElementById('adminTabBtn');
-                if (adminBtn) { adminBtn.click(); switchSidebarPane('projects'); showSubTabBar('projects'); }
-            };
-            return;
-        }
-        const setup = document.getElementById('timelineSetup');
-        const content = document.getElementById('timelineContent');
-        content.innerHTML = '<p style="color:var(--card-muted);">加载时间线...</p>';
-
-        try {
-            const listRes = await fetch('/timeline/' + currentProjectId + '/list', { credentials: 'include' });
-            const listData = await listRes.json();
-
-            if (listData.success && listData.timelines && listData.timelines.length > 0) {
-                setup.style.display = 'none';
-                content.innerHTML = _renderTimelineList(listData.timelines);
-                _loadTimelineDetail(currentProjectId, listData.timelines[0].id);
-            } else {
-                setup.style.display = 'block';
-                content.innerHTML = '';
-                _setupTimelineCreationForm(currentProjectId);
-            }
-        } catch (e) {
-            content.innerHTML = '<p style="color:var(--card-muted);">加载失败: ' + escapeHtml(e.message) + '</p>';
-        }
-    }
-
-    function _renderTimelineList(timelines) {
-        var h = '<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">';
-        h += '<span style="font-weight:600;">📋 项目时间线</span>';
-        h += '<button id="tlNewBtn" style="background:var(--accent);color:white;border:none;border-radius:4px;padding:4px 12px;font-size:0.7rem;cursor:pointer;">➕ 新建时间线</button>';
-        h += '</div>';
-        h += '<div id="timelineDetailArea" style="margin-bottom:12px;"></div>';
-        h += '<div id="timelineListContainer" style="display:flex;flex-direction:column;gap:6px;">';
-        timelines.forEach(function(t) {
-            h += '<div class="tl-list-entry" data-tid="' + t.id + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;cursor:pointer;transition:border-color .2s;">';
-            h += '<div>';
-            h += '<div style="font-weight:600;font-size:0.82rem;">📊 ' + (t.name || '主招标流程') + '</div>';
-            h += '<div style="font-size:0.68rem;color:var(--card-muted);">' + (t.category_code || '') + ' / ' + (t.method_code || '') + ' · ' + _statusBadge(t.status || 'active') + '</div>';
-            h += '</div>';
-            h += '<div style="text-align:right;">';
-            h += '<div style="font-size:0.68rem;color:var(--card-muted);">' + (t.planned_start_date || '') + ' → ' + (t.planned_end_date || '-') + '</div>';
-            h += '</div>';
-            h += '</div>';
-        });
-        h += '</div>';
-        return h;
-    }
-
-    async function _loadTimelineDetail(projectId, timelineId) {
-        var area = document.getElementById('timelineDetailArea');
-        area.innerHTML = '<p style="color:var(--card-muted);font-size:0.75rem;">加载中...</p>';
-        try {
-            var res = await fetch('/timeline/' + projectId + '?timeline_id=' + timelineId, { credentials: 'include' });
-            var tl = await res.json();
-            if (tl.success && tl.id) {
-                area.innerHTML = _renderTimelineView(tl);
-                _wireTimelineDetailActions(projectId, tl);
-            } else {
-                area.innerHTML = '<p style="color:var(--card-muted);">未找到时间线</p>';
-            }
-        } catch(e) {
-            area.innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
-        }
-        // Highlight active entry
-        document.querySelectorAll('.tl-list-entry').forEach(function(e) { e.style.borderColor = 'var(--card-border)'; });
-        var active = document.querySelector('.tl-list-entry[data-tid="' + timelineId + '"]');
-        if (active) active.style.borderColor = 'var(--accent)';
-    }
-
-    function _setupTimelineCreationForm(projectId) {
-        var catSel = document.getElementById('timelineCategorySelect');
-        var mSel = document.getElementById('timelineMethodSelect');
-        fetch('/timeline/legal/categories', { credentials: 'include' }).then(function(r) { return r.json(); }).then(function(catData) {
-            if (catData.success && catData.categories) {
-                catSel.innerHTML = '<option value="">选择类别...</option>';
-                catData.categories.forEach(function(c) {
-                    catSel.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
-                });
-                catSel.onchange = function() {
-                    mSel.innerHTML = '<option value="">选择方式...</option>';
-                    var sel = catData.categories.find(function(c) { return c.code === catSel.value; });
-                    if (sel && sel.methods) {
-                        sel.methods.forEach(function(m) {
-                            mSel.innerHTML += '<option value="' + m.code + '">' + m.name + '</option>';
-                        });
-                    }
-                };
-                document.getElementById('timelineCreateBtn').onclick = async function() {
-                    var cat = catSel.value;
-                    var meth = mSel.value;
-                    var start = document.getElementById('timelineStartDate').value;
-                    var name = document.getElementById('timelineNameInput') ? document.getElementById('timelineNameInput').value : '';
-                    if (!cat || !meth || !start) { alert('请填写所有必填项'); return; }
-                    try {
-                        var body = {category_code: cat, method_code: meth, planned_start_date: start};
-                        if (name) body.name = name;
-                        var cr = await fetch('/timeline/' + projectId, {
-                            method: 'POST', headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(body), credentials: 'include'
-                        });
-                        var cd = await cr.json();
-                        if (cd.success) { loadTimelinePanel(); } else { alert(cd.error || '创建失败'); }
-                    } catch(e) { alert('创建失败: ' + e.message); }
-                };
-            }
-        });
-    }
-
-    function _renderTimelineView(tl) {
-        var ms = tl.milestones || [];
-        var html = '<div style="margin-bottom:12px;">';
-        html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;">📊 ' + (tl.name || '主招标流程') + '</div>';
-        html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">';
-        html += '<span style="font-size:0.75rem;"><b>类别:</b> ' + (tl.category_code || '') + '</span>';
-        html += '<span style="font-size:0.75rem;"><b>方式:</b> ' + (tl.method_code || '') + '</span>';
-        html += '<span style="font-size:0.75rem;"><b>计划开始:</b> ' + (tl.planned_start_date || '') + '</span>';
-        html += '<span style="font-size:0.75rem;"><b>计划结束:</b> ' + (tl.planned_end_date || '-') + '</span>';
-        if (tl.actual_start_date || tl.actual_end_date) {
-            html += '<span style="font-size:0.75rem;"><b>实际:</b> ' + (tl.actual_start_date || '?') + ' → ' + (tl.actual_end_date || '进行中') + '</span>';
-        }
-        html += '<span style="font-size:0.75rem;"><b>状态:</b> ' + _statusBadge(tl.status || '') + '</span>';
-        html += '</div>';
-        if (tl.created_at) {
-            html += '<div style="font-size:0.68rem;color:var(--card-muted);margin-bottom:4px;">创建于 ' + tl.created_at + (tl.created_by ? ' · 由 ' + tl.created_by : '') + (tl.updated_at && tl.updated_at !== tl.created_at ? ' · 更新于 ' + tl.updated_at : '') + '</div>';
-        }
-
-        if (tl.diff_summary) {
-            var ds = tl.diff_summary;
-            html += '<div style="font-size:0.7rem;color:var(--card-muted);margin-bottom:8px;">';
-            html += '总节点: ' + ds.total_milestones + ' | 已完成: ' + ds.completed;
-            html += ' | 待处理: ' + ds.pending + ' | 延期: ' + ds.delayed;
-            html += ' | 准点: ' + ds.on_time + ' | 提前: ' + ds.advanced;
-            if (ds.total_delay_days > 0) html += ' | 累计延期: ' + ds.total_delay_days + '天';
-            html += '</div>';
-        }
-        html += '</div>';
-
-        html += '<div style="max-height:500px;overflow-y:auto;border:1px solid var(--card-border);border-radius:8px;">';
-        ms.forEach(function(m, i) {
-            var bg = m.status === 'completed' ? '#f0fff4' : (m.diff_days && m.diff_days > 0 ? '#fff5f5' : 'transparent');
-            var reasonTip = m.diff_reason ? ' title="原因: ' + m.diff_reason.replace(/"/g, '&quot;') + '"' : '';
-            html += '<div style="display:flex;align-items:center;padding:6px 12px;border-bottom:1px solid var(--card-border);background:' + bg + ';font-size:0.72rem;"' + reasonTip + '>';
-            html += '<span style="width:24px;font-weight:700;color:var(--card-muted);">' + (i+1) + '</span>';
-            html += '<span style="flex:1;font-weight:600;">' + (m.name || m.code) + '</span>';
-            html += '<span style="width:90px;text-align:center;color:var(--card-muted);">' + (m.planned_date || '待定') + '</span>';
-            html += '<span style="width:90px;text-align:center;' + (m.diff_days && m.diff_days > 0 ? 'color:#e53e3e;' : '') + '">' + (m.actual_date || '未完成') + '</span>';
-            if (m.diff_days && m.diff_days > 0) {
-                html += '<span style="width:60px;text-align:center;color:#e53e3e;">+' + m.diff_days + '天</span>';
-            } else if (m.diff_days && m.diff_days < 0) {
-                html += '<span style="width:60px;text-align:center;color:#38a169;">' + m.diff_days + '天</span>';
-            } else {
-                html += '<span style="width:60px;text-align:center;">-</span>';
-            }
-            if (m.reason_category) {
-                html += '<span style="width:70px;text-align:center;font-size:0.62rem;background:#f1f5f9;padding:1px 6px;border-radius:10px;color:#475569;">' + m.reason_category + '</span>';
-            }
-            html += _statusBadge(m.status || 'pending');
-            html += '</div>';
-        });
-        html += '</div>';
-
-        if (tl.diff_summary && tl.diff_summary.by_reason_category && Object.keys(tl.diff_summary.by_reason_category).length > 0) {
-            var cats = tl.diff_summary.by_reason_category;
-            html += '<div style="margin-top:8px;font-size:0.7rem;border:1px solid var(--card-border);border-radius:8px;padding:8px;">';
-            html += '<b style="font-size:0.72rem;">延期原因分类</b>';
-            html += '<div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;">';
-            Object.keys(cats).forEach(function(k) {
-                html += '<span style="background:#f1f5f9;padding:2px 10px;border-radius:10px;">' + k + ': <b>' + cats[k] + '</b></span>';
-            });
-            html += '</div></div>';
-        }
-
-        html += '<div style="margin-top:12px;display:flex;gap:6px;">';
-        html += '<button onclick="loadTimelinePanel()" class="file-btn" style="font-size:0.7rem;">🔄 刷新</button>';
-        html += '<button onclick="showSuggestions(' + tl.project_id + ')" class="file-btn" style="font-size:0.7rem;">💡 查看建议</button>';
-        html += '<button onclick="showDiffReport(' + tl.project_id + ')" class="file-btn" style="font-size:0.7rem;">📊 差异报告</button>';
-        html += '</div>';
-
-        return html;
-    }
-
-    function _statusBadge(status) {
-        var colors = {completed:'#38a169',pending:'#a0aec0',active:'#3182ce',overdue:'#e53e3e',delayed:'#e53e3e'};
-        var labels = {completed:'已完成',pending:'待处理',active:'进行中',overdue:'已超期',delayed:'延期',running:'运行中',failed:'失败',PASS:'通过',FAIL:'不通过'};
-        var c = colors[status] || '#a0aec0';
-        var l = labels[status] || status;
-        return '<span style="display:inline-block;background:' + c + ';color:#fff;padding:1px 6px;border-radius:4px;font-size:0.6rem;margin-left:4px;">' + l + '</span>';
-    }
-
-    function _closeTimelineModal() {
-        var ov = document.querySelector('.tl-modal-overlay');
-        if (ov) ov.remove();
-    }
-
-    window.showDiffReport = async function(projectId) {
-        _closeTimelineModal();
-        var ov = document.createElement('div');
-        ov.className = 'tl-modal-overlay';
-        ov.onclick = function(e) { if (e.target === ov) _closeTimelineModal(); };
-        ov.innerHTML = '<div class="tl-modal"><div class="tl-modal-header"><h3>差异报告</h3><button class="tl-modal-close" onclick="_closeTimelineModal()">×</button></div><div class="tl-modal-body" style="text-align:center;color:var(--card-muted);">加载中...</div></div>';
-        document.body.appendChild(ov);
-        try {
-            var res = await fetch('/timeline/' + projectId + '/diff', { credentials: 'include' });
-            var d = await res.json();
-            if (!d.success) { ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">' + (d.error || '加载失败') + '</p>'; return; }
-            var s = d.summary || {};
-            var body = '<div class="tl-summary-grid">';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.total_milestones || 0) + '</div><div class="tl-summary-label">总里程碑</div></div>';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#16a34a;">' + (s.completed || 0) + '</div><div class="tl-summary-label">已完成</div></div>';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#ea580c;">' + (s.delayed || 0) + '</div><div class="tl-summary-label">延期</div></div>';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.on_time || 0) + '</div><div class="tl-summary-label">准点</div></div>';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val">' + (s.pending || 0) + '</div><div class="tl-summary-label">待处理</div></div>';
-            body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#2563eb;">' + (s.advanced || 0) + '</div><div class="tl-summary-label">提前</div></div>';
-            if (s.total_delay_days > 0) body += '<div class="tl-summary-item"><div class="tl-summary-val" style="color:#dc2626;">+' + s.total_delay_days + '</div><div class="tl-summary-label">累计延期(天)</div></div>';
-            body += '</div>';
-
-            if (s.by_reason_category && Object.keys(s.by_reason_category).length > 0) {
-                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">按原因分类</h4>';
-                body += '<div class="tl-table-wrap"><table><thead><tr><th>原因类别</th><th>数量</th></tr></thead><tbody>';
-                Object.keys(s.by_reason_category).forEach(function(k) {
-                    body += '<tr><td>' + k + '</td><td>' + s.by_reason_category[k] + '</td></tr>';
-                });
-                body += '</tbody></table></div>';
-            }
-
-            if (d.milestones && d.milestones.length > 0) {
-                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">里程碑详情</h4>';
-                body += '<div class="tl-table-wrap"><table><thead><tr><th>节点名称</th><th>计划日期</th><th>实际日期</th><th>差异(天)</th><th>状态</th><th>原因</th></tr></thead><tbody>';
-                d.milestones.forEach(function(m) {
-                    var delayStyle = m.diff_days > 0 ? 'color:#dc2626;font-weight:600;' : (m.diff_days < 0 ? 'color:#16a34a;' : '');
-                    body += '<tr><td>' + (m.name || m.code) + '</td>';
-                    body += '<td>' + (m.planned_date || '-') + '</td>';
-                    body += '<td>' + (m.actual_date || '-') + '</td>';
-                    body += '<td style="' + delayStyle + '">' + (m.diff_days != null ? (m.diff_days > 0 ? '+' : '') + m.diff_days : '-') + '</td>';
-                    body += '<td>' + (m.status || '-') + '</td>';
-                    body += '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (m.diff_reason || m.reason_category || '-') + '</td></tr>';
-                });
-                body += '</tbody></table></div>';
-            }
-
-            if (d.diff_log && d.diff_log.length > 0) {
-                body += '<h4 style="font-size:0.85rem;margin-bottom:6px;">差异日志 (' + d.diff_log.length + '条)</h4>';
-                body += '<div class="tl-table-wrap"><table><thead><tr><th>节点</th><th>计划日期</th><th>实际日期</th><th>差异</th><th>原因</th><th>时间</th></tr></thead><tbody>';
-                d.diff_log.forEach(function(lg) {
-                    body += '<tr><td>' + (lg.milestone_code || '-') + '</td>';
-                    body += '<td>' + (lg.planned_date || '-') + '</td>';
-                    body += '<td>' + (lg.actual_date || '-') + '</td>';
-                    body += '<td>' + (lg.diff_days != null ? (lg.diff_days > 0 ? '+' : '') + lg.diff_days + '天' : '-') + '</td>';
-                    body += '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (lg.reason_detail || lg.reason_category || '-') + '</td>';
-                    body += '<td>' + (lg.created_at || '-') + '</td></tr>';
-                });
-                body += '</tbody></table></div>';
-            }
-
-            ov.querySelector('.tl-modal-body').innerHTML = body;
-        } catch(e) {
-            ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
-        }
-    };
-
-    window.showSuggestions = async function(projectId) {
-        _closeTimelineModal();
-        var ov = document.createElement('div');
-        ov.className = 'tl-modal-overlay';
-        ov.onclick = function(e) { if (e.target === ov) _closeTimelineModal(); };
-        ov.innerHTML = '<div class="tl-modal"><div class="tl-modal-header"><h3>规则建议</h3><button class="tl-modal-close" onclick="_closeTimelineModal()">×</button></div><div class="tl-modal-body" style="text-align:center;color:var(--card-muted);">加载中...</div></div>';
-        document.body.appendChild(ov);
-
-        async function _loadSuggestions() {
-            try {
-                var res = await fetch('/timeline/' + projectId + '/suggestions', { credentials: 'include' });
-                var d = await res.json();
-                if (!d.success) { ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">' + (d.error || '加载失败') + '</p>'; return; }
-                var suggestions = d.suggestions || [];
-                var body = '';
-                if (suggestions.length === 0) {
-                    body = '<p style="text-align:center;color:var(--card-muted);padding:24px 0;">暂无建议</p>';
-                } else {
-                    var priorityLabels = { critical: '严重', high: '高', medium: '中', info: '信息' };
-                    suggestions.forEach(function(s) {
-                        var p = s.priority || 'medium';
-                        body += '<div class="tl-suggestion-card">';
-                        body += '<span class="tl-priority-badge tl-priority-' + p + '">' + (priorityLabels[p] || p) + '</span>';
-                        body += '<div class="tl-suggestion-body">';
-                        body += '<div class="tl-suggestion-content">' + (s.content || '') + '</div>';
-                        if (s.suggestion) body += '<div class="tl-suggestion-advice">' + s.suggestion + '</div>';
-                        body += '</div>';
-                        body += '<button class="tl-suggestion-dismiss" onclick="event.stopPropagation();dismissSuggestion(' + projectId + ',' + s.id + ',this)">忽略</button>';
-                        body += '</div>';
-                    });
-                }
-                body += '<div class="tl-modal-actions"><button class="file-btn" style="font-size:0.72rem;" onclick="generateAiSuggestions(' + projectId + ')">🤖 AI生成建议</button></div>';
-                ov.querySelector('.tl-modal-body').innerHTML = body;
-            } catch(e) {
-                ov.querySelector('.tl-modal-body').innerHTML = '<p style="color:#ef4444;">加载失败: ' + e.message + '</p>';
-            }
-        }
-        _loadSuggestions();
-    };
-
-    window.dismissSuggestion = async function(projectId, suggestionId, btn) {
-        btn.disabled = true;
-        btn.textContent = '已忽略';
-        try {
-            await fetch('/timeline/' + projectId + '/suggestions/' + suggestionId, { method: 'POST', credentials: 'include' });
-            var card = btn.closest('.tl-suggestion-card');
-            if (card) card.style.opacity = '0.4';
-        } catch(e) { /* silent */ }
-    };
-
-    window.generateAiSuggestions = async function(projectId) {
-        var ov = document.querySelector('.tl-modal-overlay');
-        if (!ov) return;
-        var body = ov.querySelector('.tl-modal-body');
-        body.innerHTML = '<p style="text-align:center;color:var(--card-muted);">AI分析中，请稍候...</p>';
-        try {
-            var res = await fetch('/timeline/' + projectId + '/suggestions/generate', { method: 'POST', credentials: 'include' });
-            var d = await res.json();
-            if (d.success) {
-                showToast(d.message || 'AI建议已刷新', 'success');
-                showSuggestions(projectId);
-            } else {
-                body.innerHTML = '<p style="color:#ef4444;">' + (d.error || 'AI分析失败') + '</p>';
-            }
-        } catch(e) {
-            body.innerHTML = '<p style="color:#ef4444;">AI分析失败: ' + e.message + '</p>';
-        }
-    };
-
     // ======================== Usage Tab (Admin only) ========================
     const analyticsTabBtn = document.getElementById('analyticsTabBtn');
     const analyticsPanel = document.getElementById('analyticsPanel');
@@ -8307,22 +7948,6 @@
         });
     }
 
-    function _wireTimelineDetailActions(projectId, tl) {
-        setTimeout(function() {
-            document.querySelectorAll('.tl-list-entry').forEach(function(el) {
-                el.onclick = function() {
-                    var tid = parseInt(el.getAttribute('data-tid'));
-                    if (tid) _loadTimelineDetail(projectId, tid);
-                };
-            });
-            var newBtn = document.getElementById('tlNewBtn');
-            if (newBtn) newBtn.onclick = function() {
-                var setup = document.getElementById('timelineSetup');
-                setup.style.display = 'block';
-                _setupTimelineCreationForm(projectId);
-            };
-        }, 50);
-    }
     }
 
     // ======================== Todo Panel ========================

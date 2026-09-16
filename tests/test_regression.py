@@ -107,9 +107,6 @@ def test_compliance_xss_sanitization():
     app_src = _read('static/js/app.js')
     assert 'function _safeHTML(html)' in app_src, \
         "app.js must define the global _safeHTML() sanitizer"
-    comp = _read('static/js/compliance.js')
-    assert 'function _safeHTML(html)' not in comp, \
-        "compliance.js must not redefine _safeHTML (moved to app.js as a global)"
 
 
 def test_dompurify_cdn_in_index():
@@ -119,20 +116,16 @@ def test_dompurify_cdn_in_index():
         "index.html must load DOMPurify CDN for XSS sanitization"
 
 
-# ── FIX-2026-07-19-003: Tiptap ESM dynamic import (superseded) ──
-def test_tiptap_esm_dynamic_import():
-    with open('static/js/tiptap-editor.js', 'r', encoding='utf-8') as f:
-        content = f.read()
-    assert 'import(' in content, \
-        "tiptap-editor.js must use ESM dynamic import() from CDN"
-
-
-# ── FIX-2026-07-19-004: _taskIds.extracted preserved (superseded, check current state) ──
-def test_taskids_extracted_preserved():
-    with open('static/js/compliance.js', 'r', encoding='utf-8') as f:
-        content = f.read()
-    assert '_taskIds.extracted' in content, \
-        "compliance.js must set _taskIds.extracted for rules task ID tracking"
+# ── FIX-2026-09-15-056: compliance UI removed (降级 API-only) ──
+def test_compliance_frontend_removed():
+    import os
+    assert not os.path.exists(os.path.join('static', 'js', 'compliance.js')), \
+        "compliance.js removed (API-only downgrade)"
+    assert not os.path.exists(os.path.join('static', 'js', 'tiptap-editor.js')), \
+        "tiptap-editor.js removed (compliance-only editor)"
+    idx = _read('templates/index.html')
+    assert 'js/compliance.js' not in idx
+    assert 'tiptap-editor.js' not in idx
 
 
 # ── FIX-2026-07-19-005: law_monitor cursor fix ──
@@ -1788,11 +1781,11 @@ def test_mobile_more_fifth_tab_marked_admin():
 
 
 def test_safehtml_global_in_app_not_compliance():
+    import os
     app = _read('static/js/app.js')
     assert 'function _safeHTML(html)' in app, "app.js must define global _safeHTML"
-    comp = _read('static/js/compliance.js')
-    assert 'function _safeHTML(html)' not in comp, "compliance.js must not redefine _safeHTML"
-    assert '_safeHTML(' in comp, "compliance.js must still call the global _safeHTML"
+    assert not os.path.exists(os.path.join('static', 'js', 'compliance.js')), \
+        "compliance.js must be removed (was the old home of _safeHTML)"
 
 
 def test_dompurify_no_local_vendor_onerror():
@@ -1859,3 +1852,23 @@ def test_nightly_adapter_registry_schema_matches_readers(tmp_path, monkeypatch):
     assert info['active'] is True
     # reader contract in llm_provider must stay 'adapter_path'
     assert "info.get('adapter_path', '')" in _read('app/services/llm_provider.py')
+
+# ── FIX-2026-09-15-056: P1-B1 路由/前端降级 ──
+def test_audit_blueprint_removed():
+    import json
+    import os
+    assert not os.path.exists(os.path.join('app', 'routes', 'audit.py'))
+    assert not os.path.exists(os.path.join('static', 'js', 'bid-audit.js'))
+    assert not os.path.exists(os.path.join('tests', 'integration', 'test_audit.py'))
+    assert 'from app.routes.audit import audit_bp' not in _read('app/routes/__init__.py')
+    snap = json.loads(_read('tests/fixtures/routes_snapshot.json'))
+    assert not [r for r in snap if r['rule'].startswith('/audit')], "no /audit routes may remain"
+
+
+def test_timeline_api_only_downgrade():
+    idx = _read('templates/index.html')
+    assert 'timelinePanel' not in idx
+    app = _read('static/js/app.js')
+    assert 'loadTimelinePanel' not in app
+    assert 'timelineTabBtn' not in app
+    assert 'from app.routes.timeline import timeline_bp' in _read('app/routes/__init__.py')
