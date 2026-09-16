@@ -365,3 +365,44 @@ unresolved:
     resolution_plan: >
       立项规格：废标/流标事件表（项目、原因分类、依据条款、处理人）+ 重新招标
       关联 + 统计报表。表结构与流转逻辑待定，不实现。
+
+  - id: UNRESOLVED-026
+    title: "extended_laws 16 部条文补齐后接入合规检查（national-only + 核心 4 部守卫）"
+    status: pending
+    severity: medium
+    discovered: 2026-09-16
+    tags: ["合规", "数据依赖", "接线"]
+    context: >
+      data/laws/extended_laws.json 含 20 部法规，经逐条校验其前 4 部与
+      seed_laws.json 完全相同（严格超集，真实并集 = 20 部，非 24）。其中 16 部为
+      extended 独有，当前每部仅 2-3 条要点摘录（非全文），且全项目零引用 ——
+      引擎实际仅加载 seed 的 4 部。README 原宣称「法规库 24 部」即由此失真
+      （已于 FIX-057 诚实降为 4 部 + 扩-16 待补齐）。
+    decisions:
+      - "口径：16 部补齐全文后才接线（先补全条文数据再接线）"
+      - "只启用 scope=national（19 部）；广东省实施《招投标法》办法（scope=local）排除，待 UNRESOLVED-023 打通 region_code 后按地区启用"
+      - "_select_relevant_laws 加「核心 4 部始终包含」守卫（max_laws=15，63 条竞争下防核心法落榜）"
+      - "schema 归一化：extended 的 versions[].articles → 展平 {law_name,short_name,category,article,text,tags}（_load_seed_laws 为唯一加载点）"
+    sources:
+      - "政府采购法实施条例 → 国务院令658号 · gov.cn / flk.npc.gov.cn"
+      - "工程建设项目施工招标投标办法 → 七部委30号令 · ndrc.gov.cn"
+      - "评标委员会和评标方法暂行规定 → 七部委12号令 · ndrc.gov.cn"
+      - "必须招标的工程项目规定 → 发改委16号令 · ndrc.gov.cn"
+      - "政府采购货物和服务招标投标管理办法 → 财政部87号令 · mof.gov.cn"
+      - "政府采购非招标采购方式管理办法 → 财政部74号令 · mof.gov.cn"
+      - "政府采购质疑和投诉办法 → 财政部94号令 · mof.gov.cn"
+      - "电子招标投标办法 → 八部委20号令 · ndrc.gov.cn"
+      - "政府采购促进中小企业发展管理办法 → 财库〔2020〕46号 · mof.gov.cn"
+      - "关于促进政府采购公平竞争优化营商环境的通知 → 财库〔2019〕38号 · mof.gov.cn"
+      - "公共资源交易平台管理暂行办法 → 发改委39号令 · ndrc.gov.cn"
+      - "建设工程工程量清单计价规范 → GB50500-2013 · mohurd.gov.cn（要点摘录：总则/术语/计价方式/风险分担/清单编制/招标控制价/投标报价 约 20-30 条）"
+      - "关于进一步规范招标投标主体行为的通知 → gov.cn"
+      - "政府采购进口产品管理办法 → 财库〔2007〕119号 · mof.gov.cn"
+      - "招标投标违法行为记录公告暂行办法 → gov.cn / ndrc.gov.cn"
+      - "广东省实施《招投标法》办法 → 排除出接线，仅存档"
+    blocker: "16 部条文抓取录入（逐部核对条文数 + 标注 source_url/fetched_at）"
+    resolution_plan: >
+      按 sources 逐部抓取 → 转 JSON versions[0].articles[{article,text,tags}] +
+      source_url/fetched_at → 归一化接入 _load_seed_laws（national-only + 核心 4 部守卫）
+      → 更新 README/doc_drift 口径 → 1/1 工程基线回归（货物/服务 blocked）+ @code-reviewer
+      （命中 app/services + 合规路径）。
