@@ -1888,7 +1888,7 @@ def test_doc_drift_tracks_law_count():
     src = _read('scripts/check_doc_drift.py')
     assert '_count_laws' in src
     assert "'laws'" in src
-    assert '法规库（4 部' in _read('README.md')
+    assert '法规库（15 部' in _read('README.md')
 
 
 def test_docs_honest_after_audit():
@@ -1912,3 +1912,38 @@ def test_clearance_snapshot_skip_text_current():
     snap = _read('tests/fixtures/clearance_baseline/scores.json')
     assert '需外部数据源' not in snap
     assert '需交易平台数据（当前不可用）' in snap
+
+
+def test_compliance_law_pool_expanded():
+    """FIX-2026-09-15-058: engine loads core-4 + 11 extended national full-text laws."""
+    from app.services.compliance_checker import _get_seed_laws, _CORE_LAW_NAMES
+    laws = _get_seed_laws()
+    names = {l['law_name'] for l in laws}
+    for c in _CORE_LAW_NAMES:
+        assert c in names, f"core law missing: {c}"
+    for n in ('政府采购法实施条例', '工程建设项目施工招标投标办法',
+              '评标委员会和评标方法暂行规定', '电子招标投标办法',
+              '公共资源交易平台管理暂行办法', '政府采购货物和服务招标投标管理办法'):
+        assert n in names, f"extended law missing: {n}"
+    assert len(names) == 15, f"expected 15 loaded laws, got {len(names)}"
+    for l in laws:
+        assert l['law_name'] and l['article'] and l['text']
+
+
+def test_compliance_core_law_guard_wired():
+    """FIX-2026-09-15-058: the core-4 guard must exist and keep basics in selection."""
+    src = _read('app/services/compliance_checker.py')
+    assert '_CORE_LAW_NAMES' in src and 'Core-4 guard' in src
+    from app.services.compliance_checker import _select_relevant_laws, _CORE_LAW_NAMES
+    rules = [
+        {"category": "prohibition", "description": "串通投标 围标 弄虚作假 转包 分包", "original_text": ""},
+        {"category": "commercial", "description": "合同 价款 保证金 期限 报价", "original_text": ""},
+        {"category": "qualification", "description": "资质 资格 业绩 证书", "original_text": ""},
+        {"category": "technical", "description": "标准 技术 质量 规范", "original_text": ""},
+    ]
+    sel = _select_relevant_laws(rules)
+    assert 0 < len(sel) <= 15
+    picked = {l['law_name'] for l in sel}
+    # every core law that has any article must be represented (guard contract)
+    for c in _CORE_LAW_NAMES:
+        assert c in picked, f"core law crowded out: {c}"

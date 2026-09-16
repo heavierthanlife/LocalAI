@@ -78,13 +78,30 @@ def _count_indicators():
 
 
 def _count_laws():
-    """Distinct laws loaded into the compliance engine (data/laws/seed_laws.json)."""
-    path = os.path.join(PROJECT_ROOT, 'data', 'laws', 'seed_laws.json')
-    if not os.path.exists(path):
-        return -1
-    with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    return len({x['law_name'] for x in data if isinstance(x, dict) and x.get('law_name')})
+    """Distinct laws loaded into the compliance engine.
+
+    Mirrors compliance_checker._load_seed_laws: seed core laws + extended laws
+    that are national (scope=national) and fully sourced (source_url set).
+    """
+    names = set()
+    seed = os.path.join(PROJECT_ROOT, 'data', 'laws', 'seed_laws.json')
+    if os.path.exists(seed):
+        with open(seed, 'r', encoding='utf-8') as f:
+            for x in json.load(f):
+                if isinstance(x, dict) and x.get('law_name') and x.get('articles'):
+                    names.add(x['law_name'])
+    ext = os.path.join(PROJECT_ROOT, 'data', 'laws', 'extended_laws.json')
+    if os.path.exists(ext):
+        with open(ext, 'r', encoding='utf-8') as f:
+            for x in json.load(f):
+                if not (isinstance(x, dict) and x.get('scope') == 'national'
+                        and x.get('source_url') and x.get('law_name')):
+                    continue
+                arts = next((v.get('articles', []) for v in x.get('versions', [])
+                             if v.get('is_current')), [])
+                if arts:
+                    names.add(x['law_name'])
+    return len(names) if names else -1
 
 
 # metric -> (compute, [(file, regex-with-1-group, human_label)])

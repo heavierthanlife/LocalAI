@@ -8,6 +8,25 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — 合规法规库扩展：接入 11 部国家级法规全文 + 核心 4 部守卫（FIX-058）
+
+### Added
+- **合规引擎法规池 4 → 15 部 / 619 条**（`app/services/compliance_checker.py`）：`_load_seed_laws` 合并 seed 核心 4 部 + `extended_laws.json` 中 `scope=national` 且 `source_url` 完整的 11 部（去重、核心优先）。新增：政府采购法实施条例(79) · 工程建设项目施工招标投标办法(92) · 评标委员会和评标方法暂行规定(62) · 必须招标的工程项目规定(6) · 政府采购货物和服务招标投标管理办法(88) · 政府采购非招标采购方式管理办法(62) · 政府采购质疑和投诉办法(45) · 电子招标投标办法(66) · 政府采购促进中小企业发展管理办法(25) · 公共资源交易平台管理暂行办法(48) · 招标投标违法行为记录公告暂行办法(21)。全部溯源自 www.gov.cn 官方公报/政策库，条文数与法定一致（详见 UNRESOLVED-026）。
+- **核心 4 部守卫**（`_select_relevant_laws`）：`max_laws=15` 截断后，若某核心法（招标投标法/实施条例/政府采购法/民法典合同编）有相关条文却被挤出，则用其最高分条文替换末位非核心法，确保基础法条不被新增规章挤出。
+
+### Changed
+- **README 法规库口径 4 → 15 部**；`scripts/check_doc_drift.py::_count_laws` 口径同步为「已加载法规数」=15。
+- `data/fix_registry.yaml`：`FIX-2026-09-15-058`（6 不变量）；回归新增 `test_compliance_law_pool_expanded` / `test_compliance_core_law_guard_wired`。
+- `scripts/fetch_extended_laws.py`：解析器加行首约束（剔除正文内交叉引用）+ law-name 校验守卫（错页拒绝）。
+
+### Notes
+- 余 5 部未接入：38号/119号（未收录 gov.cn 政策库）· 规范招标投标主体行为若干意见（非条文结构）· GB50500（要点摘录）· 广东省办法（local 排除接线）。
+
+regression: 1/1 clearance baseline passed
+151/151 regression · 161/161 含路由守护+冒烟 · verify_fixes 256/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — 文档诚实性整改：生成器硬编码 + 法规库口径 + 陈旧文档/快照（FIX-057）
 
 ### Fixed

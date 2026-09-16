@@ -1550,7 +1550,7 @@ fixes:
         pattern: "_count_laws"
       - type: literal
         file: README.md
-        pattern: "法规库（4 部"
+        pattern: "法规库（15 部"
       - type: literal_not
         file: docs/USER_MANUAL.md
         pattern: "DEEPSEEK_API_KEY"
@@ -1563,3 +1563,35 @@ fixes:
       - type: literal_not
         file: tests/fixtures/clearance_baseline/scores.json
         pattern: "需外部数据源"
+
+  - id: FIX-2026-09-15-058
+    title: "合规法规库扩展：接入 11 部国家级法规全文 + 核心 4 部守卫"
+    severity: medium
+    rationale: >
+      extended_laws.json 的扩展法规原先全项目零引用（引擎仅加载 seed 4 部），README 宣称失真
+      （FIX-057 已诚实降为 4 部）。本批补全 11 部全文（gov.cn 官方源，见 UNRESOLVED-026）并接入：
+      (1) _load_seed_laws 合并 seed 核心 4 部 + extended 中 scope=national 且 source_url 完整的
+          11 部（去重，核心优先）→ 15 部法规 619 条。
+      (2) _select_relevant_laws 加「核心 4 部守卫」：max_laws=15 截断后，若某核心法有相关条文却被
+          挤出，则用其最高分条文替换末位非核心法，确保基础法条不被新增规章挤出。
+      (3) check_doc_drift._count_laws 口径同步为「已加载法规数」=15；README 写 15 部。
+      合规路径行为变更 → 1/1 工程基线回归 + @code-reviewer。
+    checks:
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "_CORE_LAW_NAMES"
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "extended_laws.json"
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: 'law.get("scope") != "national"'
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "Core-4 guard"
+      - type: literal
+        file: README.md
+        pattern: "法规库（15 部"
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: "extended_laws.json"

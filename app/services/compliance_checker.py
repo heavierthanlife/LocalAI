@@ -27,31 +27,70 @@ COMPLIANCE_DIR = os.path.join(str(_DATA_DIR), "compliance_results")
 os.makedirs(COMPLIANCE_DIR, exist_ok=True)
 
 
+def _flatten_law(law: dict, articles) -> list[dict]:
+    """Expand a law into flat article dicts (engine's canonical shape)."""
+    return [{
+        "law_name": law["law_name"],
+        "short_name": law.get("short_name", law["law_name"]),
+        "category": law.get("category", ""),
+        "article": art["article"],
+        "text": art["text"],
+        "tags": art.get("tags", []),
+    } for art in articles]
+
+
 def _load_seed_laws() -> list[dict]:
-    """Load built-in core laws from seed data."""
+    """Load built-in laws = core seed laws + national extended laws (full text).
+
+    Core seed (seed_laws.json) is always loaded. extended_laws.json contributes
+    entries that are national (scope=national) AND fully sourced (source_url set,
+    i.e. complete article text, FIX-058) — ministry mirrors / non-article docs and
+    local regulations are skipped. Deduped by law_name (core wins).
+    """
+    laws: list[dict] = []
+    seen = set()
+
     seed_path = os.path.join(str(_DATA_DIR), "laws", "seed_laws.json")
-    if not os.path.exists(seed_path):
+    if os.path.exists(seed_path):
+        try:
+            with open(seed_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for law in data:
+                laws.extend(_flatten_law(law, law.get("articles", [])))
+                seen.add(law["law_name"])
+            logger.info(f"Loaded {len(data)} core laws from seed data")
+        except Exception as e:
+            logger.error(f"Failed to load seed laws: {e}")
+    else:
         logger.warning(f"Seed laws not found at {seed_path}")
-        return []
-    try:
-        with open(seed_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        laws = []
-        for law in data:
-            for art in law.get("articles", []):
-                laws.append({
-                    "law_name": law["law_name"],
-                    "short_name": law.get("short_name", law["law_name"]),
-                    "category": law.get("category", ""),
-                    "article": art["article"],
-                    "text": art["text"],
-                    "tags": art.get("tags", []),
-                })
-        logger.info(f"Loaded {len(laws)} law articles from seed data ({len(data)} laws)")
-        return laws
-    except Exception as e:
-        logger.error(f"Failed to load seed laws: {e}")
-        return []
+
+    ext_path = os.path.join(str(_DATA_DIR), "laws", "extended_laws.json")
+    ext_laws = 0
+    if os.path.exists(ext_path):
+        try:
+            with open(ext_path, 'r', encoding='utf-8') as f:
+                ext = json.load(f)
+            for law in ext:
+                name = law.get("law_name")
+                if not name or name in seen:
+                    continue
+                if law.get("scope") != "national":
+                    continue
+                if not law.get("source_url"):
+                    continue  # only fully-sourced full text
+                arts = next((v.get("articles", []) for v in law.get("versions", [])
+                             if v.get("is_current")), [])
+                if not arts:
+                    continue
+                laws.extend(_flatten_law(law, arts))
+                seen.add(name)
+                ext_laws += 1
+            logger.info(f"Loaded {ext_laws} extended national laws (full text)")
+        except Exception as e:
+            logger.error(f"Failed to load extended laws: {e}")
+
+    logger.info(f"Total built-in laws: {len(seen)} laws, {len(laws)} articles")
+    return laws
 
 
 # Cache seed laws in memory
@@ -63,6 +102,16 @@ def _get_seed_laws() -> list[dict]:
     if _SEED_LAWS is None:
         _SEED_LAWS = _load_seed_laws()
     return _SEED_LAWS
+
+
+# Core national laws that must always be represented in the selected set
+# (FIX-058: prevent newly-added regulations from crowding out the basics).
+_CORE_LAW_NAMES = (
+    "中华人民共和国招标投标法",
+    "中华人民共和国招标投标法实施条例",
+    "中华人民共和国政府采购法",
+    "中华人民共和国民法典（合同编·建设工程合同）",
+)
 
 
 def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
@@ -153,7 +202,27 @@ def _select_relevant_laws(rules: list[dict], max_laws: int = 15) -> list[dict]:
             seen.add(key)
 
     scored_with_sem.sort(key=lambda x: x[0], reverse=True)
-    return [law for _, law in scored_with_sem[:max_laws]]
+    selected = [law for _, law in scored_with_sem[:max_laws]]
+
+    # Core-4 guard (FIX-058): each core law that has any relevant article must be
+    # represented, so the expanded regulation pool cannot crowd out the basics.
+    present = {law.get('law_name') for law in selected}
+    for core_name in _CORE_LAW_NAMES:
+        if core_name in present:
+            continue
+        cand = next((law for _, law in scored_with_sem
+                     if law.get('law_name') == core_name), None)
+        if not cand:
+            continue
+        if len(selected) < max_laws:
+            selected.append(cand)
+        else:
+            for i in range(len(selected) - 1, -1, -1):
+                if selected[i].get('law_name') not in _CORE_LAW_NAMES:
+                    selected[i] = cand
+                    break
+        present.add(core_name)
+    return selected
 
 
 def _match_rule_to_text(rule: dict, bid_text: str) -> Optional[str]:
