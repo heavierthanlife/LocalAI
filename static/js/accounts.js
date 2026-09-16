@@ -46,6 +46,7 @@
         if (authData.role) sessionStorage.setItem('role', authData.role);
         else if (authData.is_admin) sessionStorage.setItem('role', 'admin');
         sessionStorage.setItem('is_auditor', (authData.is_auditor || authData.is_admin) ? '1' : '0');
+        sessionStorage.setItem('hasLLM', authData.has_llm ? 'true' : 'false');
         const username = authData.username || sessionStorage.getItem('username') || '';
         const isAdmin = authData.is_admin || false;
 

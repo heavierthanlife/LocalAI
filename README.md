@@ -25,7 +25,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 | Web | Flask 3.1 + gunicorn/gevent | App factory，17 Blueprint |
 | 数据库 | PostgreSQL 16 + psycopg2 连接池 | 72 张表，`CREATE TABLE IF NOT EXISTS` 幂等管理 |
 | 缓存/消息 | Redis 7 + Celery 5 | Broker + Beat 调度 |
-| AI/LLM | LangChain + LangGraph + OpenRouter(:free) / NVIDIA NIM | 2 供应商 + fallback 链 + 熔断器 |
+| AI/LLM | LangChain + LangGraph + OpenRouter(:free) / NVIDIA NIM | 2 供应商直连 |
 | 向量 | ChromaDB + sentence-transformers | 语义检索、RAG、知识库 |
 | 文档处理 | python-docx / PyMuPDF / openpyxl / MarkItDown / EasyOCR | 全格式提取 + OCR |
 | 自动化 | Selenium + Edge/Chrome WebDriver | 企业信用查询 |

@@ -1,7 +1,7 @@
 ﻿/* Chat System module - extracted from app.js (W4) */
     // QA-Loop C8: 渲染 markdown 前统一消毒（纵深防御）。
     // md 以 html:false 初始化会转义原始 HTML，但 DOMPurify 兜底可拦截
-    // 转义之外的注入面（如未来切换 md 配置/插件）。_safeHTML 定义于 compliance.js，
+    // 转义之外的注入面（如未来切换 md 配置/插件）。_safeHTML 定义于 app.js，
     // 未加载时原样输出 md.render 结果。
     function _renderMarkdown(src) {
         var html = (typeof md !== 'undefined' && typeof md.render === 'function') ? md.render(src || '') : String(src || '');

@@ -247,3 +247,20 @@ unresolved:
       收集脱敏真实文档 → 放入 tests/fixtures/clearance_baseline/ → 更新
       meta.json doc_types + 重算 scores.json 快照。在拿到数据前不调整权重
       （避免用工程类权重误判其他类型）。
+
+  - id: UNRESOLVED-018
+    title: "llm_fallback.py 未接线 —— 多供应商 fallback/熔断仅存在于测试"
+    status: pending
+    severity: low
+    discovered: 2026-09-15
+    tags: ["架构", "待定"]
+    context: >
+      app/services/llm_fallback.py 实现了 catalog 驱动的 fallback 链
+      （指数退避 + 熔断），但全项目仅 tests 引用，运行时未接线。
+      当前 LLM 调用为单供应商直连（app/services/llm_provider.py）。
+      README/AGENTS/ARCHITECTURE 中原有的「fallback 链 + 熔断器」宣称
+      已于 2026-09-15 降级为文档修正（FIX-054）。
+    blocked_by: "需评估是否值得接入（当前单供应商可用）"
+    resolution_plan: >
+      若要接线：在 llm_provider 的模型创建处包裹 create_chat_model_with_fallback，
+      并补一个失败切换的回归测试。否则保持文档如实描述单供应商直连。

@@ -1376,3 +1376,45 @@ fixes:
       - type: literal
         file: docs/ARCHITECTURE.md
         pattern: "休眠指标分类"
+
+  - id: FIX-2026-09-15-054
+    title: "P0 空转修复：hasLLM 覆盖 / _safeHTML 迁移 / 更多下拉 / fallback 文档降级"
+    severity: high
+    rationale: >
+      四路审计确认的 5 项 P0 空转/漂移，逐项确定性修复：
+      (1) hasLLM 唯一写点在 app.js 的 loadAccountModal，被后加载的 accounts.js
+          同名函数覆盖且未带该行 → 清标「AI 评审」恒关。在 accounts.js 补回 setItem。
+      (2) _safeHTML 定义于 compliance.js，但 chat.js:8/1005 依赖它；chat.js:1005
+          缺该函数时回退原始 innerHTML = XSS 风险。迁到 app.js 作安全全局。
+      (3) index.html 的 DOMPurify onerror 指向不存在的本地 vendor js/purify.min.js，
+          直接删除（CDN 失败时由 _safeHTML 纯文本转义兜底）。
+      (4) 移动端「更多」恒空：CSS 设计为「first 4 visible, tabs 5+ into more」，
+          而 index.html 第 5 个主标签 analyticsTabBtn 缺 admin-tab 类。补类对齐收集器。
+      (5) README/AGENTS/ARCHITECTURE 宣称的 LLM「fallback 链 + 熔断器」未接线
+          （llm_fallback.py 仅 tests 引用）→ 文档如实降级为单供应商直连，接线记
+          data/unresolved.yaml UNRESOLVED-018。
+    checks:
+      - type: literal
+        file: static/js/accounts.js
+        pattern: "sessionStorage.setItem('hasLLM', authData.has_llm ? 'true' : 'false');"
+      - type: literal
+        file: static/js/app.js
+        pattern: "function _safeHTML(html) {"
+      - type: literal_not
+        file: static/js/compliance.js
+        pattern: "function _safeHTML(html) {"
+      - type: literal_not
+        file: templates/index.html
+        pattern: "filename='js/purify.min.js'"
+      - type: literal
+        file: templates/index.html
+        pattern: 'id="analyticsTabBtn" class="tab-btn admin-tab"'
+      - type: literal_not
+        file: README.md
+        pattern: "fallback 链 + 熔断器"
+      - type: literal_not
+        file: docs/ARCHITECTURE.md
+        pattern: "fallback 链：指数退避 + 熔断器"
+      - type: literal
+        file: app/services/compliance_checker.py
+        pattern: "当前未生效：law_regions/region_manager 空置"

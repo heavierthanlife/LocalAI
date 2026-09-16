@@ -283,7 +283,7 @@ class ComplianceChecker:
         bid_doc_name: str = "",
         use_ai: bool = True,
         custom_laws: list[dict] = None,
-        region_code: str = None,
+        region_code: str = None,  # 当前未生效：law_regions/region_manager 空置，地方法规接入=P2
     ) -> dict:
         """Run full compliance check on a bid document.
 
@@ -293,7 +293,7 @@ class ComplianceChecker:
             bid_doc_name: filename for logging
             use_ai: use AI for judgment (False = keyword fallback)
             custom_laws: user-supplied law articles to check against
-            region_code: optional region code for region-specific law selection
+            region_code: optional region code for region-specific law selection（当前未生效，参数已被吞）
 
         Returns:
             dict with:

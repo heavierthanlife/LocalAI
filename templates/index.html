@@ -267,7 +267,7 @@
             <button id="adminTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">folder_open</span> 项目管理</button>
             <button id="knowledgeLabTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">menu_book</span> 知识中心</button>
             <button id="recycleBinTabBtn" class="tab-btn"><span class="msi msi-sm" aria-hidden="true">delete</span> 回收站</button>
-            <button id="analyticsTabBtn" class="tab-btn" style="font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">settings</span> 系统管理</button>
+            <button id="analyticsTabBtn" class="tab-btn admin-tab" style="font-size:0.7rem;"><span class="msi msi-sm" aria-hidden="true">settings</span> 系统管理</button>
         </div>
         <!-- Hidden placeholders for module compatibility -->
         <div id="wikiTabBtn" style="display:none"></div>
@@ -811,8 +811,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js" crossorigin="anonymous"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" crossorigin="anonymous"
-        onerror="this.onerror=null;this.src='{{ url_for('static', filename='js/purify.min.js') }}'"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" crossorigin="anonymous"></script>
 <script defer src="{{ url_for('static', filename='js/graph-view.js') }}?v={{ cache_buster }}"></script>
 <script defer src="{{ url_for('static', filename='js/compliance.js') }}?v={{ cache_buster }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/tiptap-editor.js') }}?v={{ cache_buster }}"></script>

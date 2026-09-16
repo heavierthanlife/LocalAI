@@ -35,7 +35,7 @@
 1. **HTTP 请求** → nginx（HTTPS 终结，12G body limit）→ gunicorn（4 workers, gevent, 120s timeout）
 2. **Flask** → `create_app()` 注册 17 Blueprint → 路由分发
 3. **路由层**（`app/routes/`）→ 参数校验 + 权限检查 → 调用服务层
-4. **服务层**（`app/services/`）→ 业务逻辑 → DB（`database.py` 连接池）或 LLM（`llm_provider.py` + fallback）
+4. **服务层**（`app/services/`）→ 业务逻辑 → DB（`database.py` 连接池）或 LLM（`llm_provider.py`）
 5. **响应** → `ok()`/`err()` 标准化 JSON（`app/utils/helpers.py`）
 6. **长任务**（清标/深度分析/审计）→ Celery 异步 + `task_bus.py`（Redis pub/sub）→ SSE 流式推送进度
 
@@ -64,9 +64,9 @@
 
 ## 服务层核心设计
 
-### 1. LLM 多供应商路由 `llm_provider.py` + `llm_fallback.py`
+### 1. LLM 供应商路由 `llm_provider.py`
 - 2 供应商（FIX-016）：OpenRouter（`:free` 免费池）/ NVIDIA NIM
-- fallback 链：指数退避 + 熔断器
+- fallback 链（指数退避 + 熔断器）尚未接线，当前单供应商直连（`llm_fallback.py` 仅 tests 引用）
 - prompt 安全层 `prompt_safety.py`：注入防护 + anti-hallucination
 - `agent_middleware.py`：InvalidToolGuard 幻觉工具调用防护
 
@@ -77,7 +77,7 @@
 ### 3. 文档解析 `file_processing.py`
 - 全格式提取：PDF（PyMuPDF/fitz）/ DOCX/XLSX/PPTX（MarkItDown + python-docx/openpyxl）/ 旧 .doc（LibreOffice）/ 扫描件 OCR（EasyOCR，`OCR_GPU=auto` 支持 GPU）
 - 文本相似度：TF-IDF cosine + 中文停用词 + 模板去除
-- VL 描述 + 熔断器
+- VL 描述（独立解耦，`vl_model.py`）
 - 21 处导入点（高耦合，审计决定保留不拆）
 
 ### 4. 清标引擎 `clearance_engine.py` + `document_analysis_svc.py`
@@ -141,7 +141,7 @@ graph LR
 | Blueprint 分层 | `app/routes/` | 17 蓝图职责明确 |
 | Composition | `compliance_checker` + `TemplateDeviationChecker` | 避免 God class |
 | 三级 DB 连接 | `database.py` | 环境→URI→fallback |
-| 熔断器 | `llm_fallback.py` / VL | 外部依赖保护 |
+| LLM 供应商 | `llm_provider.py` | OpenRouter + NVIDIA 直连（fallback 未接线） |
 | 路径可移植 | `config.py:to_rel_path/resolve_path` | 跨机器路径透明 |
 | 回收站 | `recycle_bin_service.py` | 4 表 + 递归恢复 + 过期清理 |
 | Fix Registry | `data/fix_registry.yaml` | 修复不变异（pre-commit 校验） |

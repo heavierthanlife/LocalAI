@@ -8,6 +8,27 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-15] — P0 空转修复：hasLLM / _safeHTML / 更多下拉 / fallback 文档降级（FIX-054）
+
+### Fixed
+- **清标「AI 评审」恒关（①）**：`hasLLM` 唯一写点位于 `app.js` 的 `loadAccountModal`，但被后加载的 `accounts.js` 同名函数覆盖且未带该行 → `hasLLM` 恒为旧值/空。在 `accounts.js:38` 的 `loadAccountModal` 补回 `sessionStorage.setItem('hasLLM', authData.has_llm ? 'true' : 'false')`。
+- **移动端「更多」下拉恒空（⑩）**：CSS 设计为「first 4 visible, tabs 5+ into more」，但 `index.html` 第 5 个主标签 `analyticsTabBtn`（系统管理）缺 `admin-tab` 类 → `app.js` 收集器 `#tabBar .admin-tab` 与 `updateMobileLayout` 均匹配不到元素。补类对齐。**偏离 handoff 字面**（原计划改 `app.js` 选 `.tab-btn`，会把 5 个标签含「智能对话」全部藏进「更多」，属 UX 回退；已与用户确认采用补给第 5 标签加类方案）。
+- **XSS 兜底缺失（⑬）**：`_safeHTML` 定义于 `compliance.js`，但 `chat.js:8/1005` 依赖它，缺省时回退原始 `innerHTML`。将 `_safeHTML` 迁到 `app.js` 作安全全局；`compliance.js` 内部 2 处调用改走全局；`chat.js` 注释同步更新。
+- **DOMPurify 本地 vendor 404**：`index.html` 的 DOMPurify `onerror` 指向不存在的 `static/js/purify.min.js`，删除该 `onerror`（CDN 失败时由 `_safeHTML` 纯文本转义兜底）。
+
+### Changed
+- **region_code 现状注释（⑤）**：`compliance_checker.py` 的 `check()` 签名与 docstring 标注「当前未生效：law_regions/region_manager 空置，地方法规接入=P2」。不改签名、不改 6 处调用。
+- **LLM fallback 文档降级（②）**：删 `README.md` / `docs/ARCHITECTURE.md` 中「fallback 链 + 熔断器」宣称（`llm_fallback.py` 未接线，仅 tests 引用），改为如实描述单供应商直连；`AGENTS.md` 的 fallback 条目同步修正。
+
+### Added
+- fix_registry `FIX-2026-09-15-054`（8 项 invariant）；回归 `test_hasllm_written_by_accounts_loader` / `test_mobile_more_fifth_tab_marked_admin` / `test_safehtml_global_in_app_not_compliance` / `test_dompurify_no_local_vendor_onerror` / `test_region_code_documented_inactive` / `test_llm_fallback_claims_downgraded`（+6）。`test_compliance_xss_sanitization` 改为断言全局定义在 `app.js`。
+- `data/unresolved.yaml` `UNRESOLVED-018`（llm_fallback 未接线 backlog）。
+
+### regression: 1/1 clearance baseline passed（无清标算法改动）
+139/139 regression · verify_fixes 221/0 · doc_drift 14/14
+
+---
+
 ## [2026-09-15] — 移除 Headroom/Kompress + 休眠指标文案明确化（FIX-053）
 
 ### Removed

@@ -101,7 +101,7 @@ Every feature upgrade must include regression verification:
 
 - **活跃 provider**：OpenRouter（`:free` 免费池）+ NVIDIA NIM。旧 5 个 provider（deepseek/zhipu/qwen/siliconflow/mimo）已注释保留，`PROVIDER_CONFIG` 只含活跃 2 个。
 - **动态免费目录**：`app/services/llm_catalog.py` 每天（Celery beat 2:30 + APScheduler 24h + 启动补拉）拉取两源 `/models`，过滤免费模型存 `data/llm_catalog.json`。**固定白名单 + 动态兜底**：白名单主力 `nvidia/nemotron-3-ultra-550b-a55b:free`（1M ctx），池内缺失则回退第一个免费模型。
-- **fallback 链**：`llm_fallback.py` 从 catalog 构建（openrouter → nvidia），`DEFAULT_CHAIN` 兜底。
+- **fallback 链**：`llm_fallback.py` 尚未接线（仅 tests 引用），当前为单供应商直连；接线见 `data/unresolved.yaml`。
 - **VL**：`vl_model.py` 独立解耦，默认 `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`。
 - **环境变量**：`OPENROUTER_API_KEY` / `NVIDIA_API_KEY`（.env / docker-compose 透传）。
 

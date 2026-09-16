@@ -363,6 +363,16 @@
         });
     }
 
+    // 全局 XSS 消毒入口；无 DOMPurify vendor 时降级为纯文本转义
+    function _safeHTML(html) {
+        if (typeof DOMPurify !== 'undefined') {
+            return DOMPurify.sanitize(html);
+        }
+        var div = document.createElement('div');
+        div.textContent = html;
+        return div.innerHTML;
+    }
+
     // 清标风险判定：铁证触发(hard_alarm)或高分按红/黄预警，供各渲染路径统一着色
     function isClearanceHighRisk(info) {
         return !!(info && (info.hard_alarm || (info.total_score || 0) >= 60));

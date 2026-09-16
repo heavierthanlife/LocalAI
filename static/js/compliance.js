@@ -1,15 +1,6 @@
 // ── Compliance Module (split from app.js) ──
 // Exposed via window.Compliance namespace + legacy window aliases for inline handlers
 
-function _safeHTML(html) {
-    if (typeof DOMPurify !== 'undefined') {
-        return DOMPurify.sanitize(html);
-    }
-    var div = document.createElement('div');
-    div.textContent = html;
-    return div.innerHTML;
-}
-
 window.Compliance = {
     _taskIds: {},
     markFeedback: null,

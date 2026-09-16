@@ -102,12 +102,14 @@ def test_verdict_normalization_in_compliance_checker():
         "compliance_checker.py must normalize verdicts via .lower() to avoid case mismatch"
 
 
-# ── FIX-2026-07-19-002: XSS sanitization via _safeHTML ──
+# ── FIX-2026-07-19-002 / FIX-2026-09-15-054: XSS sanitization via global _safeHTML ──
 def test_compliance_xss_sanitization():
-    with open('static/js/compliance.js', 'r', encoding='utf-8') as f:
-        content = f.read()
-    assert '_safeHTML' in content, \
-        "compliance.js must define _safeHTML() for HTML sanitization"
+    app_src = _read('static/js/app.js')
+    assert 'function _safeHTML(html)' in app_src, \
+        "app.js must define the global _safeHTML() sanitizer"
+    comp = _read('static/js/compliance.js')
+    assert 'function _safeHTML(html)' not in comp, \
+        "compliance.js must not redefine _safeHTML (moved to app.js as a global)"
 
 
 def test_dompurify_cdn_in_index():
@@ -1769,5 +1771,43 @@ def test_headroom_removed_and_skip_label():
     assert '需外部数据源（交易平台/评标系统数据）' not in da
     assert '休眠指标分类' in _read('docs/ARCHITECTURE.md')
 
+# ── FIX-2026-09-15-054: P0 空转修复 ──
+def test_hasllm_written_by_accounts_loader():
+    acc = _read('static/js/accounts.js')
+    assert "sessionStorage.setItem('hasLLM', authData.has_llm ? 'true' : 'false');" in acc, \
+        "accounts.js must persist hasLLM (it shadows app.js loadAccountModal)"
+    app = _read('static/js/app.js')
+    assert "document.querySelectorAll('#tabBar .admin-tab')" in app, \
+        "mobile 'more' collector must still target .admin-tab"
 
 
+def test_mobile_more_fifth_tab_marked_admin():
+    idx = _read('templates/index.html')
+    assert 'id="analyticsTabBtn" class="tab-btn admin-tab"' in idx, \
+        "5th main tab must carry admin-tab so mobile 'more' is not always empty"
+
+
+def test_safehtml_global_in_app_not_compliance():
+    app = _read('static/js/app.js')
+    assert 'function _safeHTML(html)' in app, "app.js must define global _safeHTML"
+    comp = _read('static/js/compliance.js')
+    assert 'function _safeHTML(html)' not in comp, "compliance.js must not redefine _safeHTML"
+    assert '_safeHTML(' in comp, "compliance.js must still call the global _safeHTML"
+
+
+def test_dompurify_no_local_vendor_onerror():
+    idx = _read('templates/index.html')
+    assert "filename='js/purify.min.js'" not in idx, \
+        "index.html must not point onerror at the missing local purify vendor"
+    assert 'purify.min.js' in idx, "DOMPurify CDN must remain"
+
+
+def test_region_code_documented_inactive():
+    assert '当前未生效：law_regions/region_manager 空置' in _read('app/services/compliance_checker.py'), \
+        "region_code swallow must be documented as inactive"
+
+
+def test_llm_fallback_claims_downgraded():
+    assert 'fallback 链 + 熔断器' not in _read('README.md')
+    assert 'fallback 链：指数退避 + 熔断器' not in _read('docs/ARCHITECTURE.md')
+    assert 'llm_fallback.py' in _read('AGENTS.md'), "backlog note must remain in AGENTS.md"
