@@ -401,6 +401,14 @@ unresolved:
       - "招标投标违法行为记录公告暂行办法 → gov.cn / ndrc.gov.cn"
       - "广东省实施《招投标法》办法 → 排除出接线，仅存档"
     blocker: "16 部条文抓取录入（逐部核对条文数 + 标注 source_url/fetched_at）"
+    progress: >
+      2026-09-16: 3/16 已补全全文（工程建设项目施工招标投标办法 92 条 · 评标委员会和评标方法
+      暂行规定 62 条 · 必须招标的工程项目规定 6 条），均来自 gov.cn 官方页，source_url/fetched_at
+      已写入 JSON（commit 938cb4d）。工具 scripts/fetch_extended_laws.py 就绪（解析器顺序号消歧 +
+      law-name 校验守卫防错页）。待补 13 部：电子招标投标办法（ndrc/moj 页解析失败，需换源）、
+      政府采购法实施条例 / 87 / 74 / 94 / 46 / 38 号 / 39 号 / 119 号令 / 违法行为记录办法 /
+      规范主体行为通知 / 清单计价规范(摘录)。注意：搜索引擎对脚本化与多次查询已降级返回无关结果，
+      URL 发现需人工逐一在 gov.cn 政策库/国务院公报检索，故本任务分多次会话推进。
     resolution_plan: >
       按 sources 逐部抓取 → 转 JSON versions[0].articles[{article,text,tags}] +
       source_url/fetched_at → 归一化接入 _load_seed_laws（national-only + 核心 4 部守卫）
