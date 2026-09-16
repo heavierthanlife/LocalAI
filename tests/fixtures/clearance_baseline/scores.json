@@ -29,7 +29,7 @@
     "same_dongle": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "tech_section_similar": {
       "score": 0,
@@ -44,22 +44,22 @@
     "bid_ip_same": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "decrypt_ip_same": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "download_ip_same": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_file_code_same": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_contact_same": {
       "score": 0,
@@ -69,27 +69,27 @@
     "tender_query": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "candidate_give_up": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "subjective_expert_spread": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "low_win_rate": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "high_win_rate": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "bidder_count_abnormal": {
       "score": 15,
@@ -99,32 +99,32 @@
     "upload_interval_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "subjective_expert_units": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "specific_expert_score": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "clique_expert_scoring": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "clique_expert_consistency": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "objective_score_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "high_price_abnormal": {
       "score": 20,
@@ -134,72 +134,72 @@
     "extension_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "tender_fail_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "waste_rate_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "download_no_bid": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "no_show_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "expert_deviation_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_bid_ip": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_decrypt_ip": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_machine_code": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "bidder_agent_contact": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "expert_tenderer_closeness": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "expert_agent_closeness": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_download_ip": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "cross_dongle": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "tech_seal_check": {
       "score": 0,
@@ -209,22 +209,22 @@
     "expert_bidder_closeness": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "bad_expert_score": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "tech_score_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "commercial_score_abnormal": {
       "score": 0.0,
       "skipped": true,
-      "result": "○ 需外部数据源（交易平台/评标系统数据）"
+      "result": "○ 需交易平台数据（当前不可用）"
     },
     "quote_proportional_float": {
       "score": 0.0,

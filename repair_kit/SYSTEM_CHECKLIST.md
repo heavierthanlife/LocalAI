@@ -1,9 +1,8 @@
 # System Health Checklist — Automated Audit
 
-> Generated: auto  |  verify_fixes.py: 21/21 pass  |  
-> regression tests: 16/16 pass
-> Fix applied: law_monitor cursor (FIX-019-005), XSS/DOMPurify (FIX-019-002), 
-> NVIDIA cleanup, pre-commit blocking hook
+> Generated: 2026-09-16 13:51 (auto)
+> verify_fixes.py: 250/250 pass (0 failure(s))
+> Checklist: 135 items — 131 pass / 4 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
 

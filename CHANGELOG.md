@@ -8,6 +8,28 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — 文档诚实性整改：生成器硬编码 + 法规库口径 + 陈旧文档/快照（FIX-057）
+
+### Fixed
+- **`scripts/check_system.py` 头部硬编码计数**：原写死 `verify_fixes.py: 21/21` 与 `regression tests: 16/16`，每次重新生成 `SYSTEM_CHECKLIST.md` 都写回数月前的旧值。改为动态：`_verify_fixes_summary()` 实跑 `verify_fixes.py` 解析真实通过数，`_status_totals()` 汇总本次检查项 → 头部现值 `verify_fixes.py: 250/250 pass (0 failure(s))` / `135 items — 131 pass / 4 manual / 0 fail`。
+- **`README.md` 法规库口径**：「法规库（24 部）」失真 —— 引擎实际仅加载 `data/laws/seed_laws.json` 的 **4 部**；`extended_laws.json` 的 20 部（前 4 部与 seed 逐条重复，真实并集 = 20）从未接入。改为「核心法规库（4 部国家级基础法规：招标投标法 / 实施条例 / 政府采购法 / 民法典合同编）+ 扩展库 16 部待补齐条文后接入」。
+- **`docs/USER_MANUAL.md`**：供应商 key 由陈旧的 `DEEPSEEK/ZHIPU/QWEN/SILICONFLOW_API_KEY` 改为当前活跃的 `OPENROUTER_API_KEY / NVIDIA_API_KEY`；清标入口 `POST /clearance` 更正为 `POST /clearance/run`。
+- **`AGENTS.md` Long-term Backlog**：移除条目 1（清标任务归属校验）与条目 2（警示详情前端渲染）—— 二者已分别由 FIX-033（`task_owner_ok`，`app/utils/helpers.py:48` + clearance/batch/credit/tasks 全部调用）与 FIX-035（`_renderWarningDetails`，`static/js/app.js:9512`）完成，属陈旧陈述；保留条目 3（API-only 端点清单，9 端点已验证存在）。
+- **`data/current_state.yaml`**：标注 `deprecated: true`（2026-07-30 快照，fix_registry/回归/unresolved 计数与 `known_bugs` 均已过期；三项 known_bugs 均已由 FIX-013/014 及 credit_bp 注册修复）。
+- **`tests/fixtures/clearance_baseline/scores.json`**：34 条 skip 文案由旧「○ 需外部数据源（交易平台/评标系统数据）」对齐至 FIX-053 的「○ 需交易平台数据（当前不可用）」（`document_analysis_svc.py:608`）。
+
+### Changed
+- **`scripts/check_doc_drift.py`**：新增第 6 指标 `laws`（`_count_laws()` 读 `seed_laws.json` 去重 `law_name`，口径=已接入引擎的法规数），`README.md` 由正则 `法规库[（(](\d+)\s*部` 监控 → 15 claims / 6 metrics。
+- `data/fix_registry.yaml`：`FIX-2026-09-15-057`（9 个不变量）；回归 `tests/test_regression.py` 新增 5 个测试（check_system 无硬编码 / doc_drift laws 指标 / 文档诚实性 / current_state deprecated / scores.json 文案）。
+
+### Notes
+- **批次 B（待执行，data-blocked）**：`extended_laws` 16 部条文补齐后接入（仅 `scope=national` 19 部 + 核心 4 部始终包含守卫 + `versions[].articles` 归一化），已记 `UNRESOLVED-026`。
+
+regression: 1/1 clearance baseline passed（本批无清标算法改动）
+149/149 regression · 159/159 含路由守护+冒烟 · verify_fixes 250/0 · doc_drift 15/15 · check_system 131/0 · run_tests 28/28
+
+---
+
 ## [2026-09-15] — P1-B1 路由/前端降级：删 /audit + compliance/tiptap/timeline API-only（FIX-056）
 
 ### Removed

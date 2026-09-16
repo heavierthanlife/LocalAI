@@ -10,6 +10,7 @@ Bypass:   SKIP_DOC_DRIFT=1 git commit ...
 """
 import ast
 import glob
+import json
 import os
 import re
 import sys
@@ -76,6 +77,16 @@ def _count_indicators():
     return -1
 
 
+def _count_laws():
+    """Distinct laws loaded into the compliance engine (data/laws/seed_laws.json)."""
+    path = os.path.join(PROJECT_ROOT, 'data', 'laws', 'seed_laws.json')
+    if not os.path.exists(path):
+        return -1
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return len({x['law_name'] for x in data if isinstance(x, dict) and x.get('law_name')})
+
+
 # metric -> (compute, [(file, regex-with-1-group, human_label)])
 CHECKS = {
     'blueprints': (_count_blueprints, [
@@ -99,6 +110,9 @@ CHECKS = {
     'indicators': (_count_indicators, [
         ('docs/ARCHITECTURE.md', r'(\d+)\s*指标'),
         ('docs/USER_MANUAL.md', r'(\d+)\s*指标'),
+    ]),
+    'laws': (_count_laws, [
+        ('README.md', r'法规库[（(](\d+)\s*部'),
     ]),
 }
 

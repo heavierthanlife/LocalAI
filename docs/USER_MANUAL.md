@@ -11,7 +11,7 @@
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `SECRET_KEY` / `FLASK_SECRET_KEY` | ✅ | 会话签名，缺失启动失败 |
-| `DEEPSEEK_API_KEY` / `ZHIPU_API_KEY` / `QWEN_API_KEY` / `SILICONFLOW_API_KEY` | 至少一个 | LLM 提供商 |
+| `OPENROUTER_API_KEY` / `NVIDIA_API_KEY` | 至少一个 | LLM 提供商（当前活跃：OpenRouter `:free` 池 + NVIDIA NIM；其他提供商可在运行时配置） |
 | `DATABASE_URL`（Docker）或 `PG_USER`+`PG_PASSWORD`（本地） | ✅ | PostgreSQL |
 | `REDIS_URL` | Celery 用 | 默认 `redis://localhost:6379/0` |
 | `ADMIN_PIN` | ❌ | 默认 `123456`，管理员账户 |
@@ -105,7 +105,7 @@ python scripts/manage_db.py snapshot   # 导出 schema → repair_kit/SCHEMA_SNA
 
 ## 5. 清标操作（核心业务）
 
-清标统一入口 `POST /clearance`，5 维度并行（Celery 异步）：
+清标统一入口 `POST /clearance/run`，5 维度并行（Celery 异步）：
 
 1. **指标分析**：45 指标，0-100 权重复合指数
 2. **交叉比较**：投标文件两两对比（TF-IDF + RiskScorer + 组件守卫）

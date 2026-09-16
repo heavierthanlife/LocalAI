@@ -6,8 +6,10 @@ Output: markdown checklist with [x]/[?]/[ ] markup + summary.
 Items that need a running server, database connection, or browser are
 marked [?] with manual instructions.
 """
+import datetime
 import os
 import re
+import subprocess
 import sys
 import traceback
 
@@ -590,19 +592,60 @@ _add('meta', 'Current state compilation', 'PASS' if current_state else 'FAIL')
 # ===========================================================================
 
 
+def _status_totals():
+    """Aggregate the current `results` into (total, passed, failed, unknown, warned)."""
+    total = sum(len(v) for v in results.values())
+    passed = sum(1 for v in results.values() for _, s, _ in v if s == 'PASS')
+    failed = sum(1 for v in results.values() for _, s, _ in v if s == 'FAIL')
+    unknown = sum(1 for v in results.values() for _, s, _ in v if s == '?')
+    warned = sum(1 for v in results.values() for _, s, _ in v if s == 'WARN')
+    return total, passed, failed, unknown, warned
+
+
+def _verify_fixes_summary():
+    """Run scripts/verify_fixes.py and parse its 'N check(s), M failure(s)' summary.
+
+    Returns (checks, failures) or None. Avoids hardcoding counts that rot
+    (FIX-2026-09-15-057).
+    """
+    script = os.path.join(PROJECT_ROOT, 'scripts', 'verify_fixes.py')
+    if not os.path.exists(script):
+        return None
+    try:
+        r = subprocess.run(
+            [sys.executable, script],
+            capture_output=True, text=True, timeout=120, cwd=PROJECT_ROOT,
+            encoding='utf-8', errors='replace',
+        )
+        m = re.search(r'(\d+)\s*check\(s\),\s*(\d+)\s*failure\(s\)',
+                      (r.stdout or '') + (r.stderr or ''))
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    except Exception:
+        return None
+    return None
+
+
 def generate_report():
     status_icons = {'PASS': 'x', 'FAIL': ' ', 'WARN': '?', '?': '?'}
 
+    total_all, passed_all, failed_all, unknown_all, warned_all = _status_totals()
+    vf = _verify_fixes_summary()
+    stamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+
     lines = []
     lines.append('# System Health Checklist — Automated Audit')
-    lines.append(f'')
-    lines.append(f'> Generated: auto  |  verify_fixes.py: 21/21 pass  |  ')
-    lines.append(f'> regression tests: 16/16 pass')
-    lines.append(f'> Fix applied: law_monitor cursor (FIX-019-005), XSS/DOMPurify (FIX-019-002), ')
-    lines.append(f'> NVIDIA cleanup, pre-commit blocking hook')
-    lines.append(f'')
-    lines.append(f'Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed')
-    lines.append(f'')
+    lines.append('')
+    lines.append(f'> Generated: {stamp} (auto)')
+    if vf is not None:
+        checks_n, fails_n = vf
+        lines.append(f'> verify_fixes.py: {checks_n - fails_n}/{checks_n} pass ({fails_n} failure(s))')
+    else:
+        lines.append('> verify_fixes.py: not run (see pre-commit hook)')
+    lines.append(f'> Checklist: {total_all} items — {passed_all} pass / {unknown_all} manual / {failed_all} fail')
+    lines.append('')
+    lines.append('Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed')
+    lines.append('')
 
     for category, checks in results.items():
         lines.append(f'## {category.upper()}')
@@ -619,13 +662,7 @@ def generate_report():
             lines.append(f'- [{icon}] {label}{detail_str}')
         lines.append('')
 
-    # Summary
-    total_all = sum(len(v) for v in results.values())
-    passed_all = sum(1 for v in results.values() for _, s, _ in v if s == 'PASS')
-    failed_all = sum(1 for v in results.values() for _, s, _ in v if s == 'FAIL')
-    unknown_all = sum(1 for v in results.values() for _, s, _ in v if s == '?')
-    warned_all = sum(1 for v in results.values() for _, s, _ in v if s == 'WARN')
-
+    # Summary (totals computed at the top of this function)
     lines.append('## SUMMARY')
     lines.append('')
     lines.append(f'| Status | Count |')

@@ -1872,3 +1872,43 @@ def test_timeline_api_only_downgrade():
     assert 'loadTimelinePanel' not in app
     assert 'timelineTabBtn' not in app
     assert 'from app.routes.timeline import timeline_bp' in _read('app/routes/__init__.py')
+
+
+def test_check_system_no_hardcoded_counts():
+    """FIX-2026-09-15-057: checklist header must derive counts, not hardcode them."""
+    src = _read('scripts/check_system.py')
+    assert '21/21' not in src
+    assert '16/16' not in src
+    assert '_verify_fixes_summary' in src
+    assert '_status_totals' in src
+
+
+def test_doc_drift_tracks_law_count():
+    """FIX-2026-09-15-057: doc_drift monitors the loaded law count (6th metric)."""
+    src = _read('scripts/check_doc_drift.py')
+    assert '_count_laws' in src
+    assert "'laws'" in src
+    assert '法规库（4 部' in _read('README.md')
+
+
+def test_docs_honest_after_audit():
+    """FIX-2026-09-15-057: stale provider keys / route / backlog corrected."""
+    um = _read('docs/USER_MANUAL.md')
+    assert 'DEEPSEEK_API_KEY' not in um
+    assert 'POST /clearance/run' in um
+    agents = _read('AGENTS.md')
+    assert '清标任务归属校验' not in agents
+    # the removed backlog claim is stale — ownership IS enforced (source of truth)
+    assert 'def task_owner_ok' in _read('app/utils/helpers.py')
+
+
+def test_current_state_marked_deprecated():
+    """FIX-2026-09-15-057: the 2026-07-30 snapshot must be marked deprecated."""
+    assert 'deprecated: true' in _read('data/current_state.yaml')
+
+
+def test_clearance_snapshot_skip_text_current():
+    """FIX-2026-09-15-057: scores.json skip strings aligned to FIX-053 wording."""
+    snap = _read('tests/fixtures/clearance_baseline/scores.json')
+    assert '需外部数据源' not in snap
+    assert '需交易平台数据（当前不可用）' in snap

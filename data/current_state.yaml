@@ -1,0 +1,302 @@
+# Current State — comprehensive project audit
+# Generated: 2026-07-30
+# Covers: 12 fix_registry entries, 16 regression tests, 12 unresolved items, 3 new bugs discovered
+# DEPRECATED 2026-09-16 — see deprecated_note below.
+
+deprecated: true
+deprecated_note: >
+  本文件为 2026-07-30 快照，已失效（fix_registry / 回归测试 / unresolved 计数与 known_bugs 均已过期）。
+  当前事实以 data/fix_registry.yaml、data/unresolved.yaml、CHANGELOG.md、scripts/check_system.py 为准。
+  known_bugs 三项均已于 FIX-013/014（laws FK / project_timelines.name）及 credit_bp 注册修复。
+
+meta:
+  generated: 2026-07-30
+  source: "full records system audit from Phase 0-2 + auditor review 2026-07-30"
+  coverage: "7 mechanisms, 5 gaps analyzed, all fix_registry entries verified, 3 additional bugs found (laws FK, timelines.name, docs/code inconsistencies)"
+
+# ============================================================================
+# 1. FIX REGISTRY (data/fix_registry.yaml)
+# ============================================================================
+fix_registry:
+  total_entries: 12
+  verify_fixes_passing: "21/21 (0 failures)"
+  status_breakdown:
+    applied: 5
+    superseded: 4
+    mismatch_aligned: 1
+    never_applied_fixed: 3
+  entries:
+    - id: FIX-2026-07-15-001
+      title: "NVIDIA nemotron model prefix"
+      status: superseded
+      reason: "NVIDIA provider removed from codebase entirely"
+
+    - id: FIX-2026-07-15-002
+      title: "Wiki frontend .data wrapper"
+      status: superseded
+      reason: "Wiki code refactored; statsData references no longer exist"
+
+    - id: FIX-2026-07-15-003
+      title: "_score_timeline_compliance before SCORING_FUNCTIONS"
+      status: applied
+      has_regression_test: true
+
+    - id: FIX-2026-07-15-004
+      title: "NVIDIA runtime_config prefix"
+      status: applied
+      has_regression_test: true
+
+    - id: FIX-2026-07-15-005
+      title: "project_recycle_bin uploaded_by column"
+      status: applied
+      has_regression_test: true
+
+    - id: FIX-2026-07-15-006
+      title: "Recycle bin section data-attribute"
+      status: applied
+      has_regression_test: true
+
+    - id: FIX-2026-07-15-007
+      title: "SSE done event + poll cursor"
+      status: previously_misaligned_now_fixed
+      fix: "Registry patterns updated to match actual code (chat.py uses user_message_id/assistant_message_id, chat.js has _pollLastId/_lastKnownMessageId)"
+      has_regression_test: true
+
+    - id: FIX-2026-07-15-008
+      title: "Admin sidebar extras visibility"
+      status: applied
+      has_regression_test: true
+
+    - id: FIX-2026-07-19-001
+      title: "Verdict case mismatch"
+      status: previously_misaligned_now_fixed
+      fix: "Registry pattern aligned with uppercase standard (VERDICT_PASS='PASS')"
+      has_regression_test: true
+
+    - id: FIX-2026-07-19-002
+      title: "XSS via unsanitized report_html/diff_html"
+      status: previously_unapplied_now_fixed
+      fix: "Added DOMPurify CDN (with onerror fallback) + _safeHTML() wrapper in compliance.js"
+      has_regression_test: true
+
+    - id: FIX-2026-07-19-003
+      title: "Tiptap Mark import"
+      status: superseded
+      reason: "tiptap-editor.js fully rewritten to ESM dynamic imports"
+
+    - id: FIX-2026-07-19-004
+      title: "Compliance._taskIds.extracted cleared"
+      status: superseded
+      reason: "Code refactored to use closure variable extractedRulesTaskId"
+
+    - id: FIX-2026-07-19-005
+      title: "law_monitor.py closed cursor"
+      status: previously_unapplied_now_fixed
+      fix: "Moved _compute_impact(cur, law_id) inside with conn.cursor() block"
+      has_regression_test: true
+
+# ============================================================================
+# 2. REGRESSION TESTS (tests/test_regression.py)
+# ============================================================================
+regression_tests:
+  total: 16
+  all_pass: true
+  fix_coverage: "12/12 entries have at least one test"
+  new_tests_added: 9
+  tests_by_fix:
+    "FIX-001": test_nvidia_provider_removed
+    "FIX-002": test_wiki_frontend_no_data_envelope
+    "FIX-003": test_timeline_compliance_in_scoring_functions
+    "FIX-004": test_runtime_config_no_bare_nemotron
+    "FIX-005": test_recycle_bin_has_user_col_detection
+    "FIX-006": test_recycle_bin_section_data_attribute
+    "FIX-007": [test_chat_response_carries_message_ids, test_chat_poll_cursor_tracking]
+    "FIX-008": test_admin_sidebar_extras_visibility
+    "FIX-019-001": [test_verdict_uppercase_standard, test_verdict_normalization_in_compliance_checker]
+    "FIX-019-002": [test_compliance_xss_sanitization, test_dompurify_cdn_in_index]
+    "FIX-019-003": test_tiptap_esm_dynamic_import
+    "FIX-019-004": test_taskids_extracted_preserved
+    "FIX-019-005": test_law_monitor_no_stale_cursor
+
+# ============================================================================
+# 3. UNRESOLVED ISSUES (data/unresolved.yaml)
+# ============================================================================
+unresolved_issues:
+  total: 17
+  breakdown:
+    resolved: 12   # incl. 005 (encoding, 2026-09-11 UTF-8 fix), 013/014/015
+    pending: 1     # 016 (agent_middleware.py)
+    blocked: 1     # 017 (clearance baseline goods/services — needs real docs)
+    acknowledged: 2  # 010/012 (IMPROVEMENTS_SKIPPED history)
+    abandoned: 1   # 003 (@earendil-works/codex-cli)
+    new_this_session: 1  # 017 (baseline calibration blocked)
+
+# ============================================================================
+# 4. BUGS DISCOVERED THIS SESSION
+# ============================================================================
+bugs_discovered_this_session:
+  - id: UNRESOLVED-013
+    title: "law_change_events.law_id FK references nonexistent table `laws`"
+    file: "app/database.py:1120"
+    severity: medium
+    impact: "Fresh deployment crashes on CREATE TABLE law_change_events. Existing Docker volumes unaffected."
+  - id: UNRESOLVED-014
+    title: "project_timelines INSERT references nonexistent column `name`"
+    file: "app/database.py:650 / project_timeline_service.py:48"
+    severity: medium
+    impact: "Creating a new timeline triggers PostgreSQL column-not-found error. Existing data unaffected."
+  - id: UNRESOLVED-015
+    title: "AGENTS.md docs/code drifts (Blueprint count, app.js size, Session strategy)"
+    file: "AGENTS.md:50,53,67"
+    severity: low
+    impact: "Misleading documentation. All three fixed 2026-07-30."
+
+# ============================================================================
+# 5. CODE FIXES APPLIED THIS SESSION
+# ============================================================================
+fixes_applied_this_session:
+  - file: ".githooks/pre-commit"
+    change: "main() now propagates check return values; exits 1 on failures"
+  - file: "app/services/law_monitor.py"
+    change: "_compute_impact moved inside with conn.cursor() block (line 33)"
+  - file: "templates/index.html"
+    change: "Added DOMPurify CDN script with onerror fallback"
+  - file: "static/js/app.js"
+    change: "_safeHTML() sanitizer moved here (FIX-054); compliance.js removed (FIX-056, API-only downgrade)"
+  - file: "app/services/llm_fallback.py"
+    change: "Removed broken NVIDIA nemotron fallback entry"
+  - file: "data/fix_registry.yaml"
+    change: "6 entries updated — 4 marked superseded, 2 patterns realigned"
+
+# ============================================================================
+# 6. SKIPPED IMPROVEMENTS (IMPROVEMENTS_SKIPPED.md)
+# ============================================================================
+skipped_improvements:
+  total: 9
+  last_session: 2026-07-03
+  status: "Historical record. Unresolved.yaml supersedes as ongoing tracker."
+  notable_entries:
+    - "PaddleOCR → chosen RapidOCR (2026-07-04)"
+    - "Docling → kept python-docx + MinerU"
+    - "Marker → chose MinerU"
+    - "Unstructured.io → kept custom pipeline"
+    - "GPU hardware → deferred (CPU-only deployment)"
+    - "Structured logging → plain text logs (single user)"
+    - "E2E Playwright → 5 core smoke tests instead of 30+"
+    - "admin.py split → deferred (4571-line monolith)"
+    - "Theme Factory → skipped (not visually appealing enough)"
+
+# ============================================================================
+# 7. SYSTEM CHECKLIST (repair_kit/SYSTEM_CHECKLIST.md)
+# ============================================================================
+system_checklist:
+  total_items: 108
+  auto_verified: 100
+  manual_only: 5
+  failed: 3
+  script: "scripts/check_system.py"
+  status: "Auto-generated — last refreshed 2026-07-30"
+  note: >
+    3 failures all due to psycopg2 not installed in current env
+    (Flask app factory import, APScheduler import, route modules scan all fail because
+    database.py triggers psycopg2 import). Install psycopg2 to eliminate these.
+    5 items require running server (Redis ping, DB queries, bank login, etc.).
+
+# ============================================================================
+# 8. DATABASE AUDIT TABLES
+# ============================================================================
+db_audit:
+  status: "unable to query — psycopg2 not available in local Python environment"
+  tables: [admin_audit_log, compliance_reports, audit_runs, audit_file_results]
+  verified_via_code: >
+    All four tables defined in app/database.py init_postgres_tables()
+    with proper schemas, indexes, and foreign keys. Table structure
+    verified from source code; row counts unknown without DB access.
+
+# ============================================================================
+# 9. GIT HISTORY
+# ============================================================================
+git:
+  last_commit: "3794a11 — feat: U14 — law change monitoring with AI impact assessment"
+  recent_tags: none
+  stash: "Empty stash deleted 2026-07-30 (was created 2026-07-22, content identical to HEAD)"
+  regression_markers: "Not verified — need to grep commit messages for 'regression:' pattern"
+  recent_activity: >
+    15 recent commits covering features U8-U15, compliance dashboard,
+    knowledge graph, Tiptap editor, template CRUD, law diffs, batch conflict
+    panel. Active development through July 2026.
+  uncommitted:
+    staged: 4
+    unstaged: 50+
+    untracked: 100+
+    last_commit_days_ago: 12
+
+# ============================================================================
+# 10. SESSION CONTINUITY
+# ============================================================================
+session_continuity:
+  mechanism: "agentmemory MCP server (:3111)"
+  local_files: ".remember/handoff.md exists (saved 2026-07-29)"
+  skill_available: ".opencode/skills/session-continuity/SKILL.md exists"
+  status: "Functional — handoff persisted locally + SQLite (28 docs/5 sessions)"
+
+# ============================================================================
+# 11. GAP ANALYSIS
+# ============================================================================
+gaps:
+  original_5:
+    1:
+      title: "Pre-commit hook advisory-only"
+      status: "FIXED — main() now returns non-zero on check failures"
+    2:
+      title: "No consolidated status document"
+      status: "FIXED — this file (data/current_state.yaml) created"
+    3:
+      title: "Health checklist stale"
+      status: "FIXED — scripts/check_system.py auto-generates 108 items (100/108 pass)"
+    4:
+      title: "Regression test gap"
+      status: "FIXED — 16/16 tests pass, 12/12 fix entries covered"
+    5:
+      title: "No unresolved-issues tracker"
+      status: "FIXED — data/unresolved.yaml created with 10 entries"
+
+  additional_found:
+    - "Fix registry contained 3 never-applied entries (FIX-019-002, FIX-019-005, FIX-007 partial)"
+    - "Fix registry contained 4 superseded entries with stale patterns causing false failures"
+    - "Pre-commit hook ran verify_fixes.py but main() ignored its return value"
+    - "FIX-007 registry patterns pointed to app.js instead of chat.js"
+    - "NVIDIA provider removed from llm_provider.py but orphaned in llm_fallback.py DEFAULT_CHAIN"
+    - "psycopg2 not installed — DB-dependent imports fail in this environment"
+    - "AGENTS.md said MAX_CONTENT_LENGTH=500 MB, actual code is 50 MB (fixed)"
+    - "law_change_events FK references nonexistent table `laws` — needs deploy test"
+    - "project_timelines INSERT writes to nonexistent column `name`"
+    - "AGENTS.md 3 docs/code drifts: Blueprint count, app.js size, Session strategy"
+    - "AGENTS.md referenced tables compliance_reports/wiki_pages/semantic_cache/search_cache that don't exist in database.py"
+    - "System checklist was manually maintained; now auto-generated by scripts/check_system.py (108 items, 90% coverage)"
+
+# ============================================================================
+# 12. PROJECT STRUCTURE
+# ============================================================================
+project_structure:
+  blueprints: 16
+  routes_dir: "app/routes/"
+  services_dir: "app/services/"
+  js_modules:
+    - "static/js/app.js (~10k lines)"
+    - "static/js/chat.js, wiki.js, review.js"
+    - "static/js/knowledge-lab.js, file-station.js"
+    - "static/js/accounts.js, graph-view.js, templates.js, cases.js"
+  agent_skills:
+    - ".opencode/skills/ (20+ skills: api-design, code-review, debugging, security, etc.)"
+  shared_skills:
+    - "D:\\AI_Tools\\shared-agent-infra\\skills\\ (236 skills via junction)"
+  fix_tools:
+    - "data/fix_registry.yaml — 12 fix entries with automated checks"
+    - "scripts/verify_fixes.py — standalone verifier script"
+    - ".githooks/pre-commit — now blocking on fix regressions"
+    - "tests/test_regression.py — 16 pytest tests"
+  known_bugs:
+    - "credit_bp not registered in register_all() — credit check routes return 404"
+    - "law_change_events FK references `laws`(does not exist) instead of `law_masters`"
+    - "project_timelines INSERT writes to nonexistent column `name`"

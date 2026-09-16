@@ -1518,3 +1518,48 @@ fixes:
       - type: literal
         file: tests/test_route_preservation.py
         pattern: "expected_len', [391]"
+
+  - id: FIX-2026-09-15-057
+    title: "文档诚实性整改：生成器硬编码计数 + 法规库口径 + 陈旧文档/快照"
+    severity: low
+    rationale: >
+      审计发现一类「文档说谎 + 生成器缺陷」：
+      (1) scripts/check_system.py 头部硬编码 verify_fixes 21/21 与 regression 16/16
+          （实际远超），每次重生成 CHECKLIST 都写回 2 个月前旧值。修复：改动态
+          （_verify_fixes_summary 实跑 verify_fixes.py + _status_totals 汇总）。
+      (2) README 宣称「法规库 24 部」，实际引擎仅加载 seed_laws.json 的 4 部；
+          extended_laws.json 20 部（前 4 部与 seed 逐条重复）从未接入。修复：README 诚实写
+          「核心法规库（4 部…）+ 扩展库 16 部待补齐」；doc_drift 新增第 6 指标 laws 监控。
+      (3) USER_MANUAL 供应商 key 陈旧（DEEPSEEK/ZHIPU/QWEN/SILICONFLOW）+ 清标入口
+          POST /clearance（应为 /clearance/run）。
+      (4) AGENTS.md Long-term Backlog 条目 1/2 已由 FIX-033/035 完成却未移除（假 backlog）。
+      (5) data/current_state.yaml 停留在 2026-07-30（known_bugs 均已修）→ 标 deprecated。
+      (6) clearance_baseline/scores.json 34 条 skip 文案停留在 FIX-053 之前。
+    checks:
+      - type: literal_not
+        file: scripts/check_system.py
+        pattern: "21/21"
+      - type: literal_not
+        file: scripts/check_system.py
+        pattern: "16/16"
+      - type: literal
+        file: scripts/check_system.py
+        pattern: "_verify_fixes_summary"
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: "_count_laws"
+      - type: literal
+        file: README.md
+        pattern: "法规库（4 部"
+      - type: literal_not
+        file: docs/USER_MANUAL.md
+        pattern: "DEEPSEEK_API_KEY"
+      - type: literal_not
+        file: AGENTS.md
+        pattern: "清标任务归属校验"
+      - type: literal
+        file: data/current_state.yaml
+        pattern: "deprecated: true"
+      - type: literal_not
+        file: tests/fixtures/clearance_baseline/scores.json
+        pattern: "需外部数据源"

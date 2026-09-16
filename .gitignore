@@ -59,7 +59,7 @@ data/pet_command.json
 data/qa_loop/pending.flag
 data/agent_prompt.json
 data/checkpoints.db
-data/current_state.yaml
+# current_state.yaml 已解禁并跟踪（FIX-057：标注 deprecated 的 2026-07-30 快照，供 check_system meta 检查）
 data/test_out*.txt
 test.txt
 data/user_laws/
@@ -71,6 +71,7 @@ data/user_laws/
 !data/laws/extended_laws.json
 !data/laws/regions.json
 !data/laws/seed_laws.json
+!data/current_state.yaml
 !data/runtime_config.json
 !data/runtime_config_factory.json
 !data/skill_audit_cache.json
