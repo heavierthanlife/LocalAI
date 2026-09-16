@@ -402,13 +402,14 @@ unresolved:
       - "广东省实施《招投标法》办法 → 排除出接线，仅存档"
     blocker: "16 部条文抓取录入（逐部核对条文数 + 标注 source_url/fetched_at）"
     progress: >
-      2026-09-16: 3/16 已补全全文（工程建设项目施工招标投标办法 92 条 · 评标委员会和评标方法
-      暂行规定 62 条 · 必须招标的工程项目规定 6 条），均来自 gov.cn 官方页，source_url/fetched_at
-      已写入 JSON（commit 938cb4d）。工具 scripts/fetch_extended_laws.py 就绪（解析器顺序号消歧 +
-      law-name 校验守卫防错页）。待补 13 部：电子招标投标办法（ndrc/moj 页解析失败，需换源）、
-      政府采购法实施条例 / 87 / 74 / 94 / 46 / 38 号 / 39 号 / 119 号令 / 违法行为记录办法 /
-      规范主体行为通知 / 清单计价规范(摘录)。注意：搜索引擎对脚本化与多次查询已降级返回无关结果，
-      URL 发现需人工逐一在 gov.cn 政策库/国务院公报检索，故本任务分多次会话推进。
+      2026-09-16: 11/16 已补全全文（全部来自 www.gov.cn 国务院公报/政策库，source_url/fetched_at 已写入 JSON）：
+      政采法实施条例79 · 工程施工招标投标办法92 · 评标委员会规定62 · 必须招标规定6 · 87号令88 · 74号令62 ·
+      94号令45 · 电子招标投标办法66 · 中小企业46号25 · 公共资源交易平台办法48 · 违法行为记录公告办法21。
+      工具 scripts/fetch_extended_laws.py（gov.cn 页直连 + 行首约束解析 + law-name 校验；搜索 API 对本机 egress 不可达，
+      URL 需人工从 gov.cn 政策库检索后写入 SOURCES.url）。commit bd1bc49。
+      余 5 部说明：38号(营商环境通知)/119号(进口产品办法) 未收录于 gov.cn 政策库；
+      「规范招标投标主体行为若干意见」非条文结构（一、二、三 分条）；GB50500 国标按约定走要点摘录；
+      广东省办法 scope=local 排除接线。→ 接线范围应为 11 部全文国家法规 + 核心 4 部守卫。
     resolution_plan: >
       按 sources 逐部抓取 → 转 JSON versions[0].articles[{article,text,tags}] +
       source_url/fetched_at → 归一化接入 _load_seed_laws（national-only + 核心 4 部守卫）
