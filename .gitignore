@@ -59,6 +59,7 @@ data/pet_command.json
 data/qa_loop/pending.flag
 data/agent_prompt.json
 data/checkpoints.db
+data/checkpoints.db-*
 # current_state.yaml 已解禁并跟踪（FIX-057：标注 deprecated 的 2026-07-30 快照，供 check_system meta 检查）
 data/test_out*.txt
 test.txt
