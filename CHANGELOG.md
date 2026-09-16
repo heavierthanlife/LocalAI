@@ -8,6 +8,18 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — 仓库卫生 + Docker 数据资产规则文档化
+
+### Fixed
+- **停止跟踪运行时产物**：`data/user_files/**`（2 docx + 4 html 用户上传件）与 `data/checkpoints.db-shm`/`-wal`（SQLite WAL）—— 二者早已在 `.gitignore`，但「忽略不溯既往」已 tracked 需 `git rm --cached`（工作区文件保留）。`.gitignore` 补 `data/checkpoints.db-*`。保留 `data/qa_loop/audit/final_state.png`（审计证据）。**不重写历史**（未 force-push）。
+
+### Docs
+- `AGENTS.md` Gotchas 增「Docker 数据资产三规则」：① 随代码演进 → `:ro` 直挂；② 运行时可变种子 → 启动 seeding；③ 纯运行态 → `app_data` 卷。附 `.dockerignore` 丢整个 `data/` 的告警与 `repo_data:ro` 暴露说明。
+
+regression: 1/1 clearance baseline passed（无清空/合规代码路径变更）
+
+---
+
 ## [2026-09-16] — Docker 数据资产统一挂载 + 启动 seeding（FIX-059）
 
 ### Fixed

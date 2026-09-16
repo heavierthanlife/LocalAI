@@ -227,6 +227,8 @@ Auto-downloaded via `webdriver-manager` on first use. Can override with `EDGEDRI
 - DB connections are validated with `SELECT 1` on checkout from the pool. Stale connections are closed and retried once.
 - **Headroom (`headroom-ai`) 实测基本不压缩**：`ContentRouter` 在上下文压力低时阈值 `min_ratio≈0.85` → 短输入直接 `router:noop`；且 `compress_file_content`/`compress_search_results` 传单条 message，受默认 `protect_recent=4` 保护；Kompress 模型为英文。故其拉取的 Kompress ONNX + ModernBERT tokenizer 模型虽在 HF 缓存中，但大多不产生 token 节省。
 
+- **Docker 数据资产三规则（FIX-059）**：`.dockerignore` 丢弃整个 `data/`，且 `/app/data` 是 `app_data` 卷（**遮蔽镜像内 `data/`**）→ 任何 `data/` 下的 repo 资产都必须显式处理，否则容器内**静默为空**（如合规引擎曾 0 法规）。三类：① **随代码演进**（`laws/`、`industry_words/`、`runtime_config_factory.json`）→ compose **只读直挂 `:ro`**（永远最新；勿走 seeding）；② **运行时可变种子**（`domain_words.txt`，`approve_domain_words` 追加写）→ **启动 seeding**：`app/bootstrap.py::ensure_seeded()` 从 `/app/repo_data:ro` 缺失时原子复制进卷，**不得 `:ro` 挂载**；③ **纯运行态**（`runtime_config.json`、`llm_catalog.json`、`checkpoints.db`、`skill_audit_cache.json`、`user_files/`）→ 留 `app_data` 卷自建。新增 `data/` 资产务必归入上述一类并登记。注：`./data:/app/repo_data:ro` 只读暴露宿主整个 `data/`（含 `user_files/`），单机部署可接受、有意保留。
+
 ## Shared Agent Infrastructure
 
 Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shared across opencode, hermes, pi, and lmcode.
