@@ -57,6 +57,8 @@ def resolve_path(path: str) -> str:
     return os.path.join(str(BASE_DIR), p.replace('\\', '/'))
 
 # ---------------- Logging ----------------
+# LOG_LEVEL drives the console + root logger (file log stays DEBUG for diagnostics).
+_LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 LOGGING_CONFIG = {
     'version': 1,
     'formatters': {
@@ -64,12 +66,12 @@ LOGGING_CONFIG = {
         'detailed': {'format': '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'},
     },
     'handlers': {
-        'console': {'class': 'logging.StreamHandler', 'level': 'INFO', 'formatter': 'default',
+        'console': {'class': 'logging.StreamHandler', 'level': _LOG_LEVEL, 'formatter': 'default',
                     'stream': 'ext://sys.stdout'},
         'file': {'class': 'logging.handlers.RotatingFileHandler', 'level': 'DEBUG', 'formatter': 'detailed',
                  'filename': str(LOGS_DIR / 'app.log'), 'maxBytes': 10485760, 'backupCount': 5},
     },
-    'root': {'level': 'DEBUG', 'handlers': ['console', 'file']},
+    'root': {'level': _LOG_LEVEL, 'handlers': ['console', 'file']},
 }
 if sys.platform == 'win32':
     # Wrap stdout/stderr with UTF-8 to avoid GBK decode crashes on emoji/logs.

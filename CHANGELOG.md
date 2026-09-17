@@ -8,6 +8,28 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — S3/S4/S5 清理：UI 死引用 + 配置诚实性 + 文档漂移
+
+### Fixed
+- 前端「绑定时间线」按钮引用**未定义**的 `_switchSubTab('timeline')`（FIX-056 残留，点击即 `ReferenceError`）→ 移除该按钮及处理器（`static/js/knowledge-lab.js`）。
+- `has_llm` 收敛为活跃供应商（`OPENROUTER_API_KEY`/`NVIDIA_API_KEY`）——原统计已退役的 DEEPSEEK/ZHIPU/QWEN/SILICONFLOW，可能误报。
+- `LOG_LEVEL` 现真正生效（`app/config.py` 读取，原硬编码 INFO/DEBUG）。
+
+### Changed
+- **`MAX_CONCURRENT_UPLOADS` 去文档化**（从未实现）：移除 AGENTS/USER_MANUAL 宣称 + `check_system.py` 检查（清单 135→134）。
+- 补依赖 `xlrd`（.xls 解析，原静默失败）与 `python-louvain`（社区检测，原静默降级）；`.env.example` 补 `LOG_LEVEL`。
+- 文档诚实性：README 去「语义检索」（`rag_laws` 空转、实为关键词检索）/去「Tiptap」（已删）；ARCHITECTURE 修 `agent_prompt.json` 说法、beat 6→25、ChromaDB 4→5、导入点 21→27；SECURITY「70/70」→按实际；AGENTS/USER_MANUAL 清单 135→134；AGENTS API-only backlog 补 timeline(20)/compliance(23)。
+- 回归 `test_agent_prompt_file_not_test_override`（读 gitignored 文件 → 全新克隆会报错）→ 改为断言硬编码默认提示词。
+- `UNRESOLVED-026` 置 `resolved`（FIX-058 已实现其全部规格）。
+
+### Notes
+- 残余清理记 **`UNRESOLVED-027`**：audit 死模块/编排器外科删除、`review.js` docReviewPanel 死块、陈旧 DOM id、`run_ui_audit` TAB_TOUR 行、factory `typo_*` 键、Dockerfile torch 去重。
+
+regression: 1/1 clearance baseline passed
+160/160 regression · 170/170 含路由守护+冒烟 · verify_fixes 280/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — S2 部署完整性：Beat 定时任务 + 数据卷 + 补表 + compose（FIX-061）
 
 ### Fixed

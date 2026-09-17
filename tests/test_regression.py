@@ -318,15 +318,14 @@ def test_dead_prompts_removed():
         "_VL_CONSISTENCY_PROMPT is dead code and must be removed"
 
 
-def test_agent_prompt_file_not_test_override():
-    """data/agent_prompt.json must not contain the broken 'Test prompt' override."""
-    import json
-    with open('data/agent_prompt.json', 'r', encoding='utf-8') as f:
-        saved = json.load(f).get('prompt', '')
-    assert saved.strip() != 'Test prompt', \
-        "agent_prompt.json must not hold the leftover 'Test prompt' override"
-    assert len(saved.strip()) > 100, \
-        "agent_prompt.json should hold the real (long) default prompt"
+def test_agent_prompt_default_is_hardcoded():
+    """The global agent prompt is hardcoded in app/globals.py; the file-based
+    data/agent_prompt.json override was retired (file is gitignored)."""
+    src = _read('app/globals.py')
+    assert '_DEFAULT_PROMPT' in src
+    assert 'def get_default_prompt' in src
+    assert 'open(' not in src.split('_DEFAULT_PROMPT')[0].split('def get_default_prompt')[0], \
+        'agent prompt must not be read from disk at import time'
 
 
 # ── FIX-2026-08-28-006: clearance results move into chat (toolbar tab area removed) ──

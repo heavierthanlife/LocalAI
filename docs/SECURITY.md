@@ -79,7 +79,7 @@
 - 修复 bug 时必须添加 registry 条目（含 grep 校验）
 - 旁路：`SKIP_FIX_CHECK=1`
 - Python 后端修复必须补 `tests/test_regression.py` 测试
-- 当前：**70/70 校验通过**
+- 当前：**`python scripts/verify_fixes.py` → 0 failure**（条数见运行输出）
 
 **不变量示例**：
 - FIX-014：`file_processing.py` 含 `min(200,max(50,len(template_text)//500))`；`batch_orchestrator.py` 含 `_detect_component` + `component_mismatch`

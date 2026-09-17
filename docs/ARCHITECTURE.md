@@ -71,13 +71,13 @@
 
 ### 2. LangGraph 代理 `agent.py`
 - Bocha 搜索 + get_date 工具，72h 缓存
-- System prompt 从 `data/agent_prompt.json` 加载（支持在线编辑），自动追加安全防护
+- System prompt：默认内置（不可变），支持按用户覆盖（`user_prompts` 表，`user_prompt.resolve_user_prompt()`），自动追加安全防护
 
 ### 3. 文档解析 `file_processing.py`
 - 全格式提取：PDF（PyMuPDF/fitz）/ DOCX/XLSX/PPTX（MarkItDown + python-docx/openpyxl）/ 旧 .doc（LibreOffice）/ 扫描件 OCR（EasyOCR，`OCR_GPU=auto` 支持 GPU）
 - 文本相似度：TF-IDF cosine + 中文停用词 + 模板去除
 - VL 描述（独立解耦，`vl_model.py`）
-- 21 处导入点（高耦合，审计决定保留不拆）
+- 27 处导入点（高耦合，审计决定保留不拆）
 
 ### 4. 清标引擎 `clearance_engine.py` + `document_analysis_svc.py`
 5 维度并行（Celery）：
@@ -105,7 +105,7 @@
 - gang detection（社区检测）+ 报价异常（Benford/尾数/等差等比）
 
 ### 6. RAG `rag_engine.py`
-- extract → chunk → embed → ChromaDB（4 collection, LRU 5000）
+- extract → chunk → embed → ChromaDB（5 collection, LRU 5000）
 - 复用 `paraphrase-multilingual-MiniLM-L12-v2`
 
 ## 异步任务系统
@@ -120,7 +120,7 @@ graph LR
     F --> G[SSE 流推送前端]
 ```
 
-- `celery_app.py`：Redis broker+backend，JSON 序列化，Asia/Shanghai 时区，10min/15min 超时，6 beat 调度
+- `celery_app.py`：Redis broker+backend，JSON 序列化，Asia/Shanghai 时区，10min/15min 超时，25 beat 调度（FIX-061 起随 APScheduler 对齐）
 - `task_bus.py`：异步任务总线（Redis pub/sub → SSE），支持预注册（FIX-007 竞态修复）
 - 定时任务：OCR、skill 提取、RAG 索引、夜间训练、周/月/年报
 

@@ -14,7 +14,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 - **文档全格式解析**：PDF/DOCX/XLSX/PPTX/扫描件 OCR（MarkItDown + LibreOffice + PyMuPDF + EasyOCR）
 - **清标分析**：5 维度（指标分析 / 交叉比较 / 合规检查 / AI 审查 / 全量审计补充），0-100 权重复合评分
 - **串通投标检测**：TF-IDF 文本相似度 + 组件守卫 + 报价尾数/Benford 异常检测 + 关系网络
-- **合规检查**：法规库（15 部国家级法规：4 部核心法律 + 11 部行政法规/部门规章全文）+ 规则提取 + 语义检索 + 增量检查
+- **合规检查**：法规库（15 部国家级法规：4 部核心法律 + 11 部行政法规/部门规章全文）+ 规则提取 + 关键词检索 + 增量检查
 - **企业信用查询**：Selenium 自动化政府官网查询
 - **知识库 / Wiki**：RAG 摄取、技能库、法规版本管理、图谱
 
@@ -29,7 +29,7 @@ AI 驱动的招标代理业务平台，覆盖文档解析、智能对话、合�
 | 向量 | ChromaDB + sentence-transformers | 语义检索、RAG、知识库 |
 | 文档处理 | python-docx / PyMuPDF / openpyxl / MarkItDown / EasyOCR | 全格式提取 + OCR |
 | 自动化 | Selenium + Edge/Chrome WebDriver | 企业信用查询 |
-| 前端 | 原生 JS SPA + Tiptap + markdown-it + DOMPurify | 流式聊天 + 文件管理 + 知识库 |
+| 前端 | 原生 JS SPA + markdown-it + DOMPurify | 流式聊天 + 文件管理 + 知识库 |
 | 调度 | APScheduler（进程内）/ Celery Beat（Docker） | 20+ 定时任务 |
 | 部署 | Docker（6 服务）+ nginx HTTPS | app/postgres/redis/worker/beat/nginx |
 

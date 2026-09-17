@@ -371,12 +371,6 @@ if max_len_found:
 else:
     _add('filesystem', 'MAX_CONTENT_LENGTH configured', 'FAIL', 'not found in app/__init__.py')
 
-# Max concurrent uploads
-concurrent_found, _ = _grep_file('app/__init__.py', r'MAX_CONCURRENT_UPLOADS')
-_add('filesystem', 'MAX_CONCURRENT_UPLOADS set',
-     'PASS' if concurrent_found else '?',
-     'may use env var fallback')
-
 # File upload format check
 allowed_found, _ = _grep_file('app/services/file_processing.py', r'allowed_file|ALLOWED_EXTENSIONS')
 _add('filesystem', 'File upload type whitelist', 'PASS' if allowed_found else 'FAIL')

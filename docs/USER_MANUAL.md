@@ -17,7 +17,6 @@
 | `ADMIN_PIN` | ❌ | 默认 `123456`，管理员账户 |
 | `BOCHA_API_KEY` | ❌ | 联网搜索工具 |
 | `LOG_LEVEL` | ❌ | 根日志级别，默认 INFO |
-| `MAX_CONCURRENT_UPLOADS` | ❌ | 并发上传处理上限，默认 3 |
 | `ENABLE_SCHEDULER` | ❌ | 多 worker 必须 `false` |
 
 ---
@@ -172,7 +171,7 @@ python scripts/manage_db.py snapshot   # 导出 schema → repair_kit/SCHEMA_SNA
 
 | 命令 | 用途 |
 |---|---|
-| `python scripts/check_system.py` | 生成系统健康清单（130 项） |
+| `python scripts/check_system.py` | 生成系统健康清单（134 项） |
 | `python scripts/verify_fixes.py` | 校验 fix_registry 不变式 |
 | `python scripts/run_lora_training.py` | LoRA 微调（Unsloth, Qwen2.5-7B） |
 | `python scripts/migrate_seed_laws.py` | 法规种子数据迁移 |

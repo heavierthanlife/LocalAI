@@ -158,7 +158,6 @@ Every feature upgrade must include regression verification:
 - **CSRF is opt-in** — disabled by default for JSON API routes via `WTF_CSRF_CHECK_DEFAULT=False`. Not needed for AJAX/JSON endpoints.
 - **Sessions**: Filesystem (`data/flask_session/`). `SESSION_TYPE='filesystem'` in `app/__init__.py`. 30-day lifetime. Redis available for Celery but not for Flask sessions.
 - **Rate limiting**: `flask-limiter` with Redis backend. Chat 30/min, upload 10/min, login 5/min, global 120/min. Credit check uses custom in-memory limiter (10/5min).
-- **Upload semaphore**: max 3 concurrent file uploads (`MAX_CONCURRENT_UPLOADS`). Returns 429 if busy.
 - **Time zone**: Asia/Shanghai everywhere (Celery, APScheduler, `beijing_now()` helper)
 - **API responses**: `ok(data, message, status)` → `{success:true, message, ...data}`, `err(error, code, status)` → `{success:false, error, code}`
 - **资源归属模型（FIX-060）**：**实时/交互态 task**（清标、信用核查 status/captcha、合规结果/规则）→ **仅 owner 可访问**（`task_owner_ok` / `_task_forbidden`，TaskBus meta 存 user_id）；**已归档聚合产物**（`batch_comparison_results` zip、`credit_check_reports`）→ **全注册用户可见（单机构有意设计，list + download 均共享）**。项目文件/归档按项目成员（`_can_access_project`）校验。
@@ -179,7 +178,6 @@ Every feature upgrade must include regression verification:
 | `ADMIN_PIN` | No | Default: `123456`; used for admin accounts |
 | `BOCHA_API_KEY` | No | Web search tool |
 | `LOG_LEVEL` | No | Root logger level (`INFO`/`DEBUG`). Default: `INFO` |
-| `MAX_CONCURRENT_UPLOADS` | No | Concurrent file processing limit. Default: `3` |
 | `HF_HOME` | No | HuggingFace model cache. Docker 下设为 `/app/data/hf_cache`（落在 `app_data` 卷，跨 recreate 持久；sentence-transformers + Headroom/Kompress 模型只下一次）；本地默认 `~/.cache/huggingface` |
 
 Full list in `.env.example`.
@@ -207,7 +205,7 @@ Auto-downloaded via `webdriver-manager` on first use. Can override with `EDGEDRI
 |---|---|
 | `python scripts/manage_db.py check` | Dry-run pending migrations |
 | `python scripts/manage_db.py migrate` | Apply pending migrations |
-| `python scripts/check_system.py` | Auto-generate system health checklist (108 items) |
+| `python scripts/check_system.py` | Auto-generate system health checklist (134 items) |
 | `python scripts/verify_fixes.py` | Validate fix_registry invariants (runs in pre-commit) |
 | `python scripts/run_lora_training.py` | LoRA fine-tuning with Unsloth (Qwen2.5-7B) |
 | `python scripts/recover_all.py` | Emergency recovery from session dumps |
@@ -250,6 +248,8 @@ Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shar
 ## Long-term Backlog
 
 - 合规/批量族部分端点无前端（`/compliance/laws/upload`、`/feedback/history`、`/training_data`、`/trends`、`/graph`、`/laws/monitor/events`、`/check_quote_anomaly`、`/compare_bidders_quotes`、`/extract_relationships`）——保留为 API-only。
+- **timeline 全族（`app/routes/timeline.py`，20 路由）与 compliance 全族（`app/routes/compliance.py`，23 路由）**：FIX-056 摘除前端后均为 API-only（含 `/clearance` 时间线 UI 与合规独立 UI 降级）。
+- **审计编排器死代码**：`app/services/audit_engine.py` 的 `run_audit`/`run_preflight`/`_generate_reports` 等 + `audit_report.py`/`audit_wiki_publisher.py` 均已无调用方（clearance 仅用 `_run_style_analysis`/`_score_*`）；待外科式删除（S3 未完成项）。
 
 ## Fix Registry
 

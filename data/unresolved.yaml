@@ -368,8 +368,9 @@ unresolved:
 
   - id: UNRESOLVED-026
     title: "extended_laws 16 部条文补齐后接入合规检查（national-only + 核心 4 部守卫）"
-    status: pending
+    status: resolved
     severity: medium
+    resolved: 2026-09-16
     discovered: 2026-09-16
     tags: ["合规", "数据依赖", "接线"]
     context: >
@@ -415,3 +416,28 @@ unresolved:
       source_url/fetched_at → 归一化接入 _load_seed_laws（national-only + 核心 4 部守卫）
       → 更新 README/doc_drift 口径 → 1/1 工程基线回归（货物/服务 blocked）+ @code-reviewer
       （命中 app/services + 合规路径）。
+
+  - id: UNRESOLVED-027
+    title: "S3/S4 残余清理：审计死代码外科删除 + 前端死块/陈旧 DOM id + 构建去重"
+    status: deferred
+    severity: low
+    discovered: 2026-09-16
+    tags: ["清理", "死代码"]
+    context: >
+      多方向审计确认但为控制风险未在本轮执行：
+      (1) app/services/audit_engine.py 的编排器（run_audit/run_preflight/_generate_reports/
+          _save_file_result/_call_function/_run_ai_review/_run_project_level_function/get_run_results/
+          get_project_history/get_running_audit/register+unregister_progress_queue）零调用方，
+          audit_report.py / audit_wiki_publisher.py 整文件死（仅被上述死函数 import）；
+          clearance_engine 仅用 _run_style_analysis/_score_style_analysis/_score_rule_extraction。
+          删除需非连续外科切割（_run_style_analysis 夹在死函数之间），风险较高故延后。
+      (2) static/js/review.js 的 loadDocReviewPanel/initDocReviewToggle（#docReviewPanel 等 DOM 不存在）
+          + app.css 相关样式；/admin/review/document 无前端（应登记 API-only）。
+      (3) 陈旧 DOM id：app.js 的 databaseTabBtn/sidebarEditPromptBtn/fileStationBtn、cases.js 的
+          casesToggleStatus、scripts/run_ui_audit.py TAB_TOUR 的 sidebarTypoResultsBtn、
+          data/runtime_config_factory.json 的 7 个 typo_* 键（无代码读取）。
+      (4) Dockerfile torch 双装：L50 从 TORCH_INDEX 装 GPU/CPU 轮子，随后 requirements.txt 又 pin
+          torch==2.12.1（不含 +cuXXX 时 pip 视为未满足）→ 可能覆盖为 PyPI 轮子（GPU 机器受影响）。
+    resolution_plan: >
+      分批外科删除 + node --check + pytest + 重建镜像验证；torch 去重可改为 Dockerfile 最后装 torch
+      或 requirements 用 torch>=2.12.1 让 +cuXXX 满足。

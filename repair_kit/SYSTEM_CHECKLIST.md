@@ -1,8 +1,8 @@
 # System Health Checklist — Automated Audit
 
-> Generated: 2026-09-17 14:23 (auto)
-> verify_fixes.py: 270/270 pass (0 failure(s))
-> Checklist: 135 items — 131 pass / 4 manual / 0 fail
+> Generated: 2026-09-17 14:41 (auto)
+> verify_fixes.py: 280/280 pass (0 failure(s))
+> Checklist: 134 items — 131 pass / 3 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
 
@@ -62,7 +62,7 @@ _(36/36 verified automatically)_
 
 _(28/28 verified automatically)_
 
-- [x] Tables defined in database.py: 72
+- [x] Tables defined in database.py: 76
 - [x] PostgreSQL driver (psycopg2)
 - [x] Core table: users
 - [x] Core table: chat_messages
@@ -103,7 +103,7 @@ _(5/5 verified automatically)_
 
 ## FILESYSTEM
 
-_(16/17 verified automatically)_
+_(16/16 verified automatically)_
 
 - [x] Directory exists: data/
 - [x] Directory exists: data/user_files/
@@ -114,7 +114,6 @@ _(16/17 verified automatically)_
 - [x] Directory exists: data/workflows/
 - [x] Directory exists: data/temp/
 - [x] MAX_CONTENT_LENGTH: 50 MB
-- [?] MAX_CONCURRENT_UPLOADS set  —  may use env var fallback
 - [x] File upload type whitelist
 - [x] Recycle bin service module
 - [x] Temp file + ghost chat cleanup
@@ -201,7 +200,7 @@ _(6/6 verified automatically)_
 | Status | Count |
 |--------|-------|
 | [x] Pass | 131 |
-| [?] Manual | 4 |
-| **Total** | **135** |
+| [?] Manual | 3 |
+| **Total** | **134** |
 
-**Verification rate**: 131/135 auto-verified (97%)
+**Verification rate**: 131/134 auto-verified (97%)

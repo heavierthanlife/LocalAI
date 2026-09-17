@@ -683,8 +683,7 @@ let currentProjectName = '';
                     </div>
                 </div>
                 ${status === 'active' ? `<button id="openProjectChatBtn" class="file-btn" style="background:#16a34a;color:white;border-color:#15803d;padding:6px 14px;font-size:0.78rem;white-space:nowrap;">💬 项目对话</button>
-                <button id="openProjectGrillBtn" class="file-btn" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;padding:6px 14px;font-size:0.78rem;white-space:nowrap;" title="为此项目创建质问模式，AI将模拟挑剔供应商拷问招标文件">🔥 质问</button>
-                <button id="bindTimelineBtn" class="file-btn" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;padding:6px 14px;font-size:0.78rem;white-space:nowrap;">📅 绑定时间线</button>` : ''}
+                <button id="openProjectGrillBtn" class="file-btn" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;padding:6px 14px;font-size:0.78rem;white-space:nowrap;" title="为此项目创建质问模式，AI将模拟挑剔供应商拷问招标文件">🔥 质问</button>` : ''}
             </div>
             <!-- AI助手: natural language content generation -->
             ${status === 'active' ? `
@@ -794,13 +793,6 @@ let currentProjectName = '';
                     console.error('Project grill button error:', e);
                     showToast('创建项目质问模式失败', 'error', 3000);
                 }
-            };
-        }
-
-        const bindTimelineBtn = document.getElementById('bindTimelineBtn');
-        if (bindTimelineBtn) {
-            bindTimelineBtn.onclick = () => {
-                _switchSubTab('timeline');
             };
         }
 
