@@ -478,7 +478,13 @@ def auto_cleanup_temp_files():
 
 
 def auto_cleanup_memory():
-    """Hourly: clean stale _project_presence and credit_tasks entries."""
+    """Hourly: clean stale _project_presence and credit_tasks entries.
+
+    Note (FIX-061): _project_presence and download_tokens live in the Flask
+    process only, so as a Celery task this is effectively a no-op in the worker;
+    it is still scheduled because the same function also drains the shared
+    credit_tasks registry, and it keeps that path warm.
+    """
     try:
         import time as _time
         now = _time.time()
@@ -558,5 +564,39 @@ try:
         from app.services.llm_catalog import refresh_catalog
         return refresh_catalog()
 
+except Exception:
+    pass
+
+
+# ── Celery task registration (FIX-061) ──────────────────────────────────────
+# Expose the remaining maintenance jobs to Celery Beat. APScheduler
+# (app/__init__.py) calls these functions directly when ENABLE_SCHEDULER=true;
+# in Docker APScheduler is disabled and Beat drives them instead. Wrapping is
+# additive: Celery Task objects remain directly callable, so both paths work.
+try:
+    from celery_app import celery as _celery
+
+    for _fn_name in (
+        'cleanup_old_sessions',
+        'delete_expired_original_files',
+        'cleanup_stale_tasks',
+        'cleanup_stale_message_responses',
+        'schedule_project_deletion_cleanup',
+        'cleanup_expired_recycle_bin',
+        'cleanup_expired_share_files',
+        'cleanup_stale_download_tokens',
+        'cleanup_orphan_users',
+        'cleanup_old_training_data',
+        'cleanup_old_training_exports',
+        'auto_generate_monthly_report',
+        'auto_generate_annual_report',
+        'auto_rag_health_check',
+        'auto_cleanup_temp_files',
+        'auto_cleanup_memory',
+        'auto_training_health_check',
+        'auto_cleanup_stale_reviews',
+    ):
+        globals()[_fn_name] = _celery.task(
+            name=f'app.cleanup_tasks.{_fn_name}')(globals()[_fn_name])
 except Exception:
     pass

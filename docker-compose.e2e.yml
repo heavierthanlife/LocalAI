@@ -31,6 +31,9 @@ services:
       - e2e_app_data:/app/data
       - e2e_app_logs:/app/logs
       - ./data/industry_words:/app/data/industry_words:ro
+      - ./data/laws:/app/data/laws:ro
+      - ./data:/app/repo_data:ro
+      - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
@@ -95,6 +98,9 @@ services:
       - e2e_app_data:/app/data
       - e2e_app_logs:/app/logs
       - ./data/industry_words:/app/data/industry_words:ro
+      - ./data/laws:/app/data/laws:ro
+      - ./data:/app/repo_data:ro
+      - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
     depends_on:
       postgres:

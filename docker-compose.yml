@@ -10,6 +10,36 @@
 #   redis     — Redis 7 (ready for Celery + session storage)
 #   nginx     — HTTPS reverse proxy
 
+# ── Shared environment for app / celery-worker / celery-beat (FIX-061) ──
+# Single source of truth so the three services can never drift apart.
+x-app-env: &app-env
+  - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+  - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
+  - QWEN_API_KEY=${QWEN_API_KEY:-}
+  - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+  - MIMO_API_KEY=${MIMO_API_KEY:-}
+  - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+  - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+  - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+  - BOCHA_API_KEY=${BOCHA_API_KEY:-}
+  - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
+  - REDIS_URL=redis://redis:6379/0
+  - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
+  - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
+  - APP_ENV=production
+  # ADMIN_PIN must be set in .env — production refuses to start without it
+  - ADMIN_PIN=${ADMIN_PIN:-}
+  - LLM_TIMEOUT=120
+  - WORKERS=4
+  # Celery beat owns schedules in Docker; in-process APScheduler would duplicate
+  # every job across the 4 gunicorn workers.
+  - ENABLE_SCHEDULER=false
+  - CREDIT_BROWSER_HEADLESS=true
+  # HuggingFace cache → persistent app_data volume (survives recreate; shared by
+  # app/worker so sentence-transformers downloads once).
+  - HF_HOME=/app/data/hf_cache
+  - HF_HUB_DISABLE_SYMLINKS_WARNING=1
+
 services:
   # ── Flask Application ──
   app:
@@ -17,40 +47,7 @@ services:
     image: local-ai:latest
     container_name: localai-app
     restart: unless-stopped
-    environment:
-      # LLM Providers (set in .env file)
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
-      - QWEN_API_KEY=${QWEN_API_KEY:-}
-      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
-      - MIMO_API_KEY=${MIMO_API_KEY:-}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      # Database
-      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
-      # Redis
-      - REDIS_URL=redis://redis:6379/0
-      # App config
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
-      - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
-      - APP_ENV=production
-      # ADMIN_PIN must be set in .env — production refuses to start without it
-      - ADMIN_PIN=${ADMIN_PIN:-}
-      - LLM_TIMEOUT=120
-      - WORKERS=4
-      # Celery beat owns schedules in Docker; in-process APScheduler would
-      # duplicate every job across the 4 gunicorn workers.
-      - ENABLE_SCHEDULER=false
-      # Search
-      - BOCHA_API_KEY=${BOCHA_API_KEY:-}
-      # VL Model
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
-      # Credit Checker
-      - CREDIT_BROWSER_HEADLESS=true
-      # HuggingFace cache → persistent app_data volume (survives recreate; shared
-      # by app/worker so sentence-transformers + Headroom/Kompress download once).
-      - HF_HOME=/app/data/hf_cache
-      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
+    environment: *app-env
     volumes:
       # Persistent data — survives container restarts
       - app_data:/app/data
@@ -67,6 +64,10 @@ services:
       - ./data:/app/repo_data:ro
       # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      - company_kb_files:/app/company_kb_files
+      - knowledge_lab_files:/app/knowledge_lab_files
       # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
@@ -133,21 +134,7 @@ services:
     command: celery -A celery_app worker -l info -c 1 --max-tasks-per-child 50
     healthcheck:
       disable: true
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - ZHIPU_API_KEY=${ZHIPU_API_KEY:-}
-      - QWEN_API_KEY=${QWEN_API_KEY:-}
-      - MIMO_API_KEY=${MIMO_API_KEY:-}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
-      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
-      - REDIS_URL=redis://redis:6379/0
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
-      - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
-      - LLM_TIMEOUT=120
-      - HF_HOME=/app/data/hf_cache
-      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
+    environment: *app-env
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
@@ -161,6 +148,10 @@ services:
       - ./data:/app/repo_data:ro
       # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      - company_kb_files:/app/company_kb_files
+      - knowledge_lab_files:/app/knowledge_lab_files
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       - ./cert:/app/cert:ro
     depends_on:
@@ -177,15 +168,10 @@ services:
     image: local-ai:latest
     container_name: localai-celery-beat
     restart: unless-stopped
-    command: celery -A celery_app beat -l info
+    command: celery -A celery_app beat -l info --schedule=/app/data/celerybeat-schedule
     healthcheck:
       disable: true
-    environment:
-      - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
-      - REDIS_URL=redis://redis:6379/0
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
-      - HF_HOME=/app/data/hf_cache
-      - HF_HUB_DISABLE_SYMLINKS_WARNING=1
+    environment: *app-env
     volumes:
       - app_data:/app/data
       - app_logs:/app/logs
@@ -199,6 +185,10 @@ services:
       - ./data:/app/repo_data:ro
       # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      - company_kb_files:/app/company_kb_files
+      - knowledge_lab_files:/app/knowledge_lab_files
     depends_on:
       postgres:
         condition: service_healthy
@@ -235,6 +225,8 @@ volumes:
   app_logs:     # application logs
   pg_data:      # PostgreSQL data
   redis_data:   # Redis AOF persistence
+  company_kb_files:    # 企业知识库上传件（/app/company_kb_files，FIX-061）
+  knowledge_lab_files: # 知识实验室上传件（/app/knowledge_lab_files，FIX-061）
 
 # ── Network ──
 networks:

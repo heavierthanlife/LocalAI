@@ -1665,3 +1665,51 @@ fixes:
       - type: literal
         file: app/routes/admin_regeneration.py
         pattern: "code_sent_****"
+
+  - id: FIX-2026-09-15-061
+    title: "S2 部署完整性：Beat 补齐定时任务 + 数据目录卷 + 补表 + compose 对齐"
+    severity: high
+    rationale: >
+      (1) Docker 下 ENABLE_SCHEDULER=false 关掉 APScheduler，而 Celery Beat 仅 7 条 → ~18 个维护任务
+          （回收站、孤儿用户、下载令牌、陈旧任务、训练数据、月/年报、RAG 健康…）从不执行。
+          修复：cleanup_tasks.py 以守卫块把这 18 个函数注册为 Celery 任务（Task 对象仍可直接调用，
+          APScheduler 路径不受影响）；celery_app.beat_schedule 增至 25 条（含 args 复刻原语义）；
+          并修正 generate-weekly-report 误传 kwargs 的 latent bug。
+      (2) company_kb_files/ + knowledge_lab_files/ 写在 BASE_DIR 且非卷挂载 → --force-recreate 丢数据。
+          修复：compose 命名卷挂原路径。
+      (3) 代码引用但 schema 缺失的表：wiki_bookmarks/wiki_view_log/user_feedback（fresh-deploy 会坏）
+          + knowledge_lab_skills（功能已坏）→ database.py 补 CREATE TABLE IF NOT EXISTS（含必要 UNIQUE）。
+      (4) trend_service 读的是无写入方的 compliance_check_feedback（准确率永远不可用）→ 改读 compliance_feedback。
+      (5) docker-compose.e2e.yml 缺 laws/repo_data/factory 挂载 → 对齐主 compose。
+      (6) compose 三服务 env 用 x-app-env 锚点统一；beat 加 --schedule 持久化。
+    checks:
+      - type: literal
+        file: app/cleanup_tasks.py
+        pattern: "FIX-061"
+      - type: literal
+        file: celery_app.py
+        pattern: "'cleanup-old-sessions'"
+      - type: literal
+        file: celery_app.py
+        pattern: "'auto-cleanup-stale-reviews'"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "company_kb_files:/app/company_kb_files"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "x-app-env: &app-env"
+      - type: literal
+        file: docker-compose.yml
+        pattern: "--schedule=/app/data/celerybeat-schedule"
+      - type: literal
+        file: app/database.py
+        pattern: "CREATE TABLE IF NOT EXISTS wiki_bookmarks"
+      - type: literal
+        file: app/database.py
+        pattern: "CREATE TABLE IF NOT EXISTS knowledge_lab_skills"
+      - type: literal
+        file: app/services/trend_service.py
+        pattern: "FROM compliance_feedback"
+      - type: literal
+        file: docker-compose.e2e.yml
+        pattern: "./data:/app/repo_data:ro"

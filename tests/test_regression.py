@@ -2003,3 +2003,42 @@ def test_deletion_code_not_logged():
     src = _read('app/routes/admin_regeneration.py')
     assert 'code_sent_{code}' not in src
     assert 'code_sent_****' in src
+
+
+def test_beat_schedule_covers_maintenance_jobs():
+    """FIX-2026-09-15-061: Celery Beat schedules the maintenance jobs (Docker path)."""
+    import celery_app
+    bs = celery_app.celery.conf.beat_schedule
+    assert len(bs) >= 25, f"expected >=25 beat entries, got {len(bs)}"
+    for name in ('cleanup-old-sessions', 'cleanup-orphan-users', 'generate-monthly-report',
+                 'generate-annual-report', 'auto-rag-health-check', 'auto-cleanup-memory',
+                 'auto-cleanup-stale-reviews', 'cleanup-expired-recycle-bin'):
+        assert name in bs, f"missing beat entry: {name}"
+    import app.cleanup_tasks as ct
+    for fn in ('cleanup_old_sessions', 'cleanup_orphan_users', 'auto_cleanup_memory',
+               'auto_generate_monthly_report', 'auto_cleanup_stale_reviews'):
+        assert hasattr(getattr(ct, fn), 'delay'), f"{fn} is not a Celery task"
+
+
+def test_compose_data_volumes_and_env():
+    """FIX-2026-09-15-061: compose has shared env anchor, dir volumes, beat schedule."""
+    comp = _read('docker-compose.yml')
+    assert 'x-app-env: &app-env' in comp
+    assert 'company_kb_files:/app/company_kb_files' in comp
+    assert 'knowledge_lab_files:/app/knowledge_lab_files' in comp
+    assert '--schedule=/app/data/celerybeat-schedule' in comp
+    assert './data:/app/repo_data:ro' in _read('docker-compose.e2e.yml')
+
+
+def test_missing_tables_declared():
+    """FIX-2026-09-15-061: previously-missing tables are now in the schema."""
+    db = _read('app/database.py')
+    for t in ('wiki_bookmarks', 'wiki_view_log', 'user_feedback', 'knowledge_lab_skills'):
+        assert f'CREATE TABLE IF NOT EXISTS {t}' in db, f"missing CREATE TABLE for {t}"
+
+
+def test_trend_service_uses_real_feedback_table():
+    """FIX-2026-09-15-061: trend accuracy reads compliance_feedback (the written table)."""
+    src = _read('app/services/trend_service.py')
+    assert 'FROM compliance_feedback' in src
+    assert 'FROM compliance_check_feedback' not in src

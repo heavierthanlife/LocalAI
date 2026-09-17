@@ -230,6 +230,8 @@ Auto-downloaded via `webdriver-manager` on first use. Can override with `EDGEDRI
 
 - **Docker 数据资产三规则（FIX-059）**：`.dockerignore` 丢弃整个 `data/`，且 `/app/data` 是 `app_data` 卷（**遮蔽镜像内 `data/`**）→ 任何 `data/` 下的 repo 资产都必须显式处理，否则容器内**静默为空**（如合规引擎曾 0 法规）。三类：① **随代码演进**（`laws/`、`industry_words/`、`runtime_config_factory.json`）→ compose **只读直挂 `:ro`**（永远最新；勿走 seeding）；② **运行时可变种子**（`domain_words.txt`，`approve_domain_words` 追加写）→ **启动 seeding**：`app/bootstrap.py::ensure_seeded()` 从 `/app/repo_data:ro` 缺失时原子复制进卷，**不得 `:ro` 挂载**；③ **纯运行态**（`runtime_config.json`、`llm_catalog.json`、`checkpoints.db`、`skill_audit_cache.json`、`user_files/`）→ 留 `app_data` 卷自建。新增 `data/` 资产务必归入上述一类并登记。注：`./data:/app/repo_data:ro` 只读暴露宿主整个 `data/`（含 `user_files/`），单机部署可接受、有意保留。
 
+- **Docker 调度与数据目录（FIX-061）**：Docker 下 `ENABLE_SCHEDULER=false`（关 APScheduler），全部定时任务由 **Celery Beat** 驱动（`celery_app.beat_schedule`，25 条）；新增/修改 APScheduler 任务时**必须同步补 beat 条目**并在 `cleanup_tasks.py` 注册为 Celery 任务，否则生产不跑。`company_kb_files/` 与 `knowledge_lab_files/` 写在 `BASE_DIR`（非 `/app/data`），由 compose 命名卷持久化——新增这类"写目录"务必补卷。
+
 ## Shared Agent Infrastructure
 
 Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shared across opencode, hermes, pi, and lmcode.

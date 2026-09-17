@@ -2,7 +2,7 @@
 
 Data sources:
   - Primary: audit_file_results.findings + audit_runs.overall_score
-  - Accuracy: compliance_check_feedback (user-labeled verdicts)
+  - Accuracy: compliance_feedback (user-labeled verdicts)
 
 Metrics:
   - Score trend over time
@@ -146,19 +146,12 @@ def get_feedback_accuracy(days: int = 90) -> dict:
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Check if compliance_check_feedback table exists
-            cur.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'compliance_check_feedback'
-                )
-            """)
-            if not cur.fetchone()[0]:
-                return {'available': False, 'note': 'feedback table does not exist'}
-
+            # FIX-061: user feedback labels live in `compliance_feedback` (written by
+            # /compliance/feedback). The old `compliance_check_feedback` name had no
+            # writer, so accuracy was permanently unavailable.
             cur.execute("""
                 SELECT user_verdict, COUNT(*) AS cnt
-                FROM compliance_check_feedback
+                FROM compliance_feedback
                 WHERE created_at >= %s
                 GROUP BY user_verdict
             """, (since,))

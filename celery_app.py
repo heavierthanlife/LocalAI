@@ -69,8 +69,7 @@ celery.conf.update(
         },
         'generate-weekly-report': {
             'task': 'app.cleanup_tasks.auto_generate_weekly_report',
-            'schedule': 604800.0,
-            'kwargs': {'period': 'weekly'},
+            'schedule': crontab(day_of_week='mon', hour=2, minute=0),
         },
         'nightly-lora-training': {
             'task': 'app.services.nightly_trainer.run_nightly_training',
@@ -79,6 +78,80 @@ celery.conf.update(
         'refresh-llm-catalog': {
             'task': 'app.cleanup_tasks.refresh_llm_catalog_task',
             'schedule': crontab(hour=2, minute=30),  # 2:30 AM daily
+        },
+        # ── FIX-061: mirror the APScheduler maintenance jobs so they also run in
+        # Docker (ENABLE_SCHEDULER=false). Schedules/args mirror app/__init__.py. ──
+        'cleanup-old-sessions': {
+            'task': 'app.cleanup_tasks.cleanup_old_sessions',
+            'schedule': crontab(hour=3, minute=0), 'args': (15,),
+        },
+        'delete-expired-original-files': {
+            'task': 'app.cleanup_tasks.delete_expired_original_files',
+            'schedule': crontab(minute=0, hour='*/6'),
+        },
+        'cleanup-stale-tasks': {
+            'task': 'app.cleanup_tasks.cleanup_stale_tasks',
+            'schedule': crontab(minute='*/5'),
+        },
+        'cleanup-stale-message-responses': {
+            'task': 'app.cleanup_tasks.cleanup_stale_message_responses',
+            'schedule': crontab(minute=0),
+        },
+        'schedule-project-deletion-cleanup': {
+            'task': 'app.cleanup_tasks.schedule_project_deletion_cleanup',
+            'schedule': crontab(hour=4, minute=0),
+        },
+        'cleanup-expired-recycle-bin': {
+            'task': 'app.cleanup_tasks.cleanup_expired_recycle_bin',
+            'schedule': crontab(hour=5, minute=0, day_of_month='*/3'),
+        },
+        'cleanup-expired-share-files': {
+            'task': 'app.cleanup_tasks.cleanup_expired_share_files',
+            'schedule': crontab(hour=6, minute=0), 'args': (7,),
+        },
+        'cleanup-stale-download-tokens': {
+            'task': 'app.cleanup_tasks.cleanup_stale_download_tokens',
+            'schedule': crontab(minute=0, hour='*/6'), 'args': (24,),
+        },
+        'cleanup-orphan-users': {
+            'task': 'app.cleanup_tasks.cleanup_orphan_users',
+            'schedule': crontab(hour=7, minute=0, day_of_month='*/3'),
+        },
+        'cleanup-old-training-data': {
+            'task': 'app.cleanup_tasks.cleanup_old_training_data',
+            'schedule': crontab(month_of_year='1,4,7,10', day_of_month=1, hour=4, minute=0),
+        },
+        'cleanup-old-training-exports': {
+            'task': 'app.cleanup_tasks.cleanup_old_training_exports',
+            'schedule': crontab(month_of_year='1,4,7,10', day_of_month=1, hour=4, minute=30),
+        },
+        'generate-monthly-report': {
+            'task': 'app.cleanup_tasks.auto_generate_monthly_report',
+            'schedule': crontab(day_of_month=1, hour=2, minute=30),
+        },
+        'generate-annual-report': {
+            'task': 'app.cleanup_tasks.auto_generate_annual_report',
+            'schedule': crontab(month_of_year=1, day_of_month=1, hour=3, minute=0),
+        },
+        'auto-rag-health-check': {
+            'task': 'app.cleanup_tasks.auto_rag_health_check',
+            'schedule': crontab(day_of_week='sun', hour=3, minute=0),
+        },
+        'auto-cleanup-temp-files': {
+            'task': 'app.cleanup_tasks.auto_cleanup_temp_files',
+            'schedule': crontab(hour=1, minute=0),
+        },
+        'auto-cleanup-memory': {
+            'task': 'app.cleanup_tasks.auto_cleanup_memory',
+            'schedule': crontab(minute=0),
+        },
+        'auto-training-health-check': {
+            'task': 'app.cleanup_tasks.auto_training_health_check',
+            'schedule': crontab(day_of_week='sun', hour=3, minute=30),
+        },
+        'auto-cleanup-stale-reviews': {
+            'task': 'app.cleanup_tasks.auto_cleanup_stale_reviews',
+            'schedule': crontab(hour=2, minute=0),
         },
     },
 )

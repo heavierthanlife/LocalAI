@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — S2 部署完整性：Beat 定时任务 + 数据卷 + 补表 + compose（FIX-061）
+
+### Fixed
+- **Docker 下 18 个维护任务从不执行**：`ENABLE_SCHEDULER=false` 关掉 APScheduler，而 Beat 仅 7 条 → 回收站/孤儿用户/下载令牌/陈旧任务/训练数据/月年报/RAG 健康等从不运行。现将 18 个函数注册为 Celery 任务（Task 对象仍可直接调用，APScheduler 路径不受影响），`beat_schedule` 7→25 条；并修复 `generate-weekly-report` 误传 `kwargs` 的 latent bug。
+- **`company_kb_files/` + `knowledge_lab_files/` 数据丢失**：写在 `BASE_DIR` 且非卷挂载 → `--force-recreate` 即丢；compose 新增命名卷挂原路径。
+- **schema 缺表**：`wiki_bookmarks`/`wiki_view_log`/`user_feedback`（fresh-deploy 会坏）+ `knowledge_lab_skills`（功能已坏，`ingest_pipeline` 写入）→ `database.py` 补 `CREATE TABLE IF NOT EXISTS`（含 ON CONFLICT 所需 UNIQUE）。
+- **趋势准确率永久不可用**：`trend_service` 读无写入方的 `compliance_check_feedback` → 改读实际写入的 `compliance_feedback`。
+- **`docker-compose.e2e.yml` 缺 laws/repo_data/factory 挂载**（E2E 会 0 法规）→ 对齐主 compose。
+
+### Changed
+- compose 三服务 env 用 `x-app-env` 锚点统一（消除 worker/beat 缺 key）；`celery-beat` 加 `--schedule=/app/data/celerybeat-schedule`（跨 recreate 持久化）。
+
+### Added
+- fix_registry FIX-2026-09-15-061（10 不变量）+ 回归 4 测试。
+
+regression: 1/1 clearance baseline passed
+160/160 regression · 170/170 含路由守护+冒烟 · verify_fixes 280/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — S1 安全修复：项目文件越权 + 合规结果归属 + 验证码脱敏（FIX-060）
 
 ### Fixed

@@ -938,6 +938,54 @@ def _run_table_creation(cur: "PgCursor"):
         ON compliance_feedback(user_id, task_id)
     """)
 
+    # ── FIX-061: tables referenced by code but previously missing from the schema ──
+    # Wiki bookmarks (app/routes/wiki.py; ON CONFLICT (user_id, article_id) needs the UNIQUE).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS wiki_bookmarks (
+            id            SERIAL PRIMARY KEY,
+            user_id       TEXT,
+            article_id    TEXT NOT NULL,
+            article_title TEXT,
+            wiki_path     TEXT,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (user_id, article_id)
+        )
+    """)
+    # Wiki view log (app/routes/wiki.py; GROUP BY … MAX(viewed_at)).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS wiki_view_log (
+            id            SERIAL PRIMARY KEY,
+            user_id       TEXT,
+            wiki_path     TEXT NOT NULL,
+            article_title TEXT,
+            viewed_at     TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    # Generic user feedback (app/routes/knowledge.py, admin.py).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_feedback (
+            id         SERIAL PRIMARY KEY,
+            user_id    TEXT,
+            source     TEXT,
+            target_id  TEXT,
+            rating     INTEGER,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    # Knowledge-lab skills ingested from files (app/services/ingest_pipeline.py;
+    # ON CONFLICT DO NOTHING is only meaningful with a UNIQUE).
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_lab_skills (
+            id         SERIAL PRIMARY KEY,
+            category   TEXT,
+            content    TEXT,
+            source     TEXT,
+            is_company BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (source, content)
+        )
+    """)
+
     # ── Quote anomaly results (per-document + cross-bidder) ──
     cur.execute("""
         CREATE TABLE IF NOT EXISTS quote_anomaly_results (
