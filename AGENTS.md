@@ -161,6 +161,7 @@ Every feature upgrade must include regression verification:
 - **Upload semaphore**: max 3 concurrent file uploads (`MAX_CONCURRENT_UPLOADS`). Returns 429 if busy.
 - **Time zone**: Asia/Shanghai everywhere (Celery, APScheduler, `beijing_now()` helper)
 - **API responses**: `ok(data, message, status)` → `{success:true, message, ...data}`, `err(error, code, status)` → `{success:false, error, code}`
+- **资源归属模型（FIX-060）**：**实时/交互态 task**（清标、信用核查 status/captcha、合规结果/规则）→ **仅 owner 可访问**（`task_owner_ok` / `_task_forbidden`，TaskBus meta 存 user_id）；**已归档聚合产物**（`batch_comparison_results` zip、`credit_check_reports`）→ **全注册用户可见（单机构有意设计，list + download 均共享）**。项目文件/归档按项目成员（`_can_access_project`）校验。
 - **Bilingual**: Chinese (primary) + English (code comments, some tooling)
 - **Code style**: 不添加注释除非必要（遵循仓库风格）；路径用 `to_rel_path()`/`resolve_path()`，不写死绝对路径
 - **File upload limit**: 50 MB (`MAX_CONTENT_LENGTH`)

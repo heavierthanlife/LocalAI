@@ -881,7 +881,7 @@ def admin_approve_delete(username):
     admin_uid = session.get('user_id', '')
     admin_uname = session.get('username', '')
     log_admin_action(admin_uid, admin_uname, 'DELETE_APPROVE', 'users', username,
-                    column_name='deletion_requested', old_value='pending', new_value=f'code_sent_{code}')
+                    column_name='deletion_requested', old_value='pending', new_value='code_sent_****')
     if is_configured() and user_email:
         send_email(user_email, "[中联AI] 账户删除验证码",
                    f"验证码: {code}\n有效5分钟。输入此码确认删除账户。", async_mode=True)

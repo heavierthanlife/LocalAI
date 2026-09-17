@@ -393,6 +393,8 @@ def incremental_check():
 
         if not rules_task_id:
             return err("缺少 rules_task_id", "VALIDATION_ERROR", 400)
+        if _task_forbidden(rules_task_id):
+            return err("无权访问该任务", "FORBIDDEN", 403)
         if not changed_sections:
             return err("缺少 changed_sections", "VALIDATION_ERROR", 400)
 
@@ -418,10 +420,29 @@ def incremental_check():
         return err(str(e), "SERVER_ERROR", 500)
 
 
+def _task_forbidden(task_id) -> bool:
+    """True if the current session may NOT access the given task's artifacts.
+
+    Ownership lives in TaskBus meta (set at register time). Missing meta (expired
+    or legacy task) is allowed through — disk-persisted results outlive the TTL.
+    """
+    try:
+        from app.services.task_bus import TaskBus
+        from app.utils.helpers import task_owner_ok
+        meta = TaskBus.get(task_id)
+        if meta and not task_owner_ok(meta, session.get('user_id')):
+            return True
+    except Exception as e:
+        logger.debug(f"_task_forbidden check skipped: {e}")
+    return False
+
+
 @compliance_bp.route('/result/<task_id>', methods=['GET'])
 @_login_required
 def get_result(task_id):
     """Get compliance check result by task ID."""
+    if _task_forbidden(task_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     data = _load_result(task_id)
     if not data:
         # Check Celery
@@ -448,6 +469,8 @@ def get_result(task_id):
 @_login_required
 def get_rules(task_id):
     """Get extracted rules by task ID (for user review before check)."""
+    if _task_forbidden(task_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     data = _load_result(f"rules_{task_id}")
     if not data:
         return err("规则数据不存在或已过期", "NOT_FOUND", 404)
@@ -458,6 +481,8 @@ def get_rules(task_id):
 @_login_required
 def update_rules(task_id):
     """Update/modify extracted rules (user review/edit)."""
+    if _task_forbidden(task_id):
+        return err("无权访问该任务", "FORBIDDEN", 403)
     data = _load_result(f"rules_{task_id}")
     if not data:
         return err("规则数据不存在或已过期", "NOT_FOUND", 404)

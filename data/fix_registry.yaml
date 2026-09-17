@@ -1630,3 +1630,38 @@ fixes:
       - type: literal_not
         file: docker-compose.yml
         pattern: "./data/domain_words.txt:/app/data/domain_words.txt:ro"
+
+  - id: FIX-2026-09-15-060
+    title: "S1 安全：项目文件越权(IDOR) + 合规结果归属 + 注销验证码脱敏"
+    severity: high
+    rationale: >
+      多方向审计确认：
+      (1) admin.py get_file_versions/download_project_file 校验 project_id 却按 file_id 查询
+          （含 version 路径）；download_archive 无归属校验且文件名可穿越 → 跨项目文件/归档越权。
+          修复：查询 join project_files 并加 AND project_id=%s；archive 加 is_admin/_can_access_project + 文件名白名单。
+      (2) compliance.py get_result/get_rules/update_rules 仅校验登录、无 task 归属 → 猜中 task_id 可读写他人结果。
+          修复：新增 _task_forbidden()（TaskBus meta + task_owner_ok；meta 缺失按 legacy 放行）。
+      (3) admin_regeneration.py 注销验证码明文写入审计日志 → 脱敏为 code_sent_****。
+      资源模型（文档化）：live task=owner；batch/credit 归档=list+download 全用户（单机构，有意）。
+    checks:
+      - type: literal
+        file: app/routes/admin.py
+        pattern: "AND pf.project_id = %s"
+      - type: literal
+        file: app/routes/admin.py
+        pattern: "WHERE id = %s AND project_id = %s"
+      - type: literal
+        file: app/routes/admin.py
+        pattern: "if '..' in zip_filename"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "def _task_forbidden"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "if _task_forbidden(task_id):"
+      - type: literal_not
+        file: app/routes/admin_regeneration.py
+        pattern: "code_sent_{code}"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "code_sent_****"

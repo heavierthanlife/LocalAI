@@ -8,6 +8,21 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-16] — S1 安全修复：项目文件越权 + 合规结果归属 + 验证码脱敏（FIX-060）
+
+### Fixed
+- **项目文件/归档越权（IDOR）**（`app/routes/admin.py`）：`get_file_versions`、`download_project_file`（含 version 路径）原校验 `project_id` 却按 `file_id` 查询 → 跨项目文件访问；现查询 `JOIN project_files` 并加 `AND project_id=%s`。`download_archive` 原仅校验登录 → 加 `is_admin()/_can_access_project` + 文件名白名单（防 `..`/`\` 穿越）。
+- **合规结果/规则越权**（`app/routes/compliance.py`）：`get_result`/`get_rules`/`update_rules` 仅校验登录；新增 `_task_forbidden()`（TaskBus meta + `task_owner_ok`，meta 缺失按 legacy 放行）→ 仅 owner 可读写。
+- **注销验证码明文入审计日志**（`app/routes/admin_regeneration.py`）：`code_sent_{code}` → `code_sent_****`。
+
+### Docs
+- AGENTS「资源归属模型（FIX-060）」：live task=owner；batch/credit 归档 list+download 全用户（单机构有意）。
+
+regression: 1/1 clearance baseline passed
+156/156 regression · 166/166 含路由守护+冒烟 · verify_fixes 270/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — 仓库卫生 + Docker 数据资产规则文档化
 
 ### Fixed

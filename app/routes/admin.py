@@ -510,6 +510,12 @@ def finish_project(project_id):
 def download_archive(project_id, zip_filename):
     if session.get('consent_value', 0) != 1:
         return err("Consent not given", "FORBIDDEN", 403)
+    user_id = session.get('user_id')
+    if not is_admin() and not _can_access_project(project_id, user_id):
+        return err("Access denied", "FORBIDDEN", 403)
+    # Path-traversal guard: archives live directly under PROJECT_FILES_ROOT/archives.
+    if '..' in zip_filename or not re.match(r'^[A-Za-z0-9_.-]+$', zip_filename):
+        return err("Invalid filename", "VALIDATION_ERROR", 400)
     zip_dir = os.path.join(PROJECT_FILES_ROOT, 'archives')
     zip_path = os.path.join(zip_dir, zip_filename)
     if not os.path.exists(zip_path):
@@ -1283,15 +1289,16 @@ def get_file_versions(project_id, file_id):
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                        SELECT version,
-                               file_size,
-                               uploaded_at,
-                               uploaded_by,
-                               (SELECT username FROM users WHERE user_id = fv.uploaded_by) as uploaded_by_name
-                        FROM project_file_versions fv
-                        WHERE file_id = %s
-                        ORDER BY version DESC
-                        """, (file_id,))
+                        SELECT v.version,
+                               v.file_size,
+                               v.uploaded_at,
+                               v.uploaded_by,
+                               (SELECT username FROM users WHERE user_id = v.uploaded_by) as uploaded_by_name
+                        FROM project_file_versions v
+                        JOIN project_files pf ON pf.id = v.file_id
+                        WHERE v.file_id = %s AND pf.project_id = %s
+                        ORDER BY v.version DESC
+                        """, (file_id, project_id))
             versions = cur.fetchall()
             return ok({"versions": versions})
 
@@ -1307,10 +1314,13 @@ def download_project_file(project_id, file_id):
         with conn.cursor() as cur:
             if version:
                 cur.execute(
-                    "SELECT stored_path, original_name FROM project_file_versions WHERE file_id = %s AND version = %s",
-                    (file_id, version))
+                    "SELECT v.stored_path, v.original_name FROM project_file_versions v "
+                    "JOIN project_files pf ON pf.id = v.file_id "
+                    "WHERE v.file_id = %s AND v.version = %s AND pf.project_id = %s",
+                    (file_id, version, project_id))
             else:
-                cur.execute("SELECT stored_path, original_name FROM project_files WHERE id = %s", (file_id,))
+                cur.execute("SELECT stored_path, original_name FROM project_files WHERE id = %s AND project_id = %s",
+                            (file_id, project_id))
             row = cur.fetchone()
             if not row:
                 return err("File not found", "NOT_FOUND", 404)

@@ -1980,3 +1980,26 @@ def test_bootstrap_wired_and_compose_mounts():
     assert './data:/app/repo_data:ro' in comp
     assert './data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro' in comp
     assert './data/domain_words.txt:/app/data/domain_words.txt:ro' not in comp
+
+
+def test_admin_file_access_scoped_by_project():
+    """FIX-2026-09-15-060: project file/version queries must be constrained by project_id."""
+    src = _read('app/routes/admin.py')
+    assert 'AND pf.project_id = %s' in src
+    assert 'WHERE id = %s AND project_id = %s' in src
+    assert "if '..' in zip_filename" in src
+    assert '_can_access_project(project_id, user_id)' in src
+
+
+def test_compliance_result_owner_checked():
+    """FIX-2026-09-15-060: compliance result/rules endpoints enforce task ownership."""
+    src = _read('app/routes/compliance.py')
+    assert 'def _task_forbidden' in src
+    assert src.count('if _task_forbidden(task_id):') >= 3  # get_result / get_rules / update_rules
+
+
+def test_deletion_code_not_logged():
+    """FIX-2026-09-15-060: account-deletion verification code must not be logged."""
+    src = _read('app/routes/admin_regeneration.py')
+    assert 'code_sent_{code}' not in src
+    assert 'code_sent_****' in src
