@@ -6544,6 +6544,8 @@
                     const newData = await newChatRes.json();
                     await loadSession(newData.thread_id);
                 }
+                if (typeof updateChatEmptyState === 'function') updateChatEmptyState();
+                if (typeof updateFloatButtons === 'function') updateFloatButtons();
                 checkStorage();
                 await checkAdminStatus();
                 updateProjectTabVisibility();

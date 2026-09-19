@@ -1722,16 +1722,21 @@ fixes:
       content like 'Error: X is not a valid tool, try one of [...]' when the model
       hallucinates a tool name. Models without proper tool-calling support also
       echo the function-calling template ('Here is the JSON for a function call...').
-      Both were streamed and stored verbatim. Fix: sanitize_response() strips both
-      patterns at the split_thinking_answer boundary (covers the streaming,
-      non-streaming and retry paths that all funnel through it).
+      Both were streamed and stored verbatim. Fix has two halves: (1) backend
+      sanitize_response() strips both patterns at the split_thinking_answer boundary
+      for the stored/JSON copy; (2) frontend _sanitizeResponse() mirrors the patterns
+      and cleans the LIVE SSE stream before rendering (the backend cannot filter
+      per-chunk without breaking streaming).
     checks:
       - type: literal
         file: app/utils/helpers.py
         pattern: "def sanitize_response"
       - type: literal
         file: app/utils/helpers.py
-        pattern: "return thinking, sanitize_response(answer)"
+        pattern: "return sanitize_response(thinking), sanitize_response(answer)"
+      - type: literal
+        file: static/js/chat.js
+        pattern: "_sanitizeResponse(fullResponse)"
 
   - id: FIX-2026-08-15-003
     title: "Daily report insufficient-messages message was terse/unhelpful"

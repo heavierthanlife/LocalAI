@@ -2131,3 +2131,12 @@ def test_role_chip_header():
     content = _read('static/js/app.js')
     assert 'updateRoleChip' in content and 'headerRoleChip' in content, \
         "app.js must update the header role chip from /check_auth data"
+
+
+# ── FIX-2026-08-15-001 (live-stream half): frontend SSE text is sanitized ──
+def test_sanitize_response_frontend_stream_guard():
+    content = _read('static/js/chat.js')
+    assert 'function _sanitizeResponse' in content, \
+        "chat.js must define _sanitizeResponse to clean the live SSE stream"
+    assert '_sanitizeResponse(fullResponse)' in content, \
+        "chat.js must run the live streamed text through _sanitizeResponse before rendering"

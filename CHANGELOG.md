@@ -11,7 +11,7 @@ All notable changes to 中联招标智能助手.
 ## [2026-09-19] — 移植本机 QA 打磨：LLM 泄漏清洗 + 登录前门控 + UI 打磨
 
 ### Fixed
-- **LLM 工具错误 / 函数调用模板文本泄漏到聊天**（FIX-2026-08-15-001）：agent 幻觉工具名时原始 `Error: X is not a valid tool...` 及模型回显的函数调用模板文本曾被逐字流式输出并入库。新增 `sanitize_response()`，在 `split_thinking_answer()` 边界清洗，覆盖流式/非流式/重试全部路径（`app/utils/helpers.py`）。
+- **LLM 工具错误 / 函数调用模板文本泄漏到聊天**（FIX-2026-08-15-001）：agent 幻觉工具名时原始 `Error: X is not a valid tool...` 及模型回显的函数调用模板文本曾被逐字流式输出并入库。后端 `sanitize_response()` 在 `split_thinking_answer()` 边界清洗存储副本（含 thinking/answer 两侧），前端 `static/js/chat.js::_sanitizeResponse()` 同步清洗**实时 SSE 流**（后端无法逐 chunk 过滤而不破坏流式，故前端镜像同一组正则）。
 - **`/check_storage` 登录前触发 403 控制台噪声**（FIX-2026-08-15-002）：未登录时跳过请求，并静默忽略非 2xx 响应。
 - **日报问答不足提示生硬**（FIX-2026-08-15-003）："今日对话不足，至少需要2条问答" → 友好可操作文案。
 - **登录前 `/templates`、`/cases`、`/notebook`、`/admin/projects` 401/403 噪声**（FIX-2026-08-16-004）：各加载器按 `sessionStorage` 登录态门控，未登录显示"登录后查看…"。
