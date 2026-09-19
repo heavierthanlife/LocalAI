@@ -216,7 +216,7 @@
                                 addBranchButton(wrapper, tempGroup);
                                 if (data.assistant_msg_id) {
                                     addFeedbackButtons(tempGroup, data.assistant_msg_id);
-                                    addActionButtons(tempGroup, userMsg, fullResponse, '', data.assistant_msg_id);
+                                    addActionButtons(tempGroup, userMsg, _sanitizeResponse(fullResponse), '', data.assistant_msg_id);
                                 }
                             }
                         } catch (e) {
@@ -252,7 +252,7 @@
             }
             // Fix links
             fixLinksInContainer(answerDiv);
-            addCopyButton(wrapper, fullResponse);
+            addCopyButton(wrapper, _sanitizeResponse(fullResponse));
             addShareButton(wrapper);
         }
     }
