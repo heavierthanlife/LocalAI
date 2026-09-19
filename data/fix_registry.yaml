@@ -1744,3 +1744,68 @@ fixes:
       - type: literal
         file: app/routes/knowledge.py
         pattern: "先聊几句"
+
+  - id: FIX-2026-08-15-002
+    title: "/check_storage fired pre-login producing noisy 403 console errors"
+    severity: medium
+    rationale: >
+      Frontend called /check_storage on every page load including pre-login, where the
+      backend correctly returns 403 (consent not given). The 403s are expected behavior
+      but produce console noise and were misreported as a bug. Fix: checkStorage() skips
+      the fetch when sessionStorage has no username (i.e. not logged in) and ignores
+      non-OK responses.
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "sessionStorage.getItem('username')) return;"
+
+  - id: FIX-2026-08-16-004
+    title: "Pre-login fetches for templates/cases/notebook/projects fire 401/403 console noise"
+    severity: low
+    rationale: >
+      Panels initialized on DOMContentLoaded and fetched /templates, /cases, /notebook,
+      and /admin/projects regardless of login state, producing expected-but-noisy 401/403
+      console errors. Fix: each loader skips the fetch when sessionStorage has no username
+      and renders a login prompt instead.
+    checks:
+      - type: literal
+        file: static/js/cases.js
+        pattern: "登录后查看案例库"
+      - type: literal
+        file: static/js/templates.js
+        pattern: "登录后查看模板库"
+      - type: literal
+        file: static/js/knowledge-lab.js
+        pattern: "登录后查看笔记"
+      - type: literal
+        file: static/js/app.js
+        pattern: "登录后查看项目"
+
+  - id: FIX-2026-08-16-005
+    title: "Chat empty state and scroll buttons on empty conversations"
+    severity: medium
+    rationale: >
+      New conversations showed a blank white area with no welcome content, and the
+      floating scroll-to-top/bottom buttons appeared even when there was nothing to
+      scroll. Fix: chat.js renders a welcome empty-state block when no message groups
+      exist, and toggles the .hidden-float class on .float-buttons when the chat area
+      has no overflow.
+    checks:
+      - type: literal
+        file: static/js/chat.js
+        pattern: "chatEmptyState"
+      - type: literal
+        file: static/js/chat.js
+        pattern: "hidden-float"
+
+  - id: FIX-2026-08-16-006
+    title: "No visual role differentiation in the UI header"
+    severity: low
+    rationale: >
+      Regular users, auditors, and admins looked identical in the UI. Fix: app.js
+      updateRoleChip() renders a role chip (管理员/审核员/用户) in the header from
+      /check_auth data.
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "headerRoleChip"

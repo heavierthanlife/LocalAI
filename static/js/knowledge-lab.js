@@ -2302,6 +2302,10 @@ let currentProjectName = '';
     // ── Notebook ──
     async function loadNotebook() {
         const list = document.getElementById('notebookList'); if (!list) return;
+        if (!sessionStorage.getItem('username')) {  // Round 3 polish #14: skip pre-login fetch noise
+            list.innerHTML = '<span style="font-size:0.75rem;color:var(--card-muted);">登录后查看笔记</span>';
+            return;
+        }
         try {
             const r = await fetch('/notebook', {credentials:'include'});
             const d = await r.json();

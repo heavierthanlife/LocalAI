@@ -448,14 +448,21 @@
             html += `<ul style="margin:0; padding-left:16px; list-style:none;">`;
             for (const f of labFiltered) {
                 const checked = selectedKnowledgeFiles.some(sf => sf.source === 'knowledge_lab' && String(sf.id) === String(f.id));
-                html += `<li style="margin:6px 0; padding:4px 0; border-bottom:1px solid #eee;">
-                            <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; flex-wrap:wrap;">
+                html += `<li class="kb-file-item">
+                            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.8rem; cursor:pointer;">
                                 <input type="checkbox" class="knowledge-checkbox"
                                        data-source="knowledge_lab" data-id="${f.id}"
-                                       data-filename="${escapeHtml(f.original_name)}" ${checked ? 'checked' : ''}>
-                                <span><strong>${escapeHtml(f.original_name)}</strong> (${(f.file_size/1024).toFixed(1)} KB)</span>
-                                ${f.has_skill ? '<span style="font-size:0.65rem; background:#dcfce7; color:#16a34a; border-radius:8px; padding:0 5px;">🧠 技能</span>' : ''}
-                                <span style="font-size:0.7rem; color:#888;">${new Date(f.uploaded_at).toLocaleString()}</span>
+                                       data-filename="${escapeHtml(f.original_name)}" ${checked ? 'checked' : ''} style="margin-top:2px;">
+                                <span style="flex:1; min-width:0;">
+                                    <span class="kb-file-row1">
+                                        <span class="kb-name" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</span>
+                                        <span style="flex-shrink:0;">(${(f.file_size/1024).toFixed(1)} KB)</span>
+                                    </span>
+                                    <span class="kb-file-row2">
+                                        ${f.has_skill ? '<span class="kb-skill-badge">🧠 技能</span>' : ''}
+                                        <span>${new Date(f.uploaded_at).toLocaleString()}</span>
+                                    </span>
+                                </span>
                             </label>
                          </li>`;
             }
@@ -473,15 +480,22 @@
             html += `<ul style="margin:0; padding-left:16px; list-style:none;">`;
             for (const f of coFiltered) {
                 const checked = selectedKnowledgeFiles.some(sf => sf.source === 'company_kb' && String(sf.id) === String(f.id));
-                html += `<li style="margin:6px 0; padding:4px 0; border-bottom:1px solid #eee;">
-                            <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; flex-wrap:wrap;">
+                html += `<li class="kb-file-item">
+                            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.8rem; cursor:pointer;">
                                 <input type="checkbox" class="knowledge-checkbox"
                                        data-source="company_kb" data-id="${f.id}"
-                                       data-filename="${escapeHtml(f.filename)}" ${checked ? 'checked' : ''}>
-                                <span><strong>${escapeHtml(f.filename)}</strong> (${(f.file_size/1024).toFixed(1)} KB)</span>
-                                ${f.has_skill ? '<span style="font-size:0.65rem; background:#dcfce7; color:#16a34a; border-radius:8px; padding:0 5px;">🧠 技能</span>' : ''}
-                                <span style="font-size:0.7rem; color:#888;">分类: ${escapeHtml(f.category || '无')}</span>
-                                <span style="font-size:0.7rem; color:#888;">${escapeHtml(f.uploaded_by_name || 'admin')}</span>
+                                       data-filename="${escapeHtml(f.filename)}" ${checked ? 'checked' : ''} style="margin-top:2px;">
+                                <span style="flex:1; min-width:0;">
+                                    <span class="kb-file-row1">
+                                        <span class="kb-name" title="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</span>
+                                        <span style="flex-shrink:0;">(${(f.file_size/1024).toFixed(1)} KB)</span>
+                                    </span>
+                                    <span class="kb-file-row2">
+                                        ${f.has_skill ? '<span class="kb-skill-badge">🧠 技能</span>' : ''}
+                                        <span>分类: ${escapeHtml(f.category || '无')}</span>
+                                        <span>${escapeHtml(f.uploaded_by_name || 'admin')}</span>
+                                    </span>
+                                </span>
                             </label>
                          </li>`;
             }

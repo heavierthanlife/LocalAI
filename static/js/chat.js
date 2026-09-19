@@ -800,7 +800,42 @@
         } finally {
             clearTimeout(timeoutId);
             isLoadingSession = false;
+            updateChatEmptyState();
+            updateFloatButtons();
         }
+    }
+
+    // ── Chat empty state (Round 3 polish #5) ──
+    function renderEmptyState() {
+        const el = document.getElementById('chatEmptyState');
+        if (!el) return;
+        el.innerHTML = `
+            <div class="ces-icon">💬</div>
+            <div class="ces-title">开始对话</div>
+            <div class="ces-hint">我是中联招标智能助手，可以帮你：起草招标文件、分析投标文件、生成审计报告、查询招标法规、整理项目资料。</div>
+            <div class="ces-tips">
+                <span class="ces-tip">📄 附加文件分析</span>
+                <span class="ces-tip">📚 引用知识库</span>
+                <span class="ces-tip">📊 生成日报</span>
+            </div>`;
+    }
+
+    function updateChatEmptyState() {
+        const el = document.getElementById('chatEmptyState');
+        if (!el) return;
+        const hasMsgs = messagesDiv && messagesDiv.querySelector('.message-group');
+        el.style.display = hasMsgs ? 'none' : 'flex';
+        if (!hasMsgs) renderEmptyState();
+    }
+
+    // ── Float buttons visibility (Round 3 polish #6) ──
+    function updateFloatButtons() {
+        const fb = document.querySelector('.float-buttons');
+        if (!fb) return;
+        const mc = messagesDiv;
+        if (!mc) { fb.classList.add('hidden-float'); return; }
+        const noOverflow = mc.scrollHeight <= mc.clientHeight + 2;
+        fb.classList.toggle('hidden-float', noOverflow);
     }
 
     // ── Unified real-time polling (common + project chats) ──

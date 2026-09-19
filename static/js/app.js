@@ -164,6 +164,8 @@
                 if (node.nodeType === Node.ELEMENT_NODE) fixLinksInContainer(node);
             });
         });
+        if (typeof updateChatEmptyState === 'function') updateChatEmptyState();
+        if (typeof updateFloatButtons === 'function') updateFloatButtons();
     });
     observer.observe(messagesDiv, { childList: true, subtree: true });
 
@@ -1835,8 +1837,11 @@
 
     // ======================== Storage Check ========================
     async function checkStorage() {
+        // Only call when logged in — pre-login calls produce expected-but-noisy 403s
+        if (!sessionStorage.getItem('username')) return;
         try {
             const res = await fetch('/check_storage', { credentials: 'include' });
+            if (!res.ok) return; // 401/403 = not authenticated; ignore silently
             const data = await res.json();
             const warningSpan = document.getElementById('storageWarning');
             if (data.warning && warningSpan) warningSpan.innerHTML = '⚠️ ' + escapeHtml(data.message) + '，可在「我的文件」中清理旧文件释放空间。';
@@ -2293,6 +2298,10 @@
     async function loadSidebarProjects(cachedData) {
         const list = document.getElementById('sidebarProjectsList');
         if (!list) return;
+        if (!sessionStorage.getItem('username')) {  // Round 3 polish #14: skip pre-login fetch noise
+            list.innerHTML = '<li style="color:var(--card-muted);">登录后查看项目</li>';
+            return;
+        }
         const isAdmin = sessionStorage.getItem('isAdmin') === 'true';
         try {
             const data = cachedData || await (await fetch('/admin/projects', { credentials: 'include' })).json();
@@ -2522,9 +2531,16 @@
             const activeLabel = daysWithActivity.length >= 5 ? '非常活跃' : daysWithActivity.length >= 2 ? '正常使用' : '需要更多互动';
             const trendLabel = daysWithActivity.length >= 2 && daysWithActivity[daysWithActivity.length-1].count > (daysWithActivity[0]?.count||0) ? _icon('📈') + ' 上升' : _icon('📉') + ' 平稳';
 
-            activity.innerHTML = `<div style="background:var(--card-bg);border-radius:6px;padding:8px;margin-bottom:6px;">
-                <div style="font-weight:500;">活跃度: ${activeLabel}</div>
-                <div style="font-size:.7rem;color:var(--card-muted);">趋势: ${trendLabel} | 近7天有${daysWithActivity.length}天活跃</div>
+            activity.innerHTML = `<div class="stats-tile">
+                <span class="st-icon">📊</span>
+                <div class="st-text">
+                    <span class="st-value">${activeLabel}</span>
+                    <span class="st-label">活跃度</span>
+                </div>
+                <div class="st-text" style="margin-left:auto; text-align:right;">
+                    <span class="st-value">${trendLabel}</span>
+                    <span class="st-label">近7天 ${daysWithActivity.length} 天活跃</span>
+                </div>
             </div>`;
 
             // Messages per day mini-spark
@@ -2613,7 +2629,7 @@
                         const isAuditor = u.is_auditor === true;
                         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0;gap:4px;">
                             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${escapeHtml(u.username)} (${escapeHtml(u.role)})">${escapeHtml(u.username)}</span>
-                            <select class="user-role-select" data-user="${escapeHtml(u.username)}" style="font-size:.65rem;padding:1px 3px;border-radius:3px;border:1px solid var(--card-border);width:72px;">
+                            <select class="user-role-select" data-user="${escapeHtml(u.username)}" style="font-size:.7rem;padding:2px 6px;border-radius:4px;border:1px solid var(--card-border);width:96px;">
                                 <option value="user" ${isAuditor ? '' : 'selected'}>user</option>
                                 <option value="auditor" ${isAuditor ? 'selected' : ''}>auditor</option>
                             </select>
@@ -5600,7 +5616,7 @@
                         `;
                         if (isGlobalAdmin) {
                             html += `
-                                <select class="change-role" data-user="${m.user_id}" data-role="${m.role}" style="margin-right: 8px;">
+                                <select class="change-role" data-user="${m.user_id}" data-role="${m.role}" style="margin-right: 8px; font-size:.75rem; padding:2px 6px; border-radius:4px; border:1px solid var(--card-border);">
                                     <option value="member" ${m.role === 'member' ? 'selected' : ''}>成员</option>
                                     <option value="manager" ${m.role === 'manager' ? 'selected' : ''}>经理</option>
                                 </select>
@@ -5629,7 +5645,7 @@
                             <li style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span>${escapeHtml(u.username)}</span>
                                 <div>
-                                    <select class="role-select" data-user="${u.user_id}" style="margin-right: 8px;">
+                                    <select class="role-select" data-user="${u.user_id}" style="margin-right: 8px; font-size:.75rem; padding:2px 6px; border-radius:4px; border:1px solid var(--card-border);">
                                         <option value="member">成员</option>
                                         <option value="manager">经理</option>
                                     </select>
@@ -7191,12 +7207,26 @@
     });
 
     // ======================== Authentication & Fetch Interceptor ========================
+    // Role chip in header (Round 3 polish #10)
+    function updateRoleChip(authData) {
+        const chip = document.getElementById('headerRoleChip');
+        if (!chip) return;
+        if (!authData || !authData.authenticated) { chip.style.display = 'none'; return; }
+        let label = '用户', cls = '';
+        if (authData.is_admin) { label = '管理员'; cls = 'rc-admin'; }
+        else if (authData.is_auditor) { label = '审核员'; cls = 'rc-auditor'; }
+        chip.textContent = label;
+        chip.className = 'role-chip ' + cls;
+        chip.style.display = 'inline-block';
+    }
+
     async function verifyAuth() {
         try {
             const res = await fetch('/check_auth', { credentials: 'include' });
             const data = await res.json();
             if (!data.authenticated) {
                 sessionStorage.clear();
+                updateRoleChip(null);
                 if (data.consent_given) location.reload();
             } else {
                 sessionStorage.setItem('username', data.username || '');
@@ -7207,6 +7237,7 @@
                 sessionStorage.setItem('is_auditor', (data.is_auditor || data.is_admin) ? '1' : '0');
                 if (data.role) sessionStorage.setItem('role', data.role);
                 sessionStorage.setItem('user_id', data.user_id || '');
+                updateRoleChip(data);
                 // Remove anonymous watermark
                 const wm = document.getElementById('anonWatermark');
                 if (wm) wm.remove();

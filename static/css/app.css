@@ -1079,6 +1079,11 @@ body.dark .shortcut-content kbd { background:#334155; border-color:#475569; colo
     flex-direction: column;
     gap: 8px;
     z-index: 999;
+    transition: opacity .2s;
+}
+.float-buttons.hidden-float {
+    opacity: 0;
+    pointer-events: none;
 }
 .float-btn {
     background: rgba(30,41,59,.75);
@@ -1094,6 +1099,129 @@ body.dark .shortcut-content kbd { background:#334155; border-color:#475569; colo
 }
 .float-btn:hover { background:rgba(30,41,59,.9); transform:scale(1.05); }
 body.dark .float-btn { background:rgba(51,65,85,.8); }
+
+/* ============================================================
+   POLISH (Round 3): empty state, role chip, collapsible admin, cards
+   ============================================================ */
+.chat-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    color: var(--card-muted, #6b7280);
+    pointer-events: none;
+    z-index: 5;
+}
+.chat-empty-state .ces-icon { font-size: 3rem; line-height: 1; }
+.chat-empty-state .ces-title { font-size: 1.1rem; font-weight: 600; color: var(--text-color, #1e293b); }
+.chat-empty-state .ces-hint { font-size: 0.85rem; max-width: 340px; line-height: 1.7; }
+.chat-empty-state .ces-tips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chat-empty-state .ces-tip {
+    background: var(--card-bg, #f1f5f9);
+    border: 1px solid var(--card-border, #cbd5e1);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+}
+body.dark .chat-empty-state .ces-title { color: #e2e8f0; }
+
+.role-chip {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: 2px;
+    background: #e2e8f0;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+.role-chip.rc-admin { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+.role-chip.rc-auditor { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+
+.admin-collapse {
+    margin: 4px 0 6px;
+    border: 1px solid var(--card-border, #cbd5e1);
+    border-radius: 6px;
+    background: var(--card-bg, transparent);
+    padding: 2px 6px;
+}
+.admin-collapse summary {
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--card-muted, #64748b);
+    padding: 4px 0;
+    user-select: none;
+}
+.admin-collapse summary:hover { color: var(--text-color, #1e293b); }
+.admin-collapse[open] summary { margin-bottom: 4px; }
+
+.kb-file-item {
+    margin: 6px 0;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+    border-radius: 6px;
+    background: var(--card-bg, transparent);
+}
+body.dark .kb-file-item { border-bottom-color: #334155; }
+.kb-file-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+}
+.kb-file-row1 .kb-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.kb-file-row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+    font-size: 0.68rem;
+    color: #888;
+}
+.kb-file-row2 .kb-skill-badge {
+    background: #dcfce7;
+    color: #16a34a;
+    border-radius: 8px;
+    padding: 0 5px;
+}
+
+.project-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+.project-actions button { margin-bottom: 4px; }
+
+.project-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.stats-tile {
+    background: var(--card-bg, #fff);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--card-border, #e5e7eb);
+}
+.stats-tile .st-icon { font-size: 1.2rem; }
+.stats-tile .st-text { display: flex; flex-direction: column; }
+.stats-tile .st-value { font-weight: 700; font-size: 0.85rem; }
+.stats-tile .st-label { font-size: 0.65rem; color: var(--card-muted, #6b7280); }
 
 .fixed-quick-links-btn {
     position: fixed;
