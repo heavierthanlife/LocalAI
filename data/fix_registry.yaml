@@ -1713,3 +1713,34 @@ fixes:
       - type: literal
         file: docker-compose.e2e.yml
         pattern: "./data:/app/repo_data:ro"
+
+  - id: FIX-2026-08-15-001
+    title: "LLM tool-error and prompt-template text leaked into user-facing chat"
+    severity: high
+    rationale: >
+      LangChain agents with tools [get_date, bocha_search] return raw ToolMessage
+      content like 'Error: X is not a valid tool, try one of [...]' when the model
+      hallucinates a tool name. Models without proper tool-calling support also
+      echo the function-calling template ('Here is the JSON for a function call...').
+      Both were streamed and stored verbatim. Fix: sanitize_response() strips both
+      patterns at the split_thinking_answer boundary (covers the streaming,
+      non-streaming and retry paths that all funnel through it).
+    checks:
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "def sanitize_response"
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "return thinking, sanitize_response(answer)"
+
+  - id: FIX-2026-08-15-003
+    title: "Daily report insufficient-messages message was terse/unhelpful"
+    severity: low
+    rationale: >
+      /my_daily_report correctly returns 400 when the user has fewer than 2 messages in
+      24h, but the message '今日对话不足，至少需要2条问答' was reported as a broken button.
+      Fix makes the message friendly and actionable so the toast explains what to do.
+    checks:
+      - type: literal
+        file: app/routes/knowledge.py
+        pattern: "先聊几句"

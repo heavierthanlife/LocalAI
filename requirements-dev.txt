@@ -1,0 +1,7 @@
+# Dev/test dependencies for Local_AI
+# Install with: pip install -r requirements-dev.txt
+# (runtime deps are in requirements.txt)
+
+fakeredis==2.37.0
+pytest==9.1.1
+pytest-env==1.7.0

@@ -2041,3 +2041,41 @@ def test_trend_service_uses_real_feedback_table():
     src = _read('app/services/trend_service.py')
     assert 'FROM compliance_feedback' in src
     assert 'FROM compliance_check_feedback' not in src
+
+
+# ── FIX-2026-08-15-001: LLM tool-error + prompt-template leak sanitization ──
+def test_sanitize_response_strips_invalid_tool_error():
+    from app.utils.helpers import sanitize_response
+    leaked = 'Error: DesignDesign is not a valid tool, try one of [get_date, bocha_search]'
+    assert sanitize_response(leaked) == '', \
+        "sanitize_response must strip 'X is not a valid tool' error text entirely"
+
+
+def test_sanitize_response_strips_prompt_template():
+    from app.utils.helpers import sanitize_response
+    leaked = 'Here is the JSON for a function call with its proper arguments that best answers the given prompt is:'
+    assert sanitize_response(leaked) == '', \
+        "sanitize_response must strip function-calling prompt template text"
+
+
+def test_sanitize_response_preserves_normal_content():
+    from app.utils.helpers import sanitize_response
+    normal = '招标文件已上传，请等待分析完成。'
+    assert sanitize_response(normal) == normal, \
+        "sanitize_response must not alter normal user-facing content"
+
+
+def test_split_thinking_answer_sanitizes_answer():
+    from app.utils.helpers import split_thinking_answer
+    thinking, answer = split_thinking_answer(
+        '【思考】考虑中【回答】好的，我查一下。Error: Foo is not a valid tool, try one of [get_date]')
+    assert thinking == '考虑中'
+    assert 'not a valid tool' not in answer, \
+        "split_thinking_answer must sanitize the answer portion"
+
+
+# ── FIX-2026-08-15-003: /my_daily_report friendly message ──
+def test_daily_report_friendly_insufficient_message():
+    content = _read('app/routes/knowledge.py')
+    assert '先聊几句（至少2条问答）' in content, \
+        "knowledge.py my_daily_report must return the friendly insufficient-messages message"

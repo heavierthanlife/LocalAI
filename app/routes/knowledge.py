@@ -752,7 +752,7 @@ def my_daily_report():
                 WHERE cm.timestamp >= %s AND cs.user_id = %s""", (since, user_id))
             msg_count = cur.fetchone()['cnt']
             if msg_count < 2:
-                return jsonify({"error": "今日对话不足，至少需要2条问答"}), 400
+                return jsonify({"error": "今天和AI的对话还不够呢，先聊几句（至少2条问答），明天再生成日报吧~"}), 400
 
             cur.execute("""SELECT COUNT(DISTINCT cs.thread_id) as cnt FROM chat_sessions cs
                 JOIN chat_messages cm ON cm.thread_id = cs.thread_id
