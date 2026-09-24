@@ -55,10 +55,10 @@
 ## ④ CONFIRM 清单（用户批准：2026-09-24）
 
 ### 批准项（四 fix 合一批，C2 → C1/M6 → C3 → Bonus）
-- [ ] **C2** | High | `compliance.py` `submit_feedback` | 加 `_task_forbidden(task_id)` 守卫
-- [ ] **C1+M6** | Medium | `compliance.py` `_task_forbidden` | `except` → `logger.warning` + `return True`（fail-closed）
-- [ ] **C3** | Medium | `compliance.py` `_load_result/_save_result` | `task_id` 白名单正则 `^[A-Za-z0-9_-]{1,64}$`
-- [ ] **Bonus** | Medium | `task_bus.py` `_get_redis` | 连接失败改「间隔重试」而非永久缓存 False（C1 fail-closed 的安全垫，需与 C1 同批）
+- [x] **C2** | High | `compliance.py` `submit_feedback` | 加 `_task_forbidden(task_id)` 守卫
+- [x] **C1+M6** | Medium | `compliance.py` `_task_forbidden` | `except` → `logger.warning` + `return True`（fail-closed）
+- [x] **C3** | Medium | `compliance.py` `_load_result/_save_result` | `task_id` 白名单正则 `^[A-Za-z0-9_-]{1,64}$`
+- [x] **Bonus** | Medium | `task_bus.py` `_get_redis` | 连接失败改「间隔重试」而非永久缓存 False（C1 fail-closed 的安全垫，需与 C1 同批）
 
 ### 驳回/降级/延期项（记入本记录）
 - C4 → **降级 Low**（纵深防御，本轮不做，可留 backlog）
@@ -132,3 +132,41 @@ python scripts/check_integrity.py                                 # 蓝图↔清
 # 合规/清标路径 → 1/1 基线（3/3 blocked：UNRESOLVED-017）
 @code-reviewer 只读复核 diff（app/routes + app/services 命中门禁）
 ```
+
+---
+
+## 执行记录（2026-09-24）
+
+### ⑤ IMPLEMENT
+- `ab8f1c7` — `fix(security): QA-028 合规归属 fail-closed + task_id 白名单 + TaskBus Redis 重试（FIX-062~065）`
+  - `app/routes/compliance.py`：C2 守卫 / C1 fail-closed（+ docstring 澄清）/ C3 白名单
+  - `app/services/task_bus.py`：FIX-065 间隔重试
+  - `tests/test_regression.py`：4 个新回归测试（含 L1 边界用例）
+  - `data/fix_registry.yaml`：FIX-2026-09-24-062..065 · `repair_kit/SYSTEM_CHECKLIST.md`（自动重生成）
+
+### 门禁实证
+- pytest `tests/test_regression.py` — **164/164**，EXIT=0（前置：`docker compose up -d redis`，rate-limiter 依赖 :6380）
+- `verify_fixes.py` — **287/0** · `check_doc_drift.py` — **15/15** · `check_system.py` — **131/0/134** · `check_integrity.py` — 全过
+- `@code-reviewer` — **0 Critical / 0 High**；M1 docstring 已修，L1 测试边界已补，**M2 → UNRESOLVED-029**
+
+### ⑥ DOCS
+- `c999e37` — `docs: QA-028 CHANGELOG/AGENTS/unresolved + round-028 记录`
+  - CHANGELOG `[2026-09-24]`（FIX-062..065 + regression 标记）· AGENTS 资源归属模型 · `UNRESOLVED-028`（视觉）/`UNRESOLVED-029`（M2）
+
+### ⑦ PUSH
+- `git push LocalAI master` → `1cdb28b..c999e37`，OK（工作树干净，仅 2 个既有 `.bak`）
+
+### ⑧ IMAGE
+- `python scripts/docker_build.py`：`local-ai:latest` 构建 OK（GPU=False / torch cpu）
+- `docker compose up -d --force-recreate app celery-worker celery-beat` → 3 容器 Recreated
+- 健康：app 容器内 `/check_auth` = **200** + Docker `healthy`；worker 连接 `redis://redis:6379/0`；app 全蓝图 eager ready
+- 抽查（全部命中）：`kb_file_hash`=2 · `credit_rate:`=2 · `_renderMarkdown`=17 · `escapeHtml(data.message)`=1 · **新增** `_TASK_ID_RE`=2 · `Fail closed (FIX-063)`=1 · `_REDIS_RETRY_INTERVAL`=2
+- ⚠️ 口径修正：本机 compose 的 nginx **只在宿主机发布 :80**（443 为容器内，宿主机 :443 被其它进程占用）→ `https://127.0.0.1/check_auth` 不可达（000）；健康以 app 容器内 200 + nginx :80 的 301 重定向为准。qa-loop.project.md 的健康检查命令应更新。
+
+### ⑨ RE-CHECK / 下轮
+- 本批无新增 Critical/High。视觉 H1/H2/H3 仍待验证 → 下轮为视觉专项 COLLECT（扩展 `tests/visual_regression.py` + 12 缺页 + 数据夹具，见 `UNRESOLVED-028`），在新镜像上重拍后走 ② VERIFY。
+
+### 收尾
+- `data/qa_loop/last_head` → `c999e37`（本批最后一个代码/文档 commit）
+- 消费 `pending.flag`（触发来源=hook-pending, sha=1cdb28b）
+
