@@ -463,9 +463,10 @@ unresolved:
 
   - id: UNRESOLVED-029
     title: "其他路由 task_owner_ok 调用点未统一 fail-closed / 异常封装（QA-028 M2）"
-    status: pending
+    status: resolved
     severity: low
     discovered: 2026-09-24
+    resolved: 2026-09-24
     tags: ["QA-Loop", "安全", "一致性"]
     context: >
       QA-Loop Round 028 @code-reviewer（M2）：clearance.py / tasks.py / batch.py 直接调用
@@ -474,5 +475,7 @@ unresolved:
       属既有问题，非本轮引入。
     blocked_by: ~
     resolution_plan: >
-      评估将 owner 校验统一封装为共享 helper（如 helpers.owner_forbidden(task_id)），
-      在 clearance/tasks/batch 调用点复用，使异常路径一致 fail-closed（403）。
+      2026-09-24 完成（FIX-066）：新增 helpers.load_task_for(task_id, user_id) → (meta, status)，
+      status ∈ {ok, missing, forbidden}，异常归一为 forbidden（fail-closed）；clearance/tasks/batch
+      调用点复用，compliance._task_forbidden 改为薄封装委托。异常路径统一 403。评审发现并修复
+      clearance_stream 误删 TaskBus import（Critical）。

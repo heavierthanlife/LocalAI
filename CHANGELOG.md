@@ -8,6 +8,27 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-24] — QA-Loop Round 029：owner 校验统一封装（FIX-066）
+
+### Changed
+- **owner 校验统一封装**（FIX-2026-09-24-066 / `UNRESOLVED-029`）：新增 `app/utils/helpers.py::load_task_for(task_id, user_id) -> (meta, status)`，`status ∈ {ok, missing, forbidden}`，内部封装 `TaskBus.get` + `task_owner_ok`，**查询异常归一为 `forbidden`（fail-closed）**。`clearance.py`（`/status`、`/stream`）、`tasks.py`（get/delete/cancel/stream）、`batch.py`（`plagiarism_status`）改用该 helper；`compliance.py::_task_forbidden` 改为薄封装委托。
+- **行为变化**：上述端点在 TaskBus/Redis 异常时由 **500 → 403**（与 compliance 一致、可审计）。语义等价：`missing` 在 clearance/tasks/batch → 404，在 compliance → 放行（结果持久化超 TTL，FIX-060 模型）。`credit.py` 用自有 registry（非 TaskBus），不纳入。
+
+### Fixed
+- **回归（评审发现，合入前修复）**：`clearance_stream` 重构时误删局部 `from app.services.task_bus import TaskBus`，而函数体仍用 `TaskBus.subscribe` → `NameError`（500）。已补回 import，并加源码守护测试 `test_clearance_stream_imports_taskbus`。同时清理 `tasks.py` 死 import（`META_TTL`）、消除 `batch.py` 中 `status` 变量遮蔽（→ `task_status`）。
+
+### Added
+- 回归测试 6 个：`test_load_task_for_statuses`（ok/forbidden/missing/异常）、`test_clearance_status_fail_closed`、`test_tasks_get_fail_closed`、`test_batch_plagiarism_status_fail_closed`、`test_compliance_result_fail_closed`、`test_clearance_stream_imports_taskbus`。
+
+### Notes
+- FIX-033 / FIX-063 注册表检查随重构同步（`task_owner_ok(meta,user_id)` → `load_task_for(task_id,user_id)`；FIX-063 fail-closed 检查迁至 `helpers.py`）。`@code-reviewer` 复核 1 Critical（已修）→ 复确认 0 Critical/High。
+- `UNRESOLVED-029` 置 `resolved`。
+
+regression: 1/1 clearance baseline passed
+168/168 regression · verify_fixes 293/0 · doc_drift 15/15 · check_system 131/0/134
+
+---
+
 ## [2026-09-24] — QA-Loop Round 028：合规归属 fail-closed + task_id 白名单 + TaskBus Redis 重试
 
 ### Fixed
