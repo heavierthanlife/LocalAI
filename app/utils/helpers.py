@@ -63,6 +63,34 @@ def task_owner_ok(meta, user_id) -> bool:
     return str(user_id) == str(owner)
 
 
+def load_task_for(task_id, user_id):
+    """Resolve a TaskBus task and check ownership in one place (FIX-066).
+
+    Returns ``(meta, status)`` with ``status`` in ``{'ok', 'missing', 'forbidden'}``:
+
+    - ``ok``        → ``meta`` is a dict owned by ``user_id``; caller may proceed.
+    - ``missing``   → no meta (expired / legacy / Redis unavailable); the caller
+                      decides whether that means 404 or "allow" (compliance lets
+                      disk-persisted results outlive the redis TTL).
+    - ``forbidden`` → a different owner, or the lookup raised → deny (fail-closed).
+
+    Fail-closed by design: a TaskBus/Redis exception is treated as ``forbidden``
+    so the owner-check path never turns into a 500.
+    """
+    try:
+        from app.services.task_bus import TaskBus
+        meta = TaskBus.get(task_id)
+    except Exception as e:
+        # Fail closed (FIX-063): if ownership cannot be determined, deny.
+        logger.warning(f"load_task_for: ownership lookup failed, denying access: {e}")
+        return None, 'forbidden'
+    if not meta:
+        return None, 'missing'
+    if not task_owner_ok(meta, user_id):
+        return meta, 'forbidden'
+    return meta, 'ok'
+
+
 def safe_error_response(user_message="处理文件时出错，请检查文件格式或稍后重试。", log_error=None):
     """Return a standardized error string for file processing failures."""
     if log_error:

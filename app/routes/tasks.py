@@ -12,8 +12,8 @@ import logging
 
 from flask import Blueprint, request, jsonify, Response, session
 
-from app.services.task_bus import TaskBus, META_TTL
-from app.utils.helpers import task_owner_ok
+from app.services.task_bus import TaskBus
+from app.utils.helpers import load_task_for
 from app.services.session_manager import get_user_id
 
 logger = logging.getLogger(__name__)
@@ -54,11 +54,11 @@ def get_task(task_id: str):
     user_id, auth_err = _auth_guard()
     if auth_err:
         return auth_err
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return jsonify({'error': 'Task not found'}), 404
-    if not task_owner_ok(meta, user_id):
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return jsonify({'error': 'Forbidden'}), 403
+    if status == 'missing':
+        return jsonify({'error': 'Task not found'}), 404
     meta['task_id'] = task_id
     # Parse result JSON string → dict so the frontend doesn't need double-parsing
     if isinstance(meta.get('result'), str) and meta['result']:
@@ -75,8 +75,8 @@ def delete_task(task_id: str):
     user_id, auth_err = _auth_guard()
     if auth_err:
         return auth_err
-    meta = TaskBus.get(task_id)
-    if meta and not task_owner_ok(meta, user_id):
+    _, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return jsonify({'error': 'Forbidden'}), 403
     TaskBus.delete(task_id)
     return jsonify({'success': True})
@@ -89,11 +89,11 @@ def cancel_task(task_id: str):
     user_id, auth_err = _auth_guard()
     if auth_err:
         return auth_err
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return jsonify({'error': 'Task not found'}), 404
-    if not task_owner_ok(meta, user_id):
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return jsonify({'error': 'Forbidden'}), 403
+    if status == 'missing':
+        return jsonify({'error': 'Task not found'}), 404
     if meta.get('status') not in ('running', 'queued', 'pending'):
         return jsonify({'error': f"Task already {meta.get('status')}"}), 409
 
@@ -119,11 +119,11 @@ def stream_task(task_id: str):
     user_id, auth_err = _auth_guard()
     if auth_err:
         return auth_err
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return jsonify({'error': 'Task not found'}), 404
-    if not task_owner_ok(meta, user_id):
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return jsonify({'error': 'Forbidden'}), 403
+    if status == 'missing':
+        return jsonify({'error': 'Task not found'}), 404
 
     timeout = request.args.get('timeout', 300, type=int)
 

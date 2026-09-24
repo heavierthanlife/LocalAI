@@ -1427,20 +1427,23 @@ def test_compliance_check_task_signature_accepts_region_code():
 
 
 def test_task_ownership_guard_applied():
-    """All TaskBus read endpoints must enforce ownership."""
+    """All TaskBus read endpoints must enforce ownership (FIX-066: via load_task_for)."""
     with open('app/routes/tasks.py', 'r', encoding='utf-8') as f:
         t = f.read()
-    assert t.count('task_owner_ok(meta, user_id)') >= 3, \
-        "tasks get/delete/cancel must check ownership"
+    assert t.count('load_task_for(task_id, user_id)') >= 3, \
+        "tasks get/delete/cancel/stream must check ownership"
     with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
         c = f.read()
-    assert 'from app.utils.helpers import task_owner_ok' in c
-    assert c.count('task_owner_ok(meta, user_id)') >= 2, \
+    assert c.count('load_task_for(task_id, user_id)') >= 2, \
         "clearance status/stream must check ownership"
     with open('app/routes/batch.py', 'r', encoding='utf-8') as f:
         b = f.read()
-    assert 'task_owner_ok(meta, user_id)' in b, \
+    assert 'load_task_for(task_id, user_id)' in b, \
         "plagiarism status must check ownership"
+    with open('app/utils/helpers.py', 'r', encoding='utf-8') as f:
+        h = f.read()
+    assert 'def load_task_for' in h and 'def task_owner_ok' in h, \
+        "shared ownership helpers must exist"
     # producers write user_id
     assert "'user_id': str(user_id or '')" in b or '"user_id"' in b
 
@@ -2113,3 +2116,92 @@ def test_task_bus_redis_retries_after_interval(monkeypatch):
     clock['t'] += tb._REDIS_RETRY_INTERVAL + 1
     assert tb._get_redis() is False, "超过间隔后应重试"
     assert calls['n'] == 2
+
+
+# ── FIX-2026-09-24-066: owner 校验统一封装（load_task_for，异常 fail-closed）──
+def test_load_task_for_statuses(monkeypatch):
+    """load_task_for: ok / forbidden / missing / 异常→forbidden（fail-closed）。"""
+    from app.utils import helpers as h
+    from app.services import task_bus as tb
+
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(lambda tid: {'user_id': 'u1'}))
+    meta, status = h.load_task_for('t1', 'u1')
+    assert status == 'ok' and meta['user_id'] == 'u1'
+
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(lambda tid: {'user_id': 'u2'}))
+    assert h.load_task_for('t1', 'u1')[1] == 'forbidden'
+
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(lambda tid: None))
+    assert h.load_task_for('t1', 'u1') == (None, 'missing')
+
+    def _boom(tid):
+        raise RuntimeError('redis down')
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    assert h.load_task_for('t1', 'u1') == (None, 'forbidden')
+
+
+def _session_login(client, uid='test-user'):
+    with client.session_transaction() as sess:
+        sess['user_id'] = uid
+        sess['consent_value'] = 1
+
+
+def test_clearance_status_fail_closed(app, monkeypatch):
+    """FIX-066: TaskBus 异常时 /clearance/status 返回 403（原 500）。"""
+    from app.services import task_bus as tb
+
+    def _boom(tid):
+        raise RuntimeError('redis down')
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    client = app.test_client()
+    _session_login(client)
+    r = client.get('/clearance/status/abcd1234')
+    assert r.status_code == 403, f"expect 403 fail-closed, got {r.status_code}"
+
+
+def test_tasks_get_fail_closed(app, monkeypatch):
+    """FIX-066: TaskBus 异常时 GET /tasks/<id> 返回 403（原 500）。"""
+    from app.services import task_bus as tb
+
+    def _boom(tid):
+        raise RuntimeError('redis down')
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    client = app.test_client()
+    _session_login(client)
+    r = client.get('/tasks/abcd1234')
+    assert r.status_code == 403, f"expect 403 fail-closed, got {r.status_code}"
+
+
+def test_batch_plagiarism_status_fail_closed(app, monkeypatch):
+    """FIX-066: TaskBus 异常时 /batch/plagiarism/status 返回 403（原 500）。"""
+    from app.services import task_bus as tb
+
+    def _boom(tid):
+        raise RuntimeError('redis down')
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    client = app.test_client()
+    _session_login(client)
+    r = client.get('/batch/plagiarism/status/abcd1234')
+    assert r.status_code == 403, f"expect 403 fail-closed, got {r.status_code}"
+
+
+def test_compliance_result_fail_closed(app, monkeypatch):
+    """FIX-066: /compliance/result 经 load_task_for 委托，异常同样 fail-closed 403。"""
+    from app.services import task_bus as tb
+
+    def _boom(tid):
+        raise RuntimeError('redis down')
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    client = app.test_client()
+    _session_login(client)
+    r = client.get('/compliance/result/abcd1234')
+    assert r.status_code == 403, f"expect 403 fail-closed, got {r.status_code}"
+
+
+def test_clearance_stream_imports_taskbus():
+    """FIX-066 C1: clearance_stream 使用 TaskBus.subscribe，必须 import TaskBus。"""
+    with open('app/routes/clearance.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    # 存在 TaskBus.subscribe 使用点，则必须有 TaskBus 的导入
+    assert 'TaskBus.subscribe(task_id)' in src
+    assert 'from app.services.task_bus import TaskBus' in src

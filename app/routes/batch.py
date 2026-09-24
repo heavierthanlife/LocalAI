@@ -466,22 +466,21 @@ def plagiarism_status(task_id):
     user_id = session.get('user_id')
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
-    from app.services.task_bus import TaskBus
-    from app.utils.helpers import task_owner_ok
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return err("任务不存在或已过期", "NOT_FOUND", 404)
-    if not task_owner_ok(meta, user_id):
+    from app.utils.helpers import load_task_for
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return err("无权访问该任务", "FORBIDDEN", 403)
-    status = meta.get('status', '')
+    if status == 'missing':
+        return err("任务不存在或已过期", "NOT_FOUND", 404)
+    task_status = meta.get('status', '')
     result = None
-    if status == 'completed' and meta.get('result'):
+    if task_status == 'completed' and meta.get('result'):
         try:
             result = json.loads(meta['result'])
         except Exception:
             result = None
     return ok({
-        'status': status,
+        'status': task_status,
         'progress': meta.get('progress', 0),
         'message': meta.get('message', ''),
         'result': result,

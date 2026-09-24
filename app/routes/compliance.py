@@ -436,22 +436,13 @@ def incremental_check():
 def _task_forbidden(task_id) -> bool:
     """True if the current session may NOT access the given task's artifacts.
 
-    Ownership lives in TaskBus meta (set at register time). Missing meta (expired,
-    legacy task, or Redis unavailable → TaskBus.get returns None) is allowed
-    through — disk-persisted results outlive the TTL. Only an *exception* while
-    determining ownership fails closed (FIX-063).
+    Thin wrapper over helpers.load_task_for (FIX-066). Missing meta (expired,
+    legacy, or Redis unavailable) is allowed through — disk-persisted results
+    outlive the TTL; a lookup exception fails closed (403).
     """
-    try:
-        from app.services.task_bus import TaskBus
-        from app.utils.helpers import task_owner_ok
-        meta = TaskBus.get(task_id)
-        if meta and not task_owner_ok(meta, session.get('user_id')):
-            return True
-    except Exception as e:
-        # Fail closed (FIX-063): if ownership cannot be determined, deny.
-        logger.warning(f"_task_forbidden check failed, denying access: {e}")
-        return True
-    return False
+    from app.utils.helpers import load_task_for
+    _, status = load_task_for(task_id, session.get('user_id'))
+    return status == 'forbidden'
 
 
 @compliance_bp.route('/result/<task_id>', methods=['GET'])

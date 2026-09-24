@@ -988,13 +988,13 @@ fixes:
         pattern: "def task_owner_ok"
       - type: literal
         file: app/routes/tasks.py
-        pattern: "task_owner_ok(meta, user_id)"
+        pattern: "load_task_for(task_id, user_id)"
       - type: literal
         file: app/routes/clearance.py
-        pattern: "from app.utils.helpers import task_owner_ok"
+        pattern: "load_task_for(task_id, user_id)"
       - type: literal
         file: app/routes/batch.py
-        pattern: "task_owner_ok(meta, user_id)"
+        pattern: "load_task_for(task_id, user_id)"
       - type: literal
         file: app/services/compliance_checker.py
         pattern: "bus = TaskBus(task_id, 'compliance_check'"
@@ -1735,11 +1735,11 @@ fixes:
       malformed-meta fail-closed 行为对齐。
     checks:
       - type: literal
-        file: app/routes/compliance.py
+        file: app/utils/helpers.py
         pattern: "# Fail closed (FIX-063): if ownership cannot be determined, deny."
       - type: literal
-        file: app/routes/compliance.py
-        pattern: "_task_forbidden check failed, denying access"
+        file: app/utils/helpers.py
+        pattern: "load_task_for: ownership lookup failed, denying access"
 
   - id: FIX-2026-09-24-064
     title: "QA-028: 合规结果 task_id 路径遍历（_load_result/_save_result 白名单）"
@@ -1771,3 +1771,35 @@ fixes:
       - type: literal
         file: app/services/task_bus.py
         pattern: "if _redis is False and (now - _redis_last_try) < _REDIS_RETRY_INTERVAL:"
+
+  - id: FIX-2026-09-24-066
+    title: "QA-029: owner 校验统一封装（load_task_for，异常 fail-closed）"
+    severity: medium
+    rationale: >
+      QA-028 M2 / UNRESOLVED-029：clearance.py / tasks.py / batch.py 直接
+      TaskBus.get + task_owner_ok，若 get 抛异常（Redis 中途断连）则 500，与
+      compliance._task_forbidden 的 fail-closed 403 不一致。修复：新增共享
+      helpers.load_task_for(task_id, user_id) → (meta, status)，status ∈
+      {ok, missing, forbidden}，异常归一为 forbidden；四处调用点复用；
+      compliance._task_forbidden 改为薄封装委托。语义：missing 由调用方决定
+      （clearance/tasks/batch → 404；compliance → 放行，结果超 TTL 持久化）。
+      credit.py 用自有 registry（非 TaskBus），不纳入。
+    checks:
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "def load_task_for"
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "return None, 'forbidden'"
+      - type: literal
+        file: app/routes/clearance.py
+        pattern: "meta, status = load_task_for(task_id, user_id)"
+      - type: literal
+        file: app/routes/tasks.py
+        pattern: "meta, status = load_task_for(task_id, user_id)"
+      - type: literal
+        file: app/routes/batch.py
+        pattern: "meta, status = load_task_for(task_id, user_id)"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "return status == 'forbidden'"

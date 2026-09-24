@@ -236,13 +236,12 @@ def clearance_status(task_id):
     user_id = get_user_id()
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
-    from app.services.task_bus import TaskBus
-    from app.utils.helpers import task_owner_ok
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return err("Task not found", "NOT_FOUND", 404)
-    if not task_owner_ok(meta, user_id):
+    from app.utils.helpers import load_task_for
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return err("无权访问该任务", "FORBIDDEN", 403)
+    if status == 'missing':
+        return err("Task not found", "NOT_FOUND", 404)
     completed = meta.get('status') == 'completed'
     return ok({
         'completed': completed,
@@ -263,12 +262,12 @@ def clearance_stream(task_id):
     if not user_id:
         return err("Not logged in", "AUTH_REQUIRED", 401)
     from app.services.task_bus import TaskBus
-    from app.utils.helpers import task_owner_ok
-    meta = TaskBus.get(task_id)
-    if not meta:
-        return err("Task not found", "NOT_FOUND", 404)
-    if not task_owner_ok(meta, user_id):
+    from app.utils.helpers import load_task_for
+    meta, status = load_task_for(task_id, user_id)
+    if status == 'forbidden':
         return err("无权访问该任务", "FORBIDDEN", 403)
+    if status == 'missing':
+        return err("Task not found", "NOT_FOUND", 404)
     return Response(
         TaskBus.subscribe(task_id),
         mimetype='text/event-stream',
