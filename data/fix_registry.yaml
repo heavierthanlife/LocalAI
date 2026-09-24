@@ -1713,3 +1713,61 @@ fixes:
       - type: literal
         file: docker-compose.e2e.yml
         pattern: "./data:/app/repo_data:ro"
+
+  - id: FIX-2026-09-24-062
+    title: "QA-028: /compliance/feedback 缺归属守卫（IDOR 写入）"
+    severity: high
+    rationale: >
+      submit_feedback 从 JSON body 取 task_id 后直接 _load_result 并写反馈，无 owner 校验
+      —— 任意登录用户可对他人 task 提交反馈（污染 LoRA 训练数据）。修复：在 _load_result
+      前加 _task_forbidden(task_id) 守卫（与 get_result/get_rules 同模型）。
+    checks:
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "# Ownership guard (FIX-062): same model as get_result/get_rules."
+
+  - id: FIX-2026-09-24-063
+    title: "QA-028: _task_forbidden 异常 fail-open → fail-closed"
+    severity: medium
+    rationale: >
+      归属校验在 TaskBus/helpers 抛异常时 return False（放行）。修复：except 分支提为
+      logger.warning 并 return True（无法判定归属即拒绝），与 helpers.task_owner_ok
+      malformed-meta fail-closed 行为对齐。
+    checks:
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "# Fail closed (FIX-063): if ownership cannot be determined, deny."
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "_task_forbidden check failed, denying access"
+
+  - id: FIX-2026-09-24-064
+    title: "QA-028: 合规结果 task_id 路径遍历（_load_result/_save_result 白名单）"
+    severity: medium
+    rationale: >
+      task_id 可由 /compliance/feedback JSON body 提供，拼入文件路径（f"{task_id}.json"）
+      可跨目录读写任意 .json。修复：加 _TASK_ID_RE=^[A-Za-z0-9_-]{1,64}$ 白名单，
+      _load_result 非法返回 None、_save_result 非法抛 ValueError；rules_<uuid> 合成串不受影响。
+    checks:
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "_TASK_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: 'raise ValueError(f"invalid task_id: {task_id!r}")'
+
+  - id: FIX-2026-09-24-065
+    title: "QA-028: TaskBus _get_redis 首次失败永久禁用 → 间隔重试"
+    severity: medium
+    rationale: >
+      _get_redis 失败后 latch _redis=False，而守卫 `if _redis is not None` 使 False 被
+      永久缓存 —— Redis 短暂不可用会让整个进程生命周期内 TaskBus 恒返回 None（owner
+      meta 全部失联）。修复：记录 _redis_last_try，失败后每 _REDIS_RETRY_INTERVAL(60s)
+      重试一次连接。
+    checks:
+      - type: literal
+        file: app/services/task_bus.py
+        pattern: "_REDIS_RETRY_INTERVAL = 60.0"
+      - type: literal
+        file: app/services/task_bus.py
+        pattern: "if _redis is False and (now - _redis_last_try) < _REDIS_RETRY_INTERVAL:"

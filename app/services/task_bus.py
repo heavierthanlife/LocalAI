@@ -26,13 +26,21 @@ logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
 _redis = None
+_redis_last_try = 0.0
+# FIX-065: a single transient Redis outage used to disable the bus for the whole
+# process lifetime. Retry at most once per interval instead of latching False.
+_REDIS_RETRY_INTERVAL = 60.0
 
 
 def _get_redis():
     """Lazy Redis connection (shared across Flask + Celery)."""
-    global _redis
-    if _redis is not None:
+    global _redis, _redis_last_try
+    if _redis is not None and _redis is not False:
         return _redis
+    now = time.time()
+    if _redis is False and (now - _redis_last_try) < _REDIS_RETRY_INTERVAL:
+        return None
+    _redis_last_try = now
     try:
         import redis
         _redis = redis.Redis.from_url(REDIS_URL, decode_responses=True)

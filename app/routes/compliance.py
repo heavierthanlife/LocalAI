@@ -41,13 +41,26 @@ COMPLIANCE_DIR = os.path.join(str(DATA_DIR), 'compliance_results')
 os.makedirs(COMPLIANCE_DIR, exist_ok=True)
 
 
+# FIX-064: task_id is attacker-influenced (JSON body on /compliance/feedback),
+# so constrain it to filesystem-safe characters before touching disk.
+_TASK_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
+def _valid_task_id(task_id) -> bool:
+    return isinstance(task_id, str) and bool(_TASK_ID_RE.match(task_id))
+
+
 def _save_result(task_id: str, data: dict):
+    if not _valid_task_id(task_id):
+        raise ValueError(f"invalid task_id: {task_id!r}")
     path = os.path.join(COMPLIANCE_DIR, f"{task_id}.json")
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, default=str)
 
 
 def _load_result(task_id: str) -> dict | None:
+    if not _valid_task_id(task_id):
+        return None
     path = os.path.join(COMPLIANCE_DIR, f"{task_id}.json")
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
@@ -423,8 +436,10 @@ def incremental_check():
 def _task_forbidden(task_id) -> bool:
     """True if the current session may NOT access the given task's artifacts.
 
-    Ownership lives in TaskBus meta (set at register time). Missing meta (expired
-    or legacy task) is allowed through — disk-persisted results outlive the TTL.
+    Ownership lives in TaskBus meta (set at register time). Missing meta (expired,
+    legacy task, or Redis unavailable → TaskBus.get returns None) is allowed
+    through — disk-persisted results outlive the TTL. Only an *exception* while
+    determining ownership fails closed (FIX-063).
     """
     try:
         from app.services.task_bus import TaskBus
@@ -433,7 +448,9 @@ def _task_forbidden(task_id) -> bool:
         if meta and not task_owner_ok(meta, session.get('user_id')):
             return True
     except Exception as e:
-        logger.debug(f"_task_forbidden check skipped: {e}")
+        # Fail closed (FIX-063): if ownership cannot be determined, deny.
+        logger.warning(f"_task_forbidden check failed, denying access: {e}")
+        return True
     return False
 
 
@@ -541,6 +558,10 @@ def submit_feedback():
         valid_verdicts = {'true_violation', 'false_positive', 'not_matter'}
         if user_verdict not in valid_verdicts:
             return err(f"user_verdict 必须为: {', '.join(valid_verdicts)}", "VALIDATION_ERROR", 400)
+
+        # Ownership guard (FIX-062): same model as get_result/get_rules.
+        if _task_forbidden(task_id):
+            return err("无权访问该任务", "FORBIDDEN", 403)
 
         # Load original check result
         orig = _load_result(task_id)

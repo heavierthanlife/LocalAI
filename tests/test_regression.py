@@ -2041,3 +2041,75 @@ def test_trend_service_uses_real_feedback_table():
     src = _read('app/services/trend_service.py')
     assert 'FROM compliance_feedback' in src
     assert 'FROM compliance_check_feedback' not in src
+
+
+# ── FIX-2026-09-24-062/063/064/065: 合规归属 fail-closed + task_id 白名单 + TaskBus Redis 重试 ──
+def test_compliance_feedback_requires_owner(app, monkeypatch):
+    """FIX-062: 向他人 task 提交反馈必须 403（越权写入修复）。"""
+    from app.services import task_bus as tb
+    monkeypatch.setattr(tb.TaskBus, 'get',
+                        staticmethod(lambda task_id: {'user_id': 'someone-else'}))
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = 'test-user'
+        sess['consent_value'] = 1
+    r = client.post('/compliance/feedback', json={
+        'task_id': 'abcd1234', 'check_file_name': 'x.docx', 'user_verdict': 'true_violation'})
+    assert r.status_code == 403, f"越权 feedback 必须 403，实得 {r.status_code}"
+
+
+def test_compliance_task_forbidden_fail_closed(app, monkeypatch):
+    """FIX-063: 归属校验异常时必须 fail-closed（拒绝），不得放行。"""
+    from app.services import task_bus as tb
+
+    def _boom(task_id):
+        raise RuntimeError('redis down')
+
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(_boom))
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = 'test-user'
+        sess['consent_value'] = 1
+    r = client.get('/compliance/result/abcd1234')
+    assert r.status_code == 403, f"归属校验异常必须 fail-closed 403，实得 {r.status_code}"
+
+
+def test_compliance_load_result_rejects_traversal():
+    """FIX-064: task_id 白名单阻断路径遍历；合法 uuid / rules_<uuid> 放行。"""
+    from app.routes.compliance import _load_result, _save_result, _valid_task_id
+    assert _valid_task_id('rules_abc-123') is True
+    assert _valid_task_id('../../etc/passwd') is False
+    assert _valid_task_id('a/b') is False
+    assert _valid_task_id('') is False
+    assert _valid_task_id('a' * 65) is False
+    assert _valid_task_id(None) is False
+    assert _load_result('../../etc/passwd') is None
+    with pytest.raises(ValueError):
+        _save_result('../../evil', {})
+
+
+def test_task_bus_redis_retries_after_interval(monkeypatch):
+    """FIX-065: Redis 首次不可用后超过重试间隔须再次尝试（不再永久禁用）。"""
+    from app.services import task_bus as tb
+    import redis as redis_mod
+
+    monkeypatch.setattr(tb, '_redis', None)
+    monkeypatch.setattr(tb, '_redis_last_try', 0.0)
+    clock = {'t': 1000.0}
+    monkeypatch.setattr(tb.time, 'time', lambda: clock['t'])
+
+    calls = {'n': 0}
+
+    def _fail(*args, **kwargs):
+        calls['n'] += 1
+        raise RuntimeError('boom')
+
+    monkeypatch.setattr(redis_mod.Redis, 'from_url', staticmethod(_fail))
+
+    assert tb._get_redis() is False, "首次失败应 latch 为 False"
+    assert calls['n'] == 1
+    assert tb._get_redis() is None, "重试间隔内不再尝试（返回 None）"
+    assert calls['n'] == 1
+    clock['t'] += tb._REDIS_RETRY_INTERVAL + 1
+    assert tb._get_redis() is False, "超过间隔后应重试"
+    assert calls['n'] == 2
