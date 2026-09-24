@@ -8,6 +8,27 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-24] — QA-Loop Round 028：合规归属 fail-closed + task_id 白名单 + TaskBus Redis 重试
+
+### Fixed
+- **`/compliance/feedback` 越权写入（IDOR）**（FIX-2026-09-24-062，`app/routes/compliance.py`）：`submit_feedback` 从 JSON body 取 `task_id` 后直接 `_load_result` 并写反馈，无 owner 校验 → 任意登录用户可对他人 task 提交反馈（污染 LoRA 训练数据）。现加 `_task_forbidden(task_id)` 守卫（与 `get_result`/`get_rules` 同模型，返回 403）。
+- **`_task_forbidden` 异常 fail-open**（FIX-2026-09-24-063）：归属校验在 `TaskBus`/`helpers` 抛异常时 `return False`（放行）。现改为 `logger.warning` + `return True`（fail-closed）；`meta=None`（含 Redis 不可用）仍按「元数据缺失→放行」处理，不影响合法用户。
+- **合规结果 `task_id` 路径遍历**（FIX-2026-09-24-064）：`task_id` 可由 `/compliance/feedback` body 提供，拼入 `{task_id}.json` 可跨目录读写任意 `.json`。现加白名单 `^[A-Za-z0-9_-]{1,64}$`，`_load_result` 非法返回 `None`、`_save_result` 非法抛 `ValueError`；`rules_<uuid>` 合成串不受影响。
+- **`TaskBus` Redis 首次失败永久禁用**（FIX-2026-09-24-065，`app/services/task_bus.py`）：`_get_redis` 失败后 latch `_redis=False`，而守卫 `if _redis is not None` 使其被永久缓存 → Redis 短暂不可用会让整个进程生命周期内 TaskBus（含 owner meta）恒 `None`。现记录 `_redis_last_try`，每 `_REDIS_RETRY_INTERVAL`(60s) 重试一次。
+
+### Added
+- 回归测试 4 个：`test_compliance_feedback_requires_owner` · `test_compliance_task_forbidden_fail_closed` · `test_compliance_load_result_rejects_traversal` · `test_task_bus_redis_retries_after_interval`。
+
+### Notes
+- QA-Loop Round 028（增量 `bf82dbb..1cdb28b`）定级：C2 High（IDOR）；C1/C3/Bonus Medium；C4/C5 降级 Low（防御纵深 / 入库前已 `[:500]` 截断）。`@code-reviewer` 复核 0 Critical/High（1 Medium 已修 docstring）。
+- 视觉项因截图过期（2026-09-11）延期至下轮 COLLECT，记 **`UNRESOLVED-028`**（扩展 `tests/visual_regression.py` + 12 缺页 + 清标数据夹具）。
+- 其他路由（`clearance.py`/`tasks.py`/`batch.py`）直接调 `task_owner_ok` 未统一封装，记 **`UNRESOLVED-029`**（复核 M2，非本轮引入）。
+
+regression: 1/1 clearance baseline passed
+164/164 regression · verify_fixes 287/0 · doc_drift 15/15 · check_system 131/0/134
+
+---
+
 ## [2026-09-16] — S3/S4/S5 清理：UI 死引用 + 配置诚实性 + 文档漂移
 
 ### Fixed

@@ -441,3 +441,38 @@ unresolved:
     resolution_plan: >
       分批外科删除 + node --check + pytest + 重建镜像验证；torch 去重可改为 Dockerfile 最后装 torch
       或 requirements 用 torch>=2.12.1 让 +cuXXX 满足。
+
+  - id: UNRESOLVED-028
+    title: "视觉回归采集脚本扩展（12 缺页 + 清标数据夹具）"
+    status: pending
+    severity: low
+    discovered: 2026-09-24
+    tags: ["QA-Loop", "视觉", "工具"]
+    context: >
+      QA-Loop Round 028 的视觉侧无法在本轮判定：tests/visual_screenshots/ 现有 25 张
+      均为 2026-09-11（早于 bf82dbb..1cdb28b 多批前端改动）→ 判定「待运行验证（截图过期）」。
+      且 tests/visual_regression.py 仅 10 个泛化检查点（01_homepage_login…10），
+      与现存截图命名/覆盖面不一致，无法复现现有截图，也未覆盖 12 个缺页：
+      清标详情展开/知识图谱/审计日志详情/编辑提示词/模板编辑器/文件预览弹窗/窄屏≤768/
+      知识中心/项目管理/系统管理/回收站/质问模式。
+    blocked_by: "需运行中的站点（Docker up）+ 清标任务与结果数据夹具"
+    resolution_plan: >
+      扩展 tests/visual_regression.py：保留现有 10 CP，新增按页面粒度的 12 CP +
+      清标数据夹具（登录 admin/123456 → 需已存在的清标任务/报告）。在最新镜像上采集，
+      再走 QA-Loop ② VERIFY 判定旧 H1/H2/H3（巨大空白/表格溢出/压输入框）是否仍存在。
+
+  - id: UNRESOLVED-029
+    title: "其他路由 task_owner_ok 调用点未统一 fail-closed / 异常封装（QA-028 M2）"
+    status: pending
+    severity: low
+    discovered: 2026-09-24
+    tags: ["QA-Loop", "安全", "一致性"]
+    context: >
+      QA-Loop Round 028 @code-reviewer（M2）：clearance.py / tasks.py / batch.py 直接调用
+      task_owner_ok()，无 try/except 包裹；若 TaskBus.get() 在 hgetall 时抛异常，这些路由
+      将返回 500 而非 403，与 FIX-063 对 compliance._task_forbidden 的 fail-closed 设计不一致。
+      属既有问题，非本轮引入。
+    blocked_by: ~
+    resolution_plan: >
+      评估将 owner 校验统一封装为共享 helper（如 helpers.owner_forbidden(task_id)），
+      在 clearance/tasks/batch 调用点复用，使异常路径一致 fail-closed（403）。
