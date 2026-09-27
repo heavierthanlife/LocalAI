@@ -1803,3 +1803,25 @@ fixes:
       - type: literal
         file: app/routes/compliance.py
         pattern: "return status == 'forbidden'"
+
+  - id: FIX-2026-09-27-067
+    title: "S3/S4 残余清理（部分）：无效 YAML + 孤儿工厂键 + 陈旧 UI 探针 + Dockerfile torch 顺序"
+    severity: low
+    rationale: >
+      UNRESOLVED-027 的低风险子集：
+      (1) data/unresolved.yaml 为无效 YAML（L24 双引号串内 D:\AI_Tools\hermes 的 \A 非法转义）→ 改单引号，PyYAML 可解析。
+      (2) data/runtime_config_factory.json 的 7 个 typo_* 键无任何代码/DEFAULTS 读取（typo 功能已删）→ 移除。
+      (3) scripts/run_ui_audit.py TAB_TOUR 的 #sidebarTypoResultsBtn 探针（DOM 已删）→ 移除。
+      (4) Dockerfile torch 双装：requirements.txt 又 pin torch==2.12.1（不含 +cuXXX 时 pip 视为未满足）会覆盖
+          TORCH_INDEX 轮子 → 把 torch/torchvision 安装移到 requirements 之后，保证 GPU/CPU 轮子最终生效。
+      仍 deferred：audit 死代码外科删除、review.js docReviewPanel 死块、app.js/cases.js 陈旧 DOM id。
+    checks:
+      - type: literal_not
+        file: data/runtime_config_factory.json
+        pattern: "typo_"
+      - type: literal_not
+        file: scripts/run_ui_audit.py
+        pattern: "sidebarTypoResultsBtn"
+      - type: literal
+        file: Dockerfile
+        pattern: "torch/torchvision installed LAST"

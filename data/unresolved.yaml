@@ -21,7 +21,7 @@ unresolved:
       new prefix. pi installed at D:\AI_Tools\npm-global (v0.82.1).
 
   - id: UNRESOLVED-002
-    title: "Hermes migration to D:\AI_Tools\hermes"
+    title: 'Hermes migration to D:\AI_Tools\hermes'
     status: resolved
     severity: medium
     discovered: 2026-07-29
@@ -441,6 +441,12 @@ unresolved:
     resolution_plan: >
       分批外科删除 + node --check + pytest + 重建镜像验证；torch 去重可改为 Dockerfile 最后装 torch
       或 requirements 用 torch>=2.12.1 让 +cuXXX 满足。
+    progress: >
+      2026-09-27（FIX-067）：已完成的低风险子集 — Dockerfile torch 去重（改为 requirements 之后安装）、
+      data/unresolved.yaml 无效 YAML 修复、runtime_config_factory.json 移除 7 个 typo_* 孤儿键、
+      run_ui_audit.py 移除 #sidebarTypoResultsBtn 陈旧探针。仍 deferred：audit_engine 编排器 +
+      audit_report.py/audit_wiki_publisher.py 外科删除、review.js docReviewPanel 死块、
+      app.js/cases.js 陈旧 DOM id。
 
   - id: UNRESOLVED-028
     title: "视觉回归采集脚本扩展（12 缺页 + 清标数据夹具）"

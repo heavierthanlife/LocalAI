@@ -212,7 +212,6 @@ def main():
         ("tab-sidebar-stats", "#sidebar-stats-pane"),
         ("panel-quote-history", "#sidebarQuoteAnomalyResultsBtn"),
         ("panel-relationship-history", "#sidebarRelationshipResultsBtn"),
-        ("panel-typo-history", "#sidebarTypoResultsBtn"),
         ("panel-audit-log", "#sidebarAuditLogBtn"),
         ("panel-clear-cache", "#sidebarClearCacheBtn"),
         ("panel-templates", "#sidebar-templates-pane"),

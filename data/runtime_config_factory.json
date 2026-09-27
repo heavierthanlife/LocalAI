@@ -66,12 +66,5 @@
   "relation_extraction_ner_provider": "hanlp",
   "relation_extraction_llm_fallback": true,
   "relation_tianyancha_enabled": false,
-  "relation_tianyancha_api_key": "",
-  "typo_chinese_enabled": true,
-  "typo_english_enabled": true,
-  "typo_numeric_enabled": true,
-  "typo_daxie_enabled": true,
-  "typo_auto_correct": false,
-  "typo_diff_review_enabled": false,
-  "typo_min_confidence": 0.7
+  "relation_tianyancha_api_key": ""
 }

@@ -2046,6 +2046,29 @@ def test_trend_service_uses_real_feedback_table():
     assert 'FROM compliance_check_feedback' not in src
 
 
+def test_unresolved_yaml_is_valid():
+    """FIX-2026-09-15-067: unresolved.yaml must be parseable YAML (no bad escapes)."""
+    import yaml
+    with open('data/unresolved.yaml', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+    assert isinstance(data, dict) and len(data['unresolved']) > 0
+
+
+def test_factory_has_no_orphan_typo_keys():
+    """FIX-2026-09-15-067: typo_* keys removed (no reader in code)."""
+    assert 'typo_' not in _read('data/runtime_config_factory.json')
+
+
+def test_run_ui_audit_no_stale_typo_surface():
+    """FIX-2026-09-15-067: stale #sidebarTypoResultsBtn probe removed."""
+    assert 'sidebarTypoResultsBtn' not in _read('scripts/run_ui_audit.py')
+
+
+def test_dockerfile_installs_torch_after_requirements():
+    """FIX-2026-09-15-067: TORCH_INDEX wheel installed after requirements so it wins."""
+    assert 'torch/torchvision installed LAST' in _read('Dockerfile')
+
+
 # ── FIX-2026-09-24-062/063/064/065: 合规归属 fail-closed + task_id 白名单 + TaskBus Redis 重试 ──
 def test_compliance_feedback_requires_owner(app, monkeypatch):
     """FIX-062: 向他人 task 提交反馈必须 403（越权写入修复）。"""

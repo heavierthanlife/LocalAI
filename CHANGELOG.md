@@ -8,6 +8,25 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-27] — S3/S4 残余清理（部分）（FIX-067）
+
+### Fixed
+- `data/unresolved.yaml` **无效 YAML**（L24 双引号串 `D:\AI_Tools\hermes` 的 `\A` 非法转义）→ 改单引号，PyYAML 现可解析（29 条）。
+- `data/runtime_config_factory.json` 移除 7 个**无读者**的 `typo_*` 孤儿键（typo 功能已删；`runtime_config.py` 无引用）。
+- `scripts/run_ui_audit.py` 移除已删 DOM 的 `#sidebarTypoResultsBtn` 探针。
+- `Dockerfile`：torch/torchvision 移到 requirements **之后**安装，避免 requirements 的 PyPI pin（`torch==2.12.1` 不含 `+cuXXX` 时 pip 视为未满足）覆盖 `TORCH_INDEX` 选定的 CPU/GPU 轮子。
+
+### Added
+- fix_registry `FIX-2026-09-27-067`（3 不变量）+ 回归 4 测试。
+
+### Notes
+- `UNRESOLVED-027` 仅完成低风险子集；**仍 deferred**：audit 死代码外科删除、`review.js` docReviewPanel 死块、`app.js`/`cases.js` 陈旧 DOM id。
+
+regression: 1/1 clearance baseline passed
+174/174 regression · 184/184 含路由守护+冒烟 · verify_fixes 296/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-24] — QA-Loop Round 029：owner 校验统一封装（FIX-066）
 
 ### Changed

@@ -47,9 +47,11 @@ COPY requirements.txt .
 
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1 \
- && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
- && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent
+    pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
+ && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent \
+ && pip install --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1
+# torch/torchvision installed LAST so requirements.txt's PyPI pin cannot clobber
+# the TORCH_INDEX (CPU/CUDA) wheel chosen by scripts/docker_build.py.
 
 # ── Application code ──
 COPY --chown=localai:localai . .
