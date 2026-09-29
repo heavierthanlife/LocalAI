@@ -8,6 +8,19 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P0-#4 ZIP 解压路径白名单（FIX-071）
+
+### Fixed
+- **ZIP 解压路径穿越（zip-slip）**（`app/services/ingest_pipeline.py`）：`zf.extractall(tmp_dir)` 无成员校验 → 特制 ZIP 可写出 `tmp_dir` 之外（绝对路径 / `..` / 符号链接）覆盖系统文件。现改用 `_safe_extract_zip`：逐条 `infolist()`，`realpath` 前缀命中 `realpath(dest)+os.sep`，拒绝对路径/盘符/`..`/符号链接，写出后二次 realpath 校验；文件收集阶段再加一次 realpath 包含校验；跳过项计入任务 `errors`（报告可见）。
+
+### Changed
+- `check_system.py` 新增 2 条 security 探针（清单 148→150）；`AGENTS.md`/`USER_MANUAL.md` 同步。
+
+regression: 1/1 clearance baseline passed
+189/189 regression collected（EXIT=0，0 failure；全量 2/2 连绿） · verify_fixes 327/0 · doc_drift 15/15 · check_system 150/148/2/0
+
+---
+
 ## [2026-09-29] — P0-#1 会话归属 fail-closed（FIX-070）
 
 ### Fixed

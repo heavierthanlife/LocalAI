@@ -54,6 +54,57 @@ def cleanup_task(task_id: str):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _record_ingest_error(task_id: str, message: str):
+    """Append a non-fatal error to the task record (visible in the report)."""
+    logger.warning(f"ingest {task_id}: {message}")
+    with _task_lock:
+        task = _ingest_tasks.get(task_id)
+        if task is not None:
+            task.setdefault('errors', []).append(message)
+
+
+def _safe_extract_zip(zf, dest_dir):
+    """Extract a ZIP without path traversal (FIX-2026-09-29-071).
+
+    Whitelist per entry — the entry is extracted only when the resolved target
+    stays under ``realpath(dest_dir)`` (prefix match with a trailing separator, so
+    ``/data/ingest_x`` cannot masquerade as ``/data/ingest``). Absolute paths,
+    drive letters, ``..`` segments and symlinks are skipped and reported.
+
+    Returns ``(extracted_count, skipped_reasons)``.
+    """
+    real_dest = os.path.realpath(dest_dir)
+    extracted = 0
+    skipped = []
+    for member in zf.infolist():
+        name = member.filename
+        drive, _ = os.path.splitdrive(name)
+        norm = name.replace('\\', '/')
+        if drive or norm.startswith('/') or '..' in norm.split('/'):
+            skipped.append(f'skipped unsafe ZIP entry: {name}')
+            continue
+        mode = (member.external_attr >> 16) & 0o170000
+        if mode == 0o120000:  # symlink
+            skipped.append(f'skipped symlink ZIP entry: {name}')
+            continue
+        target = os.path.realpath(os.path.join(dest_dir, *norm.split('/')))
+        if target != real_dest and not target.startswith(real_dest + os.sep):
+            skipped.append(f'skipped out-of-dir ZIP entry: {name}')
+            continue
+        if member.is_dir():
+            os.makedirs(target, exist_ok=True)
+            continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with zf.open(member) as src, open(target, 'wb') as out:
+            shutil.copyfileobj(src, out)
+        # second realpath check after write
+        if not os.path.realpath(target).startswith(real_dest + os.sep):
+            skipped.append(f'post-extract escape: {name}')
+            continue
+        extracted += 1
+    return extracted, skipped
+
+
 # ── OCR helpers ──
 
 def _ocr_image(image_path: str) -> str:
@@ -503,15 +554,22 @@ def _run_ingestion_pipeline_sync(task_id, zip_path, targets):
         # Step 1: Extract ZIP
         _update_progress(task_id, progress_pct=5, detail='Extracting ZIP...')
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(tmp_dir)
+            _extracted, _skipped = _safe_extract_zip(zf, tmp_dir)
+        for _reason in _skipped:
+            _record_ingest_error(task_id, _reason)
 
-        # Collect all supported files
+        # Collect all supported files (with a second realpath containment check)
+        _real_tmp = os.path.realpath(tmp_dir)
         files = []
         for root, dirs, filenames in os.walk(tmp_dir):
             for fn in filenames:
+                fp = os.path.join(root, fn)
+                if not os.path.realpath(fp).startswith(_real_tmp + os.sep):
+                    _record_ingest_error(task_id, f'post-extract escape detected: {fp}')
+                    continue
                 ext = os.path.splitext(fn)[1].lower()
                 if ext in SUPPORTED_EXTS:
-                    files.append(os.path.join(root, fn))
+                    files.append(fp)
 
         total = len(files)
         if total == 0:

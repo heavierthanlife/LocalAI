@@ -2459,3 +2459,31 @@ def test_session_ownership_gate_wired():
         src = f.read()
     assert src.count('_assert_thread_access(') >= 6, 'all five session ops must gate'
     assert 'system=True' not in src, 'no bypass flag allowed'
+
+
+# ── FIX-2026-09-29-071: ZIP extraction must not escape the target dir ──
+def test_safe_extract_zip_blocks_traversal(tmp_path):
+    """FIX-071: ../、绝对路径成员不得写出目标目录；正常成员照常解压。"""
+    import zipfile as _zip
+    from app.services.ingest_pipeline import _safe_extract_zip
+    dest = tmp_path / 'ingest'
+    dest.mkdir()
+    zpath = tmp_path / 'evil.zip'
+    with _zip.ZipFile(zpath, 'w') as zf:
+        zf.writestr('ok.txt', 'fine')
+        zf.writestr('../evil.txt', 'pwned')
+        zf.writestr('/abs.txt', 'pwned-abs')
+    with _zip.ZipFile(zpath, 'r') as zf:
+        extracted, skipped = _safe_extract_zip(zf, str(dest))
+    assert extracted == 1, extracted
+    assert (dest / 'ok.txt').read_text() == 'fine'
+    assert not (tmp_path / 'evil.txt').exists(), 'traversal escaped the target dir'
+    assert len(skipped) >= 2, skipped
+
+
+def test_ingest_pipeline_no_extractall():
+    """FIX-071: 必须弃用 extractall，改用路径白名单解压。"""
+    with open('app/services/ingest_pipeline.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'extractall(' not in src
+    assert '_safe_extract_zip(' in src

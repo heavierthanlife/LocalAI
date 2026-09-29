@@ -1941,3 +1941,28 @@ fixes:
       - type: literal_not
         file: app/services/session_manager.py
         pattern: "system=True"
+
+  - id: FIX-2026-09-29-071
+    title: "P0-#4 ZIP 解压路径白名单（弃 extractall，防 zip-slip/绝对路径/符号链接）"
+    severity: high
+    rationale: >
+      ingest_pipeline._run_ingestion_pipeline_sync 用 zf.extractall(tmp_dir) 无成员校验，
+      特制 ZIP 可写入 tmp_dir 之外（zip-slip / 绝对路径 / 符号链接）→ 覆盖系统文件。
+      修复：新增 _safe_extract_zip（逐条 infolist；realpath 前缀命中 realpath(dest)+os.sep；
+      拒绝对路径/盘符/.. /符号链接；写出后二次 realpath 校验），收集阶段再加一次 realpath 包含校验。
+    checks:
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "def _safe_extract_zip(zf, dest_dir)"
+      - type: literal_not
+        file: app/services/ingest_pipeline.py
+        pattern: "extractall("
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "real_dest + os.sep"
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "skipped out-of-dir ZIP entry"
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "0o120000"

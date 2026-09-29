@@ -494,6 +494,13 @@ _add('security', 'Session ownership gate present', 'PASS' if sgate else 'FAIL')
 sgfair, _ = _grep_file('app/services/session_manager.py', r"pm\.status = 'active'")
 _add('security', 'Session gate covers project members', 'PASS' if sgfair else 'FAIL')
 
+# ── FIX-2026-09-29-071: ZIP extraction must be path-guarded ──
+zip_safe, _ = _grep_file('app/services/ingest_pipeline.py', r'def _safe_extract_zip\(zf, dest_dir\)')
+_add('security', 'ZIP extraction path-guarded', 'PASS' if zip_safe else 'FAIL')
+
+zip_extractall, _ = _grep_file('app/services/ingest_pipeline.py', r'extractall\(')
+_add('security', 'No zip extractall (path traversal)', 'PASS' if not zip_extractall else 'FAIL')
+
 # ===========================================================================
 # 8. Security
 # ===========================================================================

@@ -171,7 +171,7 @@ python scripts/manage_db.py snapshot   # 导出 schema → repair_kit/SCHEMA_SNA
 
 | 命令 | 用途 |
 |---|---|
-| `python scripts/check_system.py` | 生成系统健康清单（148 项） |
+| `python scripts/check_system.py` | 生成系统健康清单（150 项） |
 | `python scripts/verify_fixes.py` | 校验 fix_registry 不变式 |
 | `python scripts/run_lora_training.py` | LoRA 微调（Unsloth, Qwen2.5-7B） |
 | `python scripts/migrate_seed_laws.py` | 法规种子数据迁移 |
