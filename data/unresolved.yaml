@@ -502,3 +502,19 @@ unresolved:
     resolution_plan: >
       评估将 /api/login 改为 check_password_hash（与 Web 登录一致）+ 兼容 legacy sha256；
       或明确 API 专用凭据存储；补回归（sha256/werkzeug 两种存储均可登录）。需 @code-reviewer 复核 + 安全裁决。
+
+  - id: UNRESOLVED-031
+    title: "销户确认码明文存储 + 非常量时间比对（confirm_delete_account）"
+    status: pending
+    severity: medium
+    discovered: 2026-09-29
+    tags: ["安全", "缺陷", "认证"]
+    context: >
+      #3 施工顺手发现（审查方确认）：app/routes/auth.py confirm_delete_account（约 :413-415）
+      expected_code = row[0]; if not expected_code or code != expected_code ——
+      验证码以明文存 users.deletion_code（DB），且用 != 非常量时间比对；发码端
+      admin_regeneration.py:877。与 FIX-069 同类（验证码比对硬化），但属销户流程、不在 #3 范围。
+    blocked_by: ~
+    resolution_plan: >
+      DB 只存 hash（SHA-256）+ secrets.compare_digest + 失败/过期清码；补回归。
+      建议排 #1 之后单独一小件，需 @code-reviewer 复核。
