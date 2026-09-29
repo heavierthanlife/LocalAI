@@ -1,8 +1,8 @@
 # System Health Checklist — Automated Audit
 
-> Generated: 2026-09-29 09:56 (auto)
-> verify_fixes.py: 314/314 pass (0 failure(s))
-> Checklist: 146 items — 144 pass / 2 manual / 0 fail
+> Generated: 2026-09-29 14:56 (auto)
+> verify_fixes.py: 322/322 pass (0 failure(s))
+> Checklist: 148 items — 146 pass / 2 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
 
@@ -153,13 +153,15 @@ _(10/12 verified automatically)_
 
 ## SECURITY
 
-_(15/15 verified automatically)_
+_(17/17 verified automatically)_
 
 - [x] PIN code debug echo removed
 - [x] PIN code never stored in plaintext session
 - [x] PIN code request fails closed without SMTP
 - [x] PIN code compared in constant time
 - [x] PIN code resend cooldown
+- [x] Session ownership gate present
+- [x] Session gate covers project members
 - [x] SECRET_KEY set in env
 - [x] .env file exists
 - [x] .env.example exists
@@ -211,8 +213,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 144 |
+| [x] Pass | 146 |
 | [?] Manual | 2 |
-| **Total** | **146** |
+| **Total** | **148** |
 
-**Verification rate**: 144/146 auto-verified (98%)
+**Verification rate**: 146/148 auto-verified (98%)

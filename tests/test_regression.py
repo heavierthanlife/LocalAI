@@ -2407,3 +2407,55 @@ def test_pin_verify_constant_time_and_hash_only():
     assert 'pin_change_code_hash' in src
     assert "session['pin_change_code']" not in src
     assert '调试模式' not in src
+
+
+# ── FIX-2026-09-29-070: session ownership must be fail-closed (no bypass) ──
+class _GateCur:
+    def __init__(self, row):
+        self._row = row
+        self.sql = ''
+
+    def execute(self, sql, params=None):
+        self.sql = sql
+
+    def fetchone(self):
+        return self._row
+
+
+def test_assert_thread_access_fail_closed():
+    """FIX-070: 缺 actor→拒（不查库）；owner/项目成员→允；无行→拒。"""
+    from app.services.session_manager import _assert_thread_access
+    c = _GateCur(('x',))
+    assert _assert_thread_access(c, 't', None) is False
+    assert c.sql == '', 'must deny without querying when actor is missing'
+    c = _GateCur((1,))
+    assert _assert_thread_access(c, 't', 'u') is True
+    assert 'cs.user_id = %s' in c.sql and 'project_members' in c.sql
+    c = _GateCur(None)
+    assert _assert_thread_access(c, 't', 'u') is False
+
+
+def test_archive_route_denies_foreign_thread(app, monkeypatch):
+    """FIX-070: A 带 B 的 thread_id 调归档 → 404（不得归档/删他人会话）。"""
+    from app.routes import chat_sessions as cs
+    monkeypatch.setattr(cs, 'thread_accessible', lambda tid, uid=None: False)
+    client = app.test_client()
+    _session_login(client, uid='userA')
+    r = client.post('/archive_session/thread-owned-by-B')
+    assert r.status_code == 404, r.status_code
+
+
+def test_archive_session_service_denies_foreign_thread(app, monkeypatch):
+    """FIX-070: 服务层归档非本人会话 → 返回 None（不写入）。"""
+    from app.services import session_manager as sm
+    monkeypatch.setattr(sm, '_assert_thread_access', lambda cur, tid, actor: False)
+    monkeypatch.setattr(sm, 'get_db_connection', lambda: _FakeConn(None))
+    assert sm.archive_session('thread-owned-by-B', 'userA') is None
+
+
+def test_session_ownership_gate_wired():
+    """FIX-070: 五件套均过闸，且不存在 bypass 开关。"""
+    with open('app/services/session_manager.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert src.count('_assert_thread_access(') >= 6, 'all five session ops must gate'
+    assert 'system=True' not in src, 'no bypass flag allowed'

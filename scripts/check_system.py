@@ -487,6 +487,13 @@ _add('security', 'PIN code compared in constant time', 'PASS' if const_time else
 code_cooldown, _ = _grep_file('app/routes/auth.py', r'pin_change_code_sent_at')
 _add('security', 'PIN code resend cooldown', 'PASS' if code_cooldown else 'FAIL')
 
+# ── FIX-2026-09-29-070: session ownership gate must be fail-closed ──
+sgate, _ = _grep_file('app/services/session_manager.py', r'def _assert_thread_access\(cur, thread_id, actor_user_id\)')
+_add('security', 'Session ownership gate present', 'PASS' if sgate else 'FAIL')
+
+sgfair, _ = _grep_file('app/services/session_manager.py', r"pm\.status = 'active'")
+_add('security', 'Session gate covers project members', 'PASS' if sgfair else 'FAIL')
+
 # ===========================================================================
 # 8. Security
 # ===========================================================================

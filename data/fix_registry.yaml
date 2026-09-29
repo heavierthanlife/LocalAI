@@ -1904,3 +1904,40 @@ fixes:
       - type: literal
         file: app/routes/auth.py
         pattern: "pin_change_code_sent_at"
+
+  - id: FIX-2026-09-29-070
+    title: "P0-#1 会话归属 fail-closed（_assert_thread_access，无旁路，五件套过闸）"
+    severity: high
+    rationale: >
+      archive_session 只按 thread_id 查询（无 owner 过滤）且路由无归属检查，
+      传他人 thread_id 即可归档到本人名下并删除对方会话；服务层
+      get_session_messages/store_message/update_session_title/delete_session 均裸查，无归属门。
+      修复：新增 resolve_actor（显式 actor 优先，否则 Flask session，两者皆无→None=拒）与
+      _assert_thread_access（cs.user_id 或项目 active 成员，与 get_user_sessions 同模型），
+      无 bypass 开关；五件套统一过闸（未过返回 []/None/不写）；archive 路由加 thread_accessible
+      守卫→404；cleanup 传真实 owner；匿名（consent!=1）路径不经此闸。
+    checks:
+      - type: literal
+        file: app/services/session_manager.py
+        pattern: "def _assert_thread_access(cur, thread_id, actor_user_id)"
+      - type: literal
+        file: app/services/session_manager.py
+        pattern: "def resolve_actor(actor_user_id=None)"
+      - type: literal
+        file: app/services/session_manager.py
+        pattern: "if not actor_user_id:"
+      - type: literal
+        file: app/services/session_manager.py
+        pattern: "pm.status = 'active'"
+      - type: literal
+        file: app/services/session_manager.py
+        pattern: "def thread_accessible(thread_id, actor_user_id=None)"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "thread_accessible(thread_id, user_id)"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "delete_session(thread_id, user_id)"
+      - type: literal_not
+        file: app/services/session_manager.py
+        pattern: "system=True"

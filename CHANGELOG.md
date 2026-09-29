@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P0-#1 会话归属 fail-closed（FIX-070）
+
+### Fixed
+- **会话越权归档/删除（IDOR）**：`archive_session` 仅按 `thread_id` 查询、路由无归属检查 → 任意登录用户可传他人 `thread_id` 归档到本人名下并删除对方会话。现新增 `session_manager._assert_thread_access`（fail-closed、无 bypass；`cs.user_id` 或项目 active 成员，与 `get_user_sessions` 同模型），五件套（`get_session_messages`/`store_message`/`update_session_title`/`archive_session`/`delete_session`）统一过闸；未过闸返回 `[]`/`None`/不写。
+- `archive_session` 路由加 `thread_accessible` 守卫 → **404**（不泄露存在性）；归档/删除路由与 `cleanup_old_sessions` 均传真实 owner；匿名（`consent_value != 1`）路径不经此闸。
+
+### Changed
+- `check_system.py` 新增 2 条 security 探针（清单 146→148）；`AGENTS.md`/`USER_MANUAL.md` 同步。
+
+regression: 1/1 clearance baseline passed
+187/187 regression collected（EXIT=0，0 failure） · verify_fixes 322/0 · doc_drift 15/15 · check_system 148/146/2/0
+
+---
+
 ## [2026-09-29] — P0-#3 PIN 验证码不可回显（FIX-069）
 
 ### Fixed

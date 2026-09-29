@@ -27,6 +27,56 @@ def get_user_id():
             session['temp_user_id'] = str(uuid.uuid4())
         return session['temp_user_id']
 
+def resolve_actor(actor_user_id=None):
+    """Actor for thread-ownership checks (FIX-2026-09-29-070).
+
+    Prefer an explicit actor (Celery / service callers). Otherwise read the Flask
+    session (logged-in only). Returns None when neither is available — callers MUST
+    treat None as deny (fail-closed; there is no bypass).
+    """
+    if actor_user_id:
+        return actor_user_id
+    try:
+        if session.get('consent_value', 0) == 1:
+            return session.get('user_id')
+    except Exception:
+        return None
+    return None
+
+
+def _assert_thread_access(cur, thread_id, actor_user_id):
+    """Fail-closed thread ownership check. No bypass.
+
+    Allowed when the actor owns the thread OR is an active member of the thread's
+    project (same two-path model as get_user_sessions). Missing/empty actor → deny.
+    """
+    if not actor_user_id:
+        return False
+    cur.execute("""
+        SELECT 1 FROM chat_sessions cs
+        WHERE cs.thread_id = %s AND (
+            cs.user_id = %s
+            OR EXISTS (
+                SELECT 1 FROM project_members pm
+                WHERE pm.project_id = cs.project_id
+                  AND pm.user_id = %s AND pm.status = 'active'
+            )
+        )
+    """, (thread_id, actor_user_id, actor_user_id))
+    return cur.fetchone() is not None
+
+
+def thread_accessible(thread_id, actor_user_id=None):
+    """Public wrapper: resolve actor, open a read-only connection, check ownership."""
+    actor = resolve_actor(actor_user_id)
+    if not actor:
+        return False
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            db_execute_readonly(cur)
+            return _assert_thread_access(cur, thread_id, actor)
+
+
 def ensure_user_exists(user_id):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -59,24 +109,32 @@ def generate_session_title(messages, max_len=20):
                 return title
     return '新对话'
 
-def update_session_title(thread_id, title):
+def update_session_title(thread_id, title, actor_user_id=None):
     if session.get('consent_value', 0) != 1:
         return
+    actor = resolve_actor(actor_user_id)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            if not _assert_thread_access(cur, thread_id, actor):
+                logger.warning(f"update_session_title denied: thread={thread_id} actor={actor}")
+                return
             cur.execute(
                 "UPDATE chat_sessions SET title = %s, updated_at = %s WHERE thread_id = %s",
                 (title, utc_now(), thread_id)
             )
             conn.commit()
 
-def store_message(thread_id, role, content, thinking=None):
+def store_message(thread_id, role, content, thinking=None, actor_user_id=None):
     if session.get('consent_value', 0) != 1:
         store_message_anon(thread_id, role, content, thinking)
         return None
+    actor = resolve_actor(actor_user_id)
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
+                if not _assert_thread_access(cur, thread_id, actor):
+                    logger.warning(f"store_message denied: thread={thread_id} actor={actor}")
+                    return None
                 cur.execute(
                     "INSERT INTO chat_messages (thread_id, role, content, thinking, timestamp) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                     (thread_id, role, content, thinking, utc_now())
@@ -86,18 +144,22 @@ def store_message(thread_id, role, content, thinking=None):
                     "UPDATE chat_sessions SET updated_at = %s WHERE thread_id = %s",
                     (utc_now(), thread_id)
                 )
-    messages = get_session_messages(thread_id)
+    messages = get_session_messages(thread_id, actor_user_id=actor)
     if len(messages) == 2:
         new_title = generate_session_title(messages)
-        update_session_title(thread_id, new_title)
+        update_session_title(thread_id, new_title, actor_user_id=actor)
     return msg_id
 
-def get_session_messages(thread_id):
+def get_session_messages(thread_id, actor_user_id=None):
     if session.get('consent_value', 0) != 1:
         return get_session_messages_anon(thread_id)
+    actor = resolve_actor(actor_user_id)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             db_execute_readonly(cur)
+            if not _assert_thread_access(cur, thread_id, actor):
+                logger.warning(f"get_session_messages denied: thread={thread_id} actor={actor}")
+                return []
             cur.execute(
                 "SELECT role, content, thinking, timestamp FROM chat_messages WHERE thread_id = %s ORDER BY id ASC",
                 (thread_id,)
@@ -146,11 +208,15 @@ def get_user_sessions():
                 })
             return sessions
 
-def delete_session(thread_id):
+def delete_session(thread_id, actor_user_id=None):
+    actor = resolve_actor(actor_user_id)
     try:
         with get_db_connection() as conn:
             with db_transaction(conn):
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    if not _assert_thread_access(cur, thread_id, actor):
+                        logger.warning(f"delete_session denied: thread={thread_id} actor={actor}")
+                        return
                     cur.execute("SELECT user_id FROM chat_sessions WHERE thread_id = %s", (thread_id,))
                     row = cur.fetchone()
                     if not row:
@@ -179,8 +245,12 @@ def delete_session(thread_id):
         raise
 
 def archive_session(thread_id, user_id, reason="manual"):
+    actor = resolve_actor(user_id)
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if not _assert_thread_access(cur, thread_id, actor):
+                logger.warning(f"archive_session denied: thread={thread_id} actor={actor}")
+                return None
             cur.execute("SELECT archive_path FROM archived_sessions WHERE thread_id = %s", (thread_id,))
             if cur.fetchone():
                 return None
@@ -256,7 +326,7 @@ def cleanup_old_sessions(days=15):
             old = cur.fetchall()
             for thread_id, user_id in old:
                 archive_session(thread_id, user_id, reason="auto_15days")
-                delete_session(thread_id)
+                delete_session(thread_id, user_id)
 
 def cleanup_stale_message_responses(hours=1):
     cutoff = utc_now() - timedelta(hours=hours)

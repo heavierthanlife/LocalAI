@@ -19,6 +19,7 @@ import app.globals as g
 from app.services.session_manager import (
     get_user_id, get_or_create_session, get_session_messages, get_user_sessions,
     store_message, delete_session, archive_session, db_execute_readonly,
+    thread_accessible,
 )
 from app.services.anonymous import get_session_messages_anon
 from app.services.file_cache import load_cache_from_db
@@ -167,7 +168,7 @@ def delete_session_route(thread_id):
     except Exception as e:
         logger.error(f"Archive session failed for {thread_id}: {e}", exc_info=True)
     try:
-        delete_session(thread_id)
+        delete_session(thread_id, user_id)
         logger.info(f"Session {thread_id} deleted successfully for user {user_id}")
     except Exception as e:
         logger.error(f"Failed to delete session {thread_id}: {e}", exc_info=True)
@@ -213,10 +214,13 @@ def archive_session_route(thread_id):
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
+    # FIX-2026-09-29-070: ownership gate — 404 for a thread the actor cannot access.
+    if not thread_accessible(thread_id, user_id):
+        return jsonify({"error": "Session not found or access denied"}), 404
     try:
         archive_path = archive_session(thread_id, user_id, reason="manual")
         if archive_path:
-            delete_session(thread_id)   # remove from active sessions
+            delete_session(thread_id, user_id)   # remove from active sessions
             return jsonify({"success": True})
         else:
             return jsonify({"error": "Archive failed"}), 500
