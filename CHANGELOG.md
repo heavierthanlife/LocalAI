@@ -8,6 +8,23 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P0-#3 PIN 验证码不可回显（FIX-069）
+
+### Fixed
+- **PIN 变更验证码回显**（`app/routes/auth.py`）：`request_pin_change_code` 在 SMTP 未配置时把验证码回显到响应 `hint` 并明文写日志（`(调试模式) 验证码: {code}`）→ 现 SMTP 未配置直接 503 `MAIL_NOT_CONFIGURED`（不生成/不回显/不存储）。
+- **验证码明文落盘**：会话原存明文 `pin_change_code` → 改为只存 `pin_change_code_hash`（SHA-256）；比对由 `!=` 明文改为 `secrets.compare_digest`（常量时间）。
+- **日志明文**：改为仅不可逆指纹 `code_fp=sha256(code)[:8]`。
+- **无重发冷却**：新增 60s 冷却（`pin_change_code_sent_at`），冷却内二次请求 429 + `Retry-After`，且不重置有效期窗口。
+- 失败/过期/成功路径统一清 `pin_change_code_hash` / `_expiry` / `_sent_at`。
+
+### Changed
+- `check_system.py` 新增 5 条 security 探针（清单 141→146）；`AGENTS.md`/`USER_MANUAL.md` 同步。
+
+regression: 1/1 clearance baseline passed
+183/183 regression collected（EXIT=0，0 failure） · verify_fixes 314/0 · doc_drift 15/15 · check_system 146/144/2/0
+
+---
+
 ## [2026-09-28] — P0-#2 登录安全加固（FIX-068）
 
 ### Fixed

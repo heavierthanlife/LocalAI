@@ -266,17 +266,25 @@ def update_account():
                     return jsonify({"error": "请先在账户面板设置邮箱"}), 400
                 if not verify_code:
                     return jsonify({"error": "需要验证码"}), 400
-                expected_code = session.get('pin_change_code')
+                expected_hash = session.get('pin_change_code_hash')
                 code_expiry = session.get('pin_change_code_expiry', 0)
-                if not expected_code or time.time() > code_expiry:
-                    session.pop('pin_change_code', None)
+                if not expected_hash or time.time() > code_expiry:
+                    session.pop('pin_change_code_hash', None)
                     session.pop('pin_change_code_expiry', None)
+                    session.pop('pin_change_code_sent_at', None)
                     return jsonify({"error": "验证码已过期，请重新获取"}), 400
-                if verify_code != expected_code:
+                # FIX-069: constant-time compare of the SHA-256 digest (plaintext code
+                # is never stored in the session, only its hash).
+                provided_hash = hashlib.sha256(verify_code.encode('utf-8')).hexdigest()
+                if not secrets.compare_digest(provided_hash.encode('utf-8'), expected_hash.encode('utf-8')):
+                    session.pop('pin_change_code_hash', None)
+                    session.pop('pin_change_code_expiry', None)
+                    session.pop('pin_change_code_sent_at', None)
                     return jsonify({"error": "验证码错误"}), 400
                 # Code verified — clean up
-                session.pop('pin_change_code', None)
+                session.pop('pin_change_code_hash', None)
                 session.pop('pin_change_code_expiry', None)
+                session.pop('pin_change_code_sent_at', None)
                 if pin_length not in (4, 6) or len(new_pin) != pin_length:
                     return jsonify({"error": f"PIN必须是{pin_length}位数字"}), 400
                 if not new_pin.isdigit():
@@ -295,7 +303,13 @@ def update_account():
 
 @auth_bp.route('/request_pin_change_code', methods=['POST'])
 def request_pin_change_code():
-    """Send a 4-digit verification code to user's email for PIN change."""
+    """Send a 4-digit verification code to the user's email for PIN change.
+
+    FIX-2026-09-29-069: the code is NEVER echoed (response or logs) and never
+    persisted — only its SHA-256 digest goes into the session, and only an
+    irreversible fingerprint is logged. Without SMTP the request fails closed
+    (503) instead of falling back to a debug echo.
+    """
     if session.get('consent_value', 0) != 1 or not session.get('user_id'):
         return jsonify({"error": "未登录"}), 401
     with get_db_connection() as conn:
@@ -305,16 +319,32 @@ def request_pin_change_code():
             if not row or not row[0]:
                 return jsonify({"error": "未设置邮箱，请先在账户面板填写"}), 400
             user_email, username = row
-    code = f"{secrets.randbelow(10000):04d}"
-    session['pin_change_code'] = code
-    session['pin_change_code_expiry'] = time.time() + 300  # 5 minutes
-    session.modified = True
     from app.utils.mailer import send_email, is_configured
     if not is_configured():
-        logger.info(f"[PIN_CODE] User {username}: {code} (SMTP not configured)")
-        return jsonify({"status": "ok", "hint": f"(调试模式) 验证码: {code}"})
+        # Fail closed — do NOT generate/store/echo a code when email is unusable.
+        logger.warning(f"PIN code request refused: SMTP not configured (user={username})")
+        return jsonify({
+            "success": False,
+            "error": "邮件服务未配置，暂时无法发送验证码，请联系管理员",
+            "code": "MAIL_NOT_CONFIGURED",
+        }), 503
+    # Resend cooldown — re-request within 60s must not re-send or reset the window.
+    sent_at = session.get('pin_change_code_sent_at', 0)
+    if sent_at and (time.time() - sent_at) < 60:
+        wait = int(60 - (time.time() - sent_at)) + 1
+        resp = jsonify({"success": False, "error": "请求过于频繁，请稍后重试", "code": "RATE_LIMITED"})
+        resp.status_code = 429
+        resp.headers['Retry-After'] = str(wait)
+        return resp
+    code = f"{secrets.randbelow(10000):04d}"
+    code_fp = hashlib.sha256(code.encode('utf-8')).hexdigest()[:8]
+    session['pin_change_code_hash'] = hashlib.sha256(code.encode('utf-8')).hexdigest()
+    session['pin_change_code_expiry'] = time.time() + 300  # 5 minutes
+    session['pin_change_code_sent_at'] = time.time()
+    session.modified = True
     send_email(user_email, "[中联AI] PIN变更验证码",
                f"验证码: {code}\n有效期5分钟。如非本人操作请忽略。", async_mode=True)
+    logger.info(f"PIN change code sent (user={username} code_fp={code_fp})")
     return jsonify({"status": "ok", "hint": f"验证码已发送至 {user_email}"})
 
 

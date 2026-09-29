@@ -2303,3 +2303,107 @@ def test_ratelimit_breach_response_contract(app):
     assert resp.mimetype == 'application/json'
     assert resp.headers.get('Retry-After')
     assert int(resp.headers['Retry-After']) >= 1
+
+
+# ── FIX-2026-09-29-069: PIN code must not be echoed / persisted / logged ──
+class _FakeCur:
+    def __init__(self, row):
+        self._row = row
+
+    def execute(self, *a, **k):
+        pass
+
+    def fetchone(self):
+        return self._row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _FakeConn:
+    def __init__(self, row):
+        self._row = row
+
+    def cursor(self, *a, **k):
+        return _FakeCur(self._row)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def commit(self):
+        pass
+
+
+def _pin_session(client, uid='pin-user'):
+    with client.session_transaction() as sess:
+        sess['user_id'] = uid
+        sess['consent_value'] = 1
+
+
+def test_request_pin_code_smtp_off_no_leak(app, monkeypatch):
+    """FIX-069: SMTP 未配置 → 503；响应/头/日志均不得出现验证码（仅指纹）。"""
+    import logging
+    from app.routes import auth as auth_mod
+    from app.utils import mailer as mailer_mod
+
+    monkeypatch.setattr(auth_mod, 'get_db_connection', lambda: _FakeConn(('u@example.com', 'alice')))
+    monkeypatch.setattr(mailer_mod, 'is_configured', lambda: False)
+    monkeypatch.setattr(auth_mod.secrets, 'randbelow', lambda n: 1234)
+
+    records = []
+
+    class _H(logging.Handler):
+        def emit(self, rec):
+            records.append(rec.getMessage())
+
+    h = _H()
+    auth_mod.logger.addHandler(h)
+    try:
+        client = app.test_client()
+        _pin_session(client)
+        r = client.post('/request_pin_change_code')
+    finally:
+        auth_mod.logger.removeHandler(h)
+
+    assert r.status_code == 503, r.status_code
+    assert '1234' not in r.get_data(as_text=True), 'response body leaked the code'
+    assert '1234' not in str(dict(r.headers)), 'response headers leaked the code'
+    assert all('1234' not in m for m in records), f'logs leaked the code: {records}'
+
+
+def test_request_pin_code_cooldown(app, monkeypatch):
+    """FIX-069: 60s 内二次请求 → 429，且不重置验证码有效期窗口。"""
+    from app.routes import auth as auth_mod
+    from app.utils import mailer as mailer_mod
+
+    monkeypatch.setattr(auth_mod, 'get_db_connection', lambda: _FakeConn(('u@example.com', 'alice')))
+    monkeypatch.setattr(mailer_mod, 'is_configured', lambda: True)
+    monkeypatch.setattr(mailer_mod, 'send_email', lambda *a, **k: True)
+
+    client = app.test_client()
+    _pin_session(client)
+    r1 = client.post('/request_pin_change_code')
+    assert r1.status_code == 200, r1.status_code
+    with client.session_transaction() as sess:
+        exp1 = sess.get('pin_change_code_expiry')
+    r2 = client.post('/request_pin_change_code')
+    assert r2.status_code == 429, r2.status_code
+    assert 'Retry-After' in r2.headers
+    with client.session_transaction() as sess:
+        assert sess.get('pin_change_code_expiry') == exp1, 'cooldown must not reset the window'
+
+
+def test_pin_verify_constant_time_and_hash_only():
+    """FIX-069: 常量时间比对 + 会话仅存哈希（无明文码、无调试回显）。"""
+    with open('app/routes/auth.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'secrets.compare_digest' in src
+    assert 'pin_change_code_hash' in src
+    assert "session['pin_change_code']" not in src
+    assert '调试模式' not in src

@@ -471,6 +471,22 @@ swallow_true, _ = _grep_file('app/__init__.py', r'swallow_errors\s*=\s*True')
 _add('ratelimit', 'No swallow_errors=True (would disable limiting)',
      'PASS' if not swallow_true else 'FAIL')
 
+# ── FIX-2026-09-29-069: PIN verification code must not be echoed/persisted ──
+debug_echo, _ = _grep_file('app/routes/auth.py', r'调试模式')
+_add('security', 'PIN code debug echo removed', 'PASS' if not debug_echo else 'FAIL')
+
+plain_code, _ = _grep_file('app/routes/auth.py', r"session\['pin_change_code'\]")
+_add('security', 'PIN code never stored in plaintext session', 'PASS' if not plain_code else 'FAIL')
+
+mail_failclosed, _ = _grep_file('app/routes/auth.py', r'MAIL_NOT_CONFIGURED')
+_add('security', 'PIN code request fails closed without SMTP', 'PASS' if mail_failclosed else 'FAIL')
+
+const_time, _ = _grep_file('app/routes/auth.py', r'secrets\.compare_digest')
+_add('security', 'PIN code compared in constant time', 'PASS' if const_time else 'FAIL')
+
+code_cooldown, _ = _grep_file('app/routes/auth.py', r'pin_change_code_sent_at')
+_add('security', 'PIN code resend cooldown', 'PASS' if code_cooldown else 'FAIL')
+
 # ===========================================================================
 # 8. Security
 # ===========================================================================

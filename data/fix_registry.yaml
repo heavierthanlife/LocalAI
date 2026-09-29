@@ -1872,3 +1872,35 @@ fixes:
       - type: literal
         file: app/__init__.py
         pattern: "def _ratelimit_breach_response(request_limit)"
+
+  - id: FIX-2026-09-29-069
+    title: "P0-#3 PIN 验证码不可回显/不落盘/常量时间比对 + 重发冷却"
+    severity: high
+    rationale: >
+      request_pin_change_code 在 SMTP 未配置时把 4 位验证码回显在响应 hint（(调试模式) 验证码: {code}）
+      并 logger.info 明文，等于第二道锁形同虚设；且无重发冷却。/update_account 用 != 明文比对。
+      修复：SMTP 未配置直接 503 MAIL_NOT_CONFIGURED（不生成/不回显/不存储）；验证码只存
+      SHA-256（pin_change_code_hash），不存明文；比对用 secrets.compare_digest；日志仅不可逆指纹
+      code_fp=sha256(code)[:8]；60s 重发冷却（不重置有效期）；失败/过期/成功均清 session。
+    checks:
+      - type: literal_not
+        file: app/routes/auth.py
+        pattern: "(调试模式) 验证码: {code}"
+      - type: literal_not
+        file: app/routes/auth.py
+        pattern: "调试模式"
+      - type: literal_not
+        file: app/routes/auth.py
+        pattern: "session['pin_change_code']"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "secrets.compare_digest"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "MAIL_NOT_CONFIGURED"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "pin_change_code_hash"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "pin_change_code_sent_at"
