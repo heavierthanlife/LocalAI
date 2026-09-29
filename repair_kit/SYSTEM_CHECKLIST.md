@@ -1,8 +1,8 @@
 # System Health Checklist — Automated Audit
 
-> Generated: 2026-09-24 18:01 (auto)
-> verify_fixes.py: 293/293 pass (0 failure(s))
-> Checklist: 134 items — 131 pass / 3 manual / 0 fail
+> Generated: 2026-09-29 09:01 (auto)
+> verify_fixes.py: 307/307 pass (0 failure(s))
+> Checklist: 141 items — 139 pass / 2 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
 
@@ -136,13 +136,20 @@ _(7/7 verified automatically)_
 
 ## RATELIMIT
 
-_(2/5 verified automatically)_
+_(10/12 verified automatically)_
 
 - [x] flask-limiter initialized
 - [x] Global rate limit: 120/min
 - [?] Chat rate limits
 - [?] Upload rate limits
-- [?] Auth rate limits
+- [x] Auth rate limits
+- [x] Login rate limit (auth)
+- [x] Login rate limit (api)
+- [x] Login rate key includes client IP
+- [x] Login lock Redis-backed + memory fallback
+- [x] Reverse-proxy real client IP (ProxyFix/TRUST_PROXY)
+- [x] Limiter degrades to memory on Redis outage (not 500)
+- [x] No swallow_errors=True (would disable limiting)
 
 ## SECURITY
 
@@ -199,8 +206,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 131 |
-| [?] Manual | 3 |
-| **Total** | **134** |
+| [x] Pass | 139 |
+| [?] Manual | 2 |
+| **Total** | **141** |
 
-**Verification rate**: 131/134 auto-verified (97%)
+**Verification rate**: 139/141 auto-verified (98%)

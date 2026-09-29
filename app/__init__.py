@@ -35,10 +35,44 @@ from . import database as db
 # Rate limiter — module-level so blueprints can `from app import limiter`
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+
+def _ratelimit_breach_response(request_limit):
+    """Layer 1 (flask-limiter) 429 → JSON + Retry-After, matching login_guard's shape.
+
+    FIX-2026-09-28-068: without this, flask-limiter answers 429 with text/html and no
+    Retry-After, while the in-view Layer 2/3 gate answers JSON + Retry-After — two
+    inconsistent shapes for the same status, and clients/gateways cannot back off.
+    """
+    from flask import jsonify
+    import time as _time
+    resp = jsonify({
+        "success": False,
+        "error": "请求过于频繁，请稍后重试",
+        "code": "RATE_LIMITED",
+    })
+    resp.status_code = 429
+    try:
+        reset_at = getattr(request_limit, 'reset_at', None)
+        resp.headers['Retry-After'] = (
+            str(max(1, int(reset_at - _time.time()))) if reset_at else '1'
+        )
+    except Exception:
+        resp.headers['Retry-After'] = '1'
+    return resp
+
+
 limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=os.getenv("REDIS_URL", "memory://"),
     default_limits=["120/minute"],
+    # FIX-2026-09-28-068: unify the Layer 1 (before_request) 429 with Layer 2/3 shape.
+    on_breach=_ratelimit_breach_response,
+    # FIX-2026-09-28-068: on Redis outage, switch to the in-memory storage and keep
+    # the *existing* per-route limits (incl. /login 5/minute) rather than 500-ing or
+    # replacing them with a single global fallback. Degraded (per-worker) — not
+    # fail-closed. Never enable swallow_errors (that would disable limiting).
+    in_memory_fallback_enabled=True,
 )
 
 # ============================================================
@@ -83,6 +117,15 @@ def create_app():
     # Covers gunicorn app + celery worker/beat (all go through create_app).
     from app.bootstrap import ensure_seeded
     ensure_seeded()
+
+    # Trusted single-hop reverse proxy (nginx) — FIX-2026-09-28-068.
+    # Required so the limiter and audit logs see the real client IP instead of the
+    # nginx container IP. Gated on TRUST_PROXY only (NOT APP_ENV): enabling it with
+    # no proxy in front would let clients spoof X-Forwarded-For. compose sets
+    # TRUST_PROXY=1 for the app service; app is not published directly (nginx only).
+    if os.getenv("TRUST_PROXY", "").lower() in ("1", "true", "yes"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     # Session config
     app.config['SESSION_TYPE'] = 'filesystem'

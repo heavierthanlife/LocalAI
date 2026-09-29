@@ -1825,3 +1825,50 @@ fixes:
       - type: literal
         file: Dockerfile
         pattern: "torch/torchvision installed LAST"
+
+  - id: FIX-2026-09-28-068
+    title: "P0-#2 登录安全：三层限流/冷却/锁定 + ProxyFix 真实 IP + Redis 掉线降级"
+    severity: high
+    rationale: >
+      /login 与 /api/login 原无任何限流；PIN 仅 4/6 位数字且无失败锁定，可被快速爆破。
+      且 nginx 设置了 X-Forwarded-For 但 Flask 无 ProxyFix，get_remote_address 拿到的是
+      nginx 容器 IP → default_limits 对全站共用同一桶（可自伤）。
+      修复：三层防护（限流 username+IP / 非阻塞冷却闸 Retry-After / username+IP 硬锁）；
+      ProxyFix(x_for=1,x_proto=1) 仅在 TRUST_PROXY 开启时启用（无代理启用会导致 XFF 可伪造）；
+      limiter 开启 in_memory_fallback_enabled 使 Redis 掉线时继承原限额降级而非 500
+      （per-worker 降级，非 fail-closed）；登录锁定 Redis 主 + 内存兜底 + warning。
+      冷却闸禁止服务端 sleep（避免攻击者可控等待耗尽 worker）。
+    checks:
+      - type: literal
+        file: app/__init__.py
+        pattern: "in_memory_fallback_enabled=True"
+      - type: literal
+        file: app/__init__.py
+        pattern: "ProxyFix(app.wsgi_app, x_for=1, x_proto=1)"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "key_func=login_rate_key_func"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "key_func=login_rate_key_func"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "_resp.headers['Retry-After']"
+      - type: literal
+        file: app/services/login_guard.py
+        pattern: "r.set(lock_key, '1', ex=LOCK_TTL)"
+      - type: literal
+        file: app/services/login_guard.py
+        pattern: "login_fail:{u}"
+      - type: literal_not
+        file: app/services/login_guard.py
+        pattern: "time.sleep"
+      - type: literal_not
+        file: app/__init__.py
+        pattern: "swallow_errors=True"
+      - type: literal
+        file: app/__init__.py
+        pattern: "on_breach=_ratelimit_breach_response"
+      - type: literal
+        file: app/__init__.py
+        pattern: "def _ratelimit_breach_response(request_limit)"

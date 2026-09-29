@@ -443,6 +443,34 @@ _add('ratelimit', 'Upload rate limits', 'PASS' if upload_limit else '?')
 auth_limit, _ = _grep_file('app/routes/auth.py', r'@limiter\.limit|ratelimit|rate_limit')
 _add('ratelimit', 'Auth rate limits', 'PASS' if auth_limit else '?')
 
+# ── FIX-2026-09-28-068: login brute-force hardening (regression-guarded) ──
+login_auth, _ = _grep_file('app/routes/auth.py', r'@limiter\.limit')
+_add('ratelimit', 'Login rate limit (auth)', 'PASS' if login_auth else 'FAIL')
+
+login_api, _ = _grep_file('app/routes/chat_sessions.py', r'@limiter\.limit')
+_add('ratelimit', 'Login rate limit (api)', 'PASS' if login_api else 'FAIL')
+
+login_key_ip, _ = _grep_file('app/services/login_guard.py', r'login:\{username\}:\{ip\}')
+_add('ratelimit', 'Login rate key includes client IP', 'PASS' if login_key_ip else 'FAIL')
+
+lock_redis, _ = _grep_file('app/services/login_guard.py', r'r\.incr\(')
+lock_mem, _ = _grep_file('app/services/login_guard.py', r'login_fail:')
+_add('ratelimit', 'Login lock Redis-backed + memory fallback',
+     'PASS' if (lock_redis and lock_mem) else 'FAIL')
+
+proxyfix, _ = _grep_file('app/__init__.py', r'ProxyFix')
+trust_proxy, _ = _grep_file('app/__init__.py', r'TRUST_PROXY')
+_add('ratelimit', 'Reverse-proxy real client IP (ProxyFix/TRUST_PROXY)',
+     'PASS' if (proxyfix and trust_proxy) else 'FAIL')
+
+fallback_enabled, _ = _grep_file('app/__init__.py', r'in_memory_fallback_enabled=True')
+_add('ratelimit', 'Limiter degrades to memory on Redis outage (not 500)',
+     'PASS' if fallback_enabled else 'FAIL')
+
+swallow_true, _ = _grep_file('app/__init__.py', r'swallow_errors\s*=\s*True')
+_add('ratelimit', 'No swallow_errors=True (would disable limiting)',
+     'PASS' if not swallow_true else 'FAIL')
+
 # ===========================================================================
 # 8. Security
 # ===========================================================================

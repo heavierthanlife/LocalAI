@@ -27,6 +27,8 @@ x-app-env: &app-env
   - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
   - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
   - APP_ENV=production
+  # Trusted single-hop reverse proxy (nginx) — real client IP for limiter/audit logs
+  - TRUST_PROXY=1
   # ADMIN_PIN must be set in .env — production refuses to start without it
   - ADMIN_PIN=${ADMIN_PIN:-}
   - LLM_TIMEOUT=120

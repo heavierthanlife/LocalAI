@@ -205,7 +205,7 @@ Auto-downloaded via `webdriver-manager` on first use. Can override with `EDGEDRI
 |---|---|
 | `python scripts/manage_db.py check` | Dry-run pending migrations |
 | `python scripts/manage_db.py migrate` | Apply pending migrations |
-| `python scripts/check_system.py` | Auto-generate system health checklist (134 items) |
+| `python scripts/check_system.py` | Auto-generate system health checklist (141 items) |
 | `python scripts/verify_fixes.py` | Validate fix_registry invariants (runs in pre-commit) |
 | `python scripts/run_lora_training.py` | LoRA fine-tuning with Unsloth (Qwen2.5-7B) |
 | `python scripts/recover_all.py` | Emergency recovery from session dumps |

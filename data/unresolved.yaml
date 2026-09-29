@@ -485,3 +485,20 @@ unresolved:
       status ∈ {ok, missing, forbidden}，异常归一为 forbidden（fail-closed）；clearance/tasks/batch
       调用点复用，compliance._task_forbidden 改为薄封装委托。异常路径统一 403。评审发现并修复
       clearance_stream 误删 TaskBus import（Critical）。
+
+  - id: UNRESOLVED-030
+    title: "/api/login 凭据比对算法与入库不一致（sha256 vs werkzeug）→ 外部 API 登录恒 401"
+    status: pending
+    severity: medium
+    discovered: 2026-09-28
+    tags: ["安全", "缺陷", "API"]
+    context: >
+      P0-#2 施工中顺带发现（年检方 A 项 F10 一致）：app/routes/chat_sessions.py:85 用
+      hashlib.sha256(pin).hexdigest() 与 users.pin_hash 比对，而 pin_hash 由
+      auth.py:92 generate_password_hash(pin)（werkzeug 格式）写入 → 二者永不相等，
+      /api/login 对 Web 创建的账号实际恒 401（仅 sha256 存储的 legacy 账号可用）。
+      本轮（FIX-068）仅加限流，未改凭据校验方案（属独立缺陷，改动需单独裁决）。
+    blocked_by: "需裁决统一凭据方案：/api/login 改用 check_password_hash(pin_hash, pin)，或为 API 设独立凭据"
+    resolution_plan: >
+      评估将 /api/login 改为 check_password_hash（与 Web 登录一致）+ 兼容 legacy sha256；
+      或明确 API 专用凭据存储；补回归（sha256/werkzeug 两种存储均可登录）。需 @code-reviewer 复核 + 安全裁决。

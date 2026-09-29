@@ -8,6 +8,11 @@ from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_t
 import app.globals as g
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 from app.services.session_manager import get_or_create_session
+from app import limiter
+from flask_limiter.util import get_remote_address
+from app.services.login_guard import (
+    check_login_gate, record_login_failure, reset_login, login_rate_key_func,
+)
 
 from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -113,12 +118,22 @@ def create_account():
             return jsonify({"success": True, "username": username})
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5/minute", key_func=login_rate_key_func)
 def login():
-    data = request.get_json()
-    username = data.get('username', '').strip()
-    pin = data.get('pin', '').strip()
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    pin = (data.get('pin') or '').strip()
     if not username or not pin:
         return jsonify({"error": "用户名和PIN不能为空"}), 400
+
+    # Layer 2/3 gate (cooldown + username+IP lock). FIX-2026-09-28-068.
+    _ip = get_remote_address() or 'unknown'
+    _wait = check_login_gate(username, _ip)
+    if _wait > 0:
+        _resp = jsonify({"success": False, "error": "请求过于频繁，请稍后重试", "code": "RATE_LIMITED"})
+        _resp.status_code = 429
+        _resp.headers['Retry-After'] = str(int(_wait))
+        return _resp
 
     if username in ("admin", "CEO", "COO"):
         from flask import current_app
@@ -129,6 +144,7 @@ def login():
             return jsonify({"error": "管理员账户未配置"}), 500
         if not check_password_hash(admin_hash, pin):
             logger.warning(f"Admin login failed for {username}")
+            record_login_failure(username, _ip)
             return jsonify({"error": "用户名或PIN错误"}), 401
 
         with get_db_connection() as conn:
@@ -161,6 +177,7 @@ def login():
                 conn.commit()
 
         logger.info(f"Admin logged in: {user_id}")
+        reset_login(username, _ip)
         return jsonify({
             "success": True,
             "username": "admin",
@@ -177,6 +194,7 @@ def login():
             )
             user = cur.fetchone()
             if not user or not check_password_hash(user['pin_hash'], pin):
+                record_login_failure(username, _ip)
                 return jsonify({"error": "用户名或PIN错误"}), 401
 
             session['user_id'] = user['user_id']
@@ -192,6 +210,7 @@ def login():
                     (session.get('thread_id', str(uuid.uuid4())), 1)
                 )
             conn.commit()
+            reset_login(username, _ip)
             return jsonify({
                 "success": True,
                 "username": username,

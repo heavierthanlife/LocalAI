@@ -26,6 +26,11 @@ from app.services.task_locking import cleanup_stale_tasks
 from app.services.agent import get_agent
 from app.services.redteam_agent import get_redteam_agent
 from app.routes.chat import chat_bp, BEIJING_TZ
+from app import limiter
+from flask_limiter.util import get_remote_address
+from app.services.login_guard import (
+    check_login_gate, record_login_failure, reset_login, login_rate_key_func,
+)
 
 from psycopg2.extras import RealDictCursor
 
@@ -42,6 +47,7 @@ def new_chat():
     return jsonify({"thread_id": new_thread_id})
 
 @chat_bp.route('/api/login', methods=['POST'])
+@limiter.limit("5/minute", key_func=login_rate_key_func)
 def api_login():
     """JWT login for external API access (WeChat Enterprise, CLI tools, etc.).
 
@@ -53,6 +59,15 @@ def api_login():
     pin = (data.get('pin') or '').strip()
     if not username or not pin:
         return jsonify({"error": "username and pin required"}), 400
+
+    # Layer 2/3 gate (cooldown + username+IP lock). FIX-2026-09-28-068.
+    _ip = get_remote_address() or 'unknown'
+    _wait = check_login_gate(username, _ip)
+    if _wait > 0:
+        _resp = jsonify({"success": False, "error": "请求过于频繁，请稍后重试", "code": "RATE_LIMITED"})
+        _resp.status_code = 429
+        _resp.headers['Retry-After'] = str(int(_wait))
+        return _resp
     try:
         from app.services.auth_jwt import create_token
         from app.database import get_db_connection
@@ -63,12 +78,15 @@ def api_login():
                     (username,))
                 row = cur.fetchone()
                 if not row:
+                    record_login_failure(username, _ip)
                     return jsonify({"error": "Invalid credentials"}), 401
                 user_id, uname, role, pin_hash = row
                 import hashlib
                 if hashlib.sha256(pin.encode()).hexdigest() != pin_hash:
+                    record_login_failure(username, _ip)
                     return jsonify({"error": "Invalid credentials"}), 401
                 token = create_token(user_id, uname, role)
+                reset_login(username, _ip)
                 return jsonify({
                     "access_token": token,
                     "user_id": user_id,

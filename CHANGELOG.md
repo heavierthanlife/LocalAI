@@ -8,6 +8,26 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-28] — P0-#2 登录安全加固（FIX-068）
+
+### Fixed
+- **登录无限流 + 无失败锁定**（`app/routes/auth.py:115`、`app/routes/chat_sessions.py:44`）：`/login` 与 `/api/login` 均加 `@limiter.limit("5/minute", key_func=login_rate_key_func)`；新增 `app/services/login_guard.py` 三层防护——非阻塞冷却闸（`Retry-After`，禁止 `sleep`）+ username+IP 硬锁 15 分钟，成功登录清零。
+- **限流按 nginx IP 计数（可自伤）**：nginx 已设 `X-Forwarded-For` 但 Flask 无 `ProxyFix` → `get_remote_address` 取到 nginx 容器 IP，全站共用同一限流桶。现仅在 `TRUST_PROXY=1` 时启用 `ProxyFix(x_for=1,x_proto=1)`；nginx 两处改覆盖写 `$remote_addr`；compose `x-app-env` 设 `TRUST_PROXY=1`。
+- **Redis 掉线时限流 500**：limiter 加 `in_memory_fallback_enabled=True`（掉线继承原限额、per-worker 降级，非 fail-closed）；登录锁定 Redis 主 + 内存兜底 + warning。
+- **两套 429 形态不一致**（Layer 1 flask-limiter 回 text/html 且无 `Retry-After`）：新增 `app/__init__.py::_ratelimit_breach_response` 作为 `Limiter(on_breach=...)`，统一为 JSON `{success:false,error,code:RATE_LIMITED}` + `Retry-After`，与 Layer 2/3 一致。
+
+### Changed
+- `credit.py` 限流 key 与 `admin_utils.py` 审计日志 IP 由 nginx IP 变为真实客户端 IP（随 ProxyFix 的行为变更）。
+- `check_system.py` 新增 7 条 ratelimit 防复发探针（清单 134→141）；`AGENTS.md`/`USER_MANUAL.md`/`docs/ARCHITECTURE.md`（服务数 98→99）同步。
+
+### Notes
+- 已知代价：Redis 抖动期登录锁定效力降级为 per-worker（≤4× 放宽）；Redis 与 app 同栈，不采用 fail-closed（未来多租户/公网场景再评估）。
+
+regression: 1/1 clearance baseline passed
+180/180 regression collected（EXIT=0，0 failure；test_login_endpoint_rate_limited 8/8 连绿 + 全量 3/3 连绿） · verify_fixes 307/0 · doc_drift 15/15 · check_system 141/139/2/0 · check_integrity 全过
+
+---
+
 ## [2026-09-27] — S3/S4 残余清理（部分）（FIX-067）
 
 ### Fixed

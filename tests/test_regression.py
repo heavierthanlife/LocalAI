@@ -2228,3 +2228,78 @@ def test_clearance_stream_imports_taskbus():
     # 存在 TaskBus.subscribe 使用点，则必须有 TaskBus 的导入
     assert 'TaskBus.subscribe(task_id)' in src
     assert 'from app.services.task_bus import TaskBus' in src
+
+
+# ── FIX-2026-09-28-068: login brute-force hardening ──
+def test_login_guard_is_non_blocking():
+    """冷却闸必须非阻塞：login_guard 不得出现 time.sleep / gevent.sleep。"""
+    with open('app/services/login_guard.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'time.sleep' not in src
+    assert 'gevent.sleep' not in src
+
+
+def test_proxyfix_gated_by_trust_proxy_only():
+    """ProxyFix 仅由 TRUST_PROXY 控制（不得用 APP_ENV），且 limiter 开启内存降级。"""
+    with open('app/__init__.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert 'ProxyFix(app.wsgi_app, x_for=1, x_proto=1)' in src
+    assert 'TRUST_PROXY' in src
+    assert 'in_memory_fallback_enabled=True' in src
+    assert 'swallow_errors=True' not in src
+
+
+def test_login_rate_key_includes_ip(app):
+    """限流 key 必须含 username+IP，且不得以空串结尾（空 key=全站共用桶）。"""
+    from app.services.login_guard import login_rate_key_func
+    with app.test_request_context('/login', method='POST',
+                                  json={'username': 'Alice', 'pin': '1234'}):
+        key = login_rate_key_func()
+    assert key.startswith('login:alice:')
+    assert not key.endswith(':')
+
+
+def test_login_guard_cooldown_then_lock(app, monkeypatch):
+    """内存兜底路径：连错达阈值触发锁定；reset_login 清零。"""
+    from app.services import login_guard as lg
+    monkeypatch.setattr(lg, '_redis', lambda: None)
+    lg._mem.clear()
+    try:
+        assert lg.check_login_gate('bob', '10.0.0.1') == 0
+        for _ in range(5):
+            lg.record_login_failure('bob', '10.0.0.1')
+        assert lg.check_login_gate('bob', '10.0.0.1') > 0, 'expect lock after 5 failures'
+        lg.reset_login('bob', '10.0.0.1')
+        assert lg.check_login_gate('bob', '10.0.0.1') == 0
+    finally:
+        lg._mem.clear()
+
+
+def test_login_endpoint_rate_limited(app):
+    """FIX-068: /login 连续失败后返回 429 + Retry-After + JSON（Layer1/2/3 形态统一）。"""
+    client = app.test_client()
+    statuses = []
+    for _ in range(8):
+        r = client.post('/login', json={'username': 'admin', 'pin': '0000'})
+        statuses.append(r.status_code)
+        if r.status_code == 429:
+            assert 'Retry-After' in r.headers, '429 must carry Retry-After'
+            assert r.mimetype == 'application/json', f'429 must be JSON, got {r.mimetype}'
+            assert (r.get_json() or {}).get('code') == 'RATE_LIMITED'
+            break
+    assert 429 in statuses, f'expected 429 after repeated failures, got {statuses}'
+
+
+def test_ratelimit_breach_response_contract(app):
+    """FIX-068: flask-limiter 的 on_breach 429 必须是 JSON + Retry-After。"""
+    from app import _ratelimit_breach_response
+
+    class _FakeLimit:
+        reset_at = 9_999_999_999
+
+    with app.app_context():
+        resp = _ratelimit_breach_response(_FakeLimit())
+    assert resp.status_code == 429
+    assert resp.mimetype == 'application/json'
+    assert resp.headers.get('Retry-After')
+    assert int(resp.headers['Retry-After']) >= 1
