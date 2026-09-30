@@ -64,7 +64,7 @@
 - **认证**：session 会话（Web UI）+ JWT 签发（`auth_jwt.py` 仅 `create_token`，供外部集成；不校验），`check_auth` 健康检查
 - **权限**：`@admin_required` / `@login_required` + 项目成员检查（`routes/projects.py` 权限工具）
 - **CSRF**：opt-in，JSON API 默认关闭（AJAX 无需）
-- **Rate Limiting**：flask-limiter + Redis（聊天 30/min、上传 10/min、登录 5/min、全局 120/min）
+- **Rate Limiting**：flask-limiter + Redis（全局 120/min；登录 5/min（username+IP，FIX-068）；合规路由 10–20/min）。聊天/上传的 per-route 限流**未实现**，仅受全局 120/min 约束（P1-#7）。
 - **上传**：50MB 限制、扩展名白名单、SHA-256 去重、流式分块（8MB）、上传信号量（并发 3）
 - **Prompt 安全**：`prompt_safety.py` 注入防护 + anti-hallucination
 - **路径安全**：`to_rel_path()`/`resolve_path()` 防止路径遍历；分享 token 7 天 + 遍历防护

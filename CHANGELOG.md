@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — C1 限流文档↔代码对齐（FIX-072）
+
+### Fixed
+- **限流文档漂移**：`AGENTS.md`/`docs/SECURITY.md`/`docs/ARCHITECTURE.md` 曾宣称“聊天 30/min、上传 10/min”，代码中无 per-route 限流（仅全局 120/min + login 5/min + compliance 10–20/min）→ 文档改为如实描述；补实现记入 UNRESOLVED-032（P1-#7）。
+- `check_system.py` 的 Chat/Upload 探针由 `?` 改为 **docs↔code 一致性检查**（未实现时文档不得宣称），非删除/非硬编码 PASS；清单 `?` 归零。
+
+### Changed
+- `data/unresolved.yaml` 新增 UNRESOLVED-032（chat/upload 限流）、UNRESOLVED-033（会话归属真库集成测试）。
+
+regression: 1/1 clearance baseline passed
+189/189 regression collected（EXIT=0，0 failure） · verify_fixes 331/0 · doc_drift 15/15 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P0-#4 ZIP 解压路径白名单（FIX-071）
 
 ### Fixed

@@ -1,8 +1,8 @@
 # System Health Checklist — Automated Audit
 
-> Generated: 2026-09-29 15:19 (auto)
-> verify_fixes.py: 327/327 pass (0 failure(s))
-> Checklist: 150 items — 148 pass / 2 manual / 0 fail
+> Generated: 2026-09-30 09:32 (auto)
+> verify_fixes.py: 331/331 pass (0 failure(s))
+> Checklist: 150 items — 150 pass / 0 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
 
@@ -136,12 +136,12 @@ _(7/7 verified automatically)_
 
 ## RATELIMIT
 
-_(10/12 verified automatically)_
+_(12/12 verified automatically)_
 
 - [x] flask-limiter initialized
 - [x] Global rate limit: 120/min
-- [?] Chat rate limits
-- [?] Upload rate limits
+- [x] Chat limit matches docs
+- [x] Upload limit matches docs
 - [x] Auth rate limits
 - [x] Login rate limit (auth)
 - [x] Login rate limit (api)
@@ -215,8 +215,8 @@ _(6/6 verified automatically)_
 
 | Status | Count |
 |--------|-------|
-| [x] Pass | 148 |
-| [?] Manual | 2 |
+| [x] Pass | 150 |
+| [?] Manual | 0 |
 | **Total** | **150** |
 
-**Verification rate**: 148/150 auto-verified (98%)
+**Verification rate**: 150/150 auto-verified (100%)

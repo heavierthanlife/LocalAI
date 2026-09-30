@@ -1966,3 +1966,25 @@ fixes:
       - type: literal
         file: app/services/ingest_pipeline.py
         pattern: "0o120000"
+
+  - id: FIX-2026-09-29-072
+    title: "C1: 限流文档↔代码对齐（chat/upload per-route 未实现，文档不得宣称）"
+    severity: low
+    rationale: >
+      文档（AGENTS/SECURITY/ARCHITECTURE）宣称聊天 30/min、上传 10/min，代码中无 @limiter.limit
+      （仅全局 120/min + login 5/min + compliance 10–20/min）→ 承诺未兑现。C1 改文档如实描述，
+      并将 check_system 两条探针从 `?` 改为 docs↔code 一致性检查（非删除、非硬编码 PASS）；
+      补实现记入 UNRESOLVED-032（P1-#7）。
+    checks:
+      - type: literal_not
+        file: AGENTS.md
+        pattern: "30/min"
+      - type: literal_not
+        file: docs/SECURITY.md
+        pattern: "30/min"
+      - type: literal_not
+        file: docs/ARCHITECTURE.md
+        pattern: "30/min"
+      - type: literal
+        file: scripts/check_system.py
+        pattern: "Chat limit matches docs"

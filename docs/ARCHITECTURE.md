@@ -45,7 +45,7 @@
 
 - 加载 `.env`，校验 `SECRET_KEY`/`FLASK_SECRET_KEY`（缺失则启动失败）
 - Filesystem session（30 天）；CSRF opt-in（`WTF_CSRF_CHECK_DEFAULT=False`）
-- Flask-Limiter（Redis 后端，全局 120/min；聊天 30/min、上传 10/min、登录 5/min）
+- Flask-Limiter（Redis 后端；全局 120/min；登录 5/min（username+IP）；合规 10–20/min；聊天/上传 per-route 未实现，P1-#7）
 - Admin 密码从 `ADMIN_PIN` 自动 hash
 - 413 错误处理器、cache buster、Swagger
 - 注册 16 Blueprint（`register_all()`）

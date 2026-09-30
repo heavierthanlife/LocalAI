@@ -433,12 +433,19 @@ _add('ratelimit', 'flask-limiter initialized', 'PASS' if limiter_found else 'FAI
 default_limits_found, _ = _grep_file('app/__init__.py', r'120/minute|default_limits')
 _add('ratelimit', 'Global rate limit: 120/min', 'PASS' if default_limits_found else 'FAIL')
 
-# Check per-route rate limits
-chat_limit, _ = _grep_file('app/routes/chat.py', r'@limiter\.limit|ratelimit|rate_limit')
-_add('ratelimit', 'Chat rate limits', 'PASS' if chat_limit else '?')
-
-upload_limit, _ = _grep_file('app/routes/knowledge.py', r'@limiter\.limit|ratelimit|rate_limit')
-_add('ratelimit', 'Upload rate limits', 'PASS' if upload_limit else '?')
+# Per-route rate limits. chat/upload have none (global 120/min only — P1-#7), so the
+# probes verify docs↔code consistency rather than a hardcoded PASS or a permanent `?`:
+chat_impl, _ = _grep_file('app/routes/chat.py', r'@limiter\.limit')
+upload_impl, _ = _grep_file('app/routes/knowledge.py', r'@limiter\.limit')
+_rl_docs = ['AGENTS.md', 'docs/SECURITY.md', 'docs/ARCHITECTURE.md']
+_chat_claimed = any(_grep_file(_f, r'30/min')[0] for _f in _rl_docs)
+_upload_claimed = any(_grep_file(_f, r'10/min')[0] for _f in _rl_docs)
+_add('ratelimit', 'Chat limit matches docs',
+     'PASS' if (chat_impl or not _chat_claimed) else 'FAIL',
+     '未实现 per-route chat 限流时，文档不得宣称（P1-#7）')
+_add('ratelimit', 'Upload limit matches docs',
+     'PASS' if (upload_impl or not _upload_claimed) else 'FAIL',
+     '未实现 per-route upload 限流时，文档不得宣称（P1-#7）')
 
 auth_limit, _ = _grep_file('app/routes/auth.py', r'@limiter\.limit|ratelimit|rate_limit')
 _add('ratelimit', 'Auth rate limits', 'PASS' if auth_limit else '?')

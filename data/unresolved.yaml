@@ -518,3 +518,26 @@ unresolved:
     resolution_plan: >
       DB 只存 hash（SHA-256）+ secrets.compare_digest + 失败/过期清码；补回归。
       建议排 #1 之后单独一小件，需 @code-reviewer 复核。
+
+  - id: UNRESOLVED-032
+    title: "补 chat/upload per-route 限流（当前仅全局 120/min）"
+    status: pending
+    severity: low
+    discovered: 2026-09-29
+    tags: ["P1", "限流", "文档诚实性"]
+    context: >
+      C1 确认：chat.py / knowledge.py 无 @limiter.limit；文档此前宣称 30/min、10/min（C1 已改如实）。
+    blocked_by: ~
+    resolution_plan: >
+      为 chat 设 30/min、upload 设 10/min（@limiter.limit + 回归），或维持全局并关闭该项。
+
+  - id: UNRESOLVED-033
+    title: "会话归属双账号真库集成测试（@pytest.mark.db）"
+    status: pending
+    severity: low
+    discovered: 2026-09-29
+    tags: ["P1", "测试", "会话归属"]
+    context: >
+      FIX-070 攻击用例为接线级（monkeypatch 闸函数）；缺真库双账号 A/B 集成测试。
+    blocked_by: "需 PG fixture（A/B 两行 chat_sessions）"
+    resolution_plan: "补 @pytest.mark.db 集成测试：A 带 B 的 thread_id 归档 → 404/None。"
