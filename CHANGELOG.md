@@ -8,6 +8,21 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — C3-a 删除审计编排器死代码（FIX-074）
+
+### Removed
+- `app/services/audit_engine.py` 编排器死链：`run_audit`/`run_preflight`/`_generate_reports`/`_save_file_result`/`_call_function`/`_run_ai_review`/`_run_project_level_function`/`get_run_results`/`get_project_history`/`get_running_audit`/`register_progress_queue`/`unregister_progress_queue`/`_emit`/`_progress_queues` 及专用 helper（rg 全库零调用方）。**保留** clearance 在用的 `_run_style_analysis`/`_score_*`/`SCORING_FUNCTIONS`。
+- 整文件删除 `app/services/audit_report.py`、`app/services/audit_wiki_publisher.py`（仅被上述死函数 import）。
+
+### Changed
+- `scripts/check_system.py` 探针「Audit engine run + report」→「Audit engine (style/score) retained」（编排器已不存在，探针如实）。
+- `AGENTS.md` backlog、`docs/ARCHITECTURE.md` §4、`docs/DECISIONS.md`（ADR）同步；`UNRESOLVED-027` 标记 027-a 完成。
+
+regression: 1/1 clearance baseline passed
+191/191 regression collected（EXIT=0，0 failure） · verify_fixes 342/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — C2 文档↔代码对齐（FIX-073）
 
 ### Fixed

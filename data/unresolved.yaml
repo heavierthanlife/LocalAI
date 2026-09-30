@@ -444,9 +444,11 @@ unresolved:
     progress: >
       2026-09-27（FIX-067）：已完成的低风险子集 — Dockerfile torch 去重（改为 requirements 之后安装）、
       data/unresolved.yaml 无效 YAML 修复、runtime_config_factory.json 移除 7 个 typo_* 孤儿键、
-      run_ui_audit.py 移除 #sidebarTypoResultsBtn 陈旧探针。仍 deferred：audit_engine 编排器 +
-      audit_report.py/audit_wiki_publisher.py 外科删除、review.js docReviewPanel 死块、
-      app.js/cases.js 陈旧 DOM id。
+      run_ui_audit 移除 #sidebarTypoResultsBtn 陈旧探针。
+      2026-09-29（C3-a/FIX-074）：✅ audit_engine 编排器（run_audit/run_preflight/_generate_reports/get_*/
+      progress queues）+ audit_report.py + audit_wiki_publisher.py 已外科删除（rg 零调用方；
+      保留 _run_style_analysis/_score_*/SCORING_FUNCTIONS）。
+      仍 deferred：027-b review.js docReviewPanel 死块 + app.js/cases.js 陈旧 DOM id；027-c 残余孤儿。
 
   - id: UNRESOLVED-028
     title: "视觉回归采集脚本扩展（12 缺页 + 清标数据夹具）"

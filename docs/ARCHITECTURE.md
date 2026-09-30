@@ -17,7 +17,7 @@
 ┌──────────────▼───────────────────────────────────────────────┐
 │  Flask App Factory (app/__init__.py:create_app)               │
 │    → 16 Blueprints (app/routes/)       → HTTP 端点             │
-│    → 99 Services (app/services/)       → 业务逻辑层            │
+│    → 97 Services (app/services/)       → 业务逻辑层            │
 │    → database.py (psycopg2 连接池)     → 76 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
 │    → celery_app.py (Celery 异步任务)                           │
@@ -85,7 +85,7 @@
 - **交叉比较**：RiskScorer + TF-IDF + 组件守卫（FIX-014）
 - **合规检查**：`compliance_checker.py`
 - **AI 审查**：judge 模型二次审查
-- **全量审计补充**：`audit_engine.py`
+- **全量审计补充**：清标内联 `clearance_engine._run_audit_supplement`；`audit_engine.py` 仅保留 `_run_style_analysis` + `_score_*`（编排器已随 C3-a 删除）
 
 评分体系详见 `AGENTS.md` §清标评分。
 

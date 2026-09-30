@@ -15,6 +15,7 @@
 | 2026-07-04 | 文档解析器 | **MarkItDown + LibreOffice + PyMuPDF**（弃 Docling/Marker/Unstructured） | 中文文档适用；其余英文优化/GPL 风险/6.6GB 过重 | `IMPROVEMENTS_SKIPPED` #2/#3/#4 |
 | 2026-07-06 | 统一投标审计引擎 | 新增 `audit` blueprint + `audit_engine.py`，7 服务作库调用 | 一键全审 + 复合评分 + 持久历史 | `docs/superpowers/` |
 | 2026-08-27 | 全量审计合并入清标 | **摘除 `audit_bp` 注册**，功能并入清标 5 维度 | 避免重复入口；表保留供 graph/cases 依赖 | `CHANGELOG.md` |
+| 2026-09-29 | 删除审计编排器死代码 | 移除 `audit_engine` 编排器 + `audit_report.py`/`audit_wiki_publisher.py` | `audit_bp` 摘除后零调用方；仅留 clearance 在用的 style/score | C3-a / FIX-074 |
 | 2026-08-28 | Prompt 语言 | JUDGE/STRUCTURED 中文化 | 领域术语一致性 | FIX-005 |
 | 2026-08-31 | 无招标文件时 text_sim 处理 | **跳过**该指标 | 模板去除不可用，高余弦是模板重叠非围标 | FIX-012 |
 | 2026-09-01 | 招标高频词并入停用集 | 自适应 k + **TF≥2 守卫** | 避免误杀 TF=1 独特技术参数；长招标覆盖不足 | FIX-014 (方案 Y) |

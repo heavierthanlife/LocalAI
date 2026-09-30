@@ -2494,3 +2494,18 @@ def test_doc_drift_covers_table_init_variant():
     with open('scripts/check_doc_drift.py', 'r', encoding='utf-8') as f:
         src = f.read()
     assert r'(\d+)\s*表初始化' in src
+
+
+# ── C3-a: audit orchestrator + report generators removed ──
+def test_audit_orchestrator_removed():
+    """C3-a: 审计编排器与报告生成文件已删除；clearance 依赖的活体面保留。"""
+    import os
+    assert not os.path.exists('app/services/audit_report.py')
+    assert not os.path.exists('app/services/audit_wiki_publisher.py')
+    with open('app/services/audit_engine.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    for dead in ('def run_audit', 'def run_preflight', 'def _generate_reports',
+                 'def get_run_results', 'def get_project_history', 'def get_running_audit'):
+        assert dead not in src, f'{dead} should be removed'
+    assert 'def _run_style_analysis' in src
+    assert 'SCORING_FUNCTIONS' in src

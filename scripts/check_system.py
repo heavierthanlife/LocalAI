@@ -594,8 +594,8 @@ _add('integration', 'Batch compare', 'PASS' if batch_routes else 'FAIL')
 compliance_report, _ = _grep_file('app/routes/compliance.py', r'check|report|result')
 _add('integration', 'Compliance check + report', 'PASS' if compliance_report else 'FAIL')
 
-audit_report, _ = _grep_file('app/services/audit_engine.py', r'overview|report|run')
-_add('integration', 'Audit engine run + report', 'PASS' if audit_report else 'FAIL')
+audit_retained, _ = _grep_file('app/services/audit_engine.py', r'_run_style_analysis|SCORING_FUNCTIONS')
+_add('integration', 'Audit engine (style/score) retained', 'PASS' if audit_retained else 'FAIL')
 
 # ===========================================================================
 # 10b. Law corpus (清标 law reference data)

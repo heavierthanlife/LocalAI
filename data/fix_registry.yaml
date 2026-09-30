@@ -2012,3 +2012,30 @@ fixes:
       - type: literal
         file: docs/USER_MANUAL.md
         pattern: "TRUST_PROXY"
+
+  - id: FIX-2026-09-29-074
+    title: "C3-a: 删除审计编排器死代码（audit_engine 编排器 + audit_report/audit_wiki_publisher）"
+    severity: low
+    rationale: >
+      audit_bp 摘除后，audit_engine 的 run_audit/run_preflight/_generate_reports/get_* 与
+      audit_report.py / audit_wiki_publisher.py 全库零调用方（rg 实证）；clearance 仅用
+      _run_style_analysis / _score_* / SCORING_FUNCTIONS。外科删除，保留活体面。
+    checks:
+      - type: literal_not
+        file: app/services/audit_engine.py
+        pattern: "def run_audit"
+      - type: literal_not
+        file: app/services/audit_engine.py
+        pattern: "def run_preflight"
+      - type: literal_not
+        file: app/services/audit_engine.py
+        pattern: "def _generate_reports"
+      - type: literal_not
+        file: app/services/audit_engine.py
+        pattern: "def get_run_results"
+      - type: literal
+        file: app/services/audit_engine.py
+        pattern: "def _run_style_analysis"
+      - type: literal
+        file: app/services/audit_engine.py
+        pattern: "SCORING_FUNCTIONS"

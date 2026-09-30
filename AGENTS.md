@@ -250,7 +250,7 @@ Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shar
 
 - 合规/批量族部分端点无前端（`/compliance/laws/upload`、`/feedback/history`、`/training_data`、`/trends`、`/graph`、`/laws/monitor/events`、`/check_quote_anomaly`、`/compare_bidders_quotes`、`/extract_relationships`）——保留为 API-only。
 - **timeline 全族（`app/routes/timeline.py`，20 路由）与 compliance 全族（`app/routes/compliance.py`，23 路由）**：FIX-056 摘除前端后均为 API-only（含 `/clearance` 时间线 UI 与合规独立 UI 降级）。
-- **审计编排器死代码**：`app/services/audit_engine.py` 的 `run_audit`/`run_preflight`/`_generate_reports` 等 + `audit_report.py`/`audit_wiki_publisher.py` 均已无调用方（clearance 仅用 `_run_style_analysis`/`_score_*`）；待外科式删除（S3 未完成项）。
+- **审计编排器死代码（已删，2026-09-29 C3-a/FIX-074）**：`audit_engine.py` 的编排器（`run_audit`/`run_preflight`/`_generate_reports`/`get_*`/progress queues）+ `audit_report.py`/`audit_wiki_publisher.py` 已无调用方并外科删除；`audit_engine.py` 仅保留 clearance 在用的 `_run_style_analysis`/`_score_*`/`SCORING_FUNCTIONS`。
 
 ## Fix Registry
 
