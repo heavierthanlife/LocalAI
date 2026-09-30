@@ -448,7 +448,9 @@ unresolved:
       2026-09-29（C3-a/FIX-074）：✅ audit_engine 编排器（run_audit/run_preflight/_generate_reports/get_*/
       progress queues）+ audit_report.py + audit_wiki_publisher.py 已外科删除（rg 零调用方；
       保留 _run_style_analysis/_score_*/SCORING_FUNCTIONS）。
-      仍 deferred：027-b review.js docReviewPanel 死块 + app.js/cases.js 陈旧 DOM id；027-c 残余孤儿。
+      2026-09-29（C3-b/FIX-075）：✅ review.js docReviewPanel 死块 + app.js/cases.js/knowledge-lab.js
+      陈旧 DOM id/死块已删（node --check 全过）。
+      仍 deferred：027-c 残余孤儿。
 
   - id: UNRESOLVED-028
     title: "视觉回归采集脚本扩展（12 缺页 + 清标数据夹具）"

@@ -8,6 +8,23 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — C3-b 删除前端死块与陈旧 DOM id（FIX-075）
+
+### Removed
+- `static/js/review.js`：死块 `loadDocReviewPanel` + `initDocReviewToggle`（`#docReviewPanel`/`#docReviewDetails` 在 templates 不存在）；`/admin/review/document` 转为 API-only。
+- `static/js/app.js`：`databaseTabBtn`/`sidebarEditPromptBtn`/`fileStationBtn` 陈旧引用（含守卫块、tabMap 项、循环行）。
+- `static/js/cases.js`：无调用方的 `autoGenerate`（依赖不存在的 `#casesToggleStatus`，恒早退）。
+- `static/js/knowledge-lab.js`：`sidebarEditPromptBtn` 接线。
+
+### Changed
+- `AGENTS.md` API-only backlog 补 `/admin/review/document`；`UNRESOLVED-027` 标记 027-b 完成。
+- 4 个改动 .js `node --check` 全过。
+
+regression: 1/1 clearance baseline passed
+192/192 regression collected（EXIT=0，0 failure） · verify_fixes 348/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — C3-a 删除审计编排器死代码（FIX-074）
 
 ### Removed

@@ -2509,3 +2509,19 @@ def test_audit_orchestrator_removed():
         assert dead not in src, f'{dead} should be removed'
     assert 'def _run_style_analysis' in src
     assert 'SCORING_FUNCTIONS' in src
+
+
+# ── C3-b: frontend dead blocks / stale DOM ids removed ──
+def test_frontend_stale_dom_ids_removed():
+    """C3-b: 前端陈旧 DOM id / 死块不得复活。"""
+    targets = {
+        'static/js/app.js': ["'databaseTabBtn'", "'sidebarEditPromptBtn'", "'fileStationBtn'"],
+        'static/js/cases.js': ["'casesToggleStatus'", "function autoGenerate"],
+        'static/js/knowledge-lab.js': ["'sidebarEditPromptBtn'"],
+        'static/js/review.js': ["loadDocReviewPanel", "initDocReviewToggle", "'docReviewPanel'"],
+    }
+    for f, needles in targets.items():
+        with open(f, encoding='utf-8') as fh:
+            src = fh.read()
+        for n in needles:
+            assert n not in src, f'{n} should be removed from {f}'

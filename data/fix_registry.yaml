@@ -2039,3 +2039,31 @@ fixes:
       - type: literal
         file: app/services/audit_engine.py
         pattern: "SCORING_FUNCTIONS"
+
+  - id: FIX-2026-09-29-075
+    title: "C3-b: 删除前端死块与陈旧 DOM id（review.js docReviewPanel / app.js / cases.js）"
+    severity: low
+    rationale: >
+      templates 中不存在 #docReviewPanel / #docReviewDetails / #databaseTabBtn / #sidebarEditPromptBtn /
+      #fileStationBtn / #casesToggleStatus → 对应 JS 死块/守卫永不执行。删除 review.js loadDocReviewPanel +
+      initDocReviewToggle、app.js 的 databaseTab/fileStationBtn/sidebarEditPromptBtn 引用、
+      cases.js 无调用方的 autoGenerate、knowledge-lab.js 的 sidebarEditPromptBtn 接线。
+    checks:
+      - type: literal_not
+        file: static/js/review.js
+        pattern: "loadDocReviewPanel"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "'databaseTabBtn'"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "'sidebarEditPromptBtn'"
+      - type: literal_not
+        file: static/js/app.js
+        pattern: "'fileStationBtn'"
+      - type: literal_not
+        file: static/js/cases.js
+        pattern: "function autoGenerate"
+      - type: literal_not
+        file: static/js/knowledge-lab.js
+        pattern: "'sidebarEditPromptBtn'"

@@ -353,38 +353,6 @@ window.Cases = {};
         };
     }
 
-    function autoGenerate(findingsObj) {
-        if (!findingsObj || !findingsObj.results) {
-            if (typeof showToast === 'function') showToast('没有可用的分析结果', 'info');
-            return;
-        }
-        const statusEl = document.getElementById('casesToggleStatus');
-        if (!statusEl) return;
-        statusEl.textContent = '自动生成中...';
-        statusEl.style.color = 'var(--card-muted)';
-
-        fetch('/cases/auto-generate', {
-            method: 'POST', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ run_id: (findingsObj.run_id || findingsObj.id || 0) }),
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    if (typeof showToast === 'function') showToast('案例自动生成完成', 'success');
-                    C.refresh();
-                    statusEl.textContent = '✅ 已生成';
-                } else {
-                    statusEl.textContent = '生成失败: ' + (data.error || '');
-                    statusEl.style.color = '#e74c3c';
-                }
-            })
-            .catch(e => {
-                statusEl.textContent = '网络错误: ' + e.message;
-                statusEl.style.color = '#e74c3c';
-            });
-    }
-
     function showLawLinkModal(cid) {
         if (typeof createQuickModal === 'undefined') return;
         const modal = createQuickModal('关联法规');

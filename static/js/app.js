@@ -33,7 +33,6 @@
     const chatTab = document.getElementById('chatTabBtn');
     const adminTab = document.getElementById('adminTabBtn');
     const recycleBinTab = document.getElementById('recycleBinTabBtn');
-    const databaseTab = document.getElementById('databaseTabBtn');
     const knowledgeLabTab = document.getElementById('knowledgeLabTabBtn');
     const wikiPanel = document.getElementById('wikiPanel');
     const wikiTab = document.getElementById('wikiTabBtn');
@@ -1285,20 +1284,9 @@
     // ======================== File Station Functions ========================
     var fileStationData = [];
     var selectedFileIds = new Set();
-    var fileStationBtn = document.getElementById('fileStationBtn');
     var fileStationModal = document.getElementById('fileStationModal');
     var closeFileStationModal = document.getElementById('closeFileStationModal');
 
-    if (fileStationBtn) {
-        fileStationBtn.onclick = () => {
-            if (fileStationModal) {
-                loadFileStation();          // load the file list
-                fileStationModal.style.display = 'block';
-            } else {
-                console.error('File station modal not found');
-            }
-        };
-    }
 
     // ── Chat toolbar: daily report button ──
     var dailyReportChatBtn = document.getElementById('dailyReportChatBtn');
@@ -1953,7 +1941,6 @@
                 const role = sessionStorage.getItem('role') || '';
                 const isAuditor = sessionStorage.getItem('is_auditor') === '1';
                 if (btn.id === 'reviewTabBtn' && (role === 'admin' || isAuditor)) btn.style.display = 'inline-block';
-                if (btn.id === 'databaseTabBtn') btn.style.display = 'inline-block';
                 if (btn.id === 'analyticsTabBtn') btn.style.display = 'inline-block';
             }
         });
@@ -2793,7 +2780,6 @@
                 { panel: chatInterface, tab: chatTab },
                 { panel: adminPanel, tab: adminTab },
                 { panel: recycleBinPanel, tab: recycleBinTab },
-                { panel: databasePanel, tab: databaseTab },
                 { panel: knowledgeLabPanel, tab: knowledgeLabTab },
                 { panel: wikiPanel, tab: wikiTab },
                 { panel: analyticsPanel, tab: analyticsTabBtn },
@@ -2973,21 +2959,6 @@
                 loadSidebarRecycle(data);
                 if (typeof loadRecycleBin === 'function') loadRecycleBin(data);
             }
-            syncActiveTabWithView();
-        };
-    }
-    if (databaseTab) {
-        databaseTab.onclick = async () => {
-            stopRealtimePoll();
-            saveActiveTab('db');
-            showSubTabBar('');
-            switchToPanel('databasePanel');
-            switchSidebarPane('db');
-            const tablesRes = await fetch('/admin/db_tables', { credentials: 'include' });
-            const tablesData = await tablesRes.json();
-            loadSidebarDb(tablesData);
-            toggleQuickLinksButton(false);
-            if (typeof loadDatabaseData === 'function') loadDatabaseData(tablesData);
             syncActiveTabWithView();
         };
     }
@@ -3221,7 +3192,6 @@
         setTimeout(() => {
             const cacheBtn = document.getElementById('sidebarClearCacheBtn');
             const cleanupBtn = document.getElementById('sidebarCleanupNowBtn');
-            const promptBtn = document.getElementById('sidebarEditPromptBtn');
             const workReportBtn = document.getElementById('sidebarWorkReportBtn');
             const ragStatsBtn = document.getElementById('sidebarRagStatsBtn');
             const ragRebuildBtn = document.getElementById('sidebarRagRebuildBtn');
@@ -3245,7 +3215,6 @@
                     } catch(_) { showToast('网络错误', 'error'); }
                 };
                 // 旧 /admin/system_prompt 编辑器已退役，统一走 openPromptEditor
-                if (promptBtn) promptBtn.onclick = () => openPromptEditor('system');
                 if (workReportBtn) workReportBtn.onclick = async () => {
                     const modal = createQuickModal('工作报告');
                     let users = [];
@@ -6533,7 +6502,7 @@
                 updateProjectTabVisibility();
                 setTimeout(() => {
                     const activeTab = restoreActiveTab();
-                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', db:'databaseTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
+                    const tabMap = { chat:'chatTabBtn', projects:'adminTabBtn', recycle:'recycleBinTabBtn', knowledge:'knowledgeLabTabBtn', wiki:'wikiTabBtn', stats:'analyticsTabBtn', review:'reviewTabBtn', templates:'templatesTabBtn' };
                     const targetBtn = document.getElementById(tabMap[activeTab] || 'chatTabBtn');
                     _programmaticTabSwitch = true;
                     if (targetBtn) targetBtn.click();
@@ -7210,11 +7179,6 @@
                 // Remove anonymous watermark
                 const wm = document.getElementById('anonWatermark');
                 if (wm) wm.remove();
-            }
-            const databaseTab = document.getElementById('databaseTabBtn');
-            if (databaseTab) {
-                if (data.is_admin) databaseTab.style.display = 'inline-block';
-                else databaseTab.style.display = 'none';
             }
             // Knowledge Lab tab: registered only
             const knowledgeLabTabBtn = document.getElementById('knowledgeLabTabBtn');

@@ -48,7 +48,6 @@ let currentProjectName = '';
         setTimeout(() => {
             const cacheBtn = document.getElementById('sidebarClearCacheBtn');
             const cleanupBtn = document.getElementById('sidebarCleanupNowBtn');
-            const promptBtn = document.getElementById('sidebarEditPromptBtn');
             const workReportBtn = document.getElementById('sidebarWorkReportBtn');
             const ragStatsBtn = document.getElementById('sidebarRagStatsBtn');
             const ragRebuildBtn = document.getElementById('sidebarRagRebuildBtn');
@@ -70,11 +69,6 @@ let currentProjectName = '';
                         if (res.ok) showToast('清理完成', 'success');
                         else showToast('清理失败', 'error');
                     } catch(_) { showToast('网络错误', 'error'); }
-                };
-                // 旧 /admin/system_prompt 编辑器已退役，统一走 app.js 的 openPromptEditor
-                if (promptBtn) promptBtn.onclick = () => {
-                    if (typeof window.openPromptEditor === 'function') window.openPromptEditor('system');
-                    else showToast('编辑器加载中，请稍后重试', 'error');
                 };
                 if (workReportBtn) workReportBtn.onclick = async () => {
                     const modal = createQuickModal('工作报告');
