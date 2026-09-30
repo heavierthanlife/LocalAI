@@ -2487,3 +2487,10 @@ def test_ingest_pipeline_no_extractall():
         src = f.read()
     assert 'extractall(' not in src
     assert '_safe_extract_zip(' in src
+
+
+def test_doc_drift_covers_table_init_variant():
+    """C2: check_doc_drift 必须覆盖「N 表初始化」变体（防 ARCHITECTURE 再次漏报）。"""
+    with open('scripts/check_doc_drift.py', 'r', encoding='utf-8') as f:
+        src = f.read()
+    assert r'(\d+)\s*表初始化' in src

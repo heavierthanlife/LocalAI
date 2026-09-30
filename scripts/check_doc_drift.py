@@ -116,6 +116,7 @@ CHECKS = {
         ('README.md', r'(\d+)\s*张表'),
         ('docs/ARCHITECTURE.md', r'(\d+)\s*张表'),
         ('docs/ARCHITECTURE.md', r'(\d+)\s*张初始化'),
+        ('docs/ARCHITECTURE.md', r'(\d+)\s*表初始化'),
     ]),
     'services': (_count_services, [
         ('docs/ARCHITECTURE.md', r'(\d+)\s*Services'),

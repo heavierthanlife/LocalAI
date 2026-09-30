@@ -8,6 +8,36 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — C2 文档↔代码对齐（FIX-073）
+
+### Fixed
+- `docs/ARCHITECTURE.md`：`72 表初始化` → **76**（与同文件 `76 张表` 一致；实际 `CREATE TABLE IF NOT EXISTS`=76）。
+- `docs/ARCHITECTURE.md`：蓝图口径补注「16 Blueprints / 28 route modules / 29 .py files (incl. `__init__.py`)」消歧。
+- `scripts/check_doc_drift.py`：tables 正则新增 `(\d+)\s*表初始化` 变体，杜绝该类漏报。
+- `AGENTS.md` / `docs/USER_MANUAL.md` 环境变量表补 `TRUST_PROXY`（FIX-068 引入）。
+
+### docs↔code 对照（C2 全表，本机实测）
+| 文档声称 | 代码实际 | 处置 |
+|---|---|---|
+| 16 Blueprints | register_blueprint=16 / Blueprint()=16 | ✅ |
+| 76 张表 | 76 | ✅ |
+| 72 表初始化 | 76 | ❌→改文档 76 |
+| 99 Services | 99 | ✅ |
+| 27 处导入点 | 27 import 语句 | ✅ |
+| 25 beat | 25 | ✅ |
+| ~10k 行 app.js | 10111 | ✅ |
+| 150 项探针 | 150 | ✅ |
+| providers 2 / indicators 45 / laws 15 | doc_drift 已锁 | ✅ |
+| 30-day session lifetime | `timedelta(days=30)` | ✅ |
+| File upload 50 MB | `MAX_CONTENT_LENGTH=50MB` | ✅ |
+| Time zone Asia/Shanghai | `celery timezone='Asia/Shanghai'` | ✅ |
+| MANIFEST.md 蓝图计数 | 未提及 | 跳过（不硬造） |
+
+regression: 1/1 clearance baseline passed
+190/190 regression collected（EXIT=0，0 failure） · verify_fixes 336/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — C1 限流文档↔代码对齐（FIX-072）
 
 ### Fixed

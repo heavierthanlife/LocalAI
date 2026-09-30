@@ -17,6 +17,7 @@
 | `ADMIN_PIN` | ❌ | 默认 `123456`，管理员账户 |
 | `BOCHA_API_KEY` | ❌ | 联网搜索工具 |
 | `LOG_LEVEL` | ❌ | 根日志级别，默认 INFO |
+| `TRUST_PROXY` | ❌ | 反代（nginx）后设 `1`（Docker compose 已设）：限流/审计日志取真实客户端 IP；裸跑勿开 |
 | `ENABLE_SCHEDULER` | ❌ | 多 worker 必须 `false` |
 
 ---

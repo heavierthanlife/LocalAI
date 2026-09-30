@@ -18,7 +18,7 @@
 │  Flask App Factory (app/__init__.py:create_app)               │
 │    → 16 Blueprints (app/routes/)       → HTTP 端点             │
 │    → 99 Services (app/services/)       → 业务逻辑层            │
-│    → database.py (psycopg2 连接池)     → 72 表初始化            │
+│    → database.py (psycopg2 连接池)     → 76 表初始化            │
 │    → globals.py (全局单例) → config.py → cleanup_tasks.py       │
 │    → celery_app.py (Celery 异步任务)                           │
 │    → templates/index.html (SPA) → static/ (JS/CSS/PWA)         │
@@ -48,7 +48,7 @@
 - Flask-Limiter（Redis 后端；全局 120/min；登录 5/min（username+IP）；合规 10–20/min；聊天/上传 per-route 未实现，P1-#7）
 - Admin 密码从 `ADMIN_PIN` 自动 hash
 - 413 错误处理器、cache buster、Swagger
-- 注册 16 Blueprint（`register_all()`）
+- 注册 16 Blueprint（`register_all()`；共 28 个路由模块 / 29 个 .py 文件含 `__init__.py`）
 - APScheduler 20+ 定时任务（`cleanup_tasks.py`）
 - `init_services()`：PG 表初始化、WebDriver 延迟加载、LangGraph checkpointer
 

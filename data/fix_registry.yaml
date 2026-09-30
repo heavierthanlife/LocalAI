@@ -1988,3 +1988,27 @@ fixes:
       - type: literal
         file: scripts/check_system.py
         pattern: "Chat limit matches docs"
+
+  - id: FIX-2026-09-29-073
+    title: "C2: 文档↔代码对齐（ARCHITECTURE 72→76 表；doc_drift 覆盖「N 表初始化」变体；TRUST_PROXY 入环境变量表）"
+    severity: low
+    rationale: >
+      ARCHITECTURE 同时写「72 表初始化」与「76 张表」自相矛盾（实为 76）；check_doc_drift 的 tables
+      正则只抓「N 张表 / N 张初始化」，漏掉「N 表初始化」变体。C2 修正为 76 并扩展正则；
+      TRUST_PROXY 补进 AGENTS/USER_MANUAL 环境变量表；ARCHITECTURE 补「16 blueprints / 28 route modules」消歧。
+    checks:
+      - type: literal_not
+        file: docs/ARCHITECTURE.md
+        pattern: "72 表初始化"
+      - type: literal
+        file: docs/ARCHITECTURE.md
+        pattern: "76 表初始化"
+      - type: literal
+        file: scripts/check_doc_drift.py
+        pattern: '(\d+)\s*表初始化'
+      - type: literal
+        file: AGENTS.md
+        pattern: "TRUST_PROXY"
+      - type: literal
+        file: docs/USER_MANUAL.md
+        pattern: "TRUST_PROXY"

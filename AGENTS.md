@@ -179,6 +179,7 @@ Every feature upgrade must include regression verification:
 | `BOCHA_API_KEY` | No | Web search tool |
 | `LOG_LEVEL` | No | Root logger level (`INFO`/`DEBUG`). Default: `INFO` |
 | `HF_HOME` | No | HuggingFace model cache. Docker 下设为 `/app/data/hf_cache`（落在 `app_data` 卷，跨 recreate 持久；sentence-transformers + Headroom/Kompress 模型只下一次）；本地默认 `~/.cache/huggingface` |
+| `TRUST_PROXY` | No | 反代（nginx）后启用 `ProxyFix`（compose 已设 `1`）：限流/审计日志取真实客户端 IP；裸跑勿开 |
 
 Full list in `.env.example`.
 
