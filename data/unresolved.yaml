@@ -419,7 +419,8 @@ unresolved:
 
   - id: UNRESOLVED-027
     title: "S3/S4 残余清理：审计死代码外科删除 + 前端死块/陈旧 DOM id + 构建去重"
-    status: deferred
+    status: resolved
+    resolved: 2026-09-29
     severity: low
     discovered: 2026-09-16
     tags: ["清理", "死代码"]
@@ -450,7 +451,8 @@ unresolved:
       保留 _run_style_analysis/_score_*/SCORING_FUNCTIONS）。
       2026-09-29（C3-b/FIX-075）：✅ review.js docReviewPanel 死块 + app.js/cases.js/knowledge-lab.js
       陈旧 DOM id/死块已删（node --check 全过）。
-      仍 deferred：027-c 残余孤儿。
+      2026-09-29（C3-c/FIX-076）：✅ 残余孤儿扫尾（app.css 孤立 #docReviewPanel 删除；
+      app/services 零引用孤儿文件=0；run_ui_audit 无陈旧探针）。027 全部关闭。
 
   - id: UNRESOLVED-028
     title: "视觉回归采集脚本扩展（12 缺页 + 清标数据夹具）"

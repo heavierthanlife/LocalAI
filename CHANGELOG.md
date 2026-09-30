@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — C3-c 残余孤儿扫尾（FIX-076）
+
+### Removed
+- `static/css/app.css`：孤立规则 `#docReviewPanel button {...}` + 注释（C3-b 删除的 docReview 面板样式残留）。
+
+### Notes
+- 残余扫描证据：`templates/` 对全部已删 id 零命中；`app/services/` 无零引用孤儿文件；`scripts/run_ui_audit.py` 无陈旧探针；`audit_report`/`audit_wiki_publisher`/`run_audit` 零残留（仅留说明性 docstring）。
+- `UNRESOLVED-027` 置 **resolved**（027-a/b/c 全部完成）。
+
+regression: 1/1 clearance baseline passed
+192/192 regression collected（EXIT=0，0 failure） · verify_fixes 349/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — C3-b 删除前端死块与陈旧 DOM id（FIX-075）
 
 ### Removed

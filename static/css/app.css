@@ -1670,9 +1670,6 @@ body.dark ::-webkit-scrollbar-thumb:hover { background:#475569; }
     #relationshipToggle .action-group,
     #complianceToggle .action-group { flex-direction: column; align-items: flex-start; gap: 4px; }
 
-    /* ── Doc review panel ── */
-    #docReviewPanel button { font-size: .65rem; padding: 4px 10px; }
-
     /* ── Consent modal (phone) ── */
     .consent-overlay { align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-top: 10vh; }
     .consent-card { width: 94%; max-width: 400px; padding: 16px 14px; margin: 0 auto; }

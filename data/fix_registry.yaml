@@ -2067,3 +2067,14 @@ fixes:
       - type: literal_not
         file: static/js/knowledge-lab.js
         pattern: "'sidebarEditPromptBtn'"
+
+  - id: FIX-2026-09-29-076
+    title: "C3-c: 残余孤儿扫尾（app.css 孤立 #docReviewPanel 规则）"
+    severity: low
+    rationale: >
+      C3-b 删除 review.js docReview 死块后，static/css/app.css 仍残留孤立规则
+      `#docReviewPanel button {...}`（templates 零命中）。删除；其余扫描无孤儿。
+    checks:
+      - type: literal_not
+        file: static/css/app.css
+        pattern: "#docReviewPanel"

@@ -2519,6 +2519,7 @@ def test_frontend_stale_dom_ids_removed():
         'static/js/cases.js': ["'casesToggleStatus'", "function autoGenerate"],
         'static/js/knowledge-lab.js': ["'sidebarEditPromptBtn'"],
         'static/js/review.js': ["loadDocReviewPanel", "initDocReviewToggle", "'docReviewPanel'"],
+        'static/css/app.css': ["#docReviewPanel"],
     }
     for f, needles in targets.items():
         with open(f, encoding='utf-8') as fh:
