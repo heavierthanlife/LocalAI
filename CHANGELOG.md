@@ -8,6 +8,23 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P1-⑤ SSRF 守卫（FIX-081，P1 收官）
+
+### Fixed
+- **服务器跳板 SSRF**：`/fetch_url` 与 `/start_credit_check`（`urls` 用户可控，Selenium 导航）可让服务器访问内网 / 云元数据地址，并截图内网页面。新增 `app/utils/url_guard.py::check_url`：仅允许 `http(s)`，且 hostname 解析出的**全部** IP 必须 `is_global`；拒 loopback / private(10/172.16/192.168) / link-local(169.254、169.254.169.254) / CGNAT(100.64) / multicast / reserved / unspecified / 解析失败 + 容器名黑名单（postgres/redis/nginx/app/localhost…）。
+- `web_extractor.safe_get`：禁用自动跳转，逐跳对 `Location` 复检（防 302/DNS rebinding）；`fetch_page` 改走 `safe_get`。
+- `credit_checker.navigate_and_fill`：`driver.get` 前后校验 + `driver.current_url` 复检（Selenium 客户端跳转）。
+- `/fetch_url` 与 `/start_credit_check` 入口即拦截 → 400。
+- 策略：仅公网（无 allowlist 需求），已写入模块 docstring。
+
+### Added
+- 回归 7 条（内网 IP / 容器名 / 非 http(s) / 公网放行 / fetch_url 拒 / credit 拒 / 跳转复检）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+215/215 regression collected（EXIT=0，0 failure） · verify_fixes 366/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P1-⑩ 合规规则归属（FIX-080）
 
 ### Fixed

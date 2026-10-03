@@ -2155,3 +2155,29 @@ fixes:
       - type: literal
         file: app/routes/compliance.py
         pattern: "无权访问该规则数据"
+
+  - id: FIX-2026-09-29-081
+    title: "P1-⑤: SSRF 守卫（仅公网 + 跳转复检 + fetch_url/信用核查共用）"
+    severity: high
+    rationale: >
+      /fetch_url 与 /start_credit_check(user urls) 可让服务器访问内网/元数据地址
+      （含 Selenium 截图内网页面）。新增 app/utils/url_guard.check_url：仅 http/https 且
+      解析 IP 全为 global；拒 loopback/private/link-local(169.254/169.254.169.254)/CGNAT/
+      multicast/reserved/未知 + 容器名黑名单；web_extractor.safe_get 逐跳复检（禁自动跳转）；
+      Selenium navigate_and_fill 前后校验 + current_url 复检。策略=仅公网（无 allowlist 需求）。
+    checks:
+      - type: literal
+        file: app/utils/url_guard.py
+        pattern: "def check_url(url: str) -> Tuple[bool, str]"
+      - type: literal
+        file: app/services/web_extractor.py
+        pattern: "def safe_get(url: str"
+      - type: literal
+        file: app/services/credit_checker.py
+        pattern: "check_url(url)"
+      - type: literal
+        file: app/routes/chat_files.py
+        pattern: "from app.utils.url_guard import check_url"
+      - type: literal
+        file: app/routes/credit.py
+        pattern: "from app.utils.url_guard import check_url"

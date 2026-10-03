@@ -2774,3 +2774,73 @@ def test_rules_ownership_gate_wired():
     assert "return status != 'ok'" in src, 'missing meta must fail closed'
     assert "'compliance_rules'" in src, 'extract_rules must register an owner'
     assert '无权访问该规则数据' in src, 'start_check must check rules ownership'
+
+
+# ── FIX-2026-09-29-081: SSRF guard ──
+def test_url_guard_blocks_internal_ips(monkeypatch):
+    import app.utils.url_guard as ug
+    for ip in ('127.0.0.1', '10.0.0.5', '172.16.9.9', '192.168.1.1',
+               '169.254.169.254', '100.64.0.1', '0.0.0.0'):
+        monkeypatch.setattr(ug.socket, 'getaddrinfo',
+                            lambda *a, _ip=ip, **k: [(2, 1, 6, '', (_ip, 0))])
+        ok, _reason = ug.check_url('http://evil.example/')
+        assert not ok, f'{ip} should be blocked'
+
+
+def test_url_guard_blocks_container_names():
+    import app.utils.url_guard as ug
+    for host in ('postgres', 'redis', 'nginx', 'app', 'localhost'):
+        ok, _reason = ug.check_url(f'http://{host}/')
+        assert not ok, host
+
+
+def test_url_guard_blocks_schemes():
+    import app.utils.url_guard as ug
+    for u in ('ftp://example.com/', 'file:///etc/passwd', 'gopher://x/'):
+        ok, _reason = ug.check_url(u)
+        assert not ok, u
+
+
+def test_url_guard_allows_public(monkeypatch):
+    import app.utils.url_guard as ug
+    monkeypatch.setattr(ug.socket, 'getaddrinfo',
+                        lambda *a, **k: [(2, 1, 6, '', ('93.184.216.34', 0))])
+    ok, reason = ug.check_url('http://example.com/')
+    assert ok, reason
+
+
+def test_fetch_url_route_blocks_ssrf(app):
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/fetch_url', json={'url': 'http://127.0.0.1:8000/check_auth'})
+    assert r.status_code == 400, r.status_code
+
+
+def test_credit_route_blocks_ssrf(app):
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/start_credit_check',
+                    json={'companies': ['x'], 'urls': ['http://169.254.169.254/']})
+    assert r.status_code == 400, r.status_code
+
+
+def test_safe_get_blocks_redirect_to_internal(monkeypatch):
+    """⑤: 公网 URL 302 到内网 → 第二跳被拦（防跳转绕过）。"""
+    import pytest
+    import app.utils.url_guard as ug
+    import app.services.web_extractor as we
+
+    def _fake(host, port, *a, **k):
+        ip = '127.0.0.1' if host == '127.0.0.1' else '93.184.216.34'
+        return [(2, 1, 6, '', (ip, 0))]
+
+    monkeypatch.setattr(ug.socket, 'getaddrinfo', _fake)
+
+    class _Resp:
+        status_code = 302
+        headers = {'Location': 'http://127.0.0.1/secret'}
+        text = ''
+
+    monkeypatch.setattr(we.requests, 'get', lambda *a, **k: _Resp())
+    with pytest.raises(ValueError):
+        we.safe_get('http://example.com/', headers={}, timeout=5)

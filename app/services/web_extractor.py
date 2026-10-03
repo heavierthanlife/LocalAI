@@ -36,6 +36,30 @@ def _random_ua() -> str:
     return random.choice(UA_POOL)
 
 
+def safe_get(url: str, headers: dict, timeout: int, max_redirects: int = 5):
+    """GET with SSRF validation on the initial URL and on every redirect hop.
+
+    ``requests`` follows redirects itself, which would let a public URL 302 to an
+    internal one after our initial check. So we disable auto-redirects and validate
+    each Location before following it (FIX-2026-09-29-081).
+    """
+    from app.utils.url_guard import check_url
+
+    for _ in range(max_redirects + 1):
+        ok, reason = check_url(url)
+        if not ok:
+            raise ValueError(f'URL blocked: {reason}')
+        resp = requests.get(url, headers=headers, timeout=timeout, allow_redirects=False)
+        if resp.status_code in (301, 302, 303, 307, 308):
+            loc = resp.headers.get('Location')
+            if not loc:
+                return resp
+            url = urljoin(url, loc)
+            continue
+        return resp
+    raise ValueError('too many redirects')
+
+
 def fetch_page(url: str, retries: int = 3, timeout: int = 15,
                cookie: Optional[str] = None) -> Tuple[str, int]:
     """Fetch a page with exponential backoff retry.
@@ -55,7 +79,7 @@ def fetch_page(url: str, retries: int = 3, timeout: int = 15,
                 time.sleep(backoff)
                 logger.debug(f"Retry {attempt+1}/{retries} for {url}")
 
-            resp = requests.get(url, headers=headers, timeout=timeout)
+            resp = safe_get(url, headers=headers, timeout=timeout)
             resp.raise_for_status()
             return resp.text, resp.status_code
 

@@ -83,8 +83,20 @@ class CreditChecker:
     # ========== Navigation and Search Methods ==========
 
     def navigate_and_fill(self, company_name, url):
+        # FIX-2026-09-29-081: SSRF guard — never navigate to a non-public address.
+        from app.utils.url_guard import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            logger.warning(f"Blocked credit-check navigation: {reason}")
+            raise ValueError(f"不允许访问的地址: {reason}")
         self.driver.get(url)
         time.sleep(2)
+        # Re-validate after any client-side redirect the browser followed.
+        final_url = self.driver.current_url or url
+        ok2, reason2 = check_url(final_url)
+        if not ok2:
+            logger.warning(f"Blocked credit-check redirect target: {reason2}")
+            raise ValueError(f"重定向到不允许的地址: {reason2}")
         self._fill_search(company_name, url)
         if 'zxgk.court.gov.cn' in url or 'creditchina.gov.cn' in url:
             self.driver.execute_script("document.body.style.zoom='75%'")

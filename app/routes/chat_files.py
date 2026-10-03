@@ -209,6 +209,11 @@ def fetch_url():
         return jsonify({"error": "URL required"}), 400
     if not url.startswith(('http://', 'https://')):
         return jsonify({"error": "Invalid URL"}), 400
+    # FIX-2026-09-29-081: SSRF guard.
+    from app.utils.url_guard import check_url
+    _ok, _reason = check_url(url)
+    if not _ok:
+        return jsonify({"error": f"URL 不被允许: {_reason}"}), 400
 
     try:
         from app.services.web_extractor import fetch_page, extract_text_from_html

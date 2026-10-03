@@ -95,6 +95,12 @@ def start_credit_check():
     urls = data.get('urls', [])
     if not companies or not urls:
         return jsonify({"error": "Need companies and urls"}), 400
+    # FIX-2026-09-29-081: SSRF guard — urls are user-supplied.
+    from app.utils.url_guard import check_url
+    for _u in urls:
+        _ok, _reason = check_url(_u)
+        if not _ok:
+            return jsonify({"error": f"URL 不被允许: {_reason}"}), 400
 
     task_id = str(uuid.uuid4())
     user_id = get_user_id()
