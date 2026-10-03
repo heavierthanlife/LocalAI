@@ -511,7 +511,8 @@ unresolved:
 
   - id: UNRESOLVED-031
     title: "销户确认码明文存储 + 非常量时间比对（confirm_delete_account）"
-    status: pending
+    status: resolved
+    resolved: 2026-09-29
     severity: medium
     discovered: 2026-09-29
     tags: ["安全", "缺陷", "认证"]

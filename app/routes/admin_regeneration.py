@@ -4,6 +4,7 @@ Registered on the shared ``admin_bp`` Blueprint object from
 app/routes/admin.py. Covers the AI-document regeneration vote system:
 number/negation extraction helpers, vote records, evaluation, and review.
 """
+import hashlib
 import json
 import logging
 import os
@@ -881,7 +882,9 @@ def admin_approve_delete(username):
                 return err("该用户未申请删除", "VALIDATION_ERROR", 400)
             user_email = row.get('email', '')
             code = f"{secrets.randbelow(10000):04d}"
-            cur.execute("UPDATE users SET deletion_code = %s WHERE username = %s", (code, username))
+            # FIX-2026-09-29-082: store "{expiry_epoch}:{sha256(code)}" — never plaintext.
+            _stored = f"{int(time.time()) + 300}:{hashlib.sha256(code.encode('utf-8')).hexdigest()}"
+            cur.execute("UPDATE users SET deletion_code = %s WHERE username = %s", (_stored, username))
             conn.commit()
     from app.utils.mailer import send_email, is_configured
     from app.services.admin_utils import log_admin_action

@@ -411,8 +411,23 @@ def confirm_delete_account():
             if not row:
                 return jsonify({"error": "未找到待处理的删除请求"}), 400
             expected_code = row[0]
-            if not expected_code or code != expected_code:
-                return jsonify({"error": "验证码错误"}), 400
+            # FIX-2026-09-29-082: stored as "{expiry_epoch}:{sha256(code)}" — never
+            # plaintext; constant-time compare; single-use (cleared on mismatch/expiry).
+            stored = expected_code or ''
+            valid = False
+            try:
+                exp_s, _, digest = stored.partition(':')
+                if digest and int(exp_s) >= int(time.time()):
+                    provided = hashlib.sha256(code.encode('utf-8')).hexdigest()
+                    valid = secrets.compare_digest(provided.encode('utf-8'), digest.encode('utf-8'))
+            except Exception:
+                valid = False
+            if not valid:
+                cur.execute("UPDATE users SET deletion_code = NULL WHERE user_id = %s", (user_id,))
+                conn.commit()
+                return jsonify({"error": "验证码错误或已过期"}), 400
+            cur.execute("UPDATE users SET deletion_code = NULL WHERE user_id = %s", (user_id,))
+            conn.commit()
     # Code is correct — proceed with deletion using stored choices
     keep_ids = session.get('delete_keep_ids', [])
     session.pop('delete_keep_ids', None)

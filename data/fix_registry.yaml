@@ -2181,3 +2181,21 @@ fixes:
       - type: literal
         file: app/routes/credit.py
         pattern: "from app.utils.url_guard import check_url"
+
+  - id: FIX-2026-09-29-082
+    title: "P1-031: 销户验证码 hash 存储 + 常量时间 + 5 分钟过期 + 失败清码"
+    severity: medium
+    rationale: >
+      users.deletion_code 原存明文，confirm_delete_account 用 != 非常量时间比对，且邮件称
+      “有效5分钟”但无过期强制。现存 "{expiry_epoch}:{sha256(code)}"（沿用 TEXT 列，免 schema
+      变更）；confirm 用 secrets.compare_digest 且校验 expiry；失败/过期清码（单次有效）。
+    checks:
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "secrets.compare_digest(provided.encode('utf-8'), digest.encode('utf-8'))"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "hashlib.sha256(code.encode('utf-8')).hexdigest()"
+      - type: literal_not
+        file: app/routes/auth.py
+        pattern: "code != expected_code"

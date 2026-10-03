@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — UNRESOLVED-031 销户验证码硬化（FIX-082）
+
+### Fixed
+- **销户确认码明文存储 + 非常量时间比对**（`app/routes/auth.py`、`app/routes/admin_regeneration.py`）：`users.deletion_code` 原存明文，`confirm_delete_account` 用 `code != expected_code` 比对，且邮件称“有效 5 分钟”但无过期强制。
+  - 发码端存 `"{expiry_epoch}:{sha256(code)}"`（沿用 `TEXT` 列，**免 schema 变更**）；
+  - 确认端 `secrets.compare_digest` + 校验 expiry；
+  - 失败/过期/成功均清码（单次有效，fail-closed；旧明文值视为无效）。
+
+### Added
+- 回归 4 条（hash 通过+清码 / 旧明文拒 / 过期拒 / 静态接线）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+219/219 regression collected（EXIT=0，0 failure） · verify_fixes 369/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P1-⑤ SSRF 守卫（FIX-081，P1 收官）
 
 ### Fixed

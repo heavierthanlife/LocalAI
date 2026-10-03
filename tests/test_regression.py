@@ -2844,3 +2844,87 @@ def test_safe_get_blocks_redirect_to_internal(monkeypatch):
     monkeypatch.setattr(we.requests, 'get', lambda *a, **k: _Resp())
     with pytest.raises(ValueError):
         we.safe_get('http://example.com/', headers={}, timeout=5)
+
+
+# ── FIX-2026-09-29-082: deletion code hash + expiry + constant-time ──
+class _DelCur:
+    def __init__(self, row, log):
+        self._row = row
+        self._log = log
+
+    def execute(self, sql, params=None):
+        self._log.append((sql, params))
+
+    def fetchone(self):
+        return self._row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _DelConn:
+    def __init__(self, row, log):
+        self._cur = _DelCur(row, log)
+
+    def cursor(self, *a, **k):
+        return self._cur
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def commit(self):
+        pass
+
+
+def _confirm(app, monkeypatch, stored, code):
+    import app.routes.auth as a
+    log = []
+    monkeypatch.setattr(a, 'get_db_connection', lambda: _DelConn((stored, 'u@e.com'), log))
+    monkeypatch.setattr(a, 'delete_account_impl',
+                        lambda uid, pin, keep: __import__('flask').jsonify({"success": True}))
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/confirm_delete_account', json={'pin': '1234', 'code': code})
+    return r, log
+
+
+def test_delete_confirm_hashed_code_ok(app, monkeypatch):
+    """031: 正确 hash 码 → 放行；并清码。"""
+    import hashlib as _h
+    import time as _t
+    stored = f"{int(_t.time()) + 300}:{_h.sha256('1234'.encode()).hexdigest()}"
+    r, log = _confirm(app, monkeypatch, stored, '1234')
+    assert r.status_code == 200, r.status_code
+    assert any('deletion_code = NULL' in s for s, _ in log), 'code must be cleared'
+
+
+def test_delete_confirm_rejects_legacy_plaintext(app, monkeypatch):
+    """031: 旧明文存储 → 拒（fail-closed）。"""
+    r, log = _confirm(app, monkeypatch, '1234', '1234')
+    assert r.status_code == 400, r.status_code
+    assert any('deletion_code = NULL' in s for s, _ in log), 'cleared on failure'
+
+
+def test_delete_confirm_rejects_expired(app, monkeypatch):
+    """031: 过期码 → 拒。"""
+    import hashlib as _h
+    import time as _t
+    stored = f"{int(_t.time()) - 10}:{_h.sha256('1234'.encode()).hexdigest()}"
+    r, _log = _confirm(app, monkeypatch, stored, '1234')
+    assert r.status_code == 400, r.status_code
+
+
+def test_delete_code_not_plaintext_wired():
+    with open('app/routes/auth.py', encoding='utf-8') as f:
+        a_src = f.read()
+    with open('app/routes/admin_regeneration.py', encoding='utf-8') as f:
+        g_src = f.read()
+    assert 'code != expected_code' not in a_src
+    assert 'secrets.compare_digest(provided.encode' in a_src
+    assert "hashlib.sha256(code.encode('utf-8')).hexdigest()" in g_src
