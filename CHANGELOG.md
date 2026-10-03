@@ -8,6 +8,24 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P1-⑩ 合规规则归属（FIX-080）
+
+### Fixed
+- **合规规则无主 → 越权读/改**（`app/routes/compliance.py`）：`extract_rules` 产出 rules 未登记 TaskBus owner，且 `_task_forbidden` 对 **meta miss 放行** → 任意登录用户可按 `rules_task_id` 读/改他人规则；`start_check` 读 `rules_task_id` 也无归属校验。
+  - `extract_rules` 现登记 `user_id`（type `compliance_rules`）；
+  - `start_check` 读规则前 `_task_forbidden(rules_task_id)` → 403；
+  - `_task_forbidden` 改为 `status != 'ok'`（**missing 也 deny**，收 F3 fail-open）；
+  - 同步回退路径亦登记 owner，保证同步结果可被本人读取。
+- 注：`incremental_check` 原已有 `_task_forbidden(rules_task_id)`，现随 miss-deny 一并收紧。
+
+### Added
+- 回归 5 条（A 读/ A 改 B rules / 无主 deny / start_check 跨用户 / 静态接线）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+208/208 regression collected（EXIT=0，0 failure） · verify_fixes 361/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P1-⑧ 项目 AI 记忆成员校验（FIX-079）
 
 ### Fixed

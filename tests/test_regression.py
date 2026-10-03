@@ -2721,3 +2721,56 @@ def test_ai_memory_gate_wired():
         src = f.read()
     assert 'can_access_project(project_id, user_id)' in src
     assert "data.get('role', 'user')" not in src, 'client role must not be trusted'
+
+
+# ── FIX-2026-09-29-080: compliance rules ownership ──
+def test_rules_get_cross_user_forbidden(app, monkeypatch):
+    """⑩: A 读 B 的 rules_task_id → 403。"""
+    from app.services import task_bus as tb
+    monkeypatch.setattr(tb.TaskBus, 'get',
+                        staticmethod(lambda tid: {'user_id': 'userB', 'type': 'compliance_rules'}))
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.get('/compliance/rules/rules-xyz')
+    assert r.status_code == 403, r.status_code
+
+
+def test_rules_update_cross_user_forbidden(app, monkeypatch):
+    """⑩: A 改 B 的 rules → 403。"""
+    from app.services import task_bus as tb
+    monkeypatch.setattr(tb.TaskBus, 'get',
+                        staticmethod(lambda tid: {'user_id': 'userB', 'type': 'compliance_rules'}))
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.put('/compliance/rules/rules-xyz', json={'rules': []})
+    assert r.status_code == 403, r.status_code
+
+
+def test_rules_get_unowned_denied(app, monkeypatch):
+    """⑩: 无主（meta miss）→ fail-closed 403（F3）。"""
+    from app.services import task_bus as tb
+    monkeypatch.setattr(tb.TaskBus, 'get', staticmethod(lambda tid: None))
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.get('/compliance/rules/rules-unowned-123')
+    assert r.status_code == 403, r.status_code
+
+
+def test_start_check_denies_foreign_rules(app, monkeypatch):
+    """⑩: A 用 B 的 rules_task_id 发起检查 → 403。"""
+    from app.services import task_bus as tb
+    monkeypatch.setattr(tb.TaskBus, 'get',
+                        staticmethod(lambda tid: {'user_id': 'userB'}))
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/compliance/check',
+                    json={'rules_task_id': 'rules-fgn', 'bid_file_text': 'x' * 50})
+    assert r.status_code == 403, r.status_code
+
+
+def test_rules_ownership_gate_wired():
+    with open('app/routes/compliance.py', encoding='utf-8') as f:
+        src = f.read()
+    assert "return status != 'ok'" in src, 'missing meta must fail closed'
+    assert "'compliance_rules'" in src, 'extract_rules must register an owner'
+    assert '无权访问该规则数据' in src, 'start_check must check rules ownership'

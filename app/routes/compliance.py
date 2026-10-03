@@ -250,6 +250,15 @@ def extract_rules():
         # Cache the rules for later use
         task_id = str(uuid.uuid4())
         _save_result(f"rules_{task_id}", result)
+        # FIX-2026-09-29-080: register the owner so /rules/<task_id> can enforce
+        # ownership (extract_rules previously left rules owner-less).
+        try:
+            from app.services.task_bus import TaskBus
+            _tb = TaskBus(task_id, 'compliance_rules', f'规则提取: {f.filename}')
+            _tb.register_queued(extra={'user_id': str(session.get('user_id') or '')})
+            _tb.complete(result={'total': result.get('total', 0)})
+        except Exception as e:
+            logger.warning(f"TaskBus register for rules {task_id} failed: {e}")
 
         return ok({
             "success": True,
@@ -311,7 +320,9 @@ def start_check():
         if not bid_text:
             return err("缺少投标文件内容", "VALIDATION_ERROR", 400)
 
-        # Load rules
+        # Load rules (FIX-2026-09-29-080: enforce ownership of the provided rules_task_id)
+        if _task_forbidden(rules_task_id):
+            return err("无权访问该规则数据", "FORBIDDEN", 403)
         rules_data = _load_result(f"rules_{rules_task_id}")
         if not rules_data:
             return err("规则数据已过期，请重新提取", "NOT_FOUND", 404)
@@ -338,8 +349,20 @@ def start_check():
             })
         except (ImportError, Exception) as e:
             logger.warning(f"Celery unavailable, running sync: {e}")
-            # Sync fallback
+            # Sync fallback — still register owner so get_result can enforce it.
+            _tb = None
+            try:
+                from app.services.task_bus import TaskBus
+                _tb = TaskBus(task_id, 'compliance_check', f'合规检查: {bid_name}')
+                _tb.register_queued(extra={'user_id': str(session.get('user_id') or '')})
+            except Exception:
+                pass
             result = _run_check_sync(task_id, bid_text, rules, bid_name, use_ai, include_laws, region_code)
+            if _tb is not None:
+                try:
+                    _tb.complete(result={'status': 'completed'})
+                except Exception:
+                    pass
             return ok({
                 "task_id": task_id,
                 "status": "completed",
@@ -436,13 +459,15 @@ def incremental_check():
 def _task_forbidden(task_id) -> bool:
     """True if the current session may NOT access the given task's artifacts.
 
-    Thin wrapper over helpers.load_task_for (FIX-066). Missing meta (expired,
-    legacy, or Redis unavailable) is allowed through — disk-persisted results
-    outlive the TTL; a lookup exception fails closed (403).
+    Thin wrapper over helpers.load_task_for (FIX-066). FIX-2026-09-29-080:
+    fail-closed on missing meta. Previously a missing meta (expired / legacy /
+    Redis down) was allowed through, which let any logged-in user read/write a
+    task whose owner had never been recorded. Now only an explicit owner match
+    ('ok') grants access; 'missing' and 'forbidden' both deny.
     """
     from app.utils.helpers import load_task_for
     _, status = load_task_for(task_id, session.get('user_id'))
-    return status == 'forbidden'
+    return status != 'ok'
 
 
 @compliance_bp.route('/result/<task_id>', methods=['GET'])

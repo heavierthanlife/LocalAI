@@ -1802,7 +1802,9 @@ fixes:
         pattern: "meta, status = load_task_for(task_id, user_id)"
       - type: literal
         file: app/routes/compliance.py
-        pattern: "return status == 'forbidden'"
+        pattern: "return status != 'ok'"
+        # FIX-2026-09-29-080 收紧：compliance._task_forbidden 由仅 forbidden 改为
+        # missing 也 deny（fail-closed），表达式随之从 == 'forbidden' 改为 != 'ok'。
 
   - id: FIX-2026-09-27-067
     title: "S3/S4 残余清理（部分）：无效 YAML + 孤儿工厂键 + 陈旧 UI 探针 + Dockerfile torch 顺序"
@@ -2134,3 +2136,22 @@ fixes:
       - type: literal_not
         file: app/routes/admin_regeneration.py
         pattern: "data.get('role', 'user')"
+
+  - id: FIX-2026-09-29-080
+    title: "P1-⑩: 合规规则归属（extract_rules 登记 owner + start_check 校验 + miss fail-closed）"
+    severity: medium
+    rationale: >
+      extract_rules 产出 rules 未登记 TaskBus owner，_task_forbidden 对 meta miss 放行
+      → 任意登录用户可按 rules_task_id 读/改他人规则；start_check 读 rules_task_id 无归属校验。
+      现：extract_rules 登记 user_id；start_check 读前 _task_forbidden；_task_forbidden 改为
+      status != 'ok'（missing/forbidden 均 deny，收 F3 fail-open）；同步回退路径也登记 owner。
+    checks:
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "return status != 'ok'"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "'compliance_rules'"
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "无权访问该规则数据"
