@@ -2078,3 +2078,19 @@ fixes:
       - type: literal_not
         file: static/css/app.css
         pattern: "#docReviewPanel"
+
+  - id: FIX-2026-09-29-077
+    title: "P1-⑥: 合规反馈/训练数据 owner 过滤（非管理员仅本人；管理员全量）"
+    severity: medium
+    rationale: >
+      /compliance/feedback/history 与 /compliance/training_data 原仅校验登录，
+      SELECT ... FROM compliance_feedback 无 owner 过滤 → 任何登录用户可读取/导出全部反馈
+      （含他人 user_id/判定/说明），并污染 LoRA 训练数据。现非管理员加 WHERE user_id = %s，
+      管理员（role=admin）全量。
+    checks:
+      - type: grep
+        file: app/routes/compliance.py
+        pattern: 'FROM compliance_feedback\s+WHERE user_id = %s'
+      - type: literal
+        file: app/routes/compliance.py
+        pattern: "session.get('role') == 'admin'"

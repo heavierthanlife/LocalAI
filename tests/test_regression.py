@@ -2526,3 +2526,96 @@ def test_frontend_stale_dom_ids_removed():
             src = fh.read()
         for n in needles:
             assert n not in src, f'{n} should be removed from {f}'
+
+
+# ── FIX-2026-09-29-077: compliance feedback/training owner scope ──
+class _SqlCur:
+    def __init__(self, rows=None, count=0):
+        self._rows = rows or []
+        self._count = count
+        self.calls = []
+
+    def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return (self._count,)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _SqlConn:
+    def __init__(self, cur):
+        self._cur = cur
+
+    def cursor(self, *a, **k):
+        return self._cur
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _patch_db(monkeypatch, cur):
+    import app.database as db
+    monkeypatch.setattr(db, 'get_db_connection', lambda: _SqlConn(cur))
+
+
+def _sess(client, uid, role='user'):
+    with client.session_transaction() as sess:
+        sess['user_id'] = uid
+        sess['consent_value'] = 1
+        sess['role'] = role
+
+
+def test_feedback_history_owner_filter(app, monkeypatch):
+    """FIX-077: 非管理员拉 /compliance/feedback/history 必须带 WHERE user_id = %s。"""
+    cur = _SqlCur()
+    _patch_db(monkeypatch, cur)
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.get('/compliance/feedback/history')
+    assert r.status_code == 200, r.status_code
+    sqls = ' '.join(s for s, _ in cur.calls)
+    assert 'FROM compliance_feedback' in sqls and 'WHERE user_id = %s' in sqls
+    assert any(p and 'userA' in p for _, p in cur.calls), 'owner param must be the session user'
+
+
+def test_feedback_history_admin_unfiltered(app, monkeypatch):
+    """FIX-077: 管理员可看全量（无 WHERE user_id）。"""
+    cur = _SqlCur()
+    _patch_db(monkeypatch, cur)
+    client = app.test_client()
+    _sess(client, 'admin', 'admin')
+    r = client.get('/compliance/feedback/history')
+    assert r.status_code == 200
+    sqls = ' '.join(s for s, _ in cur.calls)
+    assert 'WHERE user_id = %s' not in sqls
+
+
+def test_training_data_owner_filter(app, monkeypatch):
+    """FIX-077: 非管理员导出训练数据必须带 WHERE user_id = %s（不得跨用户）。"""
+    cur = _SqlCur()
+    _patch_db(monkeypatch, cur)
+    client = app.test_client()
+    _sess(client, 'userB', 'user')
+    r = client.get('/compliance/training_data')
+    assert r.status_code == 200, r.status_code
+    sqls = ' '.join(s for s, _ in cur.calls)
+    assert 'FROM compliance_feedback' in sqls and 'WHERE user_id = %s' in sqls
+
+
+def test_compliance_feedback_owner_filter_wired():
+    with open('app/routes/compliance.py', encoding='utf-8') as f:
+        src = f.read()
+    assert src.count('WHERE user_id = %s') >= 2, 'both feedback endpoints must scope by owner'
+    assert "session.get('role') == 'admin'" in src

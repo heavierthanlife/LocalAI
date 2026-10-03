@@ -628,25 +628,40 @@ def submit_feedback():
 @compliance_bp.route('/feedback/history', methods=['GET'])
 @_login_required
 def feedback_history():
-    """List saved feedback records."""
+    """List saved feedback records (own records; admins see all)."""
     try:
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
         from app.database import get_db_connection
+        _uid = session.get('user_id')
+        _is_admin = session.get('role') == 'admin'
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, user_id, task_id, bid_doc_name, check_file_name,
-                           rule_count, ai_verdict, user_verdict, user_explain,
-                           created_at
-                    FROM compliance_feedback
-                    ORDER BY created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, offset))
-                rows = cur.fetchall()
-
-                cur.execute("SELECT COUNT(*) FROM compliance_feedback")
+                if _is_admin:
+                    cur.execute("""
+                        SELECT id, user_id, task_id, bid_doc_name, check_file_name,
+                               rule_count, ai_verdict, user_verdict, user_explain,
+                               created_at
+                        FROM compliance_feedback
+                        ORDER BY created_at DESC
+                        LIMIT %s OFFSET %s
+                    """, (limit, offset))
+                    rows = cur.fetchall()
+                    cur.execute("SELECT COUNT(*) FROM compliance_feedback")
+                else:
+                    # FIX-2026-09-29-077: owner scope — a user only sees their own feedback.
+                    cur.execute("""
+                        SELECT id, user_id, task_id, bid_doc_name, check_file_name,
+                               rule_count, ai_verdict, user_verdict, user_explain,
+                               created_at
+                        FROM compliance_feedback
+                        WHERE user_id = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s OFFSET %s
+                    """, (_uid, limit, offset))
+                    rows = cur.fetchall()
+                    cur.execute("SELECT COUNT(*) FROM compliance_feedback WHERE user_id = %s", (_uid,))
                 total = cur.fetchone()[0]
 
         return ok({
@@ -684,17 +699,31 @@ def export_training_data():
         limit = request.args.get('limit', 200, type=int)
         min_samples = request.args.get('min_samples', 10, type=int)
         from app.database import get_db_connection
+        _uid = session.get('user_id')
+        _is_admin = session.get('role') == 'admin'
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT id, user_id, task_id, bid_doc_name, check_file_name,
-                           rule_count, summary_json, ai_verdict,
-                           user_verdict, user_explain, results_json, created_at
-                    FROM compliance_feedback
-                    ORDER BY created_at DESC
-                    LIMIT %s
-                """, (limit,))
+                if _is_admin:
+                    cur.execute("""
+                        SELECT id, user_id, task_id, bid_doc_name, check_file_name,
+                               rule_count, summary_json, ai_verdict,
+                               user_verdict, user_explain, results_json, created_at
+                        FROM compliance_feedback
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                    """, (limit,))
+                else:
+                    # FIX-2026-09-29-077: owner scope — no cross-user training export.
+                    cur.execute("""
+                        SELECT id, user_id, task_id, bid_doc_name, check_file_name,
+                               rule_count, summary_json, ai_verdict,
+                               user_verdict, user_explain, results_json, created_at
+                        FROM compliance_feedback
+                        WHERE user_id = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                    """, (_uid, limit))
                 rows = cur.fetchall()
 
         if len(rows) < min_samples:

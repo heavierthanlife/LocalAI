@@ -8,6 +8,19 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P1-⑥ 合规反馈/训练数据 owner 过滤（FIX-077）
+
+### Fixed
+- **合规反馈跨用户读取/导出**（`app/routes/compliance.py`）：`/compliance/feedback/history` 与 `/compliance/training_data` 仅校验登录，`SELECT ... FROM compliance_feedback` 无 owner 过滤 → 任何登录用户可读取/导出他人反馈（user_id/判定/说明），并污染 LoRA 训练数据。现非管理员加 `WHERE user_id = %s`（仅本人），管理员（`role=admin`）全量。
+
+### Added
+- 回归 4 条（owner 过滤 / 管理员全量 / 训练导出 / 静态接线）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+196/196 regression collected（EXIT=0，0 failure） · verify_fixes 351/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — C3-c 残余孤儿扫尾（FIX-076）
 
 ### Removed
