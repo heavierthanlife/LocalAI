@@ -547,3 +547,15 @@ unresolved:
       FIX-070 攻击用例为接线级（monkeypatch 闸函数）；缺真库双账号 A/B 集成测试。
     blocked_by: "需 PG fixture（A/B 两行 chat_sessions）"
     resolution_plan: "补 @pytest.mark.db 集成测试：A 带 B 的 thread_id 归档 → 404/None。"
+
+  - id: UNRESOLVED-034
+    title: "ALLOWED_EXTENSIONS 仍含 .html/.htm（config.py），新上传口若只调 allowed_file() 会放进 HTML"
+    status: pending
+    severity: low
+    discovered: 2026-09-29
+    tags: ["P1", "安全", "上传"]
+    context: >
+      P1-⑨ 在路由层双重拒绝（allowed_file + 显式拒 .html/.htm），但 config.ALLOWED_EXTENSIONS
+      仍包含 .html/.htm → 未来新增上传口若只调 allowed_file()，HTML 仍可入。
+    blocked_by: ~
+    resolution_plan: "P1 收尾时在 config 层将 .html/.htm 移出自名单或加注释警示。"
