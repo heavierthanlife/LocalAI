@@ -665,12 +665,19 @@ def project_ai_sync_chat(project_id):
     user_id = session.get('user_id')
     if not user_id:
         return err("未登录", "AUTH_REQUIRED", 401)
-    
+
     data = request.get_json(silent=True) or {}
-    role = data.get('role', 'user')
     content = data.get('content', '').strip()
     if not content or len(content) < 2:
         return ok({"status": "skipped"})
+
+    # FIX-2026-09-29-079: project membership is required, and the role is forced
+    # server-side. The client-supplied role is untrusted — a user must not be able
+    # to write an 'assistant'/'system' message that would poison project AI memory.
+    from app.routes.projects import can_access_project
+    if not can_access_project(project_id, user_id):
+        return err("无权访问该项目", "FORBIDDEN", 403)
+    role = 'user'
 
     try:
         with get_db_connection() as conn:

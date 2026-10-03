@@ -2663,3 +2663,61 @@ def test_knowledge_upload_storage_name_opaque():
         assert 'allowed_file(file.filename)' in src, f
         assert 'f"{file_hash}_{int(time.time())}{_ext}"' in src, f
         assert '{int(time.time())}_{file.filename}' not in src, f
+
+
+# ── FIX-2026-09-29-079: project AI memory membership + forced role ──
+def test_ai_memory_requires_project_membership(app, monkeypatch):
+    """⑧: 非项目成员写 ai_memory → 403。"""
+    from app.routes import projects as proj
+    monkeypatch.setattr(proj, 'can_access_project', lambda pid, uid: False)
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/admin/projects/7/ai_memory',
+                    json={'role': 'user', 'content': 'hello there'})
+    assert r.status_code == 403, r.status_code
+
+
+def test_ai_memory_forces_user_role(app, monkeypatch):
+    """⑧: role=assistant 被服务端强制改写为 user（防伪装污染）。"""
+    from app.routes import projects as proj
+    monkeypatch.setattr(proj, 'can_access_project', lambda pid, uid: True)
+    captured = {}
+
+    class _Cur:
+        def execute(self, sql, params=None):
+            captured['params'] = params
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Conn:
+        def cursor(self, *a, **k):
+            return _Cur()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def commit(self):
+            pass
+
+    from app.routes import admin_regeneration as ar
+    monkeypatch.setattr(ar, 'get_db_connection', lambda: _Conn())
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/admin/projects/7/ai_memory',
+                    json={'role': 'assistant', 'content': 'fake assistant reply'})
+    assert r.status_code == 200, r.status_code
+    assert captured['params'][2] == 'user', captured
+
+
+def test_ai_memory_gate_wired():
+    with open('app/routes/admin_regeneration.py', encoding='utf-8') as f:
+        src = f.read()
+    assert 'can_access_project(project_id, user_id)' in src
+    assert "data.get('role', 'user')" not in src, 'client role must not be trusted'

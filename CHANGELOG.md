@@ -8,6 +8,19 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P1-⑧ 项目 AI 记忆成员校验（FIX-079）
+
+### Fixed
+- **项目 AI 记忆越权写**（`app/routes/admin_regeneration.py` `/admin/projects/<id>/ai_memory`）：原仅校验登录，未校验项目成员，且 `role` 取自客户端 → 任意登录用户可向**任意项目**灌 AI 记忆，并可写 `assistant`/`system` 伪装污染。现写入前 `can_access_project(project_id, user_id)`，非成员 **403**；`role` 服务端强制为 `'user'`（前端本就只发 user）。
+
+### Added
+- 回归 3 条（非成员 403 / role 强制 user / 静态接线）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+203/203 regression collected（EXIT=0，0 failure） · verify_fixes 358/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P1-⑨ 知识库上传白名单与安全存储名（FIX-078）
 
 ### Fixed

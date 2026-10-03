@@ -2116,3 +2116,21 @@ fixes:
       - type: literal_not
         file: app/routes/knowledge_company_kb.py
         pattern: "{int(time.time())}_{file.filename}"
+
+  - id: FIX-2026-09-29-079
+    title: "P1-⑧: 项目 AI 记忆成员校验 + 服务端强制 role=user"
+    severity: medium
+    rationale: >
+      /admin/projects/<id>/ai_memory 仅验登录、未校验项目成员，role 取自客户端
+      → 任意登录用户可向任意项目灌 AI 记忆，并可写 assistant/system 伪装污染。
+      现写入前 can_access_project(...)，非成员 403；role 服务端强制 'user'。
+    checks:
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "can_access_project(project_id, user_id)"
+      - type: literal
+        file: app/routes/admin_regeneration.py
+        pattern: "role = 'user'"
+      - type: literal_not
+        file: app/routes/admin_regeneration.py
+        pattern: "data.get('role', 'user')"
