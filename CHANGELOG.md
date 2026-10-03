@@ -8,6 +8,20 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — P1-⑨ 知识库上传白名单与安全存储名（FIX-078）
+
+### Fixed
+- **知识库上传无类型白名单**（`app/routes/knowledge.py`、`app/routes/knowledge_company_kb.py`）：两处上传未调 `allowed_file`，`.exe` 等可入库；且存储名 `f"{hash}_{ts}_{file.filename}"` 含原始文件名（路径穿越仅靠哈希前缀侥幸挡住）。现补 `allowed_file()` + 拒 `.html/.htm`，存储名改 `{hash}_{ts}{ext}`（同 `file_store`）。
+- 原名仅存 DB 列（`filename`/`original_name`）供展示与下载 `Content-Disposition`，**不回写路径**；`../../evil.txt` 因存储名不含原名而被安全化。存量数据不迁移。
+
+### Added
+- 回归 4 条（.exe 拒 / .html 拒 / 双扩展拒 / 存储名无原名）。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+200/200 regression collected（EXIT=0，0 failure） · verify_fixes 355/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — P1-⑥ 合规反馈/训练数据 owner 过滤（FIX-077）
 
 ### Fixed

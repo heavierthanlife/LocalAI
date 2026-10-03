@@ -9,7 +9,7 @@ import time
 
 from flask import request, jsonify, session, Response
 
-from app.config import BASE_DIR, to_rel_path, resolve_path, logger
+from app.config import BASE_DIR, to_rel_path, resolve_path, logger, allowed_file
 from app.database import get_db_connection, db_transaction
 from app.routes.knowledge import knowledge_bp
 from app.routes.knowledge_shared import _try_index_file, _try_wiki_ingest, _try_entity_extract
@@ -33,6 +33,10 @@ def upload_company_kb_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
+    # FIX-2026-09-29-078: extension whitelist + reject HTML; opaque stored name.
+    _ext = os.path.splitext(file.filename)[1].lower()
+    if not allowed_file(file.filename) or _ext in ('.html', '.htm'):
+        return jsonify({"error": "不支持的文件类型"}), 400
 
     category = request.form.get('category', '').strip()
     if not category:
@@ -53,7 +57,7 @@ def upload_company_kb_file():
     # Permanent storage
     COMPANY_KB_DIR = str(BASE_DIR / 'company_kb_files')
     os.makedirs(COMPANY_KB_DIR, exist_ok=True)
-    unique_name = f"{file_hash}_{int(time.time())}_{file.filename}"
+    unique_name = f"{file_hash}_{int(time.time())}{_ext}"
     stored_path = os.path.join(COMPANY_KB_DIR, unique_name)
     stored_rel = to_rel_path(stored_path)
     with open(stored_path, 'wb') as f:

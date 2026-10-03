@@ -2094,3 +2094,25 @@ fixes:
       - type: literal
         file: app/routes/compliance.py
         pattern: "session.get('role') == 'admin'"
+
+  - id: FIX-2026-09-29-078
+    title: "P1-⑨: 知识库上传类型白名单 + 无原名存储名"
+    severity: medium
+    rationale: >
+      knowledge_lab/company_kb 上传未调 allowed_file，且 stored_path 用
+      f"{hash}_{ts}_{file.filename}"（含原始名，路径穿越仅靠哈希前缀侥幸挡住）。现两处调
+      allowed_file + 拒 .html/.htm，存储名改 {hash}_{ts}{ext}（同 file_store）；
+      原名仅存 DB 列供展示/下载 Content-Disposition，不回写路径。存量不迁移。
+    checks:
+      - type: literal
+        file: app/routes/knowledge.py
+        pattern: "allowed_file(file.filename)"
+      - type: literal
+        file: app/routes/knowledge_company_kb.py
+        pattern: "allowed_file(file.filename)"
+      - type: literal_not
+        file: app/routes/knowledge.py
+        pattern: "{int(time.time())}_{file.filename}"
+      - type: literal_not
+        file: app/routes/knowledge_company_kb.py
+        pattern: "{int(time.time())}_{file.filename}"

@@ -2619,3 +2619,47 @@ def test_compliance_feedback_owner_filter_wired():
         src = f.read()
     assert src.count('WHERE user_id = %s') >= 2, 'both feedback endpoints must scope by owner'
     assert "session.get('role') == 'admin'" in src
+
+
+# ── FIX-2026-09-29-078: knowledge upload whitelist + opaque stored name ──
+def test_knowledge_lab_upload_rejects_exe(app):
+    """⑨: /knowledge_lab/upload 拒 .exe（早退，无需 DB）。"""
+    import io as _io
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/knowledge_lab/upload',
+                    data={'file': (_io.BytesIO(b'MZbinary'), 'evil.exe')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 400, r.status_code
+
+
+def test_knowledge_lab_upload_rejects_html(app):
+    """⑨: /knowledge_lab/upload 拒 .html。"""
+    import io as _io
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/knowledge_lab/upload',
+                    data={'file': (_io.BytesIO(b'<script>x</script>'), 'x.html')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 400, r.status_code
+
+
+def test_company_kb_upload_rejects_double_ext(app):
+    """⑨: /company_kb/upload 拒双扩展 a.pdf.exe。"""
+    import io as _io
+    client = app.test_client()
+    _sess(client, 'admin', 'admin')
+    r = client.post('/company_kb/upload',
+                    data={'file': (_io.BytesIO(b'X'), 'a.pdf.exe'), 'category': 'test'},
+                    content_type='multipart/form-data')
+    assert r.status_code == 400, r.status_code
+
+
+def test_knowledge_upload_storage_name_opaque():
+    """⑨: 存储名不得含原始文件名。"""
+    for f in ('app/routes/knowledge.py', 'app/routes/knowledge_company_kb.py'):
+        with open(f, encoding='utf-8') as fh:
+            src = fh.read()
+        assert 'allowed_file(file.filename)' in src, f
+        assert 'f"{file_hash}_{int(time.time())}{_ext}"' in src, f
+        assert '{int(time.time())}_{file.filename}' not in src, f

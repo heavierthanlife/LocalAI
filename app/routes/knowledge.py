@@ -13,7 +13,7 @@ from app.services.document_classifier import classify_and_categorize
 
 from psycopg2.extras import RealDictCursor
 
-from app.config import is_valid_extracted_text, ALLOWED_EXTENSIONS
+from app.config import is_valid_extracted_text, ALLOWED_EXTENSIONS, allowed_file
 from app.routes.admin import login_required
 from app.services.kb_skill_engine import generate_skill_for_file
 from app.routes.knowledge_shared import (
@@ -37,6 +37,11 @@ def upload_knowledge_lab_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
+    # FIX-2026-09-29-078: extension whitelist + reject HTML; stored name is opaque
+    # ({hash}_{ts}{ext}) so the original filename never reaches the filesystem path.
+    _ext = os.path.splitext(file.filename)[1].lower()
+    if not allowed_file(file.filename) or _ext in ('.html', '.htm'):
+        return jsonify({"error": "不支持的文件类型"}), 400
 
     # Extract text
     file_bytes = file.read()
@@ -56,7 +61,7 @@ def upload_knowledge_lab_file():
     # Save file permanently
     KNOWLEDGE_LAB_DIR = str(BASE_DIR / 'knowledge_lab_files')
     os.makedirs(KNOWLEDGE_LAB_DIR, exist_ok=True)
-    unique_name = f"{file_hash}_{int(time.time())}_{file.filename}"
+    unique_name = f"{file_hash}_{int(time.time())}{_ext}"
     stored_path = os.path.join(KNOWLEDGE_LAB_DIR, unique_name)
     stored_rel = to_rel_path(stored_path)
     with open(stored_path, 'wb') as f:
