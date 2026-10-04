@@ -63,27 +63,36 @@
 ### 驳回/降级项
 - 无（15 条全部复核有效；严重级微调：M5 保持 Medium，未升 High——登录态端点空 user_id 实际可达性低）
 
-## ⑤ IMPLEMENT
-- 待用户批准；批内每 fix 一 commit + 门禁（pytest / verify_fixes / node --check）+ fix_registry 条目
+## ⑤ IMPLEMENT（用户批准：分四批全处理）
+- 批 A（High 后端）：`de30505` — H1 `rejected_indices` set()→list · H2 `report_dir` 前置 · M6 url_guard port
+- 批 B（安全）：`de30505` — H3 username 白名单 + `safe_tag` · M5 `task_owner_ok` 空 owner fail-closed
+- 批 C（前端/功能）：`de30505` — M7 前端 escapeHtml · M8 GET 下载路由 · nginx 静态头 · credit get_json · tasks 404
+- 批 D（加固）：`de30505` — D1 kb_review task_id · D2 login_guard {u}:{ip} · D3 auth 等时/`ADMIN_USERNAMES` · D4 compose 强口令
+- 复核后补（同 commit）：`de30505` — GET 根放宽到 `DATA_DIR`（覆盖 docx）· `report_dir` 不再取共享 user_styles · app.js 三处 `safeDownloadUrl`
+- 终检 M：`1ad5980` — `safeDownloadUrl` 拒绝协议相对 `//`
+- 门禁：237/237 regression · verify_fixes 391/0 · node --check OK
 
 ## ⑥ DOCS
-- CHANGELOG `[2026-10-04]` Round 030 · 本 round-030.md · 受影响 AGENTS/文档
+- CHANGELOG `[2026-10-04]`（14 条 FIX 细分 + LLM 拒答实测 + 视觉 A/B）· `data/fix_registry.yaml` 14 条 FIX · `AGENTS.md`（`ADMIN_USERNAMES` + 空 owner fail-closed）· `.env.example` · 本文件 · `repair_kit/SYSTEM_CHECKLIST.md`（自动重生成）— `de30505`
 
 ## ⑦ PUSH
-- 待执行
+- `git push LocalAI master` → `ea1ea54..de30505` OK（`1ad5980` 随收尾一并推送）；远端 == 本地 HEAD（de30505 后为 1ad5980）
 
 ## ⑧ IMAGE
-- 待执行
+- `docker compose build --build-arg TORCH_INDEX=…/cpu app`（临时把 Dockerfile 的 tuna 镜像换为 **ustc https** + `pypi.org`，构建后 `git checkout` 还原）→ `local-ai:latest` 重建成功 → `up -d --force-recreate app celery-worker celery-beat`
+- 健康：`/check_auth` = **200**，app healthy；容器内 grep 抽查 10/10 命中（safe_tag / download_original_file_get / safeDownloadUrl / _kb_review_path / 空 owner / ADMIN_USERNAMES / _DUMMY_PIN_HASH / invalid port / get_json silent）→ **镜像 = HEAD**
+- 环境坑：本机 apt 需 ustc **https**（tuna 403；aliyun http trixie 404），已固化进 skill
 
 ## ⑨ RE-CHECK
-- 新增 Critical/High: 3（H1/H2/H3）→ 继续（未达停跑闸门）
+- 终检（mimo-v2.6-pro 只读）：5/5 rework 修复正确；新增 **C:0 H:0 M:1 L:3**（M=协议相对 URL，已修 `1ad5980`；L=DOM `a.href` 赋值 / docx 共享目录 / `_save_structured_data` task_id，均在本次范围外，记 backlog）
+- **新增 Critical/High = 0 且 pending 空 → 停跑闸门达成（loop 结束）**
 
 ---
 
 ## §V 视觉专项：MiMo v2.6-pro 视觉 vs 项目 EasyOCR A/B
 
 样本：
-1. `data/qa_loop/vision-probe/login-18080.png`（当轮实拍，整页，正常尺寸）
+1. `login-18080.png`（当轮实拍，整页，正常尺寸；scratch 已清理）
 2. `tests/visual_screenshots/01_clearance_report_full.png`（1740×15315 巨幅整页）
 
 | 维度 | EasyOCR (CPU) | MiMo v2.6-pro 视觉 |
