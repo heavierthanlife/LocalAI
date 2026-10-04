@@ -561,3 +561,18 @@ unresolved:
       仍包含 .html/.htm → 未来新增上传口若只调 allowed_file()，HTML 仍可入。
     blocked_by: ~
     resolution_plan: "P1 收尾时在 config 层将 .html/.htm 移出自名单或加注释警示。"
+
+  - id: UNRESOLVED-035
+    title: "宿主 443 被占用（100.126.220.49 / PID 8984，疑 VPN/ZeroTier）→ nginx 443:443 无法发布"
+    status: pending
+    severity: medium
+    discovered: 2026-09-29
+    tags: ["部署", "nginx", "运维"]
+    context: >
+      docker-compose.yml:213 发布 "443:443"，但宿主 443 已被其他进程监听，
+      docker ps 仅见 :80。http://localhost → 301 https://localhost → 不可达。
+      与 AGENTS.md「nginx 在 :80/:443」表述不符（部署环境问题，非文档虚称）。
+    resolution_plan: >
+      二选一：① 释放/迁移宿主 443（查 PID 8984 归属，VPN 类改非 443 或关闭）；
+      ② compose/nginx 改发布端口（如 8443:443）并同步 AGENTS.md/USER_MANUAL。
+      改 compose 属行为变更 → 需审查方复核 + CHANGELOG。
