@@ -116,7 +116,7 @@ let currentProjectName = '';
                                     resultDiv.innerHTML = `<div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
                                         <p style="color:#16a34a;font-weight:bold;">✅ 报告已生成</p>
                                         <p>📄 ${escapeHtml(d.filename)} · ${d.size_kb}KB</p>
-                                        <a href="${d.download_url}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
+                                        <a href="${escapeHtml(/^(\/|https?:\/\/)/.test(d.download_url || '') ? d.download_url : '#')}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
                                     </div>`;
                                 } else {
                                     resultDiv.innerHTML = `<p style="color:#dc2626;">❌ ${escapeHtml(d.error||'生成失败')}</p>`;
@@ -240,8 +240,8 @@ let currentProjectName = '';
                             body:JSON.stringify({action:'set_ttl', ttl_hours:hrs})
                         });
                         const d = await r.json();
-                        if (r.ok) { ttlDisplay.textContent = hrs; msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>'; }
-                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
+                        if (r.ok) { ttlDisplay.textContent = hrs; msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+escapeHtml(d.message)+'</span>'; }
+                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+escapeHtml(d.error||'失败')+'</span>';
                     } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 };
                 m.getElementById('searchCacheClearBtn').onclick = async () => {
@@ -252,8 +252,8 @@ let currentProjectName = '';
                             body:JSON.stringify({action:'clear'})
                         });
                         const d = await r.json();
-                        if (r.ok) msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+d.message+'</span>';
-                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+(d.error||'失败')+'</span>';
+                        if (r.ok) msgEl.innerHTML = '<span style="color:#22c55e;">' + _icon('check_circle') + ' '+escapeHtml(d.message)+'</span>';
+                        else msgEl.innerHTML = '<span style="color:#ef4444;">' + _icon('cancel') + ' '+escapeHtml(d.error||'失败')+'</span>';
                     } catch(_) { msgEl.innerHTML = '<span style="color:#ef4444;">网络错误</span>'; }
                 };
             };

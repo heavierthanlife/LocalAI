@@ -362,6 +362,12 @@
         });
     }
 
+    // 下载 URL 消毒：仅允许站内相对路径或 http(s)（FIX-2026-10-04-QA-030-07）
+    function safeDownloadUrl(u) {
+        var s = (u == null) ? '' : String(u);
+        return /^(\/|https?:\/\/)/.test(s) ? escapeHtml(s) : '#';
+    }
+
     // 全局 XSS 消毒入口；无 DOMPurify vendor 时降级为纯文本转义
     function _safeHTML(html) {
         if (typeof DOMPurify !== 'undefined') {
@@ -3261,7 +3267,7 @@
                                     resultDiv.innerHTML = `<div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
                                         <p style="color:#16a34a;font-weight:bold;">✅ 报告已生成</p>
                                         <p>📄 ${escapeHtml(d.filename)} · ${d.size_kb}KB</p>
-                                        <a href="${d.download_url}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
+                                        <a href="${safeDownloadUrl(d.download_url)}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
                                     </div>`;
                                 } else {
                                     resultDiv.innerHTML = `<p style="color:#dc2626;">❌ ${escapeHtml(d.error||'生成失败')}</p>`;
@@ -4775,7 +4781,7 @@
             const res = await fetch(`/admin/projects/${projectId}/folders`, { credentials: 'include' });
             if (!res.ok) {
                 const err = await res.json();
-                container.innerHTML = `<p>加载失败: ${err.error || '未知错误'}</p>`;
+                container.innerHTML = `<p>加载失败: ${escapeHtml(err.error || '未知错误')}</p>`;
                 return;
             }
             const data = await res.json();
@@ -8193,7 +8199,7 @@
         if (crossPairCount) html += '<div>🔀 横向对比: <b>' + crossPairCount + '</b> 对组合</div>';
         html += '</div>';
         if (dlUrl) {
-            html += '<div style="text-align:center;margin-bottom:10px;"><button class="task-result-download" data-url="' + dlUrl + '" style="display:inline-block;background:#8e44ad;color:#fff;padding:10px 24px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;">📥 下载报告 (DOCX+PDF)</button></div>';
+            html += '<div style="text-align:center;margin-bottom:10px;"><button class="task-result-download" data-url="' + safeDownloadUrl(dlUrl) + '" style="display:inline-block;background:#8e44ad;color:#fff;padding:10px 24px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:0.85rem;">📥 下载报告 (DOCX+PDF)</button></div>';
         }
         html += '<div style="text-align:center;"><button class="task-result-close" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 18px;cursor:pointer;background:#f9fafb;font-size:0.75rem;">关闭</button></div>';
 
@@ -9150,7 +9156,7 @@
         // ── 下载链接 ──
         if (downloadUrl) {
             html += '<div style="margin-bottom:10px;">';
-            html += '<a href="' + downloadUrl + '" data-clearance-download="1" download style="color:#16a34a;text-decoration:none;font-weight:600;">' + _icon('📥') + ' 下载报告 (DOCX+PDF)</a>';
+            html += '<a href="' + safeDownloadUrl(downloadUrl) + '" data-clearance-download="1" download style="color:#16a34a;text-decoration:none;font-weight:600;">' + _icon('📥') + ' 下载报告 (DOCX+PDF)</a>';
             html += '</div>';
         }
 

@@ -57,9 +57,16 @@ def task_owner_ok(meta, user_id) -> bool:
         logger.warning("task_owner_ok: malformed task meta; denying access")
         return False
     owner = meta.get('user_id')
-    if not owner:
+    if 'user_id' not in meta:
         logger.warning("Task meta missing user_id; allowing access (legacy task)")
         return True
+    if not owner:
+        # FIX-2026-10-04-QA-030: an explicitly empty owner (register_queued with
+        # user_id='') must NOT fall into the legacy-allow branch — that silently
+        # bypassed FIX-080's fail-closed owner check. Only a truly absent key is
+        # treated as a pre-ownership-tracked legacy task.
+        logger.warning("Task meta has empty user_id; denying access (fail-closed)")
+        return False
     return str(user_id) == str(owner)
 
 
@@ -69,9 +76,11 @@ def load_task_for(task_id, user_id):
     Returns ``(meta, status)`` with ``status`` in ``{'ok', 'missing', 'forbidden'}``:
 
     - ``ok``        → ``meta`` is a dict owned by ``user_id``; caller may proceed.
-    - ``missing``   → no meta (expired / legacy / Redis unavailable); the caller
-                      decides whether that means 404 or "allow" (compliance lets
-                      disk-persisted results outlive the redis TTL).
+    - ``missing``   → no meta (expired / legacy / Redis unavailable); each caller
+                      decides 404 vs. allow. Note: compliance's
+                      ``_task_forbidden`` maps *both* ``missing`` and
+                      ``forbidden`` to deny (fail-closed, FIX-080), so disk-
+                      persisted results do NOT outlive the Redis TTL either.
     - ``forbidden`` → a different owner, or the lookup raised → deny (fail-closed).
 
     Fail-closed by design: a TaskBus/Redis exception is treated as ``forbidden``

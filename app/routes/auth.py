@@ -1,5 +1,5 @@
 """Blueprint: auth routes (auto-extracted)."""
-import os, json, uuid, time, logging, hashlib, io, secrets
+import os, json, uuid, time, logging, hashlib, io, secrets, re
 from flask import Blueprint, request, jsonify, session, send_file, render_template, url_for
 
 from app.config import BASE_DIR, DATA_DIR, TEMP_ROOT, TEMP_DIR, USER_FILES_ORIGINAL_ROOT, logger
@@ -61,6 +61,13 @@ def check_auth():
         ))
     })
 
+# FIX-2026-10-04-QA-030: privileged account names configurable (was hardcoded),
+# and a precomputed dummy hash equalises login timing for unknown users.
+_ADMIN_USERNAMES = tuple(
+    x.strip() for x in os.getenv('ADMIN_USERNAMES', 'admin,CEO,COO').split(',') if x.strip()
+)
+_DUMMY_PIN_HASH = generate_password_hash('timing-equalizer-not-a-real-pin')
+
 @auth_bp.route('/create_account', methods=['POST'])
 def create_account():
     # Registration implies consent — no separate /consent call needed
@@ -73,6 +80,10 @@ def create_account():
         return jsonify({"error": "用户名和PIN不能为空"}), 400
     if len(username) < 5 or len(username) > 18:
         return jsonify({"error": "用户名长度应为5-18个字符"}), 400
+    # FIX-2026-10-04-QA-030: charset whitelist — username is embedded in report
+    # file paths; unrestricted chars allowed path traversal (`../`).
+    if not re.fullmatch(r'[A-Za-z0-9_\u4e00-\u9fa5]{5,18}', username):
+        return jsonify({"error": "用户名只能包含中文、字母、数字、下划线（5-18位）"}), 400
     if pin_length not in [4, 6] or len(pin) != pin_length:
         return jsonify({"error": f"PIN必须是{pin_length}位数字"}), 400
     if not pin.isdigit():
@@ -135,7 +146,7 @@ def login():
         _resp.headers['Retry-After'] = str(int(_wait))
         return _resp
 
-    if username in ("admin", "CEO", "COO"):
+    if username in _ADMIN_USERNAMES:
         from flask import current_app
         # All admin accounts share the same PIN
         admin_hash = current_app.config.get('ADMIN_PASSWORD_HASH')
@@ -193,7 +204,13 @@ def login():
                 (username,)
             )
             user = cur.fetchone()
-            if not user or not check_password_hash(user['pin_hash'], pin):
+            if user is None:
+                # FIX-2026-10-04-QA-030: run a dummy hash check so a missing user
+                # is not distinguishable by response timing (user enumeration).
+                check_password_hash(_DUMMY_PIN_HASH, pin)
+                record_login_failure(username, _ip)
+                return jsonify({"error": "用户名或PIN错误"}), 401
+            if not check_password_hash(user['pin_hash'], pin):
                 record_login_failure(username, _ip)
                 return jsonify({"error": "用户名或PIN错误"}), 401
 
@@ -252,6 +269,9 @@ def update_account():
             if new_username:
                 if len(new_username) < 5 or len(new_username) > 18:
                     return jsonify({"error": "用户名长度应为5-18个字符"}), 400
+                # FIX-2026-10-04-QA-030: same charset whitelist as registration.
+                if not re.fullmatch(r'[A-Za-z0-9_\u4e00-\u9fa5]{5,18}', new_username):
+                    return jsonify({"error": "用户名只能包含中文、字母、数字、下划线（5-18位）"}), 400
                 cur.execute("SELECT 1 FROM users WHERE username = %s AND user_id != %s",
                             (new_username, session['user_id']))
                 if cur.fetchone():

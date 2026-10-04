@@ -22,7 +22,7 @@ x-app-env: &app-env
   - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
   - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
   - BOCHA_API_KEY=${BOCHA_API_KEY:-}
-  - DATABASE_URL=postgresql://localai:${DB_PASSWORD:-localai}@postgres:5432/localai
+  - DATABASE_URL=postgresql://localai:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@postgres:5432/localai
   - REDIS_URL=redis://redis:6379/0
   - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
   - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
@@ -95,7 +95,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: localai
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-localai}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       POSTGRES_DB: localai
     volumes:
       - pg_data:/var/lib/postgresql/data

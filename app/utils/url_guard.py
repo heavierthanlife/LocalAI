@@ -54,7 +54,12 @@ def check_url(url: str) -> Tuple[bool, str]:
         return False, 'missing host'
     if host.lower() in _DENY_HOSTNAMES:
         return False, f'blocked host: {host}'
-    port = parts.port or (443 if parts.scheme == 'https' else 80)
+    # FIX-2026-10-04-QA-030: accessing .port raises ValueError for out-of-range
+    # ports (e.g. :99999). It must not escape the (ok, reason) contract.
+    try:
+        port = parts.port or (443 if parts.scheme == 'https' else 80)
+    except ValueError as e:
+        return False, f'invalid port: {e}'
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except Exception as e:

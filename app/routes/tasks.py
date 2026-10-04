@@ -78,6 +78,10 @@ def delete_task(task_id: str):
     _, status = load_task_for(task_id, user_id)
     if status == 'forbidden':
         return jsonify({'error': 'Forbidden'}), 403
+    if status == 'missing':
+        # FIX-2026-10-04-QA-030: a missing task must 404 (was silently treated
+        # as success, inconsistent with get/cancel/stream).
+        return jsonify({'error': 'Not Found'}), 404
     TaskBus.delete(task_id)
     return jsonify({'success': True})
 

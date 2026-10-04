@@ -90,7 +90,7 @@ def start_credit_check():
     if not isinstance(uid_or_err, str):
         return uid_or_err
     user_id = uid_or_err
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     companies = data.get('companies', [])
     urls = data.get('urls', [])
     if not companies or not urls:
@@ -329,7 +329,7 @@ def solve_captcha(task_id):
         return jsonify({"error": "Task not found"}), 404
     if not task_owner_ok(task, session.get('user_id')):
         return jsonify({"error": "Forbidden"}), 403
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     solution = data.get('solution', '')
     _credit_patch(task_id, captcha_solution=solution)

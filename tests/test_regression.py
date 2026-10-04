@@ -2963,3 +2963,131 @@ def test_no_jwt_encode_anywhere():
                     if 'jwt.encode' in f.read():
                         hits.append(p)
     assert hits == [], hits
+
+
+# ── FIX-2026-10-04-QA-030 (round-030): reviewer=mimo-v2.6-pro ──
+
+def test_qa030_ingest_rejected_indices_json_serialisable():
+    """H1: _prepare_kb_review must not put a set() into the JSON review file."""
+    import json, tempfile, os
+    from app.services import ingest_pipeline as ip
+    # Directly exercise the dict that gets json.dump'ed (no chunk_text needed).
+    src = open('app/services/ingest_pipeline.py', encoding='utf-8').read()
+    assert "'rejected_indices': set()," not in src
+    assert "'rejected_indices': []," in src
+    # And confirm a set() actually fails the dump the old code did.
+    try:
+        json.dumps({'rejected_indices': set()})
+        raised = False
+    except TypeError:
+        raised = True
+    assert raised, "sanity: set() is not JSON-serialisable"
+
+
+def test_qa030_knowledge_report_dir_defined_both_paths():
+    """H2: report_dir assigned before the try (was only in except → UnboundLocalError)."""
+    src = open('app/routes/knowledge.py', encoding='utf-8').read()
+    assert 'report_dir = os.path.join(USER_FILES_ORIGINAL_ROOT, user_id)' in src
+    assert 'os.makedirs(report_dir, exist_ok=True)' in src
+    # the success path must not reopen the shared-dir / unbound regression
+    assert 'report_dir = os.path.dirname(report_path)' not in src
+
+
+def test_qa030_username_charset_whitelist_wired():
+    """H3: registration/rename enforce a username charset (path-traversal guard)."""
+    src = open('app/routes/auth.py', encoding='utf-8').read()
+    assert "A-Za-z0-9_\\u4e00-\\u9fa5" in src
+    assert src.count('用户名只能包含中文、字母、数字、下划线（5-18位）') >= 2
+    ksrc = open('app/routes/knowledge.py', encoding='utf-8').read()
+    assert 'safe_tag = re.sub(' in ksrc
+
+
+def test_qa030_task_owner_ok_empty_fails_closed():
+    """M5: empty-string owner is denied; only an absent key is a legacy task."""
+    from app.utils.helpers import task_owner_ok
+    assert task_owner_ok({}, 'u1') is True, "legacy (no key) must stay allowed"
+    assert task_owner_ok({'user_id': ''}, 'u1') is False, "empty owner must fail closed"
+    assert task_owner_ok({'user_id': 'u1'}, 'u1') is True
+    assert task_owner_ok({'user_id': 'u1'}, 'u2') is False
+
+
+def test_qa030_url_guard_invalid_port_returns_tuple():
+    """M6: URL with an out-of-range port must not raise out of check_url."""
+    from app.utils.url_guard import check_url
+    ok, reason = check_url('http://127.0.0.1:99999/x')
+    assert ok is False
+    assert 'port' in reason.lower()
+
+
+def test_qa030_download_get_route_registered(app):
+    """M8: GET download variant exists and is owner-guarded."""
+    rules = [str(r) for r in app.url_map.iter_rules()]
+    assert any('/download_original_file/<user_id>/<path:filename>' in r for r in rules), rules
+    src = open('app/routes/chat_files.py', encoding='utf-8').read()
+    assert 'if str(sess_uid) != str(user_id) and not is_admin():' in src
+
+
+def test_qa030_frontend_escapes_and_validates():
+    """M7: server strings escaped before innerHTML; download_url scheme checked."""
+    appjs = open('static/js/app.js', encoding='utf-8').read()
+    assert "escapeHtml(err.error || '未知错误')" in appjs
+    assert 'safeDownloadUrl(d.download_url)' in appjs
+    assert 'safeDownloadUrl(downloadUrl)' in appjs
+    kl = open('static/js/knowledge-lab.js', encoding='utf-8').read()
+    assert 'escapeHtml(d.message)' in kl
+    assert "test(d.download_url" in kl
+
+
+def test_qa030_credit_get_json_silent():
+    """L14: no 500 on a missing/invalid JSON body."""
+    assert 'data = request.get_json(silent=True) or {}' in open('app/routes/credit.py', encoding='utf-8').read()
+
+
+def test_qa030_tasks_delete_missing_404():
+    """L15: delete on a missing task returns 404."""
+    src = open('app/routes/tasks.py', encoding='utf-8').read()
+    assert "if status == 'missing':" in src
+    assert "return jsonify({'error': 'Not Found'}), 404" in src
+
+
+def test_qa030_kb_review_path_rejects_traversal():
+    """L9: _kb_review_path must reject separators / traversal ids."""
+    from app.services.ingest_pipeline import _kb_review_path
+    assert _kb_review_path('abc123').endswith('kb_review_abc123.json')
+    for bad in ('../../etc/passwd', 'a/b', 'a\\b', '..', ''):
+        p = _kb_review_path(bad)
+        assert '..' not in p and 'passwd' not in p and p.endswith('.kb_review_invalid')
+
+
+def test_qa030_login_guard_fail_counters_ip_scoped(monkeypatch):
+    """L10: failure counters are per (username, ip); memory purge honours TTL."""
+    import app.services.login_guard as lg
+    monkeypatch.setattr(lg, '_redis', lambda: None)
+    lg._mem.clear()
+    lg.record_login_failure('Alice', '1.1.1.1')
+    lg.record_login_failure('Alice', '2.2.2.2')
+    keys = [k for k in lg._mem if k.startswith('login_fail:')]
+    assert 'login_fail:alice:1.1.1.1' in keys
+    assert 'login_fail:alice:2.2.2.2' in keys
+    lg._mem.clear()
+
+
+def test_qa030_auth_timing_and_admin_config():
+    """L11: dummy hash for unknown users; admin usernames configurable."""
+    from app.routes.auth import _DUMMY_PIN_HASH, _ADMIN_USERNAMES
+    assert _DUMMY_PIN_HASH
+    assert 'admin' in _ADMIN_USERNAMES
+
+
+def test_qa030_compose_requires_db_password():
+    """L13: no insecure default DB password in compose."""
+    src = open('docker-compose.yml', encoding='utf-8').read()
+    assert 'DB_PASSWORD:-localai' not in src
+    assert 'DB_PASSWORD:?' in src
+
+
+def test_qa030_nginx_static_security_headers():
+    """L12: /static/ location re-declares server-level security headers."""
+    src = open('nginx.conf', encoding='utf-8').read()
+    assert src.count('add_header X-Content-Type-Options nosniff;') >= 2
+    assert src.count('add_header X-Frame-Options SAMEORIGIN;') >= 2

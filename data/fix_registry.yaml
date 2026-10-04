@@ -2206,3 +2206,183 @@ fixes:
       - type: literal_not
         file: app/services/login_guard.py
         pattern: "/api/login"
+
+  # ── QA-Loop round-030 (2026-10-04) — reviewer: mimo-v2.6-pro ──
+
+  - id: FIX-2026-10-04-QA-030-01
+    title: "ingest_pipeline: rejected_indices must be JSON-serialisable (was set())"
+    severity: high
+    rationale: >
+      _prepare_kb_review() wrote 'rejected_indices': set() then json.dump(no default)
+      → TypeError, caught by the outer except → status=error, aborting the whole
+      ingestion pipeline (Pipeline B onward). Downstream reject_kb_chunk reads a list.
+    checks:
+      - type: literal_not
+        file: app/services/ingest_pipeline.py
+        pattern: "'rejected_indices': set(),"
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "'rejected_indices': [],"
+
+  - id: FIX-2026-10-04-QA-030-02
+    title: "knowledge: report_dir defined on the success path (was UnboundLocalError)"
+    severity: high
+    rationale: >
+      admin_generate_work_report assigned report_dir only inside except; the success
+      path hit os.path.join(report_dir, ...) unbound → 500 on every successful report.
+    checks:
+      - type: literal
+        file: app/routes/knowledge.py
+        pattern: "report_dir = os.path.join(USER_FILES_ORIGINAL_ROOT, user_id)"
+      - type: literal_not
+        file: app/routes/knowledge.py
+        pattern: "report_dir = os.path.dirname(report_path)"
+
+  - id: FIX-2026-10-04-QA-030-03
+    title: "auth/knowledge: username charset whitelist + report filename sanitised (path traversal)"
+    severity: high
+    rationale: >
+      Registration/rename only checked length, so a username with ../ could traverse
+      out of USER_FILES_ORIGINAL_ROOT when embedded in a report filename. Enforce a
+      charset whitelist and sanitise the tag used for filenames.
+    checks:
+      - type: grep
+        file: app/routes/auth.py
+        pattern: "A-Za-z0-9_\\\\u4e00-\\\\u9fa5"
+      - type: literal
+        file: app/routes/knowledge.py
+        pattern: "safe_tag = re.sub("
+
+  - id: FIX-2026-10-04-QA-030-04
+    title: "task_owner_ok: explicitly empty user_id fails closed (not legacy-allowed)"
+    severity: medium
+    rationale: >
+      register_queued(extra={'user_id': ''}) caused task_owner_ok to take the legacy
+      'if not owner: return True' branch → FIX-080 fail-closed owner check bypassed.
+      Only a truly absent key is a legacy task now.
+    checks:
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "Task meta has empty user_id; denying access (fail-closed)"
+      - type: literal
+        file: app/utils/helpers.py
+        pattern: "if 'user_id' not in meta:"
+
+  - id: FIX-2026-10-04-QA-030-05
+    title: "url_guard: out-of-range port must return (False, reason), not raise"
+    severity: medium
+    rationale: >
+      parts.port raises ValueError for e.g. :99999; it sat outside the try, so the
+      SSRF guard escaped its (ok, reason) contract and the routes 500'd.
+    checks:
+      - type: literal
+        file: app/utils/url_guard.py
+        pattern: "invalid port: {e}"
+
+  - id: FIX-2026-10-04-QA-030-06
+    title: "chat_files: GET /download_original_file/<uid>/<file> (report download link was POST-only)"
+    severity: medium
+    rationale: >
+      knowledge.py returns download_url: /download_original_file/<uid>/<file> opened
+      by an <a href> (GET), but the only route was POST with a JSON body → 405 and the
+      path params never matched. Added an owner-checked, traversal-safe GET variant.
+    checks:
+      - type: literal
+        file: app/routes/chat_files.py
+        pattern: "/download_original_file/<user_id>/<path:filename>"
+      - type: literal
+        file: app/routes/chat_files.py
+        pattern: "if str(sess_uid) != str(user_id) and not is_admin():"
+
+  - id: FIX-2026-10-04-QA-030-07
+    title: "frontend: escape server strings before innerHTML + validate download_url scheme"
+    severity: medium
+    rationale: >
+      err.error / d.message / d.error were interpolated into innerHTML unescaped, and
+      d.download_url went straight into an href (javascript: risk).
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "escapeHtml(err.error || '未知错误')"
+      - type: literal
+        file: static/js/knowledge-lab.js
+        pattern: "escapeHtml(d.message)"
+
+  - id: FIX-2026-10-04-QA-030-08
+    title: "credit: get_json(silent=True) — no 500 on missing/invalid JSON body"
+    severity: low
+    rationale: "request.get_json() returned None or raised 415 → data.get() 500."
+    checks:
+      - type: literal
+        file: app/routes/credit.py
+        pattern: "data = request.get_json(silent=True) or {}"
+
+  - id: FIX-2026-10-04-QA-030-09
+    title: "tasks: delete on a missing task returns 404 (was success)"
+    severity: low
+    rationale: "Only 'forbidden' was handled; 'missing' still deleted and returned success, inconsistent with get/cancel/stream."
+    checks:
+      - type: literal
+        file: app/routes/tasks.py
+        pattern: "return jsonify({'error': 'Not Found'}), 404"
+
+  - id: FIX-2026-10-04-QA-030-10
+    title: "ingest_pipeline: kb_review task_id validated against traversal"
+    severity: low
+    rationale: >
+      KB_REVIEW_PATH_TEMPLATE.format(task_id=...) used a URL-supplied id directly;
+      a '..\\..' value could traverse on Windows. Centralised in _kb_review_path().
+    checks:
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "def _kb_review_path(task_id: str) -> str:"
+      - type: literal
+        file: app/services/ingest_pipeline.py
+        pattern: "_KB_TASK_ID_RE = re.compile"
+
+  - id: FIX-2026-10-04-QA-030-11
+    title: "login_guard: fail counters IP-scoped + memory purge honours per-key TTL"
+    severity: low
+    rationale: >
+      login_fail:{u} was username-global → one attacker could cool down a victim
+      across all IPs; _mem_purge used max(FAIL_TTL, LOCK_TTL)=900s so memory failure
+      counters outlived the Redis 120s TTL.
+    checks:
+      - type: literal
+        file: app/services/login_guard.py
+        pattern: "fail_key = f\"login_fail:{u}:{ip}\""
+      - type: literal
+        file: app/services/login_guard.py
+        pattern: "ttl = LOCK_TTL if k.startswith('login_lock:') else FAIL_TTL"
+
+  - id: FIX-2026-10-04-QA-030-12
+    title: "auth: constant-time login for unknown users + configurable admin usernames"
+    severity: low
+    rationale: >
+      Unknown-user login short-circuited before any hash check (user-enumeration
+      timing side channel); admin usernames were hardcoded.
+    checks:
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "_DUMMY_PIN_HASH"
+      - type: literal
+        file: app/routes/auth.py
+        pattern: "_ADMIN_USERNAMES"
+
+  - id: FIX-2026-10-04-QA-030-13
+    title: "nginx: re-declare security headers inside /static/ (add_header inheritance reset)"
+    severity: low
+    rationale: "A location-level add_header cancels inherited server-level security headers; static responses lost nosniff/frame/xss."
+    checks:
+      - type: literal
+        file: nginx.conf
+        pattern: "add_header X-Content-Type-Options nosniff;\n            add_header X-Frame-Options SAMEORIGIN;"
+
+  - id: FIX-2026-10-04-QA-030-14
+    title: "compose: DB_PASSWORD required (no insecure weak default)"
+    severity: low
+    rationale: "${DB_PASSWORD:-localai} silently started Postgres with a default password when .env was missing."
+    checks:
+      - type: grep_not
+        file: docker-compose.yml
+        pattern: "DB_PASSWORD:-localai"

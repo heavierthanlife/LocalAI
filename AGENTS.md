@@ -160,7 +160,7 @@ Every feature upgrade must include regression verification:
 - **Rate limiting**: `flask-limiter` with Redis backend. Global 120/min; login 5/min (keyed username+IP, FIX-068); compliance routes 10–20/min. Chat/upload per-route limits are **not** implemented (global 120/min only) — tracked as P1-#7. Credit check uses a custom in-memory limiter (10/5min).
 - **Time zone**: Asia/Shanghai everywhere (Celery, APScheduler, `beijing_now()` helper)
 - **API responses**: `ok(data, message, status)` → `{success:true, message, ...data}`, `err(error, code, status)` → `{success:false, error, code}`
-- **资源归属模型（FIX-060）**：**实时/交互态 task**（清标、信用核查 status/captcha、合规结果/规则）→ **仅 owner 可访问**（`task_owner_ok` / `_task_forbidden`，TaskBus meta 存 user_id）；**已归档聚合产物**（`batch_comparison_results` zip、`credit_check_reports`）→ **全注册用户可见（单机构有意设计，list + download 均共享）**。项目文件/归档按项目成员（`_can_access_project`）校验。合规归属守卫（**FIX-062~064**）：`/compliance/feedback` 已加 owner 校验；`_task_forbidden` 异常时 **fail-closed**（`meta=None` 含 Redis 不可用仍放行，与 legacy 一致）；`task_id` 限 `^[A-Za-z0-9_-]{1,64}$`（`_load_result`/`_save_result`）。`TaskBus._get_redis` 失败按 **60s 间隔重试**（FIX-065），不再永久禁用。owner 校验统一走 **`helpers.load_task_for`**（FIX-066，`ok/missing/forbidden` 三态；查询异常 fail-closed→403），clearance/tasks/batch/compliance 共用；credit 用自有 registry 不纳入。
+- **资源归属模型（FIX-060）**：**实时/交互态 task**（清标、信用核查 status/captcha、合规结果/规则）→ **仅 owner 可访问**（`task_owner_ok` / `_task_forbidden`，TaskBus meta 存 user_id）；**已归档聚合产物**（`batch_comparison_results` zip、`credit_check_reports`）→ **全注册用户可见（单机构有意设计，list + download 均共享）**。项目文件/归档按项目成员（`_can_access_project`）校验。合规归属守卫（**FIX-062~064**）：`/compliance/feedback` 已加 owner 校验；`_task_forbidden` 异常时 **fail-closed**（`meta=None` 含 Redis 不可用仍放行，与 legacy 一致）；`task_id` 限 `^[A-Za-z0-9_-]{1,64}$`（`_load_result`/`_save_result`）。`TaskBus._get_redis` 失败按 **60s 间隔重试**（FIX-065），不再永久禁用。owner 校验统一走 **`helpers.load_task_for`**（FIX-066，`ok/missing/forbidden` 三态；查询异常 fail-closed→403），clearance/tasks/batch/compliance 共用；credit 用自有 registry 不纳入。**空 owner fail-closed**（FIX-2026-10-04-QA-030-04）：`task_owner_ok` 对显式 `user_id=''` 拒绝（仅「键缺失」才视为 legacy 放行）。
 - **Bilingual**: Chinese (primary) + English (code comments, some tooling)
 - **Code style**: 不添加注释除非必要（遵循仓库风格）；路径用 `to_rel_path()`/`resolve_path()`，不写死绝对路径
 - **File upload limit**: 50 MB (`MAX_CONTENT_LENGTH`)
@@ -176,6 +176,7 @@ Every feature upgrade must include regression verification:
 | `DATABASE_URL` (Docker) or `PG_USER`+`PG_PASSWORD` (local) | Yes | PostgreSQL |
 | `REDIS_URL` | For Celery | Default: `redis://localhost:6379/0` |
 | `ADMIN_PIN` | No | Default: `123456`; used for admin accounts |
+| `ADMIN_USERNAMES` | No | 特权账号名（逗号分隔）。默认 `admin,CEO,COO`（FIX-2026-10-04-QA-030-12）|
 | `BOCHA_API_KEY` | No | Web search tool |
 | `LOG_LEVEL` | No | Root logger level (`INFO`/`DEBUG`). Default: `INFO` |
 | `HF_HOME` | No | HuggingFace model cache. Docker 下设为 `/app/data/hf_cache`（落在 `app_data` 卷，跨 recreate 持久；sentence-transformers + Headroom/Kompress 模型只下一次）；本地默认 `~/.cache/huggingface` |

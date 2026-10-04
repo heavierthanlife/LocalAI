@@ -204,11 +204,30 @@ def _save_domain_review(candidates: list[dict]):
 # ── Pipeline B: Company KB (with review queue) ──
 
 KB_REVIEW_PATH_TEMPLATE = os.path.join(INGEST_DIR, 'kb_review_{task_id}.json')
+_KB_TASK_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
+def _kb_review_path(task_id: str) -> str:
+    """Safe KB-review path for a task_id (FIX-2026-10-04-QA-030).
+
+    The task_id arrives from URL path segments; without validation a '..\\..'
+    value would traverse out of INGEST_DIR on Windows. Invalid ids map to a
+    sentinel path that never exists, so the callers' ``os.path.exists`` guards
+    return falsy and no read/write leaves INGEST_DIR.
+    """
+    if not isinstance(task_id, str) or not _KB_TASK_ID_RE.match(task_id):
+        logger.warning("kb_review: rejected unsafe task_id")
+        return os.path.join(INGEST_DIR, '.kb_review_invalid')
+    return os.path.join(INGEST_DIR, f'kb_review_{task_id}.json')
 
 
 def _prepare_kb_review(text: str, task_id: str, title: str = "Batch Ingestion") -> dict:
     """Chunk text and save to review queue. Returns {chunk_count, review_path}."""
     from app.services.rag_engine import chunk_text
+    if not isinstance(task_id, str) or not _KB_TASK_ID_RE.match(task_id):
+        # Never write the sentinel path (FIX-2026-10-04-QA-030-10 follow-up).
+        logger.warning("_prepare_kb_review: rejected unsafe task_id")
+        return {'chunk_count': 0, 'review_path': ''}
     chunks = chunk_text(text)
     if not chunks:
         return {'chunk_count': 0, 'review_path': ''}
@@ -224,10 +243,13 @@ def _prepare_kb_review(text: str, task_id: str, title: str = "Batch Ingestion") 
         'created_at': datetime.now(timezone.utc).isoformat(),
         'status': 'pending_review',
         'edited_chunks': {},  # {index: corrected_text}
-        'rejected_indices': set(),
+        # FIX-2026-10-04-QA-030: must be JSON-serialisable (was set() → json.dump
+        # TypeError, which aborted the whole ingestion pipeline). Downstream
+        # reject_kb_chunk() reads it as a list anyway.
+        'rejected_indices': [],
     }
 
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     with open(review_path, 'w', encoding='utf-8') as f:
         json.dump(review_data, f, ensure_ascii=False, indent=2)
 
@@ -244,7 +266,7 @@ def _pick_sample_indices(total: int, count: int) -> list[int]:
 
 def get_kb_review_sample(task_id: str) -> dict | None:
     """Get sample chunks for admin review."""
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     if not os.path.exists(review_path):
         return None
     try:
@@ -271,7 +293,7 @@ def get_kb_review_sample(task_id: str) -> dict | None:
 
 def get_kb_review_chunk(task_id: str, chunk_index: int) -> dict | None:
     """Get a specific chunk for editing, with surrounding context."""
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     if not os.path.exists(review_path):
         return None
     try:
@@ -295,7 +317,7 @@ def get_kb_review_chunk(task_id: str, chunk_index: int) -> dict | None:
 
 def update_kb_review_chunk(task_id: str, chunk_index: int, new_text: str) -> bool:
     """Admin corrects a chunk's OCR errors."""
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     if not os.path.exists(review_path):
         return False
     try:
@@ -313,7 +335,7 @@ def update_kb_review_chunk(task_id: str, chunk_index: int, new_text: str) -> boo
 
 def approve_kb_review(task_id: str) -> int:
     """Approve KB review: index all non-rejected chunks to ChromaDB. Returns chunk count."""
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     if not os.path.exists(review_path):
         return 0
     try:
@@ -363,7 +385,7 @@ def approve_kb_review(task_id: str) -> int:
 
 def reject_kb_chunk(task_id: str, chunk_index: int) -> bool:
     """Admin rejects a specific chunk (won't be indexed)."""
-    review_path = KB_REVIEW_PATH_TEMPLATE.format(task_id=task_id)
+    review_path = _kb_review_path(task_id)
     if not os.path.exists(review_path):
         return False
     try:
@@ -858,7 +880,7 @@ def cleanup_stale_reviews() -> dict:
 
     for task in result['kb_review_tasks']:
         if task['age_days'] > cleanup_days:
-            fpath = KB_REVIEW_PATH_TEMPLATE.format(task_id=task['task_id'])
+            fpath = _kb_review_path(task['task_id'])
             if os.path.exists(fpath):
                 try:
                     os.remove(fpath)

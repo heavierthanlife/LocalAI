@@ -8,6 +8,53 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-10-04] — 日志清理 + 按日期轮转（UNRESOLVED-037）
+
+### Changed
+- **应用日志改为按日期轮转**（`app/config.py`）：`RotatingFileHandler`（10MB×5）→ `TimedRotatingFileHandler`（`when=midnight`，保留 14 天）。旧 `logs/app.log.1–5`（约 50MB，9 月滚动副本）已删除。
+
+### Removed
+- `.remember/logs/` 全部（117 个 7 月代理日志，约 1.2MB）
+- `.playwright-mcp/console-*.log` 旧档 24 个（保留最近 2 个）
+- `.audit/last-full-audit.md` + `.audit/incremental-logs/audit-2026-07-08-*.md`（7 月快照，已被后续轮次覆盖）
+- `data/dump/` 全部聊天归档（2 用户 / 70 文件 / 165K，2026-06-30 – 07-17）——按用户指令删除
+
+### Notes
+- 仅本地运行时文件，均在 `.gitignore` 内，**不入库**。`logs/app.log`（当前）、`data/flask_session/`（未过期）保留；`data/dump/` 归档已按指令清除。
+- 本轮由审查方按运维指令执行，**双人复核暂缺**（自跑门禁：223/223 · verify_fixes 368/0 · doc_drift 16/16 · check_system 150/150）。
+
+---
+
+## [2026-10-04] — QA-Loop Round 030（reviewer: mimo-v2.6-pro / 视觉: mimo-v2.6-pro + EasyOCR）
+
+### Fixed
+- **FIX-2026-10-04-QA-030-01（High）** `app/services/ingest_pipeline.py` — `_prepare_kb_review` 把 `rejected_indices` 写成 `set()` 后直接 `json.dump` → TypeError，被外层 except 吞掉并以 `status=error` 终止整条入库流水线；改 list（下游 `reject_kb_chunk` 本就按 list 存取）。
+- **FIX-2026-10-04-QA-030-02（High）** `app/routes/knowledge.py` — `admin_generate_work_report` 的 `report_dir` 仅在 except 分支赋值，成功路径未定义 → `UnboundLocalError`（生成报告成功反而 500）；提到 try 前统一赋值。
+- **FIX-2026-10-04-QA-030-03（High，安全）** `app/routes/auth.py` + `app/routes/knowledge.py` — 注册/改名仅校验长度 → 含 `../` 的用户名在报告文件名中构成**路径穿越写**；加字符集白名单并对报告文件名前缀 `re.sub` 消毒。
+- **FIX-2026-10-04-QA-030-04（Medium，安全）** `app/utils/helpers.py` — `task_owner_ok` 对「显式空 owner」（`register_queued(extra={'user_id': ''})`）走 legacy 放行分支，绕过 FIX-080 fail-closed；改为空 owner 拒绝、仅「键缺失」视为 legacy；同步修正 `load_task_for` docstring。
+- **FIX-2026-10-04-QA-030-05（Medium）** `app/utils/url_guard.py` — `parts.port` 越界端口抛 `ValueError` 且不在 try 内，违反 `(ok, reason)` 契约并使调用方 500；包进 try 返回 `(False, 'invalid port')`。
+- **FIX-2026-10-04-QA-030-06（Medium）** `app/routes/chat_files.py` — 报告 `download_url` 为 GET `/download_original_file/<uid>/<file>`，但唯一路由是 POST+JSON body → 前端「立即下载」405；新增带 owner 校验 + 穿越防护的 GET 变体。
+- **FIX-2026-10-04-QA-030-07（Medium，前端）** `static/js/{app,knowledge-lab}.js` — `err.error`/`d.message`/`d.error` 未转义进 innerHTML、`d.download_url` 未校验 scheme 直接入 href；补 `escapeHtml` + scheme 白名单。
+- **FIX-2026-10-04-QA-030-08（Low）** `app/routes/credit.py` — `request.get_json()` 无 silent → 缺 body/非 JSON 时 500；改 `silent=True or {}`。
+- **FIX-2026-10-04-QA-030-09（Low）** `app/routes/tasks.py` — delete 对 `missing` 仍删除并返 success；改 404。
+- **FIX-2026-10-04-QA-030-10（Low）** `app/services/ingest_pipeline.py` — `kb_review` 的 `task_id` 来自 URL 段无校验；集中到 `_kb_review_path()` 拒绝穿越。
+- **FIX-2026-10-04-QA-030-11（Low）** `app/services/login_guard.py` — 失败计数键 `login_fail:{u}` 不分 IP（单点可跨 IP 冷却受害者）且内存 purge 用 `max(FAIL_TTL, LOCK_TTL)`；改为 `{u}:{ip}` 作用域 + 按 key 分别 TTL。
+- **FIX-2026-10-04-QA-030-12（Low）** `app/routes/auth.py` — 用户不存在即短路（时序侧信道/用户名枚举）+ 硬编码特权账号名；加 dummy hash 等时 + `ADMIN_USERNAMES` 可配置。
+- **FIX-2026-10-04-QA-030-13（Low）** `nginx.conf` — `/static/` location 的 `add_header` 按继承规则取消 server 级安全头；在 location 内重声明三枚。
+- **FIX-2026-10-04-QA-030-14（Low）** `docker-compose.yml` — `${DB_PASSWORD:-localai}` 弱默认；改 `${DB_PASSWORD:?…}` 强制。
+
+### Verified
+- **LLM 拒答排查**：生产 provider 用「围标串标线索分析」实测——OpenRouter 200 完整输出、NVIDIA NIM 200 完整输出，**均不拒答**；agentrouter 网关返回 401 `unauthorized_client_error`（非本项目 provider，其"敏感词遮断"为第三方网关行为）。结论：`串标` 在本项目**无任何内容过滤**，`data/domain_words.txt` 中的 `串标/围标` 是 jieba 用户词典（助分词，非屏蔽）。
+- **视觉 A/B**：MiMo v2.6-pro 视觉读 UI 文字远胜 EasyOCR（OCR 对 UI 小字大量错字/整页降采样返回空），但有假阳性（把已加载的 `list_alt` 图标误报 tofu）→ 需与 DOM/OCR 交叉验证。
+
+### Docs
+- `data/qa_loop/round-030.md`（COLLECT/VERIFY/CONFIRM + 视觉 A/B）· `repair_kit/SYSTEM_CHECKLIST.md`（自动重生成）· `AGENTS.md` 增 `ADMIN_USERNAMES` + 空 owner fail-closed 说明 · `.env.example` 增 `ADMIN_USERNAMES`
+
+regression: 1/1 baseline passed (owner/authz + knowledge/download paths; goods/services N/A — missing fixtures, UNRESOLVED-017)
+237/237 regression collected · verify_fixes 390/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — BREAKING: 下线 /api/login + 删除 auth_jwt（UNRESOLVED-030 / FIX-083）
 
 ### Removed

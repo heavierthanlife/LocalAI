@@ -15,7 +15,7 @@ from io import BytesIO
 from flask import request, jsonify, session, send_file
 from werkzeug.datastructures import FileStorage
 
-from app.config import to_rel_path, resolve_path, USER_FILES_ORIGINAL_ROOT, allowed_file, logger
+from app.config import to_rel_path, resolve_path, USER_FILES_ORIGINAL_ROOT, DATA_DIR, allowed_file, logger
 from app.database import get_db_connection, db_transaction
 from app.utils.helpers import ok, err
 from app.services.session_manager import get_user_id, ensure_user_exists, get_or_create_session, record_file_usage
@@ -197,6 +197,48 @@ def download_original_file():
             return send_file(original_path, as_attachment=True, download_name=filename)
 
 # ── Web page fetch (URL analysis) ──
+
+@chat_bp.route('/download_original_file/<user_id>/<path:filename>', methods=['GET'])
+def download_original_file_get(user_id, filename):
+    """GET variant of /download_original_file (FIX-2026-10-04-QA-030).
+
+    The report endpoints return ``download_url: /download_original_file/<uid>/<file>``
+    which the frontend opens with a plain ``<a href>`` (GET). The original route
+    was POST-only, so those links 405'd. This enforces owner + path safety.
+    """
+    if session.get('consent_value', 0) != 1:
+        return jsonify({"error": "请先登录"}), 403
+    sess_uid = session.get('user_id')
+    if not sess_uid:
+        return jsonify({"error": "未登录"}), 401
+    if str(sess_uid) != str(user_id) and not is_admin():
+        return jsonify({"error": "无权访问该文件"}), 403
+    safe_name = os.path.basename(filename or '')
+    if not safe_name or safe_name != filename:
+        return jsonify({"error": "非法文件名"}), 400
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT original_stored_path
+                FROM user_files
+                WHERE user_id = %s AND filename = %s
+                  AND (original_expires_at IS NULL OR original_expires_at > NOW())
+                ORDER BY id DESC LIMIT 1
+            """, (user_id, safe_name))
+            row = cur.fetchone()
+    if not row or not row[0]:
+        return jsonify({"error": "文件不存在或已过期"}), 404
+    original_path = resolve_path(row[0])
+    # Reports live under data/user_files (uploads) or data/user_styles (docx
+    # reports), both under DATA_DIR. Filename is DB-matched and basename-checked.
+    root = os.path.realpath(DATA_DIR)
+    if not os.path.realpath(original_path).startswith(root + os.sep):
+        return jsonify({"error": "非法路径"}), 400
+    if not os.path.exists(original_path):
+        return jsonify({"error": "文件不存在"}), 404
+    return send_file(original_path, as_attachment=True, download_name=safe_name)
+
 
 @chat_bp.route('/fetch_url', methods=['POST'])
 def fetch_url():

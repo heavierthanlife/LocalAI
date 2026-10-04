@@ -1,5 +1,5 @@
 """Blueprint: knowledge routes (auto-extracted)."""
-import os, json, uuid, time, logging, hashlib, io, threading
+import os, json, uuid, time, logging, hashlib, io, threading, re
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, session, send_file, render_template, url_for, Response
 
@@ -685,7 +685,14 @@ def admin_generate_work_report():
     user_id = session.get('user_id')
     label = {'daily': '日报', 'weekly': '周报', 'monthly': '月报', 'annual': '年报'}.get(period, '报告')
     date_range = f"{since.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}"
-    filename_prefix = f"{username_tag}_{label}_{date_range}"
+    # FIX-2026-10-04-QA-030: report_dir must exist on BOTH paths (previously
+    # only assigned in the except branch → UnboundLocalError on the success path).
+    report_dir = os.path.join(USER_FILES_ORIGINAL_ROOT, user_id)
+    os.makedirs(report_dir, exist_ok=True)
+    # FIX-2026-10-04-QA-030: username_tag is DB-controlled; sanitize it to a safe
+    # basename component so a crafted username cannot traverse the report dir.
+    safe_tag = re.sub(r'[^\w\u4e00-\u9fa5-]', '_', str(username_tag)) or 'user'
+    filename_prefix = f"{safe_tag}_{label}_{date_range}"
     # Use Word format with user's style profile
     try:
         from app.services.style_engine import get_user_style, generate_report_file
@@ -693,16 +700,14 @@ def admin_generate_work_report():
         report_path = generate_report_file(report, filename_prefix, f'{label} - {username_tag}', style)
         filename = os.path.basename(report_path)
     except Exception:
-        report_dir = os.path.join(USER_FILES_ORIGINAL_ROOT, user_id)
         report_path = os.path.join(report_dir, f'{filename_prefix}.md')
         filename = f'{filename_prefix}.md'
-        os.makedirs(report_dir, exist_ok=True)
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report)
 
     # ZIP: package all same-period report files together
     import zipfile
-    zip_name = f"{username_tag}_{label}_{date_range}.zip"
+    zip_name = f"{safe_tag}_{label}_{date_range}.zip"
     zip_path = os.path.join(report_dir, zip_name)
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         # Include the just-generated report
@@ -808,7 +813,7 @@ def my_daily_report():
     except Exception as e:
         return jsonify({"error": f"AI生成失败: {str(e)[:100]}"}), 500
 
-    username = session.get('username', user_id[:8])
+    username = re.sub(r'[^\w\u4e00-\u9fa5-]', '_', str(session.get('username') or user_id[:8])) or 'user'
     date_range = f"{since.strftime('%Y%m%d')}_{now.strftime('%Y%m%d')}"
     label = '日报'
     filename = f"{username}_{label}_{date_range}.md"

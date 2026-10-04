@@ -10,8 +10,10 @@ Redis-primary with an in-memory fallback (same shape as ``routes/credit.py``).
 A Redis outage is a *degraded* (per-worker) mode and is logged as a warning — it is
 NOT fail-closed and must never be described as such.
 
-Keys: ``login_fail:{username}`` / ``login_last:{username}`` / ``login_lock:{u}:{ip}``,
+Keys: ``login_fail:{u}:{ip}`` / ``login_last:{u}:{ip}`` / ``login_lock:{u}:{ip}``,
 all with TTL (``INCR`` + ``EXPIRE`` on first write) so nothing accumulates forever.
+FIX-2026-10-04-QA-030: fail counters are scoped by IP too, so an attacker cannot
+lock a victim account out across all IPs by spamming failures.
 """
 import logging
 import threading
@@ -65,9 +67,11 @@ def _redis():
 
 
 def _mem_purge(now):
-    horizon = now - max(FAIL_TTL, LOCK_TTL)
+    # FIX-2026-10-04-QA-030: honour each key's own TTL (fail counters 120s, locks
+    # 900s) instead of a single max() horizon.
     for k in list(_mem.keys()):
-        if _mem[k]['ts'] < horizon:
+        ttl = LOCK_TTL if k.startswith('login_lock:') else FAIL_TTL
+        if _mem[k]['ts'] < now - ttl:
             del _mem[k]
 
 
@@ -86,8 +90,8 @@ def check_login_gate(username, ip):
         return 0
     now = time.time()
     lock_key = f"login_lock:{u}:{ip}"
-    fail_key = f"login_fail:{u}"
-    last_key = f"login_last:{u}"
+    fail_key = f"login_fail:{u}:{ip}"
+    last_key = f"login_last:{u}:{ip}"
 
     r = _redis()
     if r is not None:
@@ -126,8 +130,8 @@ def record_login_failure(username, ip):
     if not u:
         return
     now = time.time()
-    fail_key = f"login_fail:{u}"
-    last_key = f"login_last:{u}"
+    fail_key = f"login_fail:{u}:{ip}"
+    last_key = f"login_last:{u}:{ip}"
     lock_key = f"login_lock:{u}:{ip}"
 
     r = _redis()
@@ -165,10 +169,11 @@ def reset_login(username, ip):
     r = _redis()
     if r is not None:
         try:
-            r.delete(f"login_fail:{u}", f"login_last:{u}", f"login_lock:{u}:{ip}")
+            r.delete(f"login_fail:{u}:{ip}", f"login_last:{u}:{ip}", f"login_lock:{u}:{ip}")
             return
         except Exception as e:
             logger.warning(f"login_guard: reset Redis failed, in-memory fallback: {e}")
     with _mem_lock:
-        _mem.pop(f"login_fail:{u}", None)
+        _mem.pop(f"login_fail:{u}:{ip}", None)
+        _mem.pop(f"login_last:{u}:{ip}", None)
         _mem.pop(f"login_lock:{u}:{ip}", None)
