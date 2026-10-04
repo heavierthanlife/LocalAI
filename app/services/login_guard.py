@@ -1,6 +1,6 @@
 """Login brute-force guard (FIX-2026-09-28-068).
 
-Three-layer defence for ``/login`` and ``/api/login``:
+Three-layer defence for ``/login``:
 
   Layer 1  ``@limiter.limit("5/minute", key_func=login_rate_key_func)``  (username+IP)
   Layer 2  cooldown gate — non-blocking, returns ``Retry-After`` seconds; never sleeps

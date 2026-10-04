@@ -8,6 +8,22 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-09-29] — BREAKING: 下线 /api/login + 删除 auth_jwt（UNRESOLVED-030 / FIX-083）
+
+### Removed
+- **`POST /api/login`（JWT 登录）已下线**（`app/routes/chat_sessions.py`）：该端点用 `sha256(pin)` 比对 `pin_hash`（实际为 werkzeug / `salt:pbkdf2` 存储）→ **对任何账号恒 401**；其签发 token 全库无校验方（FIX-055 后无 `jwt.decode`）→ 死端点 + 无验证 token（UNRESOLVED-030）。
+- `app/services/auth_jwt.py` 整文件删除（唯一消费方即上述端点）。
+
+### Notes
+- **BREAKING（仅对仓库外集成方，且其现状本已不可用）**：如需 API 登录，请新开 `/api/v2/login` + 独立安全评审，禁止原地复活 sha256 方案。
+- **未改动** Web `/login`、PIN 校验、`login_guard`（030 只做下线）。
+- `UNRESOLVED-030 → resolved`；`docs/ARCHITECTURE.md` 服务数 97→96。
+
+regression: 1/1 baseline passed (authz-only change; goods/services N/A — missing fixtures, same root as B / UNRESOLVED-017)
+223/223 regression collected（EXIT=0，0 failure） · verify_fixes 368/0 · doc_drift 16/16 · check_system 150/150/0/0
+
+---
+
 ## [2026-09-29] — UNRESOLVED-031 销户验证码硬化（FIX-082）
 
 ### Fixed

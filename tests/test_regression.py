@@ -1816,12 +1816,10 @@ def test_dead_service_modules_removed():
 
 
 def test_auth_jwt_only_issues_tokens():
-    src = _read('app/services/auth_jwt.py')
-    assert 'def create_token' in src
-    assert 'def jwt_required' not in src
-    assert 'def jwt_optional' not in src
-    assert 'def decode_token' not in src
-    assert 'from app.services.auth_jwt import create_token' in _read('app/routes/chat_sessions.py')
+    """030 supersedes FIX-055: auth_jwt.py（只签发、无人校验）连同 /api/login 一并删除。"""
+    import os
+    assert not os.path.exists('app/services/auth_jwt.py')
+    assert 'create_token' not in _read('app/routes/chat_sessions.py')
 
 
 def test_law_semantic_rebuild_removed_but_search_kept():
@@ -2928,3 +2926,40 @@ def test_delete_code_not_plaintext_wired():
     assert 'code != expected_code' not in a_src
     assert 'secrets.compare_digest(provided.encode' in a_src
     assert "hashlib.sha256(code.encode('utf-8')).hexdigest()" in g_src
+
+
+# ── FIX-2026-09-29-083: /api/login + auth_jwt retired (UNRESOLVED-030) ──
+def test_api_login_removed(app):
+    client = app.test_client()
+    _sess(client, 'userA', 'user')
+    r = client.post('/api/login', json={'username': 'x', 'pin': '1234'})
+    assert r.status_code == 404, r.status_code
+
+
+def test_auth_jwt_removed():
+    import os
+    assert not os.path.exists('app/services/auth_jwt.py')
+    with open('app/routes/chat_sessions.py', encoding='utf-8') as f:
+        src = f.read()
+    assert 'create_token' not in src
+    assert 'def api_login' not in src
+
+
+def test_web_login_not_regressed(app):
+    """030 不改 /login：路由仍在且响应该登录（401/429/400 均可，非 404）。"""
+    client = app.test_client()
+    r = client.post('/login', json={'username': 'admin', 'pin': 'wrongpin'})
+    assert r.status_code in (400, 401, 429), r.status_code
+
+
+def test_no_jwt_encode_anywhere():
+    import os
+    hits = []
+    for root, _d, files in os.walk('app'):
+        for fn in files:
+            if fn.endswith('.py'):
+                p = os.path.join(root, fn)
+                with open(p, encoding='utf-8') as f:
+                    if 'jwt.encode' in f.read():
+                        hits.append(p)
+    assert hits == [], hits

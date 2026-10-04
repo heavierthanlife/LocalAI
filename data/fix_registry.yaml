@@ -1443,15 +1443,7 @@ fixes:
       - type: literal_not
         file: docs/SECURITY.md
         pattern: "session + JWT（`auth_jwt.py`）"
-      - type: literal
-        file: app/services/auth_jwt.py
-        pattern: "def create_token"
-      - type: literal_not
-        file: app/services/auth_jwt.py
-        pattern: "def jwt_required"
-      - type: literal_not
-        file: app/services/auth_jwt.py
-        pattern: "def decode_token"
+      # auth_jwt.py 的三条检查已由 FIX-2026-09-29-083（030 下线 /api/login + 删 auth_jwt.py）取代。
       - type: literal
         file: app/services/law_semantic.py
         pattern: "def semantic_law_search"
@@ -1851,9 +1843,6 @@ fixes:
         file: app/routes/auth.py
         pattern: "key_func=login_rate_key_func"
       - type: literal
-        file: app/routes/chat_sessions.py
-        pattern: "key_func=login_rate_key_func"
-      - type: literal
         file: app/routes/auth.py
         pattern: "_resp.headers['Retry-After']"
       - type: literal
@@ -2199,3 +2188,21 @@ fixes:
       - type: literal_not
         file: app/routes/auth.py
         pattern: "code != expected_code"
+
+  - id: FIX-2026-09-29-083
+    title: "030: 下线 /api/login + 删除 auth_jwt（恒 401 死端点 + 无校验 JWT）"
+    severity: low
+    rationale: >
+      /api/login 用 sha256(pin) 比对 werkzeug/salt:pbkdf2 存储 → 恒 401；create_token 唯一
+      消费方即该端点，且全库无 jwt.decode（FIX-055 后 token 无人校验）→ 死端点 + 无验证 token。
+      UNRESOLVED-030 裁定 C：删除路由与 auth_jwt.py（不留 410 墓碑）。BREAKING，CHANGELOG 说明。
+    checks:
+      - type: literal_not
+        file: app/routes/chat_sessions.py
+        pattern: "def api_login"
+      - type: literal_not
+        file: app/routes/chat_sessions.py
+        pattern: "create_token"
+      - type: literal_not
+        file: app/services/login_guard.py
+        pattern: "/api/login"

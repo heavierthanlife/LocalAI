@@ -61,7 +61,7 @@
 
 ## 安全架构要点
 
-- **认证**：session 会话（Web UI）+ JWT 签发（`auth_jwt.py` 仅 `create_token`，供外部集成；不校验），`check_auth` 健康检查
+- **认证**：session 会话（Web UI），`check_auth` 健康检查（API JWT 登录已于 030 下线，见 CHANGELOG）
 - **权限**：`@admin_required` / `@login_required` + 项目成员检查（`routes/projects.py` 权限工具）
 - **CSRF**：opt-in，JSON API 默认关闭（AJAX 无需）
 - **Rate Limiting**：flask-limiter + Redis（全局 120/min；登录 5/min（username+IP，FIX-068）；合规路由 10–20/min）。聊天/上传的 per-route 限流**未实现**，仅受全局 120/min 约束（P1-#7）。

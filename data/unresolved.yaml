@@ -494,7 +494,8 @@ unresolved:
 
   - id: UNRESOLVED-030
     title: "/api/login 凭据比对算法与入库不一致（sha256 vs werkzeug）→ 外部 API 登录恒 401"
-    status: pending
+    status: resolved
+    resolved: 2026-09-29
     severity: medium
     discovered: 2026-09-28
     tags: ["安全", "缺陷", "API"]

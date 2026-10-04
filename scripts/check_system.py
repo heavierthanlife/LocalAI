@@ -454,8 +454,8 @@ _add('ratelimit', 'Auth rate limits', 'PASS' if auth_limit else '?')
 login_auth, _ = _grep_file('app/routes/auth.py', r'@limiter\.limit')
 _add('ratelimit', 'Login rate limit (auth)', 'PASS' if login_auth else 'FAIL')
 
-login_api, _ = _grep_file('app/routes/chat_sessions.py', r'@limiter\.limit')
-_add('ratelimit', 'Login rate limit (api)', 'PASS' if login_api else 'FAIL')
+login_api, _ = _grep_file('app/routes/chat_sessions.py', r'def api_login')
+_add('ratelimit', 'API login removed (/api/login)', 'PASS' if not login_api else 'FAIL')
 
 login_key_ip, _ = _grep_file('app/services/login_guard.py', r'login:\{username\}:\{ip\}')
 _add('ratelimit', 'Login rate key includes client IP', 'PASS' if login_key_ip else 'FAIL')

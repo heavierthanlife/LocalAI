@@ -1,7 +1,7 @@
 # System Health Checklist — Automated Audit
 
-> Generated: 2026-10-03 23:50 (auto)
-> verify_fixes.py: 369/369 pass (0 failure(s))
+> Generated: 2026-10-04 00:33 (auto)
+> verify_fixes.py: 368/368 pass (0 failure(s))
 > Checklist: 150 items — 150 pass / 0 manual / 0 fail
 
 Legend: `[x]` = verified  |  `[?]` = needs runtime/DB  |  `[ ]` = check failed
@@ -144,7 +144,7 @@ _(12/12 verified automatically)_
 - [x] Upload limit matches docs
 - [x] Auth rate limits
 - [x] Login rate limit (auth)
-- [x] Login rate limit (api)
+- [x] API login removed (/api/login)
 - [x] Login rate key includes client IP
 - [x] Login lock Redis-backed + memory fallback
 - [x] Reverse-proxy real client IP (ProxyFix/TRUST_PROXY)
