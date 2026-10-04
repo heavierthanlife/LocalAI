@@ -7,6 +7,15 @@
 - 技术栈：Flask 3.1 / Python 3.12 / PostgreSQL 16 / Redis 7 / Celery 5
 - 前端：templates/index.html + static/js/*.js（无框架，原生 JS SPA 风格）
 
+## pi 引擎 / 模型分工（2026-10-04 固化）
+- 子 agent 启动（WSL 跑 Windows 项目）：
+  `HOME=/mnt/c/Users/nana- DEEPSEEK_API_KEY=<win user env> pi --print --no-session -ne -t read,grep,find,ls --provider <p> --model <m> "<prompt>"`
+- **reviewer（代码侧，只读）** = `xiaomi-token-plan-cn / mimo-v2.6-pro`
+- **工作 subagent** = 与主 agent 同款（当前 `deepseek / deepseek-flash`，官方 API）
+- **视觉 subagent** = `xiaomi-token-plan-cn / mimo-v2.6-pro`（多模态）；OCR = `app/services/ocr.OCRManager`（EasyOCR）
+- **视觉方法论**：viewport/元素级裁切截图（勿整页巨图）+ `DOM(evaluate)`/`OCR`/`VL` 三源交叉；VL 假阳性必须用 DOM 复核，精确文字/数字以 OCR+DOM 为准。
+- 生产 LLM（OpenRouter/NVIDIA）对「围标串标线索分析」**不拒答**；第三方网关（agentrouter）可能遮断——非项目层过滤。
+
 ## 收集范围
 - 后端：`app/services/`、`app/routes/`（16 个 blueprint）、`app/database.py`、`app/__init__.py`、`celery_app.py`
 - 前端：`static/js/*.js`（重点 app.js / chat.js / knowledge-lab.js）、`static/css/`、`static/icons.js`
