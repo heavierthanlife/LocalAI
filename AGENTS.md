@@ -239,10 +239,12 @@ Skills and plugins are centralized at `D:\AI_Tools\shared-agent-infra\` and shar
 |------|--------|------------------------|
 | **opencode** | `~/.config/opencode/skills\` → junction to `D:\AI_Tools\shared-agent-infra\skills\` | Junction at global skills dir |
 | **hermes** | `D:\AI_Tools\hermes\config.yaml` → `skills.external_dirs` | List entry |
-| **pi** | `C:\Users\nana-\.pi\agent\settings.json` → `"skills"` array | Config array |
+| **pi** | `C:\Users\nana-\.pi\agent\skills\` → 逐 skill Junction 到 `D:\AI_Tools\shared-agent-infra\skills\`（pi 自动扫描该目录；`settings.json` 无 `skills` 数组） | 每 skill 一个 Junction |
 | **lmcode** | `D:\AI_Tools\npm-global\lm.cmd` / `lm.ps1` → `--skills-dir` flag | CLI arg |
 
 **236 unique skills** in the shared pool. 4 collisions resolved (grill-me identical, spike hermes-wins, tdd merged, docx merged). Losers archived in `skills/_old/`. Per-tool extensions in `tool-extensions/`.
+
+**pi skills 现状**：`~/.pi/agent/skills/` 为**逐目录 Junction**（非整目录），当前 29 个（qa-loop 于 2026-10-04 接入）；新增共享 skill 后需在同目录建 Junction（`New-Item -ItemType Junction`），pi 重启/重扫后生效。
 
 **会话自举**（`tool-extensions/opencode/plugins/session-bootstrap.ts`，全局 `~/.config/opencode/plugins/`）：新会话首次 system-transform 时一次性注入 `<session-bootstrap>` 块 = Session Operating Protocol + `.remember/handoff.md`(≤2000 字) + `data/unresolved.yaml`(pending/deferred/blocked) + `.remember/findings/*.md`(unresolved,≤5)。每会话去重、文件缺失即 no-op。与 `agentmemory-capture.ts` 分工：前者=本会话交接/门禁，后者=跨会话洞察。
 
