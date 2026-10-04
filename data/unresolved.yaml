@@ -576,3 +576,19 @@ unresolved:
       二选一：① 释放/迁移宿主 443（查 PID 8984 归属，VPN 类改非 443 或关闭）；
       ② compose/nginx 改发布端口（如 8443:443）并同步 AGENTS.md/USER_MANUAL。
       改 compose 属行为变更 → 需审查方复核 + CHANGELOG。
+
+  - id: UNRESOLVED-036
+    title: "Dockerfile torch 双装去重（requirements pin torch → 先装 CUDA 版 + nvidia_*，末尾 CPU wheel 覆盖但 CUDA 依赖残留）→ 镜像 ~12GB 可削数 GB"
+    status: pending
+    severity: low
+    discovered: 2026-09-29
+    tags: ["构建", "Docker", "体积"]
+    context: >
+      requirements.txt pin 了 torch==2.12.1/torchvision。构建时第一条 pip install -r requirements.txt
+      经 PyPI 装下 CUDA 版 torch 及整套 nvidia_* wheel（~5GB+），随后 Dockerfile 末尾才用
+      TORCH_INDEX=whl/cpu 重装 torch（覆盖本体，但 CUDA 依赖 wheel 残留）→ local-ai:latest ≈ 12.5GB。
+      FIX-067 仅调整了安装顺序，未去除 requirements 的 torch pin，属残留项（同 UNRESOLVED-027 旁）。
+    resolution_plan: >
+      将 torch/torchvision 从 requirements.txt 摘出，仅由 Dockerfile 末尾按 TORCH_INDEX 安装；
+      或 requirements 侧用平台/依赖约束避免 CUDA 抽取。改 Dockerfile/requirements 属构建行为变更
+      → 需复核 + CHANGELOG；建议在专门构建轮或 B 之后做（当前构建环境刚稳，勿触发依赖地狱）。
