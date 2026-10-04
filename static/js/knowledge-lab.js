@@ -116,7 +116,7 @@ let currentProjectName = '';
                                     resultDiv.innerHTML = `<div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
                                         <p style="color:#16a34a;font-weight:bold;">✅ 报告已生成</p>
                                         <p>📄 ${escapeHtml(d.filename)} · ${d.size_kb}KB</p>
-                                        <a href="${escapeHtml(/^(\/|https?:\/\/)/.test(d.download_url || '') ? d.download_url : '#')}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
+                                        <a href="${escapeHtml(/^(?:\/(?!\/)|https?:\/\/)/.test(d.download_url || '') ? d.download_url : '#')}" download class="file-btn" style="display:inline-block;margin-top:6px;background:#16a34a;color:white;padding:6px 16px;text-decoration:none;">📥 立即下载</a>
                                     </div>`;
                                 } else {
                                     resultDiv.innerHTML = `<p style="color:#dc2626;">❌ ${escapeHtml(d.error||'生成失败')}</p>`;

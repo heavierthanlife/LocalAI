@@ -365,7 +365,8 @@
     // 下载 URL 消毒：仅允许站内相对路径或 http(s)（FIX-2026-10-04-QA-030-07）
     function safeDownloadUrl(u) {
         var s = (u == null) ? '' : String(u);
-        return /^(\/|https?:\/\/)/.test(s) ? escapeHtml(s) : '#';
+        // Reject protocol-relative '//evil.com'; allow a single leading '/' or http(s).
+        return /^(?:\/(?!\/)|https?:\/\/)/.test(s) ? escapeHtml(s) : '#';
     }
 
     // 全局 XSS 消毒入口；无 DOMPurify vendor 时降级为纯文本转义

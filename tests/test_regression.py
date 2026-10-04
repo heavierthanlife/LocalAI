@@ -3033,6 +3033,7 @@ def test_qa030_frontend_escapes_and_validates():
     assert "escapeHtml(err.error || '未知错误')" in appjs
     assert 'safeDownloadUrl(d.download_url)' in appjs
     assert 'safeDownloadUrl(downloadUrl)' in appjs
+    assert '(?:\\/(?!\\/)' in appjs  # rejects protocol-relative //
     kl = open('static/js/knowledge-lab.js', encoding='utf-8').read()
     assert 'escapeHtml(d.message)' in kl
     assert "test(d.download_url" in kl
