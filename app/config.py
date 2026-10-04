@@ -68,8 +68,11 @@ LOGGING_CONFIG = {
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'level': _LOG_LEVEL, 'formatter': 'default',
                     'stream': 'ext://sys.stdout'},
-        'file': {'class': 'logging.handlers.RotatingFileHandler', 'level': 'DEBUG', 'formatter': 'detailed',
-                 'filename': str(LOGS_DIR / 'app.log'), 'maxBytes': 10485760, 'backupCount': 5},
+        # Date-based rotation (was RotatingFileHandler by size). Keep 14 days of
+        # logs; unused by security paths — ops hygiene only (UNRESOLVED-037).
+        'file': {'class': 'logging.handlers.TimedRotatingFileHandler', 'level': 'DEBUG', 'formatter': 'detailed',
+                 'filename': str(LOGS_DIR / 'app.log'), 'when': 'midnight', 'interval': 1, 'backupCount': 14,
+                 'encoding': 'utf-8'},
     },
     'root': {'level': _LOG_LEVEL, 'handlers': ['console', 'file']},
 }
