@@ -49,6 +49,7 @@ All notable changes to 中联招标智能助手.
 
 ### Docs
 - `data/qa_loop/round-030.md`（COLLECT/VERIFY/CONFIRM + 视觉 A/B）· `repair_kit/SYSTEM_CHECKLIST.md`（自动重生成）· `AGENTS.md` 增 `ADMIN_USERNAMES` + 空 owner fail-closed 说明 · `.env.example` 增 `ADMIN_USERNAMES`
+- **审查方终态抽检结案**（2026-10-04）：Round 030 关闭（HEAD/远端/镜像一致）。终检 L×3 登记 `UNRESOLVED-038`（下轮并入）；清标报告整页截图 98% 空白标注「截图方法待复核」，待新镜像元素级裁切重拍。
 
 regression: 1/1 baseline passed (owner/authz + knowledge/download paths; goods/services N/A — missing fixtures, UNRESOLVED-017)
 237/237 regression collected · verify_fixes 390/0 · doc_drift 16/16 · check_system 150/150/0/0
