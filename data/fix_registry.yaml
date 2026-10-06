@@ -2621,6 +2621,12 @@ fixes:
       - type: literal
         file: app/utils/helpers.py
         pattern: "is not a valid tool(?:,\\s*try one of"
+      - type: literal_not
+        file: app/utils/helpers.py
+        pattern: "{0,80}?is not a valid tool"
+      - type: literal_not
+        file: static/js/chat.js
+        pattern: "{0,80}?is not a valid tool"
       - type: literal
         file: static/js/chat.js
         pattern: "is not a valid tool(?:,\\s*try one of"

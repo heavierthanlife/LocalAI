@@ -13,7 +13,7 @@
     // Patterns mirror app/utils/helpers.py — keep in sync; tests/test_regression.py
     // asserts the two are behaviourally equivalent, not merely textually similar.
     var _LEAK_PATTERNS = [
-        /Error:\s*[^\n\r]{0,80}?is not a valid tool(?:,\s*try one of[^\n\r]*)?/gi,
+        /Error:\s*[^\n\r]*?is not a valid tool(?:,\s*try one of[^\n\r]*)?/gi,
         /Here is the JSON for a function call with its proper arguments[^\n\r]*/gi
     ];
     function _sanitizeResponse(text) {

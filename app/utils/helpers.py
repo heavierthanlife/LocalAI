@@ -151,13 +151,15 @@ def split_thinking_answer(text: str) -> tuple:
 # copy). Keep the two in sync — tests/test_regression.py asserts the two are
 # behaviourally equivalent, not merely textually similar.
 #
-# The tool-name gap is `[^\n\r]{0,80}?` rather than `\S+`: real LangChain output
-# names tools with spaces ("Error: get current date is not a valid tool, ..."),
-# and `\S+` cannot span that space, so the whole artifact used to survive. The
-# trailing `, try one of [...]` is optional so legitimate text later on the same
-# line is no longer swallowed.
+# The tool-name gap is `[^\n\r]*?` rather than `\S+`: real LangChain output names
+# tools with spaces ("Error: get current date is not a valid tool, ...") and `\S+`
+# cannot span that space, so the whole artifact used to survive. The gap is
+# deliberately unbounded within the line — a bounded `{0,80}?` still let a long
+# tool name through — and stays lazy so "is not a valid tool" anchors the match.
+# The trailing `, try one of [...]` is optional so legitimate text later on the
+# same line is no longer swallowed.
 _INVALID_TOOL_RE = re.compile(
-    r"Error:\s*[^\n\r]{0,80}?is not a valid tool(?:,\s*try one of[^\n\r]*)?",
+    r"Error:\s*[^\n\r]*?is not a valid tool(?:,\s*try one of[^\n\r]*)?",
     re.IGNORECASE,
 )
 _PROMPT_TEMPLATE_RE = re.compile(

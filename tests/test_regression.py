@@ -3293,14 +3293,21 @@ _SANITIZER_PAYLOADS = [
     '正常回答，不应被清洗。',
     'Error: DesignDesign is not a valid tool 之后还有正文',
     '前言\nError: get current date is not a valid tool, try one of [x]\n后记',
+    'Error: ' + 'a' * 100 + ' is not a valid tool, try one of [x]',
+    'Error: ' + 'a' * 300 + ' is not a valid tool, try one of [x]',
 ]
+
+# indices whose payload is nothing but an artifact -> must sanitize to ''
+_ALL_ARTIFACT = [0, 1, 2, 3, 7, 8]
 
 
 def test_sanitizer_strips_space_and_newline_tool_names():
-    """A tool name containing a space used to survive sanitization entirely."""
+    """A space in the tool name used to defeat the cleaner entirely, and a name
+    longer than the original {0,80} bound bypassed it again — both leaked."""
     from app.utils.helpers import sanitize_response
-    for payload in _SANITIZER_PAYLOADS[:4]:
-        assert sanitize_response(payload) == '', f'not stripped: {payload!r}'
+    for i in _ALL_ARTIFACT:
+        payload = _SANITIZER_PAYLOADS[i]
+        assert sanitize_response(payload) == '', f'not stripped: {payload[:60]!r}'
 
 
 def test_sanitizer_keeps_text_after_the_artifact():
