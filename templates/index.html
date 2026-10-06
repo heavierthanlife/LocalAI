@@ -110,8 +110,10 @@
                 <button class="recycle-filter" data-source="knowledge_lab" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">science</span> 知识库</button>
                 <button class="recycle-filter" data-source="company_kb" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--card-border);border-radius:12px;background:var(--card-bg);cursor:pointer;"><span class="msi msi-sm" aria-hidden="true">domain</span> 公司</button>
             </div>
-            <button id="sidebarRestoreAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#22c55e; color:white; border-color:#16a34a;"><span class="msi msi-sm" aria-hidden="true">recycling</span> 恢复筛选结果</button>
-            <button id="sidebarEmptyAllBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#ef4444; color:white; border-color:#dc2626;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清空筛选结果</button>
+            <div style="display:flex;gap:6px;">
+                <button id="sidebarRestoreAllBtn" class="file-btn" style="flex:1; padding:4px 6px; font-size:0.72rem; background:#22c55e; color:white; border-color:#16a34a;"><span class="msi msi-sm" aria-hidden="true">recycling</span> 恢复筛选结果</button>
+                <button id="sidebarEmptyAllBtn" class="file-btn" style="flex:1; padding:4px 6px; font-size:0.72rem; background:#ef4444; color:white; border-color:#dc2626;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清空筛选结果</button>
+            </div>
             <p style="font-size:.65rem;color:var(--card-muted);margin-top:8px;"><span class="msi msi-sm" aria-hidden="true">lightbulb</span> 超过15天的对话会自动归档删除</p>
         </div>
 
@@ -130,19 +132,27 @@
                 <h4 style="font-size:0.8rem; color:var(--card-muted); margin-bottom:6px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 管理工具</h4>
                 <button id="sidebarAuditLogBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 审计日志</button>
                 <button id="sidebarWorkReportBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 工作报告</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 维护</div>
-                <button id="sidebarClearCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清除缓存</button>
-                <button id="sidebarCleanupNowBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 清理数据</button>
-                <button id="sidebarSearchCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">settings</span> 搜索缓存</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">psychology</span> 引擎</div>
-                <button id="sidebarRagStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">search</span> RAG索引</button>
-                <button id="sidebarRagRebuildBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">hammer</span> 重建索引</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 训练</div>
-                <button id="sidebarTrainingStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">trending_up</span> 训练统计</button>
-                <button id="sidebarTrainingExportBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出JSONL</button>
-                <div style="font-size:.65rem; color:var(--card-muted); margin:6px 0 2px;"><span class="msi msi-sm" aria-hidden="true">search</span> 检测结果</div>
-                <button id="sidebarQuoteAnomalyResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">payments</span> 报价异常记录</button>
-                <button id="sidebarRelationshipResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">link</span> 关联关系记录</button>
+                <details class="admin-collapse" open>
+                    <summary><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 维护</summary>
+                    <button id="sidebarClearCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">delete</span> 清除缓存</button>
+                    <button id="sidebarCleanupNowBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 清理数据</button>
+                    <button id="sidebarSearchCacheBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">settings</span> 搜索缓存</button>
+                </details>
+                <details class="admin-collapse" open>
+                    <summary><span class="msi msi-sm" aria-hidden="true">psychology</span> 引擎</summary>
+                    <button id="sidebarRagStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">search</span> RAG索引</button>
+                    <button id="sidebarRagRebuildBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">hammer</span> 重建索引</button>
+                </details>
+                <details class="admin-collapse" open>
+                    <summary><span class="msi msi-sm" aria-hidden="true">bar_chart</span> 训练</summary>
+                    <button id="sidebarTrainingStatsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">trending_up</span> 训练统计</button>
+                    <button id="sidebarTrainingExportBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">download</span> 导出JSONL</button>
+                </details>
+                <details class="admin-collapse" open>
+                    <summary><span class="msi msi-sm" aria-hidden="true">search</span> 检测结果</summary>
+                    <button id="sidebarQuoteAnomalyResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">payments</span> 报价异常记录</button>
+                    <button id="sidebarRelationshipResultsBtn" class="file-btn" style="width:100%; margin-bottom:4px;"><span class="msi msi-sm" aria-hidden="true">link</span> 关联关系记录</button>
+                </details>
                 <hr style="margin:12px 0;">
                 <button id="sidebarSystemCleanupBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#fef2f2; color:#dc2626; border-color:#fca5a5;"><span class="msi msi-sm" aria-hidden="true">cleaning_services</span> 一键系统清理</button>
                 <button id="sidebarClearAllDataBtn" class="file-btn" style="width:100%; margin-bottom:4px; background:#7f1d1d; color:white; border-color:#991b1b;"><span class="msi msi-sm" aria-hidden="true">warning</span> 清空全部数据</button>
@@ -243,7 +253,7 @@
     <div class="chat-app">
         <div class="chat-header">
             <button class="toggle-sidebar-btn" id="toggleSidebarBtn" aria-label="切换侧边栏"><span class="msi msi-sm" aria-hidden="true">menu</span></button>
-            <span style="flex:1; text-align:center;">中联招标智能助手 China United International Engineering AI Services</span>
+            <span style="flex:1; text-align:center;">中联招标智能助手 China United International Engineering AI Services <span id="headerRoleChip" class="role-chip" style="display:none;"></span></span>
             <div id="processingIndicator" style="display: none; font-size: 0.7rem; background: #5a7c9b; padding: 2px 8px; border-radius: 20px; color: white;">⏳ 处理中...</div>
             <div id="progressBar" style="display:none;position:fixed;top:0;left:0;right:0;height:3px;z-index:10001;">
                 <div id="progressBarFill" style="height:100%;background:linear-gradient(90deg,#5a7c9b,#1e293b);width:0%;transition:width .3s;"></div>
@@ -294,10 +304,11 @@
         </div>
 
         <!-- Chat Interface -->
-        <div id="chatInterface" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div id="chatInterface" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;">
             <div id="grillModeBanner" style="display:none;background:linear-gradient(135deg,#fef2f2,#fff5f5);border:1px solid #fca5a5;border-radius:8px;padding:8px 14px;margin-bottom:4px;font-size:0.78rem;color:#991b1b;text-align:center;">
                 <span class="msi msi-sm" aria-hidden="true">local_fire_department</span> <strong>质问模式</strong> — AI正扮演挑剔供应商，对你的文件进行拷问
             </div>
+            <div id="chatEmptyState" class="chat-empty-state" style="display:none;"></div>
             <div class="chat-messages" id="chatMessages"></div>
             <div class="float-buttons">
                 <button id="scrollTopBtn" class="float-btn" title="回到顶部"><span class="msi msi-sm" aria-hidden="true">north</span>️</button>

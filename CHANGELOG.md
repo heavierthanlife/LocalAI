@@ -378,6 +378,31 @@ regression: 1/1 clearance baseline passed
 
 ---
 
+## [2026-09-19] — 移植本机 QA 打磨：LLM 泄漏清洗 + 登录前门控 + UI 打磨
+
+### Fixed
+- **LLM 工具错误 / 函数调用模板文本泄漏到聊天**（FIX-2026-08-15-001）：agent 幻觉工具名时原始 `Error: X is not a valid tool...` 及模型回显的函数调用模板文本曾被逐字流式输出并入库。后端 `sanitize_response()` 在 `split_thinking_answer()` 边界清洗存储副本（含 thinking/answer 两侧），前端 `static/js/chat.js::_sanitizeResponse()` 同步清洗**实时 SSE 流**（后端无法逐 chunk 过滤而不破坏流式，故前端镜像同一组正则）。
+- **`/check_storage` 登录前触发 403 控制台噪声**（FIX-2026-08-15-002）：未登录时跳过请求，并静默忽略非 2xx 响应。
+- **日报问答不足提示生硬**（FIX-2026-08-15-003）："今日对话不足，至少需要2条问答" → 友好可操作文案。
+- **登录前 `/templates`、`/cases`、`/notebook`、`/admin/projects` 401/403 噪声**（FIX-2026-08-16-004）：各加载器按 `sessionStorage` 登录态门控，未登录显示"登录后查看…"。
+
+### Added
+- 聊天空态欢迎块 + 无溢出时隐藏浮动滚动按钮（FIX-2026-08-16-005）。
+- 头部角色标识 chip（管理员/审核员/用户）（FIX-2026-08-16-006）。
+- 管理侧栏分组可折叠（`<details class="admin-collapse">`）、公司/知识库文件双行列表（`kb-file-*`）、统计卡片（`stats-tile`）。
+- `requirements-dev.txt`（pytest / fakeredis / pytest-env）。
+- 13 条回归测试（FIX-2026-08-15-001/002/003 · 2026-08-16-004/005/006）。
+
+### Notes
+- 来源：本机 2026-08 的未提交 QA 打磨（git stash），按功能逐个移植到 2026-09 主线；未移植项见 commit `0559ec3`/`d3627fa` 说明。
+- 未移植（有意弃用）：`412b3da` 的 credit 模块删除（主线保留 credit）、`templates.py` 损坏修复（主线已干净）、`flask-limiter`/`selenium`（主线已有）、`agent_middleware.py` 补丁（主线已删该文件）。
+- 本机运行/调试产物（`db/`、`_app_run.*`、`qa-tooling/` 等）保留在磁盘并加入 `.gitignore`。
+
+regression: N/A（未触及合规/清标路径）
+smoke 7/7 · 新增回归 13/13 · verify_fixes 291/0 · doc_drift 15/15
+
+---
+
 ## [2026-09-16] — S3/S4/S5 清理：UI 死引用 + 配置诚实性 + 文档漂移
 
 ### Fixed

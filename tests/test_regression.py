@@ -3092,3 +3092,102 @@ def test_qa030_nginx_static_security_headers():
     src = open('nginx.conf', encoding='utf-8').read()
     assert src.count('add_header X-Content-Type-Options nosniff;') >= 2
     assert src.count('add_header X-Frame-Options SAMEORIGIN;') >= 2
+
+
+# ── FIX-2026-08-15-001: LLM tool-error + prompt-template leak sanitization ──
+def test_sanitize_response_strips_invalid_tool_error():
+    from app.utils.helpers import sanitize_response
+    leaked = 'Error: DesignDesign is not a valid tool, try one of [get_date, bocha_search]'
+    assert sanitize_response(leaked) == '', \
+        "sanitize_response must strip 'X is not a valid tool' error text entirely"
+
+
+def test_sanitize_response_strips_prompt_template():
+    from app.utils.helpers import sanitize_response
+    leaked = 'Here is the JSON for a function call with its proper arguments that best answers the given prompt is:'
+    assert sanitize_response(leaked) == '', \
+        "sanitize_response must strip function-calling prompt template text"
+
+
+def test_sanitize_response_preserves_normal_content():
+    from app.utils.helpers import sanitize_response
+    normal = '招标文件已上传，请等待分析完成。'
+    assert sanitize_response(normal) == normal, \
+        "sanitize_response must not alter normal user-facing content"
+
+
+def test_split_thinking_answer_sanitizes_answer():
+    from app.utils.helpers import split_thinking_answer
+    thinking, answer = split_thinking_answer(
+        '【思考】考虑中【回答】好的，我查一下。Error: Foo is not a valid tool, try one of [get_date]')
+    assert thinking == '考虑中'
+    assert 'not a valid tool' not in answer, \
+        "split_thinking_answer must sanitize the answer portion"
+
+
+# ── FIX-2026-08-15-003: /my_daily_report friendly message ──
+def test_daily_report_friendly_insufficient_message():
+    content = _read('app/routes/knowledge.py')
+    assert '先聊几句（至少2条问答）' in content, \
+        "knowledge.py my_daily_report must return the friendly insufficient-messages message"
+
+
+# ── FIX-2026-08-15-002: /check_storage frontend auth gating ──
+def test_check_storage_frontend_gated_by_username():
+    content = _read('static/js/app.js')
+    assert "sessionStorage.getItem('username')) return;" in content, \
+        "app.js checkStorage() must skip the fetch when no username is in sessionStorage"
+
+
+# ── FIX-2026-08-16-004: Pre-login fetch noise gating (templates/cases/notebook/projects) ──
+def test_prelogin_gate_cases():
+    content = _read('static/js/cases.js')
+    assert "sessionStorage.getItem('username'))" in content and "登录后查看案例库" in content, \
+        "cases.js loadList must skip the fetch pre-login"
+
+
+def test_prelogin_gate_templates():
+    content = _read('static/js/templates.js')
+    assert "sessionStorage.getItem('username'))" in content and "登录后查看模板库" in content, \
+        "templates.js loadList must skip the fetch pre-login"
+
+
+def test_prelogin_gate_notebook():
+    content = _read('static/js/knowledge-lab.js')
+    assert "sessionStorage.getItem('username'))" in content and "登录后查看笔记" in content, \
+        "knowledge-lab.js loadNotebook must skip the fetch pre-login"
+
+
+def test_prelogin_gate_projects():
+    content = _read('static/js/app.js')
+    assert "sessionStorage.getItem('username'))" in content and "登录后查看项目" in content, \
+        "app.js loadSidebarProjects must skip the fetch pre-login"
+
+
+# ── FIX-2026-08-16-005: Chat empty-state + float button visibility ──
+def test_chat_empty_state_rendered():
+    content = _read('static/js/chat.js')
+    assert 'chatEmptyState' in content and 'renderEmptyState' in content, \
+        "chat.js must render the chat empty-state block"
+
+
+def test_float_buttons_hidden_when_no_overflow():
+    content = _read('static/js/chat.js')
+    assert 'hidden-float' in content, \
+        "chat.js must toggle hidden-float on the float buttons container"
+
+
+# ── FIX-2026-08-16-006: Role chip in header ──
+def test_role_chip_header():
+    content = _read('static/js/app.js')
+    assert 'updateRoleChip' in content and 'headerRoleChip' in content, \
+        "app.js must update the header role chip from /check_auth data"
+
+
+# ── FIX-2026-08-15-001 (live-stream half): frontend SSE text is sanitized ──
+def test_sanitize_response_frontend_stream_guard():
+    content = _read('static/js/chat.js')
+    assert 'function _sanitizeResponse' in content, \
+        "chat.js must define _sanitizeResponse to clean the live SSE stream"
+    assert '_sanitizeResponse(fullResponse)' in content, \
+        "chat.js must run the live streamed text through _sanitizeResponse before rendering"

@@ -118,7 +118,7 @@ def split_thinking_answer(text: str) -> tuple:
     multi-block MiMo output is correctly separated.
     """
     if not text:
-        return None, text
+        return None, sanitize_response(text)
 
     # ── MiMo / multi-block (≥2 【思考】) ──
     if text.count('【思考】') >= 2:
@@ -127,8 +127,8 @@ def split_thinking_answer(text: str) -> tuple:
             thinking = text[:idx].replace('【思考】', '').strip()
             thinking = re.sub(r'\n{3,}', '\n\n', thinking)
             answer = text[idx + len('【回答】'):].strip()
-            return thinking, answer
-        return None, text
+            return sanitize_response(thinking), sanitize_response(answer)
+        return None, sanitize_response(text)
 
     # ── Standard single-block formats ──
     patterns = [
@@ -141,5 +141,39 @@ def split_thinking_answer(text: str) -> tuple:
         if match:
             thinking = match.group(1).strip()
             answer = re.sub(pat, '', text, flags=re.DOTALL).strip()
-            return thinking, answer
-    return None, text
+            return sanitize_response(thinking), sanitize_response(answer)
+    return None, sanitize_response(text)
+
+
+# ── Response sanitization: never surface internal tool/LLM artifacts to users ──
+# NOTE: patterns are mirrored in static/js/chat.js `_sanitizeResponse()` so the
+# live SSE stream is cleaned too (split_thinking_answer only covers the stored
+# copy). Keep the two in sync.
+_INVALID_TOOL_RE = re.compile(
+    r"Error:[ \t]*\S+[ \t]*is not a valid tool[^\n]*",
+    re.IGNORECASE,
+)
+_PROMPT_TEMPLATE_RE = re.compile(
+    r"Here is the JSON for a function call with its proper arguments[^\n]*",
+    re.IGNORECASE,
+)
+_KNOWN_LEAK_PATTERNS = (
+    _INVALID_TOOL_RE,
+    _PROMPT_TEMPLATE_RE,
+)
+
+
+def sanitize_response(text: str) -> str:
+    """Strip internal tool-calling artifacts and prompt-template echoes from
+    AI responses before they reach the user or are persisted.
+
+    Covers: 'Error: X is not a valid tool, try one of [...]' (LangChain tool
+    executor output) and function-calling template text echoed by models that
+    lack proper tool-calling support.
+    """
+    if not text:
+        return text
+    cleaned = text
+    for pat in _KNOWN_LEAK_PATTERNS:
+        cleaned = pat.sub("", cleaned)
+    return cleaned.strip()

@@ -73,6 +73,10 @@ window.Cases = {};
         currentFilter = filter;
         const container = document.getElementById('casesListContainer');
         if (!container) return;
+        if (!sessionStorage.getItem('username')) {  // Round 3 polish #14: skip pre-login fetch noise
+            container.innerHTML = '<div style="color:var(--card-muted);padding:12px;text-align:center;">登录后查看案例库</div>';
+            return;
+        }
         container.innerHTML = '<span style="color:var(--card-muted);">' + _icon('hourglass_empty') + ' 加载中...</span>';
 
         let url = '/cases?page=1&per_page=50';

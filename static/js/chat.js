@@ -8,6 +8,19 @@
         if (typeof _safeHTML === 'function') return _safeHTML(html);
         return html;
     }
+    // FIX-2026-08-15-001: strip internal tool-error / prompt-template leaks from
+    // the LIVE SSE stream (backend sanitize_response only covers the stored copy).
+    // Patterns mirror app/utils/helpers.py — keep in sync.
+    var _LEAK_PATTERNS = [
+        /Error:[ \t]*\S+[ \t]*is not a valid tool[^\n]*/gi,
+        /Here is the JSON for a function call with its proper arguments[^\n]*/gi
+    ];
+    function _sanitizeResponse(text) {
+        if (!text) return text;
+        var cleaned = String(text);
+        for (var i = 0; i < _LEAK_PATTERNS.length; i++) cleaned = cleaned.replace(_LEAK_PATTERNS[i], '');
+        return cleaned.trim();
+    }
     // ======================== STREAMING SEND FUNCTION ========================
     async function sendMessageStreaming(userMsg, messageId, files, userGroup = null, retryCount = 0) {
         const formData = new FormData();
@@ -131,8 +144,8 @@
                                     if (m) {
                                         thinkingDone = true;
                                         const idx = fullResponse.indexOf(m[0]);
-                                        const thinking = fullResponse.substring(0, idx).replace(/^【思考】|^思考：|^<思考>/i, '').trim();
-                                        const answerStart = fullResponse.substring(idx + m[0].length);
+                                        const thinking = _sanitizeResponse(fullResponse.substring(0, idx).replace(/^【思考】|^思考：|^<思考>/i, '').trim());
+                                        const answerStart = _sanitizeResponse(fullResponse.substring(idx + m[0].length));
 
                                         // Build collapsed thinking block
                                         const preview = thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
@@ -154,17 +167,17 @@
                                 if (thinkingDone) {
                                     if (noThinkingMarker) {
                                         // Direct answer — no thinking block
-                                        answerDiv.innerHTML = _renderMarkdown(fullResponse);
+                                        answerDiv.innerHTML = _renderMarkdown(_sanitizeResponse(fullResponse));
                                     } else {
                                         const splitIdx = fullResponse.search(THINKING_END);
                                         const answerText = splitIdx >= 0
                                             ? fullResponse.substring(splitIdx + fullResponse.match(THINKING_END)[0].length)
                                             : fullResponse;
-                                        answerDiv.innerHTML = thinkingHtml + _renderMarkdown(answerText);
+                                        answerDiv.innerHTML = thinkingHtml + _renderMarkdown(_sanitizeResponse(answerText));
                                     }
                                 } else {
                                     // Still in thinking phase — show dimmed streaming text
-                                    answerDiv.innerHTML = `<div class="stream-thinking">${escapeHtml(fullResponse)}</div>`;
+                                    answerDiv.innerHTML = `<div class="stream-thinking">${escapeHtml(_sanitizeResponse(fullResponse))}</div>`;
                                 }
                                 scrollToBottom(true);
                             } else if (data.type === 'error') {
@@ -184,8 +197,8 @@
                                 // If backend sent pre-split answer/thinking (e.g. JSON format),
                                 // replace raw streaming content with properly formatted version
                                 if (data.answer) {
-                                    const finalThinking = data.thinking || '';
-                                    const finalAnswer = data.answer || '';
+                                    const finalThinking = _sanitizeResponse(data.thinking || '');
+                                    const finalAnswer = _sanitizeResponse(data.answer || '');
                                     if (finalThinking) {
                                         const thinkingHtml2 = `<div class="message-thinking" style="font-size:0.72rem;color:var(--card-muted);background:#f5f7fa;border-radius:6px;padding:6px 10px;margin-bottom:6px;cursor:pointer;" onclick="this.classList.toggle('collapsed');const n=this.nextElementSibling;n.style.display=n.style.display==='none'?'block':'none';">
                                             💭 思考过程 <span style="font-size:0.6rem;">(点击展开)</span></div>
@@ -203,7 +216,7 @@
                                 addBranchButton(wrapper, tempGroup);
                                 if (data.assistant_msg_id) {
                                     addFeedbackButtons(tempGroup, data.assistant_msg_id);
-                                    addActionButtons(tempGroup, userMsg, fullResponse, '', data.assistant_msg_id);
+                                    addActionButtons(tempGroup, userMsg, _sanitizeResponse(fullResponse), '', data.assistant_msg_id);
                                 }
                             }
                         } catch (e) {
@@ -239,7 +252,7 @@
             }
             // Fix links
             fixLinksInContainer(answerDiv);
-            addCopyButton(wrapper, fullResponse);
+            addCopyButton(wrapper, _sanitizeResponse(fullResponse));
             addShareButton(wrapper);
         }
     }
@@ -800,7 +813,42 @@
         } finally {
             clearTimeout(timeoutId);
             isLoadingSession = false;
+            updateChatEmptyState();
+            updateFloatButtons();
         }
+    }
+
+    // ── Chat empty state (Round 3 polish #5) ──
+    function renderEmptyState() {
+        const el = document.getElementById('chatEmptyState');
+        if (!el) return;
+        el.innerHTML = `
+            <div class="ces-icon">💬</div>
+            <div class="ces-title">开始对话</div>
+            <div class="ces-hint">我是中联招标智能助手，可以帮你：起草招标文件、分析投标文件、生成审计报告、查询招标法规、整理项目资料。</div>
+            <div class="ces-tips">
+                <span class="ces-tip">📄 附加文件分析</span>
+                <span class="ces-tip">📚 引用知识库</span>
+                <span class="ces-tip">📊 生成日报</span>
+            </div>`;
+    }
+
+    function updateChatEmptyState() {
+        const el = document.getElementById('chatEmptyState');
+        if (!el) return;
+        const hasMsgs = messagesDiv && messagesDiv.querySelector('.message-group');
+        el.style.display = hasMsgs ? 'none' : 'flex';
+        if (!hasMsgs) renderEmptyState();
+    }
+
+    // ── Float buttons visibility (Round 3 polish #6) ──
+    function updateFloatButtons() {
+        const fb = document.querySelector('.float-buttons');
+        if (!fb) return;
+        const mc = messagesDiv;
+        if (!mc) { fb.classList.add('hidden-float'); return; }
+        const noOverflow = mc.scrollHeight <= mc.clientHeight + 2;
+        fb.classList.toggle('hidden-float', noOverflow);
     }
 
     // ── Unified real-time polling (common + project chats) ──
