@@ -663,3 +663,25 @@ unresolved:
       提供，版本不一致即报此错）；③ 确认 Windows 图形设置未把 WSL 绑到非 NVIDIA GPU；
       ④ 修好前**不要**加载 docker-compose.gpu.yml。GPU 镜像本身已验证正确
       （torch 2.12.1+cu126、cuda 12.6、15 个 nvidia-*cu12 轮子）。
+
+  - id: UNRESOLVED-041
+    title: "pre-commit 未拦下 verify_fixes 失败的提交（原因未复现）"
+    status: pending
+    severity: medium
+    discovered: 2026-10-06
+    tags: ["工具链", "门禁", "git"]
+    context: >
+      Round 031 构建轮中，提交 1756730 在 `verify_fixes.py` 报 445/1
+      （FIX-084 的 literal 检查被 PIP_RETRIES/PIP_TIMEOUT 调优击穿）的情况下仍成功
+      提交并推送。已确认 `core.hooksPath=.githooks`，`.githooks/pre-commit` 可执行
+      （-rwxr-xr-x）；钩子逻辑上 check_fix_registry() 返回 False → main() 返回 1 →
+      sys.exit(main()) 应为非零、应阻断提交。手动跑钩子（门禁已绿）返回 0，故未能
+      复现阻断路径。同批次还有属主失误：提交脚本先跑了门禁却**无 fail-fast**，
+      看到 1 failure 仍继续提交。
+    blocked_by: "需在门禁为红时实测钩子退出码"
+    resolution_plan: >
+      ① 制造一次可控失败（如临时改 fix_registry 的某个 literal），执行
+      `.venv/Scripts/python.exe .githooks/pre-commit; echo $?` 看是否为 1；② 若钩子
+      本身正常，查 git 是否因 Windows/shebang（#!/usr/bin/env python）解析不到解释器
+      而**静默跳过**钩子；③ 无论结论，提交侧一律用 fail-fast 封装
+      （`verify_fixes.py || exit 1`）——本轮已按此模式提交。
