@@ -2487,3 +2487,43 @@ fixes:
       - type: literal
         file: static/js/app.js
         pattern: "headerRoleChip"
+
+  - id: FIX-2026-10-05-084
+    title: "docker_build: GPU torch index pointed at cu124, which has no torch 2.12.1"
+    severity: medium
+    rationale: >
+      scripts/docker_build.py defaulted the GPU torch index to .../whl/cu124, but
+      cu124 only ships torch <=2.6.0 while requirements.txt pins torch==2.12.1 —
+      so a GPU build could never resolve and fell back to pip failure. Fix: default
+      to cu126 (the lowest index carrying 2.12.1; still supports Turing/sm_75 for
+      RTX 20-series). Dockerfile also gained PIP_RETRIES/PIP_TIMEOUT because the
+      CUDA wheels (nvidia-cudnn ~700MB) intermittently stall on pypi.nvidia.com.
+    checks:
+      - type: literal
+        file: scripts/docker_build.py
+        pattern: 'GPU_INDEX_DEFAULT = "https://download.pytorch.org/whl/cu126"'
+      - type: grep_not
+        file: scripts/docker_build.py
+        pattern: "whl/cu124"
+      - type: literal
+        file: Dockerfile
+        pattern: "ARG PIP_RETRIES=10"
+
+  - id: FIX-2026-10-05-085
+    title: "pre-commit hook ran under system Python, misreporting fix regressions"
+    severity: medium
+    rationale: >
+      .githooks/pre-commit dispatches verify_fixes.py via sys.executable, which is
+      whatever interpreter git launched the hook with (bare `python` → system
+      Python without yaml/dotenv). The script then crashed with ImportError and
+      the hook reported 'Fix regression detected', blocking commits for reasons
+      unrelated to the fix registry. Fix: re-exec the hook once under
+      .venv/Scripts/python.exe (guarded by LOCALAI_HOOK_VENV, no-op when .venv is
+      absent so CI is unaffected).
+    checks:
+      - type: literal
+        file: .githooks/pre-commit
+        pattern: "def _reexec_with_venv"
+      - type: literal
+        file: .githooks/pre-commit
+        pattern: "os.environ['LOCALAI_HOOK_VENV'] = '1'"

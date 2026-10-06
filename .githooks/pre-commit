@@ -85,6 +85,36 @@ def check_integrity():
 VERIFY_FIXES = os.path.join(PROJECT_ROOT, 'scripts', 'verify_fixes.py')
 
 
+def _reexec_with_venv():
+    """Re-exec this hook under the project's venv interpreter.
+
+    Git invokes the hook through ``#!/usr/bin/env python``, which on Windows
+    resolves to the system Python — one without the app's dependencies
+    (yaml/dotenv). ``verify_fixes.py`` then dies with ImportError, the hook
+    sees a non-zero exit and misreports it as "Fix regression detected",
+    blocking every commit for the wrong reason.
+
+    Re-exec once (guarded by LOCALAI_HOOK_VENV) so the checks run against the
+    project's real environment. No-ops when .venv is absent (e.g. CI), which
+    preserves the previous behaviour.
+    """
+    if os.environ.get('LOCALAI_HOOK_VENV'):
+        return
+    if os.name == 'nt':
+        venv_py = os.path.join(PROJECT_ROOT, '.venv', 'Scripts', 'python.exe')
+    else:
+        venv_py = os.path.join(PROJECT_ROOT, '.venv', 'bin', 'python')
+    if not os.path.exists(venv_py):
+        return
+    if os.path.normcase(os.path.abspath(sys.executable)) == os.path.normcase(os.path.abspath(venv_py)):
+        return
+    os.environ['LOCALAI_HOOK_VENV'] = '1'
+    try:
+        os.execv(venv_py, [venv_py, os.path.abspath(__file__)] + sys.argv[1:])
+    except OSError:
+        pass  # fall back to the current interpreter
+
+
 def check_fix_registry():
     """Run verify_fixes.py and reject if any fix has regressed."""
     if os.getenv('SKIP_FIX_CHECK'):
@@ -185,6 +215,8 @@ def check_skills():
 def main():
     if os.environ.get('SKIP_REPAIR_KIT_CHECK'):
         return 0
+
+    _reexec_with_venv()
 
     changed = _get_changed_files()
 

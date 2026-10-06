@@ -3191,3 +3191,26 @@ def test_sanitize_response_frontend_stream_guard():
         "chat.js must define _sanitizeResponse to clean the live SSE stream"
     assert '_sanitizeResponse(fullResponse)' in content, \
         "chat.js must run the live streamed text through _sanitizeResponse before rendering"
+
+
+# ── FIX-2026-10-05-084: GPU torch index must carry the pinned torch 2.12.1 ──
+def test_docker_build_gpu_index_is_cu126():
+    """cu124 caps at torch 2.6.0; requirements pin 2.12.1 -> GPU builds need cu126."""
+    src = _read('scripts/docker_build.py')
+    assert 'whl/cu126' in src, "GPU torch index must be cu126 (cu124 has no torch 2.12.1)"
+    assert 'whl/cu124' not in src, "cu124 would make the GPU build unresolvable"
+
+
+def test_dockerfile_has_pip_retry_budget():
+    """Large CUDA wheels stall on pypi.nvidia.com; the Dockerfile must retry."""
+    src = _read('Dockerfile')
+    assert 'ARG PIP_RETRIES=10' in src and 'ARG PIP_TIMEOUT=120' in src
+
+
+# ── FIX-2026-10-05-085: pre-commit hook must use the project venv interpreter ──
+def test_pre_commit_hook_reexecs_with_venv():
+    """Bare `python` lacks yaml/dotenv -> the hook must re-exec under .venv."""
+    src = _read('.githooks/pre-commit')
+    assert 'def _reexec_with_venv' in src
+    assert 'LOCALAI_HOOK_VENV' in src
+    assert '.venv' in src

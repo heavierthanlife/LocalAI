@@ -6,10 +6,11 @@ index, so the same git repo builds correctly on both a CPU-only machine and an
 RTX GPU machine:
 
   - no GPU  -> https://download.pytorch.org/whl/cpu      (torch 2.12.1+cpu, ~200MB)
-  - GPU     -> https://download.pytorch.org/whl/cu124    (torch CUDA build; 2080 Super / Turing sm_75)
+  - GPU     -> https://download.pytorch.org/whl/cu126    (torch CUDA build; 2080 Super / Turing sm_75)
 
 Override the CUDA index with the TORCH_CUDA_INDEX env var if a different
-cuXXXX build is needed (e.g. verified on the target GPU machine).
+cuXXXX build is needed (e.g. verified on the target GPU machine). Note: cu124
+is NOT usable here — it only ships torch <=2.6.0, while requirements pin 2.12.1.
 
 Usage (Windows PowerShell or any shell):
     python scripts/docker_build.py            # build app/celery-worker/celery-beat
@@ -24,7 +25,9 @@ import subprocess
 import sys
 
 CPU_INDEX = "https://download.pytorch.org/whl/cpu"
-GPU_INDEX_DEFAULT = "https://download.pytorch.org/whl/cu124"
+# cu126 is the lowest CUDA index that carries the pinned torch 2.12.1 (cu124 caps
+# at 2.6.0). cu126 still supports Turing (sm_75) — RTX 20-series.
+GPU_INDEX_DEFAULT = "https://download.pytorch.org/whl/cu126"
 SERVICES = ["app", "celery-worker", "celery-beat"]
 
 

@@ -46,10 +46,17 @@ WORKDIR /app
 COPY requirements.txt .
 
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+# --retries/--timeout: CUDA wheels (nvidia-cudnn ~700MB, cublas ~600MB) are large and
+# pypi.nvidia.com intermittently stalls; retries resume from the pip cache mount.
+ARG PIP_RETRIES=10
+ARG PIP_TIMEOUT=120
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
- && pip install -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent \
- && pip install --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1
+    pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
+ && pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent \
+ && pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
+        --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1
 # torch/torchvision installed LAST so requirements.txt's PyPI pin cannot clobber
 # the TORCH_INDEX (CPU/CUDA) wheel chosen by scripts/docker_build.py.
 

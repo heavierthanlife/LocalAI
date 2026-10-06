@@ -8,6 +8,21 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-10-05] — 本机构建/工具链修正（torch cu126 + 钩子解释器）
+
+### Fixed
+- **GPU 构建 torch 索引指向 cu124，而 cu124 无 torch 2.12.1**（FIX-2026-10-05-084）：`scripts/docker_build.py` 默认 GPU 索引 `.../whl/cu124`，但 cu124 最高只到 torch 2.6.0，而 `requirements.txt` 钉死 2.12.1 —— GPU 构建必然解析失败。改为 **cu126**（承载 2.12.1 的最低索引，仍支持 Turing/sm_75，覆盖 RTX 20 系）。`Dockerfile` 同时加入 `PIP_RETRIES=10` / `PIP_TIMEOUT=120`：CUDA wheel（`nvidia-cudnn` 约 700MB）在 pypi.nvidia.com 上偶发卡死，重试可复用 pip cache mount 续传。
+- **pre-commit 钩子误报 fix 回归**（FIX-2026-10-05-085）：`.githooks/pre-commit` 经 `sys.executable` 调用 `verify_fixes.py`，而 git 以裸 `python`（系统解释器，无 yaml/dotenv）启动钩子 → 脚本 ImportError 崩溃，钩子判为 `Fix regression detected`，**任何提交都被错误拦截**。改为在 `.venv` 存在时用 venv 解释器重新执行一次（`LOCALAI_HOOK_VENV` 守卫；`.venv` 缺失时 no-op，CI 不受影响）。
+
+### Notes
+- 来源：本机 5 提交并入 master（merge commit `4148aa1`）后，暴露的两处本机环境/构建问题，均非应用逻辑。
+- 未推送前本机 5 提交（sanitize 泄漏清洗 + 登录前门控 + UI 打磨）已随同一合并进入主线。
+
+regression: N/A（未触及合规/清标路径）
+verify_fixes 408/0 · regression 254 passed · smoke 7/7 · doc_drift 16/16 · check_system 150/150
+
+---
+
 ## [2026-10-04] — 日志清理 + 按日期轮转（UNRESOLVED-037）
 
 ### Changed
