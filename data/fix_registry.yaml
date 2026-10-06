@@ -144,7 +144,8 @@ fixes:
       _score_compliance_check compared verdict == 'pass' (lowercase) but AI
       returned "PASS" (uppercase). Pass count was always 0, scoring always 100%.
       Fix normalizes verdict to lowercase at the AI boundary and defines
-      VERDICT_PASS/WARNING/VIOLATION/CRITICAL constants as single source of truth.
+      VERDICT_PASS/WARNING/VIOLATION/CRITICAL constants as single source of
+      truth.
     checks:
       - type: grep
         file: app/services/compliance_prompts.py
@@ -205,9 +206,11 @@ fixes:
     title: "Closed cursor passed to _compute_impact in law_monitor.py"
     severity: high
     rationale: >
-      create_change_event called _compute_impact(cur if 'cur' in dir() else None)
+      create_change_event called _compute_impact(cur if 'cur' in dir() else
+      None)
       after the with conn.cursor() context exited. The dir() check always passed
-      but the cursor was closed, causing InterfaceError. Fix moves _compute_impact
+      but the cursor was closed, causing InterfaceError. Fix moves
+      _compute_impact
       call inside the with block while cursor is alive.
     checks:
       - type: grep
@@ -221,10 +224,13 @@ fixes:
     title: "/api/graph endpoints require login + project-membership check"
     severity: critical
     rationale: >
-      All five /api/graph endpoints (collusion/compliance/law-impact/citation/types)
+      All five /api/graph endpoints
+      (collusion/compliance/law-impact/citation/types)
       had zero authentication, exposing bidder collusion and compliance data to
-      anonymous callers and allowing any logged-in user to read any project's graph
-      via arbitrary project_id (IDOR). Fix applies login_required to all routes and
+      anonymous callers and allowing any logged-in user to read any project's
+      graph
+      via arbitrary project_id (IDOR). Fix applies login_required to all routes
+      and
       _require_project_access (admin bypass, others must be project members) on
       project_id-bearing routes.
     checks:
@@ -239,7 +245,8 @@ fixes:
     title: "Admin PIN fails closed in production (no weak 123456 default)"
     severity: high
     rationale: >
-      When APP_ENV=production and neither ADMIN_PIN nor ADMIN_PASSWORD_HASH is set,
+      When APP_ENV=production and neither ADMIN_PIN nor ADMIN_PASSWORD_HASH is
+      set,
       create_app now raises instead of silently using the weak default 123456.
       Development keeps the 123456 fallback but logs a prominent warning.
       docker-compose sets APP_ENV=production and ADMIN_PIN default to empty so a
@@ -257,7 +264,8 @@ fixes:
     severity: high
     rationale: >
       The credit-check task registry lived in a process-local dict (app.globals.
-      credit_tasks). Under multiple gunicorn workers the start POST could land on
+      credit_tasks). Under multiple gunicorn workers the start POST could land
+      on
       worker A while status/captcha/solve requests hit workers B/C/D, causing
       spurious 404s and CAPTCHA handshake deadlocks. Fix adds a Redis-backed
       registry (app/services/credit_task_registry.py) with graceful in-memory
@@ -276,7 +284,8 @@ fixes:
     rationale: >
       Anonymous chat history was stored as one JSON file per thread under
       TEMP_ROOT with filelock read-modify-rewrite — non-atomic, data-loss on
-      crash, and lock contention under streaming. Fix adds the anon_chat_messages
+      crash, and lock contention under streaming. Fix adds the
+      anon_chat_messages
       JSONB table (database.py) and stores history via atomic UPSERT append
       (ON CONFLICT DO UPDATE ... messages || EXCLUDED.messages). Temp-file
       helpers (get_anon_temp_dir/cleanup_anon_temp) remain file-based.
@@ -297,13 +306,18 @@ fixes:
     rationale: >
       Auditor review found (a) English prompts in an all-Chinese system
       (JUDGE_PROMPT, STRUCTURED_PROMPT), (b) a generic "答疑助手" main prompt and a
-      stale 'Test prompt' override in data/agent_prompt.json that had replaced the
-      real default, (c) call_llm appending the anti-hallucination guard twice when
+      stale 'Test prompt' override in data/agent_prompt.json that had replaced
+      the
+      real default, (c) call_llm appending the anti-hallucination guard twice
+      when
       the system_prompt already embeds it, and (d) four dead prompt constants.
-      Fix: localize prompts to Chinese, upgrade the main prompt to a bidding-domain
-      expert identity, restore the real default into agent_prompt.json, dedup the
+      Fix: localize prompts to Chinese, upgrade the main prompt to a
+      bidding-domain
+      expert identity, restore the real default into agent_prompt.json, dedup
+      the
       guard in call_llm, and delete dead code (BID_COMPARISON_SYSTEM,
-      build_bid_analysis_prompt, WIKI_LINT_SYSTEM_PROMPT, WIKI_UPDATE_INDEX_PROMPT,
+      build_bid_analysis_prompt, WIKI_LINT_SYSTEM_PROMPT,
+      WIKI_UPDATE_INDEX_PROMPT,
       _VL_CONSISTENCY_PROMPT).
     checks:
       - type: grep
@@ -330,12 +344,17 @@ fixes:
     severity: medium
     rationale: >
       Clearance (清标) results were shown in toolbar tabs that only covered 4 of
-      the 10 report sections (九 image sampling and 十 audit supplement had no UI).
-      Fix moves the results into the chat as an assistant answer (full 10 sections,
-      collapsible, heat-matrix + clickable cells via scoped handlers), persists them
+      the 10 report sections (九 image sampling and 十 audit supplement had no
+      UI).
+      Fix moves the results into the chat as an assistant answer (full 10
+      sections,
+      collapsible, heat-matrix + clickable cells via scoped handlers), persists
+      them
       as a CLEARANCE_REPORT-marked chat_messages row (reusing the existing DB
-      transaction), adds thread-aware sidebar-click targeting via TaskBus thread_id
-      metadata, and removes the toolbar results/tabs/download area (download stays in
+      transaction), adds thread-aware sidebar-click targeting via TaskBus
+      thread_id
+      metadata, and removes the toolbar results/tabs/download area (download
+      stays in
       the sidebar task modal + chat bubble). Route preservation: 371/371.
     checks:
       - type: grep_not
@@ -359,13 +378,16 @@ fixes:
     severity: medium
     rationale: >
       After POST /clearance/run (or /document_analysis/analyze), the frontend
-      immediately GETs /<route>/status/<task_id>. The route only enqueues a Celery
+      immediately GETs /<route>/status/<task_id>. The route only enqueues a
+      Celery
       task; task_meta is written when the worker calls bus.start(). In the
       enqueue→worker-start window TaskBus.get() returns None → 404 → noisy F12
       console errors ("Failed to load resource: 404", "提取 加载失败"). Fix: (B)
-      add TaskBus.register_queued() and call it synchronously in both routes before
+      add TaskBus.register_queued() and call it synchronously in both routes
+      before
       send_task so status never 404s (worker start() upgrades queued→running);
-      (A) frontend status pre-check tolerates a failed/404 fetch and falls through
+      (A) frontend status pre-check tolerates a failed/404 fetch and falls
+      through
       to SSE.
     checks:
       - type: grep
@@ -388,7 +410,8 @@ fixes:
       similarity was always 0 because the TF-IDF matrix was never precomputed
       in the clearance path; (B3) suspected-unit indicator counts were booleans.
       Fix adds: per-indicator section-三 tables, TF-IDF wiring (with tender
-      template removal), real indicator counts, a clearance_openinfo service that
+      template removal), real indicator counts, a clearance_openinfo service
+      that
       parses an uploaded 开标信息表 (Excel/CSV/JSON) and extracts 评审标准 from the
       tender, activating 11 OPEN_INFO + 3 TENDER indicators, quote accuracy via
       the 开标投标报价 column, and a preview_criteria endpoint for manual confirm.
@@ -414,18 +437,30 @@ fixes:
     title: "清标评分计量升级 — 权重复合指数 + 行业信号 + bug 修复"
     severity: high
     rationale: >
-      Scoring audit (verified against code) found: (a) total_score was a raw sum of
-      heterogeneous capped scores (~209 max), uncalibrated; (b) warning thresholds
-      were reversed in the analysis path and uncalibrated to any scale; (c) text_sim
-      double-counted into 3 indicators; (d) RiskScorer had a dead 0.2 image weight
-      (scale 0-80) and no text-similarity gate; (e) industry-standard signals missing:
-      报价尾数/规律性, Benford Nigrini grading, expert-score panel analysis, relationship
-      community detection. Fix: 0-100 weighted composite index (INDICATOR_WEIGHTS +
-      score caps + text_sim dedup), RiskScorer 0.375/0.375/0.25 with ≥80% text gate,
-      composite warning thresholds (≥60/≥30), quote arithmetic/geometric progression,
-      Benford Nigrini MAD grades + chi-square + Z-scores, score_analyzer (Grubbs/Kendall W/
-      Spearman), relationship community detection, and 5 bug fixes (len(suspicious),
-      extension date, bidder_count_abnormal semantics, open_info allowed_file, task_bus
+      Scoring audit (verified against code) found: (a) total_score was a raw sum
+      of
+      heterogeneous capped scores (~209 max), uncalibrated; (b) warning
+      thresholds
+      were reversed in the analysis path and uncalibrated to any scale; (c)
+      text_sim
+      double-counted into 3 indicators; (d) RiskScorer had a dead 0.2 image
+      weight
+      (scale 0-80) and no text-similarity gate; (e) industry-standard signals
+      missing:
+      报价尾数/规律性, Benford Nigrini grading, expert-score panel analysis,
+      relationship
+      community detection. Fix: 0-100 weighted composite index
+      (INDICATOR_WEIGHTS +
+      score caps + text_sim dedup), RiskScorer 0.375/0.375/0.25 with ≥80% text
+      gate,
+      composite warning thresholds (≥60/≥30), quote arithmetic/geometric
+      progression,
+      Benford Nigrini MAD grades + chi-square + Z-scores, score_analyzer
+      (Grubbs/Kendall W/
+      Spearman), relationship community detection, and 5 bug fixes
+      (len(suspicious),
+      extension date, bidder_count_abnormal semantics, open_info allowed_file,
+      task_bus
       delete dead code, qn dup import, incremental upload).
     checks:
       - type: grep
@@ -475,7 +510,8 @@ fixes:
       是招标模板重叠（无招标文件无法去除），relationship/quote 因项目上下文与原始文本
       噪声误报。Fix: (a) 无招标文件时 text_sim 指标跳过（remove_template_content 不可用）；
       (b) 下调 relationship/quote/typo/contact 等易误报指标权重；(c) 新增
-      tests/fixtures/clearance_baseline/ 快照 + test_clearance_baseline_scores 防漂移；
+      tests/fixtures/clearance_baseline/ 快照 + test_clearance_baseline_scores
+      防漂移；
       (d) 报告加样本量免责声明（N<5）。校准范围仅工程类；货物/服务待真实文档。
     checks:
       - type: grep
@@ -495,7 +531,8 @@ fixes:
       无中文停用词表时，常见招投标词（招标/投标/项目/资质/安全生产许可证/评标/评分…）
       在所有投标文档中高频出现（df=2, idf=1.0），TF-IDF 无法抑制 → 正常投标（共享招标
       模板）cosine 高达 0.98 被误判为围标。Fix: (a) 新增 stop_words.py DEFAULT_STOP_WORDS
-      (~150 词); (b) tokenize_for_tfidf 默认过滤停用词; (c) _make_vectorizer / preprocess_
+      (~150 词); (b) tokenize_for_tfidf 默认过滤停用词; (c) _make_vectorizer /
+      preprocess_
       text_for_similarity / compute_similarity_with_numbers 全链路接入; (d) B轻量: 提供
       template_text 时动态加入其 top-50 高频词。实证：围标(技术雷同) cosine 0.98 vs 正常
       (技术不同) 0.74，≥80% 门槛可判别。更新 TF-IDF 与 keyword 快照值。
@@ -1253,7 +1290,8 @@ fixes:
       ReferenceError，删除账户按钮点击无响应。且 app.js:915 与 accounts.js:88 双重
       绑定导致一次点击触发两次 requestDeleteAccount（双请求/双弹窗）。
       修复：app.js 暴露 window.createQuickModal/escapeHtml/showToast；删除 app.js
-      legacy requestDeleteAccount/deleteAccount/showConfirmDeleteModal 与 deleteAccountBtn
+      legacy requestDeleteAccount/deleteAccount/showConfirmDeleteModal 与
+      deleteAccountBtn
       绑定，收敛为 accounts.js 单一事实源。
     checks:
       - type: literal
@@ -1352,7 +1390,8 @@ fixes:
     rationale: >
       实测 headroom 对中文招标文本零压缩（Kompress 英文模型 + ContentRouter min_ratio≈0.85
       跳过 + 单条消息 protect_recent=4），且其模型占用 HF 缓存 ~0.85GB。移除 headroom-ai/
-      magika/onnxruntime；headroom_utils 保留为 soft no-op（ImportError→_available=False→原样
+      magika/onnxruntime；headroom_utils 保留为 soft
+      no-op（ImportError→_available=False→原样
       返回）。同时把休眠指标的占位文案由「需外部数据源（交易平台/评标系统数据）」改为
       「需交易平台数据（当前不可用）」并附 skip_reason，减少误解。
     checks:
@@ -1469,16 +1508,22 @@ fixes:
     rationale: >
       P1 子批 B1（含路由集变化）：
       (1) /audit 蓝图（10 条路由）全死：唯一前端消费者 bid-audit.js 从未被 index.html 加载。
-          删除 app/routes/audit.py + 注册块 + tests/integration/test_audit.py + static/js/bid-audit.js；
-          scripts/check_system.py 的 audit 检查改指向 app/services/audit_engine.py（真正的引擎，清标在用）。
-      (2) compliance UI 降级 API-only：compliance.js 的 23 个 DOM id 在 index.html 全部不存在（加载即空转），
-          tiptap-editor.js 只服务 compliance 编辑器 → 两个文件删除 + index.html 摘除 script 标签。
+          删除 app/routes/audit.py + 注册块 + tests/integration/test_audit.py +
+          static/js/bid-audit.js；
+          scripts/check_system.py 的 audit 检查改指向
+          app/services/audit_engine.py（真正的引擎，清标在用）。
+      (2) compliance UI 降级 API-only：compliance.js 的 23 个 DOM id 在 index.html
+      全部不存在（加载即空转），
+          tiptap-editor.js 只服务 compliance 编辑器 → 两个文件删除 + index.html 摘除 script
+          标签。
           后端 compliance 路由保留（API-only）。
-      (3) timeline UI 降级 API-only：删除 index.html 时间线子标签 + #timelinePanel，删除 app.js 的
+      (3) timeline UI 降级 API-only：删除 index.html 时间线子标签 + #timelinePanel，删除
+      app.js 的
           Timeline Tab 全部前端逻辑与 wiring。后端 timeline 蓝图保留（API-only）。
       (4) credit / LoRA 确认本就是 API-only（前端零引用），无需改动。
       路由集由 401 → 391（仅移除 /audit 10 条）；tests/fixtures/routes_snapshot.json 重生成，
-      test_route_preservation.py expected_len 401 → 391。蓝图数 17 → 16（README/AGENTS/ARCHITECTURE 同步）。
+      test_route_preservation.py expected_len 401 → 391。蓝图数 17 →
+      16（README/AGENTS/ARCHITECTURE 同步）。
     checks:
       - type: literal
         file: app/routes/__init__.py
@@ -1562,7 +1607,8 @@ fixes:
     rationale: >
       extended_laws.json 的扩展法规原先全项目零引用（引擎仅加载 seed 4 部），README 宣称失真
       （FIX-057 已诚实降为 4 部）。本批补全 11 部全文（gov.cn 官方源，见 UNRESOLVED-026）并接入：
-      (1) _load_seed_laws 合并 seed 核心 4 部 + extended 中 scope=national 且 source_url 完整的
+      (1) _load_seed_laws 合并 seed 核心 4 部 + extended 中 scope=national 且
+      source_url 完整的
           11 部（去重，核心优先）→ 15 部法规 619 条。
       (2) _select_relevant_laws 加「核心 4 部守卫」：max_laws=15 截断后，若某核心法有相关条文却被
           挤出，则用其最高分条文替换末位非核心法，确保基础法条不被新增规章挤出。
@@ -1597,12 +1643,17 @@ fixes:
     rationale: >
       .dockerignore 丢弃整个 data/ 且无启动 seeding，导致每个 repo 数据资产都需手工挂载，
       易静默「0 加载」（FIX-058 的 laws 即此坑）。修复：
-      (1) docker-compose 为 app/celery-worker/celery-beat 增加 ./data:/app/repo_data:ro（通用 seed 源）
-          与 ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro（不可变出厂基线；
+      (1) docker-compose 为 app/celery-worker/celery-beat 增加
+      ./data:/app/repo_data:ro（通用 seed 源）
+          与
+          ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro（不可变出厂基线；
           此前 Docker 下缺失 → restore-to-factory 失效）。
-      (2) 新增 app/bootstrap.py::ensure_seeded()：把 repo_data 中可变种子（domain_words.txt，运行时追加写）
-          在卷缺失时原子复制（copy2→os.replace）进 /app/data；由 create_app() 调用，覆盖 app + celery worker/beat。
-      (3) laws/industry_words 保持 :ro 直挂（随代码最新）；domain_words.txt 不得 :ro 挂载（会破坏追加写）。
+      (2) 新增 app/bootstrap.py::ensure_seeded()：把 repo_data
+      中可变种子（domain_words.txt，运行时追加写）
+          在卷缺失时原子复制（copy2→os.replace）进 /app/data；由 create_app() 调用，覆盖 app +
+          celery worker/beat。
+      (3) laws/industry_words 保持 :ro 直挂（随代码最新）；domain_words.txt 不得 :ro
+      挂载（会破坏追加写）。
     checks:
       - type: literal
         file: docker-compose.yml
@@ -1628,11 +1679,15 @@ fixes:
     severity: high
     rationale: >
       多方向审计确认：
-      (1) admin.py get_file_versions/download_project_file 校验 project_id 却按 file_id 查询
+      (1) admin.py get_file_versions/download_project_file 校验 project_id 却按
+      file_id 查询
           （含 version 路径）；download_archive 无归属校验且文件名可穿越 → 跨项目文件/归档越权。
-          修复：查询 join project_files 并加 AND project_id=%s；archive 加 is_admin/_can_access_project + 文件名白名单。
-      (2) compliance.py get_result/get_rules/update_rules 仅校验登录、无 task 归属 → 猜中 task_id 可读写他人结果。
-          修复：新增 _task_forbidden()（TaskBus meta + task_owner_ok；meta 缺失按 legacy 放行）。
+          修复：查询 join project_files 并加 AND project_id=%s；archive 加
+          is_admin/_can_access_project + 文件名白名单。
+      (2) compliance.py get_result/get_rules/update_rules 仅校验登录、无 task 归属 → 猜中
+      task_id 可读写他人结果。
+          修复：新增 _task_forbidden()（TaskBus meta + task_owner_ok；meta 缺失按 legacy
+          放行）。
       (3) admin_regeneration.py 注销验证码明文写入审计日志 → 脱敏为 code_sent_****。
       资源模型（文档化）：live task=owner；batch/credit 归档=list+download 全用户（单机构，有意）。
     checks:
@@ -1662,16 +1717,21 @@ fixes:
     title: "S2 部署完整性：Beat 补齐定时任务 + 数据目录卷 + 补表 + compose 对齐"
     severity: high
     rationale: >
-      (1) Docker 下 ENABLE_SCHEDULER=false 关掉 APScheduler，而 Celery Beat 仅 7 条 → ~18 个维护任务
+      (1) Docker 下 ENABLE_SCHEDULER=false 关掉 APScheduler，而 Celery Beat 仅 7 条 →
+      ~18 个维护任务
           （回收站、孤儿用户、下载令牌、陈旧任务、训练数据、月/年报、RAG 健康…）从不执行。
           修复：cleanup_tasks.py 以守卫块把这 18 个函数注册为 Celery 任务（Task 对象仍可直接调用，
           APScheduler 路径不受影响）；celery_app.beat_schedule 增至 25 条（含 args 复刻原语义）；
           并修正 generate-weekly-report 误传 kwargs 的 latent bug。
-      (2) company_kb_files/ + knowledge_lab_files/ 写在 BASE_DIR 且非卷挂载 → --force-recreate 丢数据。
+      (2) company_kb_files/ + knowledge_lab_files/ 写在 BASE_DIR 且非卷挂载 →
+      --force-recreate 丢数据。
           修复：compose 命名卷挂原路径。
-      (3) 代码引用但 schema 缺失的表：wiki_bookmarks/wiki_view_log/user_feedback（fresh-deploy 会坏）
-          + knowledge_lab_skills（功能已坏）→ database.py 补 CREATE TABLE IF NOT EXISTS（含必要 UNIQUE）。
-      (4) trend_service 读的是无写入方的 compliance_check_feedback（准确率永远不可用）→ 改读 compliance_feedback。
+      (3) 代码引用但 schema
+      缺失的表：wiki_bookmarks/wiki_view_log/user_feedback（fresh-deploy 会坏）
+          + knowledge_lab_skills（功能已坏）→ database.py 补 CREATE TABLE IF NOT
+          EXISTS（含必要 UNIQUE）。
+      (4) trend_service 读的是无写入方的 compliance_check_feedback（准确率永远不可用）→ 改读
+      compliance_feedback。
       (5) docker-compose.e2e.yml 缺 laws/repo_data/factory 挂载 → 对齐主 compose。
       (6) compose 三服务 env 用 x-app-env 锚点统一；beat 加 --schedule 持久化。
     checks:
@@ -1803,12 +1863,18 @@ fixes:
     severity: low
     rationale: >
       UNRESOLVED-027 的低风险子集：
-      (1) data/unresolved.yaml 为无效 YAML（L24 双引号串内 D:\AI_Tools\hermes 的 \A 非法转义）→ 改单引号，PyYAML 可解析。
-      (2) data/runtime_config_factory.json 的 7 个 typo_* 键无任何代码/DEFAULTS 读取（typo 功能已删）→ 移除。
-      (3) scripts/run_ui_audit.py TAB_TOUR 的 #sidebarTypoResultsBtn 探针（DOM 已删）→ 移除。
-      (4) Dockerfile torch 双装：requirements.txt 又 pin torch==2.12.1（不含 +cuXXX 时 pip 视为未满足）会覆盖
-          TORCH_INDEX 轮子 → 把 torch/torchvision 安装移到 requirements 之后，保证 GPU/CPU 轮子最终生效。
-      仍 deferred：audit 死代码外科删除、review.js docReviewPanel 死块、app.js/cases.js 陈旧 DOM id。
+      (1) data/unresolved.yaml 为无效 YAML（L24 双引号串内 D:\AI_Tools\hermes 的 \A 非法转义）→
+      改单引号，PyYAML 可解析。
+      (2) data/runtime_config_factory.json 的 7 个 typo_* 键无任何代码/DEFAULTS 读取（typo
+      功能已删）→ 移除。
+      (3) scripts/run_ui_audit.py TAB_TOUR 的 #sidebarTypoResultsBtn 探针（DOM 已删）→
+      移除。
+      (4) Dockerfile torch 双装：requirements.txt 又 pin torch==2.12.1（不含 +cuXXX 时
+      pip 视为未满足）会覆盖
+          TORCH_INDEX 轮子 → 把 torch/torchvision 安装移到 requirements 之后，保证 GPU/CPU
+          轮子最终生效。
+      仍 deferred：audit 死代码外科删除、review.js docReviewPanel 死块、app.js/cases.js 陈旧
+      DOM id。
     checks:
       - type: literal_not
         file: data/runtime_config_factory.json
@@ -1902,7 +1968,8 @@ fixes:
     rationale: >
       archive_session 只按 thread_id 查询（无 owner 过滤）且路由无归属检查，
       传他人 thread_id 即可归档到本人名下并删除对方会话；服务层
-      get_session_messages/store_message/update_session_title/delete_session 均裸查，无归属门。
+      get_session_messages/store_message/update_session_title/delete_session
+      均裸查，无归属门。
       修复：新增 resolve_actor（显式 actor 优先，否则 Flask session，两者皆无→None=拒）与
       _assert_thread_access（cs.user_id 或项目 active 成员，与 get_user_sessions 同模型），
       无 bypass 开关；五件套统一过闸（未过返回 []/None/不写）；archive 路由加 thread_accessible
@@ -1937,7 +2004,8 @@ fixes:
     title: "P0-#4 ZIP 解压路径白名单（弃 extractall，防 zip-slip/绝对路径/符号链接）"
     severity: high
     rationale: >
-      ingest_pipeline._run_ingestion_pipeline_sync 用 zf.extractall(tmp_dir) 无成员校验，
+      ingest_pipeline._run_ingestion_pipeline_sync 用 zf.extractall(tmp_dir)
+      无成员校验，
       特制 ZIP 可写入 tmp_dir 之外（zip-slip / 绝对路径 / 符号链接）→ 覆盖系统文件。
       修复：新增 _safe_extract_zip（逐条 infolist；realpath 前缀命中 realpath(dest)+os.sep；
       拒绝对路径/盘符/.. /符号链接；写出后二次 realpath 校验），收集阶段再加一次 realpath 包含校验。
@@ -1986,7 +2054,8 @@ fixes:
     rationale: >
       ARCHITECTURE 同时写「72 表初始化」与「76 张表」自相矛盾（实为 76）；check_doc_drift 的 tables
       正则只抓「N 张表 / N 张初始化」，漏掉「N 表初始化」变体。C2 修正为 76 并扩展正则；
-      TRUST_PROXY 补进 AGENTS/USER_MANUAL 环境变量表；ARCHITECTURE 补「16 blueprints / 28 route modules」消歧。
+      TRUST_PROXY 补进 AGENTS/USER_MANUAL 环境变量表；ARCHITECTURE 补「16 blueprints / 28
+      route modules」消歧。
     checks:
       - type: literal_not
         file: docs/ARCHITECTURE.md
@@ -2008,7 +2077,8 @@ fixes:
     title: "C3-a: 删除审计编排器死代码（audit_engine 编排器 + audit_report/audit_wiki_publisher）"
     severity: low
     rationale: >
-      audit_bp 摘除后，audit_engine 的 run_audit/run_preflight/_generate_reports/get_* 与
+      audit_bp 摘除后，audit_engine 的
+      run_audit/run_preflight/_generate_reports/get_* 与
       audit_report.py / audit_wiki_publisher.py 全库零调用方（rg 实证）；clearance 仅用
       _run_style_analysis / _score_* / SCORING_FUNCTIONS。外科删除，保留活体面。
     checks:
@@ -2035,9 +2105,12 @@ fixes:
     title: "C3-b: 删除前端死块与陈旧 DOM id（review.js docReviewPanel / app.js / cases.js）"
     severity: low
     rationale: >
-      templates 中不存在 #docReviewPanel / #docReviewDetails / #databaseTabBtn / #sidebarEditPromptBtn /
-      #fileStationBtn / #casesToggleStatus → 对应 JS 死块/守卫永不执行。删除 review.js loadDocReviewPanel +
-      initDocReviewToggle、app.js 的 databaseTab/fileStationBtn/sidebarEditPromptBtn 引用、
+      templates 中不存在 #docReviewPanel / #docReviewDetails / #databaseTabBtn /
+      #sidebarEditPromptBtn /
+      #fileStationBtn / #casesToggleStatus → 对应 JS 死块/守卫永不执行。删除 review.js
+      loadDocReviewPanel +
+      initDocReviewToggle、app.js 的
+      databaseTab/fileStationBtn/sidebarEditPromptBtn 引用、
       cases.js 无调用方的 autoGenerate、knowledge-lab.js 的 sidebarEditPromptBtn 接线。
     checks:
       - type: literal_not
@@ -2132,7 +2205,8 @@ fixes:
     rationale: >
       extract_rules 产出 rules 未登记 TaskBus owner，_task_forbidden 对 meta miss 放行
       → 任意登录用户可按 rules_task_id 读/改他人规则；start_check 读 rules_task_id 无归属校验。
-      现：extract_rules 登记 user_id；start_check 读前 _task_forbidden；_task_forbidden 改为
+      现：extract_rules 登记 user_id；start_check 读前 _task_forbidden；_task_forbidden
+      改为
       status != 'ok'（missing/forbidden 均 deny，收 F3 fail-open）；同步回退路径也登记 owner。
     checks:
       - type: literal
@@ -2151,7 +2225,8 @@ fixes:
     rationale: >
       /fetch_url 与 /start_credit_check(user urls) 可让服务器访问内网/元数据地址
       （含 Selenium 截图内网页面）。新增 app/utils/url_guard.check_url：仅 http/https 且
-      解析 IP 全为 global；拒 loopback/private/link-local(169.254/169.254.169.254)/CGNAT/
+      解析 IP 全为 global；拒
+      loopback/private/link-local(169.254/169.254.169.254)/CGNAT/
       multicast/reserved/未知 + 容器名黑名单；web_extractor.safe_get 逐跳复检（禁自动跳转）；
       Selenium navigate_and_fill 前后校验 + current_url 复检。策略=仅公网（无 allowlist 需求）。
     checks:
@@ -2193,7 +2268,8 @@ fixes:
     title: "030: 下线 /api/login + 删除 auth_jwt（恒 401 死端点 + 无校验 JWT）"
     severity: low
     rationale: >
-      /api/login 用 sha256(pin) 比对 werkzeug/salt:pbkdf2 存储 → 恒 401；create_token 唯一
+      /api/login 用 sha256(pin) 比对 werkzeug/salt:pbkdf2 存储 → 恒 401；create_token
+      唯一
       消费方即该端点，且全库无 jwt.decode（FIX-055 后 token 无人校验）→ 死端点 + 无验证 token。
       UNRESOLVED-030 裁定 C：删除路由与 auth_jwt.py（不留 410 墓碑）。BREAKING，CHANGELOG 说明。
     checks:
@@ -2213,9 +2289,11 @@ fixes:
     title: "ingest_pipeline: rejected_indices must be JSON-serialisable (was set())"
     severity: high
     rationale: >
-      _prepare_kb_review() wrote 'rejected_indices': set() then json.dump(no default)
+      _prepare_kb_review() wrote 'rejected_indices': set() then json.dump(no
+      default)
       → TypeError, caught by the outer except → status=error, aborting the whole
-      ingestion pipeline (Pipeline B onward). Downstream reject_kb_chunk reads a list.
+      ingestion pipeline (Pipeline B onward). Downstream reject_kb_chunk reads a
+      list.
     checks:
       - type: literal_not
         file: app/services/ingest_pipeline.py
@@ -2228,8 +2306,10 @@ fixes:
     title: "knowledge: report_dir defined on the success path (was UnboundLocalError)"
     severity: high
     rationale: >
-      admin_generate_work_report assigned report_dir only inside except; the success
-      path hit os.path.join(report_dir, ...) unbound → 500 on every successful report.
+      admin_generate_work_report assigned report_dir only inside except; the
+      success
+      path hit os.path.join(report_dir, ...) unbound → 500 on every successful
+      report.
     checks:
       - type: literal
         file: app/routes/knowledge.py
@@ -2242,8 +2322,10 @@ fixes:
     title: "auth/knowledge: username charset whitelist + report filename sanitised (path traversal)"
     severity: high
     rationale: >
-      Registration/rename only checked length, so a username with ../ could traverse
-      out of USER_FILES_ORIGINAL_ROOT when embedded in a report filename. Enforce a
+      Registration/rename only checked length, so a username with ../ could
+      traverse
+      out of USER_FILES_ORIGINAL_ROOT when embedded in a report filename.
+      Enforce a
       charset whitelist and sanitise the tag used for filenames.
     checks:
       - type: grep
@@ -2257,8 +2339,10 @@ fixes:
     title: "task_owner_ok: explicitly empty user_id fails closed (not legacy-allowed)"
     severity: medium
     rationale: >
-      register_queued(extra={'user_id': ''}) caused task_owner_ok to take the legacy
-      'if not owner: return True' branch → FIX-080 fail-closed owner check bypassed.
+      register_queued(extra={'user_id': ''}) caused task_owner_ok to take the
+      legacy
+      'if not owner: return True' branch → FIX-080 fail-closed owner check
+      bypassed.
       Only a truly absent key is a legacy task now.
     checks:
       - type: literal
@@ -2272,7 +2356,8 @@ fixes:
     title: "url_guard: out-of-range port must return (False, reason), not raise"
     severity: medium
     rationale: >
-      parts.port raises ValueError for e.g. :99999; it sat outside the try, so the
+      parts.port raises ValueError for e.g. :99999; it sat outside the try, so
+      the
       SSRF guard escaped its (ok, reason) contract and the routes 500'd.
     checks:
       - type: literal
@@ -2283,9 +2368,12 @@ fixes:
     title: "chat_files: GET /download_original_file/<uid>/<file> (report download link was POST-only)"
     severity: medium
     rationale: >
-      knowledge.py returns download_url: /download_original_file/<uid>/<file> opened
-      by an <a href> (GET), but the only route was POST with a JSON body → 405 and the
-      path params never matched. Added an owner-checked, traversal-safe GET variant.
+      knowledge.py returns download_url: /download_original_file/<uid>/<file>
+      opened
+      by an <a href> (GET), but the only route was POST with a JSON body → 405
+      and the
+      path params never matched. Added an owner-checked, traversal-safe GET
+      variant.
     checks:
       - type: literal
         file: app/routes/chat_files.py
@@ -2298,7 +2386,8 @@ fixes:
     title: "frontend: escape server strings before innerHTML + validate download_url scheme"
     severity: medium
     rationale: >
-      err.error / d.message / d.error were interpolated into innerHTML unescaped, and
+      err.error / d.message / d.error were interpolated into innerHTML
+      unescaped, and
       d.download_url went straight into an href (javascript: risk).
     checks:
       - type: literal
@@ -2330,8 +2419,10 @@ fixes:
     title: "ingest_pipeline: kb_review task_id validated against traversal"
     severity: low
     rationale: >
-      KB_REVIEW_PATH_TEMPLATE.format(task_id=...) used a URL-supplied id directly;
-      a '..\\..' value could traverse on Windows. Centralised in _kb_review_path().
+      KB_REVIEW_PATH_TEMPLATE.format(task_id=...) used a URL-supplied id
+      directly;
+      a '..\\..' value could traverse on Windows. Centralised in
+      _kb_review_path().
     checks:
       - type: literal
         file: app/services/ingest_pipeline.py
@@ -2345,7 +2436,8 @@ fixes:
     severity: low
     rationale: >
       login_fail:{u} was username-global → one attacker could cool down a victim
-      across all IPs; _mem_purge used max(FAIL_TTL, LOCK_TTL)=900s so memory failure
+      across all IPs; _mem_purge used max(FAIL_TTL, LOCK_TTL)=900s so memory
+      failure
       counters outlived the Redis 120s TTL.
     checks:
       - type: literal
@@ -2391,13 +2483,18 @@ fixes:
     title: "LLM tool-error and prompt-template text leaked into user-facing chat"
     severity: high
     rationale: >
-      LangChain agents with tools [get_date, bocha_search] return raw ToolMessage
-      content like 'Error: X is not a valid tool, try one of [...]' when the model
+      LangChain agents with tools [get_date, bocha_search] return raw
+      ToolMessage
+      content like 'Error: X is not a valid tool, try one of [...]' when the
+      model
       hallucinates a tool name. Models without proper tool-calling support also
-      echo the function-calling template ('Here is the JSON for a function call...').
+      echo the function-calling template ('Here is the JSON for a function
+      call...').
       Both were streamed and stored verbatim. Fix has two halves: (1) backend
-      sanitize_response() strips both patterns at the split_thinking_answer boundary
-      for the stored/JSON copy; (2) frontend _sanitizeResponse() mirrors the patterns
+      sanitize_response() strips both patterns at the split_thinking_answer
+      boundary
+      for the stored/JSON copy; (2) frontend _sanitizeResponse() mirrors the
+      patterns
       and cleans the LIVE SSE stream before rendering (the backend cannot filter
       per-chunk without breaking streaming).
     checks:
@@ -2415,9 +2512,11 @@ fixes:
     title: "Daily report insufficient-messages message was terse/unhelpful"
     severity: low
     rationale: >
-      /my_daily_report correctly returns 400 when the user has fewer than 2 messages in
+      /my_daily_report correctly returns 400 when the user has fewer than 2
+      messages in
       24h, but the message '今日对话不足，至少需要2条问答' was reported as a broken button.
-      Fix makes the message friendly and actionable so the toast explains what to do.
+      Fix makes the message friendly and actionable so the toast explains what
+      to do.
     checks:
       - type: literal
         file: app/routes/knowledge.py
@@ -2427,10 +2526,14 @@ fixes:
     title: "/check_storage fired pre-login producing noisy 403 console errors"
     severity: medium
     rationale: >
-      Frontend called /check_storage on every page load including pre-login, where the
-      backend correctly returns 403 (consent not given). The 403s are expected behavior
-      but produce console noise and were misreported as a bug. Fix: checkStorage() skips
-      the fetch when sessionStorage has no username (i.e. not logged in) and ignores
+      Frontend called /check_storage on every page load including pre-login,
+      where the
+      backend correctly returns 403 (consent not given). The 403s are expected
+      behavior
+      but produce console noise and were misreported as a bug. Fix:
+      checkStorage() skips
+      the fetch when sessionStorage has no username (i.e. not logged in) and
+      ignores
       non-OK responses.
     checks:
       - type: literal
@@ -2441,9 +2544,12 @@ fixes:
     title: "Pre-login fetches for templates/cases/notebook/projects fire 401/403 console noise"
     severity: low
     rationale: >
-      Panels initialized on DOMContentLoaded and fetched /templates, /cases, /notebook,
-      and /admin/projects regardless of login state, producing expected-but-noisy 401/403
-      console errors. Fix: each loader skips the fetch when sessionStorage has no username
+      Panels initialized on DOMContentLoaded and fetched /templates, /cases,
+      /notebook,
+      and /admin/projects regardless of login state, producing
+      expected-but-noisy 401/403
+      console errors. Fix: each loader skips the fetch when sessionStorage has
+      no username
       and renders a login prompt instead.
     checks:
       - type: literal
@@ -2463,10 +2569,14 @@ fixes:
     title: "Chat empty state and scroll buttons on empty conversations"
     severity: medium
     rationale: >
-      New conversations showed a blank white area with no welcome content, and the
-      floating scroll-to-top/bottom buttons appeared even when there was nothing to
-      scroll. Fix: chat.js renders a welcome empty-state block when no message groups
-      exist, and toggles the .hidden-float class on .float-buttons when the chat area
+      New conversations showed a blank white area with no welcome content, and
+      the
+      floating scroll-to-top/bottom buttons appeared even when there was nothing
+      to
+      scroll. Fix: chat.js renders a welcome empty-state block when no message
+      groups
+      exist, and toggles the .hidden-float class on .float-buttons when the chat
+      area
       has no overflow.
     checks:
       - type: literal
@@ -2480,7 +2590,8 @@ fixes:
     title: "No visual role differentiation in the UI header"
     severity: low
     rationale: >
-      Regular users, auditors, and admins looked identical in the UI. Fix: app.js
+      Regular users, auditors, and admins looked identical in the UI. Fix:
+      app.js
       updateRoleChip() renders a role chip (管理员/审核员/用户) in the header from
       /check_auth data.
     checks:
@@ -2492,10 +2603,13 @@ fixes:
     title: "docker_build: GPU torch index pointed at cu124, which has no torch 2.12.1"
     severity: medium
     rationale: >
-      scripts/docker_build.py defaulted the GPU torch index to .../whl/cu124, but
+      scripts/docker_build.py defaulted the GPU torch index to .../whl/cu124,
+      but
       cu124 only ships torch <=2.6.0 while requirements.txt pins torch==2.12.1 —
-      so a GPU build could never resolve and fell back to pip failure. Fix: default
-      to cu126 (the lowest index carrying 2.12.1; still supports Turing/sm_75 for
+      so a GPU build could never resolve and fell back to pip failure. Fix:
+      default
+      to cu126 (the lowest index carrying 2.12.1; still supports Turing/sm_75
+      for
       RTX 20-series). Dockerfile also gained PIP_RETRIES/PIP_TIMEOUT because the
       CUDA wheels (nvidia-cudnn ~700MB) intermittently stall on pypi.nvidia.com.
     checks:
@@ -2505,9 +2619,12 @@ fixes:
       - type: grep_not
         file: scripts/docker_build.py
         pattern: "whl/cu124"
-      - type: literal
+      - type: grep
         file: Dockerfile
-        pattern: "ARG PIP_RETRIES=10"
+        pattern: "ARG PIP_RETRIES=[0-9]+"
+      - type: grep
+        file: Dockerfile
+        pattern: "ARG PIP_TIMEOUT=[0-9]+"
 
   - id: FIX-2026-10-05-085
     title: "pre-commit hook ran under system Python; false fix regressions"
@@ -2552,11 +2669,15 @@ fixes:
     rationale: >
       Both store paths for a model reply shortcut to
       `answer = raw_response.strip()` whenever the provider populated
-      additional_kwargs['reasoning_content'] — the branch that exists precisely for
-      the active OpenRouter/NVIDIA reasoning models. split_thinking_answer (and with
+      additional_kwargs['reasoning_content'] — the branch that exists precisely
+      for
+      the active OpenRouter/NVIDIA reasoning models. split_thinking_answer (and
+      with
       it sanitize_response) was never called on that branch, so tool-error and
-      prompt-template artifacts were persisted and returned verbatim, defeating the
-      "stored copy is clean" half of FIX-2026-08-15-001. Fix: run both thinking and
+      prompt-template artifacts were persisted and returned verbatim, defeating
+      the
+      "stored copy is clean" half of FIX-2026-08-15-001. Fix: run both thinking
+      and
       answer through sanitize_response on that branch too.
     checks:
       - type: literal
@@ -2579,15 +2700,20 @@ fixes:
         pattern: "answer = raw_response.strip() if raw_response else ''"
 
   - id: FIX-2026-10-06-QA-031-02
-    title: "falsy-answer fallback re-stored the raw leak sanitize_response had removed"
+    title: "falsy-answer fallback re-stored the raw leak"
     severity: medium
     rationale: >
-      sanitize_response returns '' when a reply is nothing but a tool-error artifact
-      (asserted by test_sanitize_response_strips_invalid_tool_error). Two paths then
+      sanitize_response returns '' when a reply is nothing but a tool-error
+      artifact
+      (asserted by test_sanitize_response_strips_invalid_tool_error). Two paths
+      then
       treated '' as "no result" and fell back to the RAW text:
-      chat_sessions.regenerate stored and returned `answer if answer else raw_response`,
-      and the SSE error path in chat.py used `(answer or full_response)` when saving a
-      partial reply. So exactly the case the fix's own test proves it handles was the
+      chat_sessions.regenerate stored and returned `answer if answer else
+      raw_response`,
+      and the SSE error path in chat.py used `(answer or full_response)` when
+      saving a
+      partial reply. So exactly the case the fix's own test proves it handles
+      was the
       case that re-persisted the leak. Fix: never fall back to the raw response.
     checks:
       - type: literal_not
@@ -2772,7 +2898,8 @@ fixes:
     title: "PIP_TIMEOUT=120 too short for 700MB CUDA wheels; GPU build died"
     severity: medium
     rationale: >
-      FIX-084 raised PIP_RETRIES but left the read timeout at 120s. Building with
+      FIX-084 raised PIP_RETRIES but left the read timeout at 120s. Building
+      with
       TORCH_INDEX=.../whl/cu126 downloads nvidia-cudnn-cu12 (~707MB) and
       nvidia-cublas-cu12 (~600MB); on a slow mirror (~1MB/s) a single read
       blocks past 120s and pip aborts with "TimeoutError: The read operation

@@ -3208,9 +3208,22 @@ def test_docker_build_gpu_index_is_cu126():
 
 
 def test_dockerfile_has_pip_retry_budget():
-    """Large CUDA wheels stall on pypi.nvidia.com; the Dockerfile must retry."""
+    """Large CUDA wheels stall on slow mirrors; the retry budget must be generous.
+
+    Asserts the *property*, not the tuned constants: pinning the numbers made
+    every tuning break the gate (FIX-2026-10-06-QA-031-09 raised them from
+    10/120s to 20/600s after a 707MB wheel timed out mid-download).
+    """
+    import re
     src = _read('Dockerfile')
-    assert 'ARG PIP_RETRIES=10' in src and 'ARG PIP_TIMEOUT=120' in src
+    retries = re.search(r'ARG PIP_RETRIES=(\d+)', src)
+    timeout = re.search(r'ARG PIP_TIMEOUT=(\d+)', src)
+    assert retries and timeout, \
+        'Dockerfile must declare ARG PIP_RETRIES and ARG PIP_TIMEOUT'
+    assert int(retries.group(1)) >= 10, \
+        'too few pip retries for multi-hundred-MB CUDA wheels'
+    assert int(timeout.group(1)) >= 300, \
+        'pip read timeout too short for a ~700MB wheel on a slow mirror'
 
 
 # ── FIX-2026-10-05-085: pre-commit hook must use the project venv interpreter ──
