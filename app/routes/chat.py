@@ -15,7 +15,7 @@ from app.config import (
     is_valid_extracted_text, ALLOWED_EXTENSIONS, allowed_file, logger as config_logger,
 )
 from app.database import get_db_connection, db_transaction
-from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer
+from app.utils.helpers import utc_now, beijing_now, safe_error_response, split_thinking_answer, sanitize_response
 import app.globals as g
 from app.services.file_cache import file_cache_manager, add_to_cache, load_cache_from_db
 
@@ -385,7 +385,7 @@ def send_message_stream():
             # Save partial response before sending error to client
             if full_response:
                 thinking, answer = split_thinking_answer(full_response)
-                answer = (answer or full_response) + "\n\n[回复中断] 发送任意消息继续"
+                answer = (answer or '') + "\n\n[回复中断] 发送任意消息继续"
                 if is_anon:
                     session.setdefault('chat_history', []).append({'role': 'assistant', 'content': answer, 'thinking': thinking})
                 else:
@@ -868,8 +868,8 @@ Keep it concise, professional, in Chinese."""
         raw_response = assistant_message.content
         reasoning = assistant_message.additional_kwargs.get('reasoning_content', '')
         if reasoning and reasoning.strip():
-            thinking = reasoning.strip()
-            answer = raw_response.strip() if raw_response else ''
+            thinking = sanitize_response(reasoning.strip())
+            answer = sanitize_response(raw_response.strip()) if raw_response else ''
         else:
             thinking, answer = split_thinking_answer(raw_response)
 

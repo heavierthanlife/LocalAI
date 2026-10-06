@@ -13,7 +13,7 @@ import uuid
 from flask import request, jsonify, session
 
 from app.database import get_db_connection, db_transaction
-from app.utils.helpers import ok, err, split_thinking_answer
+from app.utils.helpers import ok, err, split_thinking_answer, sanitize_response
 import app.globals as g
 from app.services.session_manager import (
     get_user_id, get_or_create_session, get_session_messages, get_user_sessions,
@@ -259,8 +259,8 @@ def regenerate():
     raw_response = assistant_message.content
     reasoning = assistant_message.additional_kwargs.get('reasoning_content', '')
     if reasoning and reasoning.strip():
-        thinking = reasoning.strip()
-        answer = raw_response.strip() if raw_response else ''
+        thinking = sanitize_response(reasoning.strip())
+        answer = sanitize_response(raw_response.strip()) if raw_response else ''
     else:
         thinking, answer = split_thinking_answer(raw_response)
     with get_db_connection() as conn:
@@ -277,10 +277,10 @@ def regenerate():
                             """, (thread_id,))
                 conn.commit()
     store_message(thread_id, 'user', user_message)
-    store_message(thread_id, 'assistant', answer if answer else raw_response, thinking if thinking else "")
+    store_message(thread_id, 'assistant', answer, thinking if thinking else "")
     new_messages = get_session_messages(thread_id)
     session['chat_history'] = new_messages
     return jsonify({
-        "assistant_message": answer if answer else raw_response,
+        "assistant_message": answer,
         "thinking": thinking if thinking else ""
     })

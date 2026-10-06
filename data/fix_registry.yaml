@@ -2545,3 +2545,57 @@ fixes:
       - type: literal
         file: .gitignore
         pattern: ".mcp.json"
+
+  - id: FIX-2026-10-06-QA-031-01
+    title: "reasoning_content short-circuit bypassed sanitize_response entirely"
+    severity: medium
+    rationale: >
+      Both store paths for a model reply shortcut to
+      `answer = raw_response.strip()` whenever the provider populated
+      additional_kwargs['reasoning_content'] — the branch that exists precisely for
+      the active OpenRouter/NVIDIA reasoning models. split_thinking_answer (and with
+      it sanitize_response) was never called on that branch, so tool-error and
+      prompt-template artifacts were persisted and returned verbatim, defeating the
+      "stored copy is clean" half of FIX-2026-08-15-001. Fix: run both thinking and
+      answer through sanitize_response on that branch too.
+    checks:
+      - type: literal
+        file: app/routes/chat.py
+        pattern: "thinking = sanitize_response(reasoning.strip())"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "thinking = sanitize_response(reasoning.strip())"
+      - type: literal
+        file: app/routes/chat.py
+        pattern: "answer = sanitize_response(raw_response.strip())"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "answer = sanitize_response(raw_response.strip())"
+      - type: literal_not
+        file: app/routes/chat.py
+        pattern: "answer = raw_response.strip() if raw_response else ''"
+      - type: literal_not
+        file: app/routes/chat_sessions.py
+        pattern: "answer = raw_response.strip() if raw_response else ''"
+
+  - id: FIX-2026-10-06-QA-031-02
+    title: "falsy-answer fallback re-stored the raw leak sanitize_response had removed"
+    severity: medium
+    rationale: >
+      sanitize_response returns '' when a reply is nothing but a tool-error artifact
+      (asserted by test_sanitize_response_strips_invalid_tool_error). Two paths then
+      treated '' as "no result" and fell back to the RAW text:
+      chat_sessions.regenerate stored and returned `answer if answer else raw_response`,
+      and the SSE error path in chat.py used `(answer or full_response)` when saving a
+      partial reply. So exactly the case the fix's own test proves it handles was the
+      case that re-persisted the leak. Fix: never fall back to the raw response.
+    checks:
+      - type: literal_not
+        file: app/routes/chat_sessions.py
+        pattern: "answer if answer else raw_response"
+      - type: literal_not
+        file: app/routes/chat.py
+        pattern: "answer = (answer or full_response)"
+      - type: literal
+        file: app/routes/chat.py
+        pattern: "answer = (answer or '') +"

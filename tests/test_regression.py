@@ -3220,3 +3220,28 @@ def test_pre_commit_hook_reexecs_with_venv():
 def test_mcp_json_is_explicitly_gitignored():
     """A narrowed *.json rule must not be able to commit .mcp.json."""
     assert '.mcp.json' in _read('.gitignore')
+
+
+# ── FIX-2026-10-06-QA-031-01: reasoning_content branch must sanitize too ──
+def test_reasoning_content_branch_sanitizes():
+    """The reasoning_content shortcut skipped split_thinking_answer entirely."""
+    for rel in ('app/routes/chat.py', 'app/routes/chat_sessions.py'):
+        src = _read(rel)
+        assert 'thinking = sanitize_response(reasoning.strip())' in src, \
+            f"{rel}: reasoning_content branch must sanitize thinking"
+        assert 'answer = sanitize_response(raw_response.strip())' in src, \
+            f"{rel}: reasoning_content branch must sanitize the answer"
+        assert "answer = raw_response.strip() if raw_response else ''" not in src, \
+            f"{rel}: unsanitized answer assignment must be gone"
+
+
+# ── FIX-2026-10-06-QA-031-02: sanitized-empty must not fall back to the raw leak ──
+def test_sanitized_empty_never_falls_back_to_raw():
+    """sanitize_response('Error: X ...') == '' — falling back to raw re-leaks it."""
+    cs = _read('app/routes/chat_sessions.py')
+    assert 'answer if answer else raw_response' not in cs, \
+        'regenerate must not fall back to the raw response'
+    ch = _read('app/routes/chat.py')
+    assert 'answer = (answer or full_response)' not in ch, \
+        'partial-save must not fall back to the raw response'
+    assert "answer = (answer or '')" in ch
