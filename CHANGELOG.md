@@ -8,6 +8,31 @@ All notable changes to 中联招标智能助手.
 
 ---
 
+## [2026-10-06] — QA-Loop Round 031：回答清洗闭环 + 已登录门控回归
+
+### Fixed
+- **回答清洗在 reasoning_content 分支被整体绕过**（FIX-2026-10-06-QA-031-01）：`app/routes/chat.py` 与 `chat_sessions.py` 在模型返回 `reasoning_content` 时直接 `answer = raw_response.strip()`，`split_thinking_answer`（及 `sanitize_response`）从未被调用 —— 而这正是活跃 OpenRouter/NVIDIA 推理模型走的分支，工具报错/提示词模板回显被原样落库并返回。改为同样清洗 thinking 与 answer。
+- **falsy 回退把清洗结果换回原始泄漏**（FIX-2026-10-06-QA-031-02）：`sanitize_response` 对纯工具报错返回 `''`（该修复自身测试即断言此行为），而 `chat_sessions.py:280,284` 的 `answer if answer else raw_response` 与 `chat.py:388` 的 `(answer or full_response)` 又把**原始文本**写回 —— 恰好在自身测试覆盖的场景里自我失效。改为不回落原文。
+- **清洗漏判含空格工具名，且前端镜像仅靠注释同步**（FIX-2026-10-06-QA-031-03）：原 pattern 的 `\S+` 无法跨越工具名内空格，真实载荷 `Error: get current date is not a valid tool, ...` 整条逃过清洗，而原回归用 `DesignDesign`（无空格）故一直全绿。缺口改为 `[^\n\r]{0,80}?`，`, try one of [...]` 尾巴改为可选（不再吞掉同行合法正文），`strip/trim` 空白类对齐（新增 `_TRIM_CHARS`）。回归由「字符串存在性」升级为在 node 中执行 `chat.js` 的前后端**行为对拍**。
+- **已登录新标签页被登录前门控永久挡住**（FIX-2026-10-06-QA-031-04）：门控读 `sessionStorage['username']`，该键仅在 `/check_auth` 解析后写入，而加载器在 `DOMContentLoaded` 即运行 → 持有效 30 天 cookie 的新标签页/浏览器重启后，案例库/模板库/笔记/侧栏项目停在「登录后查看…」且**永不发请求**（`C.refresh`/`T.refresh` 只有删除后的调用点，无人重触发）。相对门控前行为是回归。`verifyAuth` 认证成功后调用 `reloadAuthGatedPanels()` 与 `checkStorage()`。
+- **历史渲染绕过清洗**（FIX-2026-10-06-QA-031-05）：`chat.js renderAssistantMessageLegacy` 直接把 `msg.content`/`msg.thinking` 写入 DOM（并进 `/feedback`），本 delta 之前落库的行仍显示工具报错/模板回显；写入侧清洗无法追溯既有行 → 渲染器入口统一清洗。非 XSS（答案路径经 `_renderMarkdown`/`_safeHTML`）。
+
+### Changed
+- `requirements-dev.txt` 改为 `-r tests/requirements-test.txt`（FIX-2026-10-06-QA-031-06）：原为第二份不完整副本，缺 `pytest-cov/flask/mock/httpx/xdist` 且 `fakeredis` 缺 `[lua]` extra，照其自身安装说明装依赖会得到坏环境。
+- 回归 `test_pre_commit_hook_reexecs_with_venv` 由存在性断言升级为「`main()` 真的调用了 `_reexec_with_venv`」+ 用 importlib 载入钩子验证 `.venv` 缺失时不 re-exec（fail-closed，原无测试）。
+- `CHANGELOG` 回归计数 13→14（实测 14 个测试函数承载所引 FIX id）；`UNRESOLVED-038` 失效行号 `app.js:1307/5968` → `1310/5985`（status 仍 pending，未关闭）。
+
+### Notes
+- 本轮为 **QA-Loop Round 031**（增量 `1ad5980..123f958` + 本轮修复），审计轨见 `data/qa_loop/round-031.md`。
+- 三视角只读复核（mimo-v2.6-pro）：R1 正确性/安全 0C/0H/4M/2L · R2 前端 0C/1H/1M/1L · R3 不变量/测试 0C/0H/2M/4L，去重后 **1H/6M/6L** 全部修复。
+- 对抗席（同一模型）三次失败（大载荷停滞 + 大规模计数退化），本轮 §③ 为**主 agent 裁定**，缺口已在 `round-031.md` §③/§INFRA 明示。
+- 视觉专项：`mimo-v2.6-pro` VL 0.978（4/5 精确）vs EasyOCR 0.908（2/5 精确），元素级 A/B、DOM 命中测试为真值，详见 `round-031.md` §V。
+
+regression: N/A（未触及合规/清标路径）
+verify_fixes 434/0 · regression 261 passed · smoke 7/7 · doc_drift 16/16 · check_system 150/150
+
+---
+
 ## [2026-10-05] — 本机构建/工具链修正（torch cu126 + 钩子解释器）
 
 ### Fixed

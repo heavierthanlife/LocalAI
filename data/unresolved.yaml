@@ -613,3 +613,24 @@ unresolved:
       ① app.js 两处改用 safeDownloadUrl（或加 scheme 断言）；② style_engine docx 落到按 user_id
       分目录（data/user_styles/<uid>/）；③ _save_structured_data 复用 _KB_TASK_ID_RE 校验 task_id。
       三项均低危，下轮（Round 031）随增量修复并入；勿在 B/样本轮前插队。
+
+  - id: UNRESOLVED-039
+    title: "pi-lens per-file 门禁在基线即红：需 pyright 配置 + 基线清理"
+    status: pending
+    severity: low
+    discovered: 2026-10-06
+    tags: ["Round-031", "工具链", "静态检查"]
+    context: >
+      Round 031 实现期实测：pi-lens 对任何被触碰的文件都报出大量**基线既有**问题，
+      因此无法用作「本次改动是否引入问题」的通过/失败信号。逐行与 HEAD 比对确认
+      tests/test_regression.py 的 14 处 pyright 报错全部 SAME；app.js 151 项
+      （L4+ 未使用变量、L76+ innerHTML slop）；helpers.py:2,6 为未改动的 import 块；
+      data/fix_registry.yaml 与 data/unresolved.yaml 为 CRLF 加 >80 列标题。
+      其中 Import could not be resolved 一类属纯环境：仓库无 pyrightconfig.json /
+      pyproject.toml / setup.cfg，而 .venv 内 pytest 9.1.1 / flask 3.1.3 均在。
+    blocked_by: "需用户决定是否引入工具链配置（超出 QA 修复批次范围）"
+    resolution_plan: >
+      ① 加 pyrightconfig.json 指向 .venv（venvPath/venv），可一次性消掉全部
+      import-resolution 噪声；② 若要把 lint 变成真门禁，需先清基线（约 300 项，单开一轮，
+      勿混入修复批次）；③ 在此之前以 AGENTS.md 声明的门禁为准（verify_fixes / pytest /
+      doc_drift / check_system / node --check）。
