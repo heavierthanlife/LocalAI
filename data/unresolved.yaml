@@ -640,3 +640,26 @@ unresolved:
       import-resolution 噪声；② 若要把 lint 变成真门禁，需先清基线（约 300 项，单开一轮，
       勿混入修复批次）；③ 在此之前以 AGENTS.md 声明的门禁为准（verify_fixes / pytest /
       doc_drift / check_system / node --check）。
+
+  - id: UNRESOLVED-040
+    title: "Docker GPU 透传不通：WSL2 下 nvidia-container-cli no adapters found"
+    status: pending
+    severity: medium
+    discovered: 2026-10-06
+    tags: ["Docker", "GPU", "WSL2", "环境"]
+    context: >
+      Windows 原生 nvidia-smi 正常（RTX 2080 Super / driver 617.14），WSL 内
+      /dev/dxg 存在，但 Ubuntu 内 nvidia-smi 报 "Failed to initialize NVML:
+      GPU access blocked by the operating system"；`docker run --gpus all
+      ubuntu:24.04` 同样失败（nvidia-container-cli: initialization error:
+      WSL environment detected but no adapters were found；mode 'legacy'）。
+      故 `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`
+      会让 app 与 celery-worker 起不来（celery-beat 无 GPU 需求故正常）。
+      已用纯净 ubuntu 镜像复现，与仓库镜像/compose 无关。
+    blocked_by: "宿主层——WSL2 GPU 透传 / 驱动，非仓库可修"
+    resolution_plan: >
+      ① 先 `wsl --update`，再 `wsl --shutdown` 后重启 Docker Desktop（刷新
+      /usr/lib/wsl/lib）；② 若仍 blocked，重装/升级 Windows NVIDIA 驱动（WSL 侧库由驱动
+      提供，版本不一致即报此错）；③ 确认 Windows 图形设置未把 WSL 绑到非 NVIDIA GPU；
+      ④ 修好前**不要**加载 docker-compose.gpu.yml。GPU 镜像本身已验证正确
+      （torch 2.12.1+cu126、cuda 12.6、15 个 nvidia-*cu12 轮子）。

@@ -18,6 +18,10 @@ All notable changes to 中联招标智能助手.
 - **历史渲染绕过清洗**（FIX-2026-10-06-QA-031-05）：`chat.js renderAssistantMessageLegacy` 直接把 `msg.content`/`msg.thinking` 写入 DOM（并进 `/feedback`），本 delta 之前落库的行仍显示工具报错/模板回显；写入侧清洗无法追溯既有行 → 渲染器入口统一清洗。非 XSS（答案路径经 `_renderMarkdown`/`_safeHTML`）。
 - **Dockerfile torch 双装，白拉 ~12GB CUDA 轮子**（FIX-2026-10-06-QA-031-07，关闭 `UNRESOLVED-036`）：`requirements.txt` pin 了 `torch==2.12.1`，而镜像先从 PyPI 镜像装它、末尾再用 `TORCH_INDEX` 覆盖 —— CPU 机器因此白下载整套 CUDA 13 轮子（`nvidia-cublas` 423MB + `nvidia-cudnn-cu13` 366MB，约 12GB @ ~3MB/s）后丢弃。改为把 `TORCH_INDEX` 作为 requirements 层的**主索引**（`--extra-index-url` 保留镜像供其余包），torch 一次解析为 `2.12.1+cpu`；实测构建日志 `nvidia-cublas`/`nvidia-cudnn` 命中 **0**，镜像 **11.6GB → 7.11GB**。
 - **apt 镜像使构建必失败**（FIX-2026-10-06-QA-031-08）：Debian 源被改写为 tuna **http**，apt 在装 `libreoffice-core`/`fonts-noto-cjk` 时报 `E: Failed to fetch … Connection failed [IP: 101.6.15.130 80]` 并以 exit 100 终止，`docker compose build` 永远产不出与 HEAD 一致的镜像。Round 030 曾临时改镜像再还原（故反复复发），现**永久**改为 `mirrors.ustc.edu.cn` **https**。
+- **GPU 构建的 700MB CUDA 轮子被 120s 读超时打断**（FIX-2026-10-06-QA-031-09）：`TORCH_INDEX=…/whl/cu126` 会拉 `nvidia-cudnn-cu12`（~707MB）与 `nvidia-cublas-cu12`（~600MB）；慢镜像（~1MB/s）下单次 read 超过 120s，pip 以 `TimeoutError: The read operation timed out` 在 71/706MB 处中止（exit 2）。改为 `PIP_TIMEOUT=600` / `PIP_RETRIES=20`（重试复用 BuildKit pip cache），同一构建随即成功：`torch 2.12.1+cu126` + 15 个 `nvidia-*cu12` 轮子（镜像 16GB，Turing/sm_75 可用）。
+
+### Known issue
+- **本机 GPU 容器透传不通**（`UNRESOLVED-040`）：Windows 原生 `nvidia-smi` 正常，但 WSL 内报 `GPU access blocked by the operating system`，纯净 `ubuntu:24.04 --gpus all` 同样失败 → 属宿主 WSL2 层。**修好前不要加载 `docker-compose.gpu.yml`**（会让 app/celery-worker 起不来，celery-beat 不受影响）。镜像本身已 GPU-ready；`OCR_GPU=auto` 会在透传可用后自动启用 GPU，无需改配置。
 
 ### Changed
 - `requirements-dev.txt` 改为 `-r tests/requirements-test.txt`（FIX-2026-10-06-QA-031-06）：原为第二份不完整副本，缺 `pytest-cov/flask/mock/httpx/xdist` 且 `fakeredis` 缺 `[lua]` extra，照其自身安装说明装依赖会得到坏环境。

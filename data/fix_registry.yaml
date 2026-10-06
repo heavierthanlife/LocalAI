@@ -2767,3 +2767,23 @@ fixes:
       - type: literal_not
         file: Dockerfile
         pattern: "mirrors.tuna.tsinghua.edu.cn|g' /etc/apt"
+
+  - id: FIX-2026-10-06-QA-031-09
+    title: "PIP_TIMEOUT=120 too short for 700MB CUDA wheels; GPU build died"
+    severity: medium
+    rationale: >
+      FIX-084 raised PIP_RETRIES but left the read timeout at 120s. Building with
+      TORCH_INDEX=.../whl/cu126 downloads nvidia-cudnn-cu12 (~707MB) and
+      nvidia-cublas-cu12 (~600MB); on a slow mirror (~1MB/s) a single read
+      blocks past 120s and pip aborts with "TimeoutError: The read operation
+      timed out" after 71/706MB, failing the whole build (exit 2). Now
+      PIP_TIMEOUT=600, PIP_RETRIES=20; retries resume from the BuildKit pip
+      cache mount, so a generous read timeout is the right knob. With this the
+      build completed: torch-2.12.1+cu126 plus 15 nvidia-*cu12 wheels.
+    checks:
+      - type: literal
+        file: Dockerfile
+        pattern: "ARG PIP_TIMEOUT=600"
+      - type: literal
+        file: Dockerfile
+        pattern: "ARG PIP_RETRIES=20"

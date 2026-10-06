@@ -46,10 +46,13 @@ WORKDIR /app
 COPY requirements.txt .
 
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
-# --retries/--timeout: CUDA wheels (nvidia-cudnn ~700MB, cublas ~600MB) are large and
-# pypi.nvidia.com intermittently stalls; retries resume from the pip cache mount.
-ARG PIP_RETRIES=10
-ARG PIP_TIMEOUT=120
+# --retries/--timeout: CUDA wheels (nvidia-cudnn-cu12 ~707MB, cublas ~600MB) are large and
+# slow mirrors intermittently stall mid-read. FIX-084 added retries but left the read
+# timeout at 120s, which a 700MB wheel at ~1MB/s cannot satisfy — the GPU build died with
+# 'TimeoutError: The read operation timed out' at 71/706MB. Retries resume from the pip
+# cache mount, so a generous read timeout is the right knob.
+ARG PIP_RETRIES=20
+ARG PIP_TIMEOUT=600
 # UNRESOLVED-036 (fixed 2026-10-06): requirements.txt also pins torch==2.12.1 /
 # torchvision==0.27.1, so installing it from the PyPI mirror FIRST pulled the whole
 # CUDA 13 wheel set (nvidia-cublas 423 MB + nvidia-cudnn-cu13 366 MB, ~12 GB) and
