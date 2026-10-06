@@ -172,6 +172,59 @@ diff 分片（`.remember/tmp/r031/`，`.remember/` 整体 gitignored）:
 
 ---
 
+## ⑥ VERIFY（实测输出）
+
+| 门禁 | 结果 |
+| --- | --- |
+| `scripts/verify_fixes.py` | **439/0**，`exit=0`（起始 409） |
+| `pytest tests/test_regression.py` | **261 passed**（起始 255） |
+| `pytest tests/test_smoke.py` | **7 passed** |
+| `node --check`（chat / app / knowledge-lab） | 全部 OK |
+| `scripts/check_doc_drift.py` | **16/16** |
+| `scripts/check_system.py` | **150/150**（checklist 自动重生成） |
+
+回归增量 6 条（QA-031-01…06 各带断言）；其中 QA-031-03 的镜像一致性由 **node 中执行
+`chat.js` 的前后端行为对拍**（9 条载荷）保证，而非字符串存在性。
+
+## ⑦ PUSH
+
+`123f958..75aa203` → `LocalAI/master` OK；`git rev-list --left-right --count master...LocalAI/master`
+= `0 0`；本地 HEAD == 远端 == `75aa203`；工作树干净。
+
+## ⑧ IMAGE —— **阻塞（未完成）**
+
+**blocked by `UNRESOLVED-036`（Dockerfile torch 双装）**：`docker compose build` 在
+`pip install -r requirements.txt` 层拉 CUDA 13 轮子（`nvidia-cublas` 423 MB、
+`nvidia-cudnn-cu13` 366 MB，合计约 12 GB，实测 ~3 MB/s）。`--build-arg TORCH_INDEX=…/cpu`
+**无效** —— 下载发生在 requirements 层，而 `Dockerfile:59` 的 CPU 索引 torch 装在其后。
+本轮 1500 s 超时被 SIGTERM（exit 143）。
+
+容器内抽查证实**镜像 ≠ HEAD**：
+
+| 探针 | 期望 | 实测 |
+| --- | --- | --- |
+| `reloadAuthGatedPanels` in `/app/static/js/app.js` | ≥1 | **0** |
+| `stored_answer` in `/app/app/routes/chat_sessions.py` | ≥1 | **0** |
+| 镜像构建时间 | ≈HEAD | `2026-09-19`（HEAD `2026-10-06`） |
+
+旧镜像仍在运行（`localai-app` healthy，未回滚、未中断服务）。**按 SKILL 规定，镜像 ≠ HEAD
+即不得收尾**，故本轮**不推进 `last_head`、不清 `pending.flag`**。
+
+## ⑨ RE-CHECK / 停跑闸门 —— **未执行（前置于 ⑧ 成功）**
+
+停跑闸门（新增 C/H == 0 且 `pending` 空）**未达成**：⑧ 未通过，且 `pending.flag` 仍未消费。
+
+### 本轮遗留（给下一轮）
+
+1. **解除 ⑧ 阻塞**：把 `requirements.txt` 的 `torch` 从默认 PyPI 源剥离（或对该层加
+   `--index-url ${TORCH_INDEX}` + `--extra-index-url` 以处理 `+cpu` 本地版本号），单开一个
+   **构建轮**处理 `UNRESOLVED-036`——kickoff 已明确建议「勿在修复轮触发依赖地狱」。
+2. 镜像重建后重跑 ⑧ 容器内抽查（含 `reloadAuthGatedPanels` / `stored_answer` 两条新探针）。
+3. ⑨ 独立复检（建议**窄任务 + 小分片**，分片须在**最终 HEAD** 上重新生成并覆盖 registry+tests）。
+4. `UNRESOLVED-039`（pi-lens 基线配置）。
+
+---
+
 ## §REVIEW 只读复核门禁（AGENTS.md：改动命中 `app/routes/` + `data/fix_registry.yaml`）
 
 第 1 次 **429 限流**；第 2 次 **30 min 超时**（16 turn / 30 工具调用 / 48 `message_start`，零可用

@@ -299,6 +299,21 @@ number, run a full-workspace scan first (`lens_diagnostics` with `scope=workspac
 - `read` truncates at 50 KB — undersized shards, not one big diff.
 - Reviewers cannot run `git diff`; feed them files.
 - Don't hardcode the reviewer launcher, HOME, or a WSL mount.
+- **Regenerate review shards at the FINAL HEAD, and always include
+  `data/fix_registry.yaml` + `tests/`.** Reusing an older diff makes the reviewer read stale
+  line numbers and report already-fixed "findings" (Round 031: two of four review answers were
+  stale-artifact noise). Omitting the registry/tests shard makes "every fix has a regression"
+  impossible to verify, and the reviewer will correctly say the gate is unmet.
+- **Narrow task + small shard is the only shape that reliably works for the `mimo-v2.6-pro`
+  reviewer.** Large, open-ended or aggregating tasks (whole-diff review, multi-report
+  cross-examination) reliably stall (30 min timeout, zero usable output) or degenerate. Split
+  by file group and ask a handful of specific questions with an explicit stop condition.
+- **⑧ IMAGE is blocked in this repo by `UNRESOLVED-036` (Dockerfile double-installs torch):**
+  `pip install -r requirements.txt` pulls CUDA 13 wheels (`nvidia-cublas` 423 MB +
+  `nvidia-cudnn-cu13` 366 MB, ~12 GB at ~3 MB/s). `--build-arg TORCH_INDEX=…/cpu` does **not**
+  help — the download happens in the requirements layer, not the `TORCH_INDEX` layer. Needs a
+  dedicated build round; until then the running image is **not** HEAD, so the round must not
+  close (do not advance `last_head`, do not clear `pending.flag`).
 - Commit messages: `type: 中文摘要`. Never commit keys/private keys/binaries
   (`cert/key.pem`, `msedgedriver.exe`).
 - `/qa-loop` is never automated — `.pi/qa-loop.project.md` and AGENTS.md both require it.
