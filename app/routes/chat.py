@@ -385,7 +385,7 @@ def send_message_stream():
             # Save partial response before sending error to client
             if full_response:
                 thinking, answer = split_thinking_answer(full_response)
-                answer = (answer or '') + "\n\n[回复中断] 发送任意消息继续"
+                answer = (answer or sanitize_response(full_response or '')) + "\n\n[回复中断] 发送任意消息继续"
                 if is_anon:
                     session.setdefault('chat_history', []).append({'role': 'assistant', 'content': answer, 'thinking': thinking})
                 else:

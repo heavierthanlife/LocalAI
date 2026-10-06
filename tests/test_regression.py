@@ -3274,14 +3274,23 @@ def test_reasoning_content_branch_sanitizes():
 
 # ── FIX-2026-10-06-QA-031-02: sanitized-empty must not fall back to the raw leak ──
 def test_sanitized_empty_never_falls_back_to_raw():
-    """sanitize_response('Error: X ...') == '' — falling back to raw re-leaks it."""
+    """The fallback must not restore raw text, but must not discard real content either.
+
+    Falling back to the raw response re-leaks the artifact; falling back to ''
+    throws away real content when the reply was a thinking-only block. So both
+    paths fall back to the SANITIZED raw text: non-empty when there was genuine
+    content, '' when the whole reply was an artifact.
+    """
     cs = _read('app/routes/chat_sessions.py')
     assert 'answer if answer else raw_response' not in cs, \
         'regenerate must not fall back to the raw response'
+    assert "stored_answer = answer or sanitize_response(raw_response or '')" in cs, \
+        'regenerate must fall back to the sanitized raw text'
     ch = _read('app/routes/chat.py')
     assert 'answer = (answer or full_response)' not in ch, \
         'partial-save must not fall back to the raw response'
-    assert "answer = (answer or '')" in ch
+    assert "answer = (answer or sanitize_response(full_response or ''))" in ch, \
+        'partial-save must fall back to the sanitized raw text'
 
 
 # ── FIX-2026-10-06-QA-031-03: sanitizer must agree with its front-end mirror ──
@@ -3295,10 +3304,12 @@ _SANITIZER_PAYLOADS = [
     '前言\nError: get current date is not a valid tool, try one of [x]\n后记',
     'Error: ' + 'a' * 100 + ' is not a valid tool, try one of [x]',
     'Error: ' + 'a' * 300 + ' is not a valid tool, try one of [x]',
+    "Error: get_date is not a valid tool, try 'get_date_time' instead",
+    'Error: X is not a valid tool. Use Y instead.',
 ]
 
 # indices whose payload is nothing but an artifact -> must sanitize to ''
-_ALL_ARTIFACT = [0, 1, 2, 3, 7, 8]
+_ALL_ARTIFACT = [0, 1, 2, 3, 5, 7, 8, 9, 10]
 
 
 def test_sanitizer_strips_space_and_newline_tool_names():
@@ -3310,12 +3321,21 @@ def test_sanitizer_strips_space_and_newline_tool_names():
         assert sanitize_response(payload) == '', f'not stripped: {payload[:60]!r}'
 
 
-def test_sanitizer_keeps_text_after_the_artifact():
-    """The old tail pattern swallowed legitimate text later on the same line."""
+def test_sanitizer_strips_to_end_of_line_by_design():
+    """R1-F5 (over-strip) is an accepted trade-off, not a bug.
+
+    Narrowing the tail to only `, try one of [...]` made other continuation forms
+    survive — "Error: X is not a valid tool, try 'Y' instead" left
+    ", try 'Y' instead" in the answer — i.e. it traded a cosmetic content loss
+    for a real leak. Leaking internal tool errors is what this sanitizer exists to
+    prevent, so the tail stays line-greedy.
+    """
     from app.utils.helpers import sanitize_response
     assert sanitize_response('正常回答，不应被清洗。') == '正常回答，不应被清洗。'
-    kept = sanitize_response('Error: DesignDesign is not a valid tool 之后还有正文')
-    assert '之后还有正文' in kept, kept
+    for payload in ("Error: get_date is not a valid tool, try 'get_date_time' instead",
+                    'Error: X is not a valid tool. Use Y instead.',
+                    'Error: DesignDesign is not a valid tool 之后还有正文'):
+        assert sanitize_response(payload) == '', f'must strip to EOL: {payload!r}'
 
 
 def test_sanitizer_mirror_is_behaviourally_equivalent():

@@ -263,6 +263,7 @@ def regenerate():
         answer = sanitize_response(raw_response.strip()) if raw_response else ''
     else:
         thinking, answer = split_thinking_answer(raw_response)
+    stored_answer = answer or sanitize_response(raw_response or '')
     with get_db_connection() as conn:
         with db_transaction(conn):
             with conn.cursor() as cur:
@@ -277,10 +278,10 @@ def regenerate():
                             """, (thread_id,))
                 conn.commit()
     store_message(thread_id, 'user', user_message)
-    store_message(thread_id, 'assistant', answer, thinking if thinking else "")
+    store_message(thread_id, 'assistant', stored_answer, thinking if thinking else "")
     new_messages = get_session_messages(thread_id)
     session['chat_history'] = new_messages
     return jsonify({
-        "assistant_message": answer,
+        "assistant_message": stored_answer,
         "thinking": thinking if thinking else ""
     })

@@ -2598,7 +2598,10 @@ fixes:
         pattern: "answer = (answer or full_response)"
       - type: literal
         file: app/routes/chat.py
-        pattern: "answer = (answer or '') +"
+        pattern: "answer = (answer or sanitize_response(full_response or '')) +"
+      - type: literal
+        file: app/routes/chat_sessions.py
+        pattern: "stored_answer = answer or sanitize_response("
 
   - id: FIX-2026-10-06-QA-031-03
     title: "sanitize_response missed spaced tool names; mirror diverged"
@@ -2612,24 +2615,31 @@ fixes:
       test_sanitize_response_strips_invalid_tool_error stayed green because its
       fixture uses "DesignDesign" (no space). The `[^\n]*` tail also deleted
       legitimate text later on the same line, and `str.strip()` vs `.trim()`
-      diverged on \x1c-\x1f / \x85. Fix: the gap is `[^\n\r]{0,80}?`, the
-      ", try one of [...]" continuation is optional, and both sides trim one
-      explicit shared character set. tests/test_regression.py now executes
+      diverged on \x1c-\x1f / \x85. Fix: the gap is `[^\n\r]*?` (line-scoped,
+      not `\S+`) and both sides trim one explicit shared character set. The tail
+      stays line-greedy: narrowing it to only ", try one of [...]" instead let
+      other forms leak, which is the worse failure. test_regression.py runs
       chat.js in node and asserts the front-end and back-end sanitizers agree
       on a payload table, instead of asserting the pattern *strings* exist.
     checks:
       - type: literal
         file: app/utils/helpers.py
-        pattern: "is not a valid tool(?:,\\s*try one of"
+        pattern: "is not a valid tool[^\\n\\r]*"
+      - type: literal
+        file: static/js/chat.js
+        pattern: "is not a valid tool[^\\n\\r]*"
+      - type: literal_not
+        file: app/utils/helpers.py
+        pattern: "(?:,\\s*try one of"
+      - type: literal_not
+        file: static/js/chat.js
+        pattern: "(?:,\\s*try one of"
       - type: literal_not
         file: app/utils/helpers.py
         pattern: "{0,80}?is not a valid tool"
       - type: literal_not
         file: static/js/chat.js
         pattern: "{0,80}?is not a valid tool"
-      - type: literal
-        file: static/js/chat.js
-        pattern: "is not a valid tool(?:,\\s*try one of"
       - type: literal
         file: app/utils/helpers.py
         pattern: "return cleaned.strip(_TRIM_CHARS)"

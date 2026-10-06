@@ -156,10 +156,15 @@ def split_thinking_answer(text: str) -> tuple:
 # cannot span that space, so the whole artifact used to survive. The gap is
 # deliberately unbounded within the line — a bounded `{0,80}?` still let a long
 # tool name through — and stays lazy so "is not a valid tool" anchors the match.
-# The trailing `, try one of [...]` is optional so legitimate text later on the
-# same line is no longer swallowed.
+#
+# The tail is line-greedy ON PURPOSE. Restricting it to the `, try one of [...]`
+# continuation (an earlier attempt) made other forms survive instead, e.g.
+# "Error: X is not a valid tool, try 'Y' instead" — trading a cosmetic over-strip
+# for a real leak. Leaking internal tool errors is the bug this sanitizer exists to
+# prevent, so the tail stays greedy: R1-F5 (legitimate same-line text after the
+# artifact is dropped too) is accepted as the lesser cost, not fixed.
 _INVALID_TOOL_RE = re.compile(
-    r"Error:\s*[^\n\r]*?is not a valid tool(?:,\s*try one of[^\n\r]*)?",
+    r"Error:\s*[^\n\r]*?is not a valid tool[^\n\r]*",
     re.IGNORECASE,
 )
 _PROMPT_TEMPLATE_RE = re.compile(
