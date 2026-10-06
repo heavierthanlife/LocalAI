@@ -18,13 +18,14 @@ All notable changes to 中联招标智能助手.
 - **补齐本机运行产物忽略清单**：`9054e22`（「忽略本机运行产物」）遗漏 5 项，本次补入 `.gitignore` —— `wheelhouse/`（manylinux pip 轮子，约 548MB，仅供 Docker 构建）、`data/_audit/`（QA 截图与一次性脚本）、`data/_backup/`（含用户数据的 DB dump）、`data/_audit_run.*.log`、`docker-compose.override.yml`（本机 nginx 端口覆盖：Tailscale 占用 :443）。
 - **入仓 QA 工具** `scripts/clean_screenshots.py`：删除 QA 截图（仅图片，保留 md/json 报告），避免下一轮 `@vl` 读到过期截图产出无效发现（本轮已实际发生）。
 - **`.mcp.json` 精简**（本机配置，未入仓 —— 被 `.gitignore` 的 `*.json` 全局规则覆盖，且含明文 DB 口令）：移除 4 个失效/冗余 MCP —— `filesystem`（目录 `D:/AI_Tools/LMprocess` 不存在）、`skill`（脚本与 2 个技能目录均已不存在）、`agentmemory`（与 pi-hermes-memory 重叠，且 `:3111` 返回 500）、`git`（与内置 bash+git 重叠）；保留 `postgres`。
+- **`.mcp.json` 去密钥**：DSN 从配置文件移到环境变量 `LOCALAI_PG_DSN`（Windows 用户级）。因 `server-postgres` 只从 `argv[0]` 读 DSN、而 pi-mcp-adapter 不插值 `args`（仅 `env`/`cwd`/`url`/`headers`/`socket` 等），故用 `cmd /c … %LOCALAI_PG_DSN%` 交由 cmd 展开，`env` 块以 `${LOCALAI_PG_DSN}` 显式声明依赖；`.gitignore` 同时显式登记 `.mcp.json`，不再仅靠 `*.json` 兜底。（FIX-2026-10-05-086）
 
 ### Notes
 - 来源：本机 5 提交并入 master（merge commit `4148aa1`）后，暴露的两处本机环境/构建问题，均非应用逻辑。
 - 未推送前本机 5 提交（sanitize 泄漏清洗 + 登录前门控 + UI 打磨）已随同一合并进入主线。
 
 regression: N/A（未触及合规/清标路径）
-verify_fixes 408/0 · regression 254 passed · smoke 7/7 · doc_drift 16/16 · check_system 150/150
+verify_fixes 409/0 · regression 255 passed · smoke 7/7 · doc_drift 16/16 · check_system 150/150
 
 ---
 

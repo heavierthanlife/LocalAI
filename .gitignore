@@ -104,3 +104,7 @@ data/_audit/
 data/_audit_run.*.log
 data/_backup/
 docker-compose.override.yml
+
+# 本机 MCP 配置：含本机路径/凭据，且必须保持不进仓（以前只靠上面的 *.json 兜住，
+# 一旦那条规则收窄就会泄露）。DSN 现已移到环境变量 LOCALAI_PG_DSN。
+.mcp.json

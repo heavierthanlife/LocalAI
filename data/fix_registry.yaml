@@ -2510,16 +2510,16 @@ fixes:
         pattern: "ARG PIP_RETRIES=10"
 
   - id: FIX-2026-10-05-085
-    title: "pre-commit hook ran under system Python, misreporting fix regressions"
+    title: "pre-commit hook ran under system Python; false fix regressions"
     severity: medium
     rationale: >
-      .githooks/pre-commit dispatches verify_fixes.py via sys.executable, which is
-      whatever interpreter git launched the hook with (bare `python` → system
+      .githooks/pre-commit dispatches verify_fixes.py via sys.executable, which
+      is whatever interpreter git launched the hook with (bare `python` → system
       Python without yaml/dotenv). The script then crashed with ImportError and
       the hook reported 'Fix regression detected', blocking commits for reasons
       unrelated to the fix registry. Fix: re-exec the hook once under
-      .venv/Scripts/python.exe (guarded by LOCALAI_HOOK_VENV, no-op when .venv is
-      absent so CI is unaffected).
+      .venv/Scripts/python.exe (guarded by LOCALAI_HOOK_VENV; no-op without
+      .venv so CI is unaffected).
     checks:
       - type: literal
         file: .githooks/pre-commit
@@ -2527,3 +2527,21 @@ fixes:
       - type: literal
         file: .githooks/pre-commit
         pattern: "os.environ['LOCALAI_HOOK_VENV'] = '1'"
+
+  - id: FIX-2026-10-05-086
+    title: ".mcp.json held a plaintext DB password; ignored only by accident"
+    severity: medium
+    rationale: >
+      The project .mcp.json carried the postgres DSN (password inline) and was
+      excluded from git only as a side effect of the blanket *.json rule in
+      .gitignore — narrowing that rule would have committed the credential.
+      Fix: the DSN now comes from the Windows user environment variable
+      LOCALAI_PG_DSN. server-postgres reads its DSN only from argv[0], and
+      pi-mcp-adapter interpolates env/cwd/url/headers/socket but NOT `args`, so
+      the value is expanded by cmd.exe via %LOCALAI_PG_DSN% while the `env`
+      block declares the dependency explicitly. .mcp.json is now explicitly
+      ignored rather than incidentally covered.
+    checks:
+      - type: literal
+        file: .gitignore
+        pattern: ".mcp.json"

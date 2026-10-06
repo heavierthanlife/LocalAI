@@ -3214,3 +3214,9 @@ def test_pre_commit_hook_reexecs_with_venv():
     assert 'def _reexec_with_venv' in src
     assert 'LOCALAI_HOOK_VENV' in src
     assert '.venv' in src
+
+
+# ── FIX-2026-10-05-086: .mcp.json carries machine credentials — keep it ignored ──
+def test_mcp_json_is_explicitly_gitignored():
+    """A narrowed *.json rule must not be able to commit .mcp.json."""
+    assert '.mcp.json' in _read('.gitignore')
