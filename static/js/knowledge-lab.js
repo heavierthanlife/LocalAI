@@ -2316,6 +2316,10 @@ let currentProjectName = '';
         } catch(_) { list.innerHTML = '<span style="color:#ef4444;font-size:0.75rem;">加载失败</span>'; }
     }
 
+    // QA-031 C1: the notebook loader runs before verifyAuth resolves, so a fresh
+    // tab with a valid cookie shows "登录后查看笔记" and never re-fetches.
+    window._refreshNotebook = loadNotebook;
+
     window._openNotebook = async function(noteId) {
         const r = await fetch('/notebook/' + encodeURIComponent(noteId), {credentials:'include'});
         const d = await r.json();

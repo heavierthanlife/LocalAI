@@ -2633,3 +2633,35 @@ fixes:
       - type: literal_not
         file: static/js/chat.js
         pattern: "is not a valid tool[^\\n]*"
+
+  - id: FIX-2026-10-06-QA-031-04
+    title: "authenticated fresh tab stayed gated; sessionStorage raced auth"
+    severity: high
+    rationale: >
+      The Round-3 pre-login gates read sessionStorage['username'], which
+      verifyAuth only writes after /check_auth resolves, while the loaders
+      (cases / templates / notebook / sidebar projects) run at
+      DOMContentLoaded. On a fresh tab or after a browser restart with a
+      still-valid 30-day cookie, the gates therefore rendered the login
+      placeholder and the fetch never fired: nothing re-invoked them, since
+      C.refresh and T.refresh had only post-delete call sites. That is a
+      regression against the pre-gate behaviour, where the session cookie alone
+      was enough. Fix: verifyAuth calls reloadAuthGatedPanels() and
+      checkStorage() once auth is known, and knowledge-lab.js exposes
+      window._refreshNotebook for that hook.
+    checks:
+      - type: literal
+        file: static/js/app.js
+        pattern: "function reloadAuthGatedPanels"
+      - type: literal
+        file: static/js/app.js
+        pattern: "reloadAuthGatedPanels();"
+      - type: literal
+        file: static/js/knowledge-lab.js
+        pattern: "window._refreshNotebook = loadNotebook"
+      - type: literal
+        file: static/js/app.js
+        pattern: "window.Cases.refresh"
+      - type: literal
+        file: static/js/app.js
+        pattern: "window.Templates.refresh"

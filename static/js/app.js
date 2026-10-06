@@ -7198,6 +7198,17 @@
         chip.style.display = 'inline-block';
     }
 
+    // QA-031 C1: 案例库 / 模板库 / 笔记 run their loaders at DOMContentLoaded, which
+    // is before this auth round trip resolves. On a fresh tab sessionStorage is
+    // still empty, so those gates render "登录后查看…" and never fetch. Re-run them
+    // once authentication is actually known.
+    function reloadAuthGatedPanels() {
+        if (window.Cases && typeof window.Cases.refresh === 'function') window.Cases.refresh();
+        if (window.Templates && typeof window.Templates.refresh === 'function') window.Templates.refresh();
+        if (typeof window._refreshNotebook === 'function') window._refreshNotebook();
+        loadSidebarProjects();
+    }
+
     async function verifyAuth() {
         try {
             const res = await fetch('/check_auth', { credentials: 'include' });
@@ -7219,6 +7230,8 @@
                 // Remove anonymous watermark
                 const wm = document.getElementById('anonWatermark');
                 if (wm) wm.remove();
+                reloadAuthGatedPanels();
+                checkStorage();
             }
             // Knowledge Lab tab: registered only
             const knowledgeLabTabBtn = document.getElementById('knowledgeLabTabBtn');

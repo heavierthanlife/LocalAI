@@ -3320,3 +3320,34 @@ def test_sanitizer_mirror_is_behaviourally_equivalent():
     assert front == back, 'front/back sanitizer divergence:\n' + '\n'.join(
         f'  {p!r}\n    js={f!r}\n    py={b!r}'
         for p, f, b in zip(_SANITIZER_PAYLOADS, front, back) if f != b)
+
+
+# ── FIX-2026-10-06-QA-031-04: authenticated fresh tab must not stay gated ──
+def test_auth_completion_reloads_gated_panels():
+    """sessionStorage is set only after /check_auth resolves, but the gated
+    loaders run at DOMContentLoaded -> a fresh tab with a valid cookie rendered
+    the login placeholder and never fetched. verifyAuth must re-run them."""
+    import re
+    app_src = _read('static/js/app.js')
+    assert 'function reloadAuthGatedPanels' in app_src
+    assert 'window.Cases.refresh' in app_src
+    assert 'window.Templates.refresh' in app_src
+    assert 'window._refreshNotebook' in app_src
+    assert 'loadSidebarProjects();' in app_src
+    assert 'window._refreshNotebook = loadNotebook' in _read('static/js/knowledge-lab.js')
+
+    # the re-trigger must live inside verifyAuth, and the storage check must run
+    # after auth is known (it too was gated on the racing sessionStorage key)
+    tail = app_src[app_src.index('async function verifyAuth'):]
+    assert 'reloadAuthGatedPanels();' in tail, \
+        'verifyAuth must re-run the gated panels once auth is known'
+    assert re.search(r'reloadAuthGatedPanels\(\);\s*\n\s*checkStorage\(\);', tail), \
+        'checkStorage must run after authentication, not only from chat load'
+
+    # the gates themselves stay: pre-login must still render the placeholder
+    # rather than firing a request
+    for rel, needle in (('static/js/cases.js', '登录后查看案例库'),
+                        ('static/js/templates.js', '登录后查看模板库'),
+                        ('static/js/knowledge-lab.js', '登录后查看笔记'),
+                        ('static/js/app.js', '登录后查看项目')):
+        assert needle in _read(rel), f'{rel}: pre-login gate message must survive'
