@@ -97,3 +97,10 @@ db/
 data/qa_screenshots/
 nul
 审计报告_*.md
+
+# 其余本机运行产物（2026-10-05 补齐 9054e22 遗漏项；wheelhouse 是 manylinux 轮子，~548MB）
+wheelhouse/
+data/_audit/
+data/_audit_run.*.log
+data/_backup/
+docker-compose.override.yml

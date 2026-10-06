@@ -14,6 +14,11 @@ All notable changes to 中联招标智能助手.
 - **GPU 构建 torch 索引指向 cu124，而 cu124 无 torch 2.12.1**（FIX-2026-10-05-084）：`scripts/docker_build.py` 默认 GPU 索引 `.../whl/cu124`，但 cu124 最高只到 torch 2.6.0，而 `requirements.txt` 钉死 2.12.1 —— GPU 构建必然解析失败。改为 **cu126**（承载 2.12.1 的最低索引，仍支持 Turing/sm_75，覆盖 RTX 20 系）。`Dockerfile` 同时加入 `PIP_RETRIES=10` / `PIP_TIMEOUT=120`：CUDA wheel（`nvidia-cudnn` 约 700MB）在 pypi.nvidia.com 上偶发卡死，重试可复用 pip cache mount 续传。
 - **pre-commit 钩子误报 fix 回归**（FIX-2026-10-05-085）：`.githooks/pre-commit` 经 `sys.executable` 调用 `verify_fixes.py`，而 git 以裸 `python`（系统解释器，无 yaml/dotenv）启动钩子 → 脚本 ImportError 崩溃，钩子判为 `Fix regression detected`，**任何提交都被错误拦截**。改为在 `.venv` 存在时用 venv 解释器重新执行一次（`LOCALAI_HOOK_VENV` 守卫；`.venv` 缺失时 no-op，CI 不受影响）。
 
+### Chore
+- **补齐本机运行产物忽略清单**：`9054e22`（「忽略本机运行产物」）遗漏 5 项，本次补入 `.gitignore` —— `wheelhouse/`（manylinux pip 轮子，约 548MB，仅供 Docker 构建）、`data/_audit/`（QA 截图与一次性脚本）、`data/_backup/`（含用户数据的 DB dump）、`data/_audit_run.*.log`、`docker-compose.override.yml`（本机 nginx 端口覆盖：Tailscale 占用 :443）。
+- **入仓 QA 工具** `scripts/clean_screenshots.py`：删除 QA 截图（仅图片，保留 md/json 报告），避免下一轮 `@vl` 读到过期截图产出无效发现（本轮已实际发生）。
+- **`.mcp.json` 精简**（本机配置，未入仓 —— 被 `.gitignore` 的 `*.json` 全局规则覆盖，且含明文 DB 口令）：移除 4 个失效/冗余 MCP —— `filesystem`（目录 `D:/AI_Tools/LMprocess` 不存在）、`skill`（脚本与 2 个技能目录均已不存在）、`agentmemory`（与 pi-hermes-memory 重叠，且 `:3111` 返回 500）、`git`（与内置 bash+git 重叠）；保留 `postgres`。
+
 ### Notes
 - 来源：本机 5 提交并入 master（merge commit `4148aa1`）后，暴露的两处本机环境/构建问题，均非应用逻辑。
 - 未推送前本机 5 提交（sanitize 泄漏清洗 + 登录前门控 + UI 打磨）已随同一合并进入主线。
