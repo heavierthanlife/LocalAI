@@ -148,18 +148,33 @@ def split_thinking_answer(text: str) -> tuple:
 # ── Response sanitization: never surface internal tool/LLM artifacts to users ──
 # NOTE: patterns are mirrored in static/js/chat.js `_sanitizeResponse()` so the
 # live SSE stream is cleaned too (split_thinking_answer only covers the stored
-# copy). Keep the two in sync.
+# copy). Keep the two in sync — tests/test_regression.py asserts the two are
+# behaviourally equivalent, not merely textually similar.
+#
+# The tool-name gap is `[^\n\r]{0,80}?` rather than `\S+`: real LangChain output
+# names tools with spaces ("Error: get current date is not a valid tool, ..."),
+# and `\S+` cannot span that space, so the whole artifact used to survive. The
+# trailing `, try one of [...]` is optional so legitimate text later on the same
+# line is no longer swallowed.
 _INVALID_TOOL_RE = re.compile(
-    r"Error:[ \t]*\S+[ \t]*is not a valid tool[^\n]*",
+    r"Error:\s*[^\n\r]{0,80}?is not a valid tool(?:,\s*try one of[^\n\r]*)?",
     re.IGNORECASE,
 )
 _PROMPT_TEMPLATE_RE = re.compile(
-    r"Here is the JSON for a function call with its proper arguments[^\n]*",
+    r"Here is the JSON for a function call with its proper arguments[^\n\r]*",
     re.IGNORECASE,
 )
 _KNOWN_LEAK_PATTERNS = (
     _INVALID_TOOL_RE,
     _PROMPT_TEMPLATE_RE,
+)
+
+# Explicit trim set identical to JavaScript's String.prototype.trim()
+# (WhiteSpace + LineTerminator). Bare str.strip() additionally removes
+# \x1c-\x1f and \x85, which made the two copies diverge on such payloads.
+_TRIM_CHARS = (
+    " \t\n\r\f\v\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007"
+    "\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
 )
 
 
@@ -176,4 +191,4 @@ def sanitize_response(text: str) -> str:
     cleaned = text
     for pat in _KNOWN_LEAK_PATTERNS:
         cleaned = pat.sub("", cleaned)
-    return cleaned.strip()
+    return cleaned.strip(_TRIM_CHARS)

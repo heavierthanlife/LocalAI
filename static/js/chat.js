@@ -10,10 +10,11 @@
     }
     // FIX-2026-08-15-001: strip internal tool-error / prompt-template leaks from
     // the LIVE SSE stream (backend sanitize_response only covers the stored copy).
-    // Patterns mirror app/utils/helpers.py — keep in sync.
+    // Patterns mirror app/utils/helpers.py — keep in sync; tests/test_regression.py
+    // asserts the two are behaviourally equivalent, not merely textually similar.
     var _LEAK_PATTERNS = [
-        /Error:[ \t]*\S+[ \t]*is not a valid tool[^\n]*/gi,
-        /Here is the JSON for a function call with its proper arguments[^\n]*/gi
+        /Error:\s*[^\n\r]{0,80}?is not a valid tool(?:,\s*try one of[^\n\r]*)?/gi,
+        /Here is the JSON for a function call with its proper arguments[^\n\r]*/gi
     ];
     function _sanitizeResponse(text) {
         if (!text) return text;

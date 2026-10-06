@@ -3186,6 +3186,12 @@ def test_role_chip_header():
 
 # ── FIX-2026-08-15-001 (live-stream half): frontend SSE text is sanitized ──
 def test_sanitize_response_frontend_stream_guard():
+    """The SSE stream must be wired through the front-end sanitizer.
+
+    Regex parity with the backend is covered behaviourally by
+    test_sanitizer_mirror_is_behaviourally_equivalent — asserting that the
+    pattern *strings* exist could not detect a typo in the regex.
+    """
     content = _read('static/js/chat.js')
     assert 'function _sanitizeResponse' in content, \
         "chat.js must define _sanitizeResponse to clean the live SSE stream"
@@ -3245,3 +3251,72 @@ def test_sanitized_empty_never_falls_back_to_raw():
     assert 'answer = (answer or full_response)' not in ch, \
         'partial-save must not fall back to the raw response'
     assert "answer = (answer or '')" in ch
+
+
+# ── FIX-2026-10-06-QA-031-03: sanitizer must agree with its front-end mirror ──
+_SANITIZER_PAYLOADS = [
+    'Error: DesignDesign is not a valid tool, try one of [get_date, bocha_search]',
+    'Error: get current date is not a valid tool, try one of [get_date, bocha_search]',
+    'Error:\nDesignDesign is not a valid tool, try one of [get_date]',
+    'Here is the JSON for a function call with its proper arguments {"tool": "get_date"}',
+    '正常回答，不应被清洗。',
+    'Error: DesignDesign is not a valid tool 之后还有正文',
+    '前言\nError: get current date is not a valid tool, try one of [x]\n后记',
+]
+
+
+def test_sanitizer_strips_space_and_newline_tool_names():
+    """A tool name containing a space used to survive sanitization entirely."""
+    from app.utils.helpers import sanitize_response
+    for payload in _SANITIZER_PAYLOADS[:4]:
+        assert sanitize_response(payload) == '', f'not stripped: {payload!r}'
+
+
+def test_sanitizer_keeps_text_after_the_artifact():
+    """The old tail pattern swallowed legitimate text later on the same line."""
+    from app.utils.helpers import sanitize_response
+    assert sanitize_response('正常回答，不应被清洗。') == '正常回答，不应被清洗。'
+    kept = sanitize_response('Error: DesignDesign is not a valid tool 之后还有正文')
+    assert '之后还有正文' in kept, kept
+
+
+def test_sanitizer_mirror_is_behaviourally_equivalent():
+    """helpers.py::sanitize_response must agree with chat.js::_sanitizeResponse.
+
+    The old guard asserted only that the *strings* 'function _sanitizeResponse'
+    and '_sanitizeResponse(fullResponse)' exist, so a typo in the front-end regex
+    left both pytest and verify_fixes green while the live SSE stream leaked.
+    """
+    import json as _json
+    import re
+    import shutil
+    import subprocess
+
+    from app.utils.helpers import sanitize_response
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node not available — cannot execute the front-end sanitizer')
+
+    block = re.search(r'_LEAK_PATTERNS\s*=\s*\[(.*?)\];',
+                      _read('static/js/chat.js'), re.DOTALL)
+    assert block, 'could not locate _LEAK_PATTERNS in static/js/chat.js'
+    pats = re.findall(r"/Error:.*?/gi|/Here is the JSON.*?/gi", block.group(1))
+    assert len(pats) == 2, f'expected 2 front-end patterns, got {pats!r}'
+
+    script = (
+        'const pats=[' + ','.join(pats) + '];'
+        "const payloads=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+        'const san=(t)=>{if(!t)return t;let c=String(t);'
+        "for(const p of pats){c=c.replace(p,'');}return c.trim();};"
+        'console.log(JSON.stringify(payloads.map(san)));'
+    )
+    proc = subprocess.run([node, '-e', script],
+                          input=_json.dumps(_SANITIZER_PAYLOADS),
+                          capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, f'node failed: {proc.stderr[:400]}'
+    front = _json.loads(proc.stdout)
+    back = [sanitize_response(p) for p in _SANITIZER_PAYLOADS]
+    assert front == back, 'front/back sanitizer divergence:\n' + '\n'.join(
+        f'  {p!r}\n    js={f!r}\n    py={b!r}'
+        for p, f, b in zip(_SANITIZER_PAYLOADS, front, back) if f != b)
