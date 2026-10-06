@@ -2665,3 +2665,48 @@ fixes:
       - type: literal
         file: static/js/app.js
         pattern: "window.Templates.refresh"
+
+  - id: FIX-2026-10-06-QA-031-05
+    title: "legacy history renderer bypassed the sanitizer"
+    severity: medium
+    rationale: >
+      renderAssistantMessageLegacy renders msg.content and msg.thinking straight
+      into the DOM, so assistant rows persisted before FIX-2026-08-15-001 still
+      showed tool-error and prompt-template artifacts, and that same raw text
+      also reached the /feedback payload. Sanitizing at write time cannot clean
+      rows that already exist. Not an XSS issue: the answer path goes through
+      _renderMarkdown/_safeHTML (DOMPurify). Fix: sanitize assistantMsg and
+      thinking once at the top of the legacy renderer.
+    checks:
+      - type: literal
+        file: static/js/chat.js
+        pattern: "assistantMsg = _sanitizeResponse(assistantMsg);"
+      - type: literal
+        file: static/js/chat.js
+        pattern: "thinking = thinking ? _sanitizeResponse(thinking) : thinking;"
+
+  - id: FIX-2026-10-06-QA-031-06
+    title: "dev manifest duplicated the test set; counts and refs drifted"
+    severity: low
+    rationale: >
+      requirements-dev.txt was a second, partial copy of the test dependency
+      set: it omitted pytest-cov/flask/mock/httpx/xdist and pinned fakeredis
+      without the `lua` extra that tests/requirements-test.txt requires, so
+      following its own install header produced a broken environment. It now
+      includes that file instead of restating it. Also corrected the CHANGELOG
+      regression count (13 -> 14 test functions carry the cited FIX ids) and
+      refreshed the stale UNRESOLVED-038 line refs (app.js:1307/5968 ->
+      app.js:1310/5985).
+    checks:
+      - type: literal
+        file: requirements-dev.txt
+        pattern: "-r tests/requirements-test.txt"
+      - type: literal
+        file: requirements-dev.txt
+        pattern: "fakeredis[lua]==2.37.0"
+      - type: literal_not
+        file: CHANGELOG.md
+        pattern: "13 条回归测试"
+      - type: literal
+        file: data/unresolved.yaml
+        pattern: "app.js:1310 / app.js:5985"

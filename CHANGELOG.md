@@ -413,7 +413,7 @@ regression: 1/1 clearance baseline passed
 - 头部角色标识 chip（管理员/审核员/用户）（FIX-2026-08-16-006）。
 - 管理侧栏分组可折叠（`<details class="admin-collapse">`）、公司/知识库文件双行列表（`kb-file-*`）、统计卡片（`stats-tile`）。
 - `requirements-dev.txt`（pytest / fakeredis / pytest-env）。
-- 13 条回归测试（FIX-2026-08-15-001/002/003 · 2026-08-16-004/005/006）。
+- 14 条回归测试（FIX-2026-08-15-001/002/003 · 2026-08-16-004/005/006）。
 
 ### Notes
 - 来源：本机 2026-08 的未提交 QA 打磨（git stash），按功能逐个移植到 2026-09 主线；未移植项见 commit `0559ec3`/`d3627fa` 说明。
@@ -421,7 +421,7 @@ regression: 1/1 clearance baseline passed
 - 本机运行/调试产物（`db/`、`_app_run.*`、`qa-tooling/` 等）保留在磁盘并加入 `.gitignore`。
 
 regression: N/A（未触及合规/清标路径）
-smoke 7/7 · 新增回归 13/13 · verify_fixes 291/0 · doc_drift 15/15
+smoke 7/7 · 新增回归 14/14 · verify_fixes 291/0 · doc_drift 15/15
 
 ---
 

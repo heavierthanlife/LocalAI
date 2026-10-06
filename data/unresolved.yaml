@@ -602,7 +602,7 @@ unresolved:
     context: >
       QA-Loop Round 030 终检（mimo-v2.6-pro 只读）新增 3 条 Low，均在本轮修复范围外；审查方裁定
       进 backlog（下轮并入，不抢当前轮）：
-      ① app.js:1307 / app.js:5968 以 a.href = d.download_url 直接赋值 DOM 属性（非 innerHTML
+      ① app.js:1310 / app.js:5985 以 a.href = d.download_url 直接赋值 DOM 属性（非 innerHTML
          注入面，故非 XSS 风险），仅 scheme 一致性欠缺，未走 safeDownloadUrl；
       ② app/services/style_engine.py:429 generate_report_file 的 .docx 写共享 data/user_styles；
          zip 仅收自身刚生成文件无泄漏，但注册前无字符集限制的旧用户名经 safe_tag 消毒后可能同名互相覆盖；

@@ -1,7 +1,15 @@
 # Dev/test dependencies for Local_AI
 # Install with: pip install -r requirements-dev.txt
 # (runtime deps are in requirements.txt)
+#
+# QA-031 D2: the test set lives in exactly one place. This file used to be a
+# second, partial copy that drifted: it omitted pytest-cov / pytest-flask /
+# pytest-mock / pytest-httpx / pytest-xdist and pinned fakeredis without the
+# `lua` extra that tests/requirements-test.txt requires. Include it instead of
+# restating it, then pin the tool versions this project is developed against.
 
-fakeredis==2.37.0
+-r tests/requirements-test.txt
+
+fakeredis[lua]==2.37.0
 pytest==9.1.1
 pytest-env==1.7.0

@@ -968,6 +968,10 @@
     }
 
     function renderAssistantMessageLegacy(msgId, userMsg, assistantMsg, thinking = null) {
+        // QA-031 D1: rows persisted before FIX-2026-08-15-001 still carry tool-error /
+        // prompt-template artifacts, and this legacy renderer never ran the sanitizer.
+        assistantMsg = _sanitizeResponse(assistantMsg);
+        thinking = thinking ? _sanitizeResponse(thinking) : thinking;
         const group = document.createElement('div');
         group.className = 'message-group';
         group.id = `msg-${msgId}`;

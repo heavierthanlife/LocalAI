@@ -3215,11 +3215,42 @@ def test_dockerfile_has_pip_retry_budget():
 
 # ── FIX-2026-10-05-085: pre-commit hook must use the project venv interpreter ──
 def test_pre_commit_hook_reexecs_with_venv():
-    """Bare `python` lacks yaml/dotenv -> the hook must re-exec under .venv."""
+    """Bare `python` lacks yaml/dotenv -> the hook must re-exec under .venv.
+
+    Asserting only that the *strings* exist let a deleted call site pass, so this
+    checks the wiring and that the no-venv branch stays fail-closed (no re-exec).
+    """
+    import importlib.machinery
+    import importlib.util
+    import os
+    import re
+
     src = _read('.githooks/pre-commit')
     assert 'def _reexec_with_venv' in src
     assert 'LOCALAI_HOOK_VENV' in src
-    assert '.venv' in src
+    assert re.search(r'^[ \t]*_reexec_with_venv\(\)', src, re.M), \
+        '_reexec_with_venv must be called from main(), not merely defined'
+
+    loader = importlib.machinery.SourceFileLoader('precommit_hook',
+                                                 '.githooks/pre-commit')
+    spec = importlib.util.spec_from_loader('precommit_hook', loader)
+    assert spec is not None
+    hook = importlib.util.module_from_spec(spec)
+    loader.exec_module(hook)
+
+    old = os.environ.pop('LOCALAI_HOOK_VENV', None)
+    real_execv, real_exists = os.execv, os.path.exists
+    executed = []
+    os.execv = lambda *a, **k: executed.append(a)
+    os.path.exists = lambda p: (False if ('.venv' in str(p) and str(p).endswith('python.exe'))
+                                else real_exists(p))
+    try:
+        hook._reexec_with_venv()
+        assert executed == [], 'must not re-exec when .venv is absent (CI)'
+    finally:
+        os.execv, os.path.exists = real_execv, real_exists
+        if old is not None:
+            os.environ['LOCALAI_HOOK_VENV'] = old
 
 
 # ── FIX-2026-10-05-086: .mcp.json carries machine credentials — keep it ignored ──
@@ -3297,6 +3328,7 @@ def test_sanitizer_mirror_is_behaviourally_equivalent():
     node = shutil.which('node')
     if not node:
         pytest.skip('node not available — cannot execute the front-end sanitizer')
+    assert node is not None
 
     block = re.search(r'_LEAK_PATTERNS\s*=\s*\[(.*?)\];',
                       _read('static/js/chat.js'), re.DOTALL)
@@ -3319,7 +3351,7 @@ def test_sanitizer_mirror_is_behaviourally_equivalent():
     back = [sanitize_response(p) for p in _SANITIZER_PAYLOADS]
     assert front == back, 'front/back sanitizer divergence:\n' + '\n'.join(
         f'  {p!r}\n    js={f!r}\n    py={b!r}'
-        for p, f, b in zip(_SANITIZER_PAYLOADS, front, back) if f != b)
+        for p, f, b in zip(_SANITIZER_PAYLOADS, front, back, strict=True) if f != b)
 
 
 # ── FIX-2026-10-06-QA-031-04: authenticated fresh tab must not stay gated ──
