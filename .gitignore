@@ -44,7 +44,10 @@ local_cache/
 .opencode/plugins/
 .opencode/node_modules/
 .opencode/plans/
-.opencode/settings.local.jsontest.txt
+.opencode/settings.local.json
+# pi 侧等价产物（.opencode → .pi 迁移后遗漏）：plan/handoff 属本机草稿
+.pi/plans/
+test.txt
 stdout.txt
 stderr.txt
 localai-run*.log
