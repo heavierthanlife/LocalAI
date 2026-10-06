@@ -191,7 +191,7 @@ diff 分片（`.remember/tmp/r031/`，`.remember/` 整体 gitignored）:
 `123f958..75aa203` → `LocalAI/master` OK；`git rev-list --left-right --count master...LocalAI/master`
 = `0 0`；本地 HEAD == 远端 == `75aa203`；工作树干净。
 
-## ⑧ IMAGE —— **阻塞（未完成）**
+## ⑧ IMAGE —— 先阻塞，后由构建轮解除（**完成**）
 
 **blocked by `UNRESOLVED-036`（Dockerfile torch 双装）**：`docker compose build` 在
 `pip install -r requirements.txt` 层拉 CUDA 13 轮子（`nvidia-cublas` 423 MB、
@@ -208,20 +208,54 @@ diff 分片（`.remember/tmp/r031/`，`.remember/` 整体 gitignored）:
 | 镜像构建时间 | ≈HEAD | `2026-09-19`（HEAD `2026-10-06`） |
 
 旧镜像仍在运行（`localai-app` healthy，未回滚、未中断服务）。**按 SKILL 规定，镜像 ≠ HEAD
-即不得收尾**，故本轮**不推进 `last_head`、不清 `pending.flag`**。
+即不得收尾**，故当时**未推进 `last_head`、未清 `pending.flag`**。
 
-## ⑨ RE-CHECK / 停跑闸门 —— **未执行（前置于 ⑧ 成功）**
+**→ 已解除（2026-10-06 构建轮，用户裁定 a）**：
 
-停跑闸门（新增 C/H == 0 且 `pending` 空）**未达成**：⑧ 未通过，且 `pending.flag` 仍未消费。
+| 项 | 结果 |
+| --- | --- |
+| build | **成功**（apt 层 `#11 DONE 422.9s`、`#12 DONE 199.4s`；pip 层无 nvidia-*） |
+| 镜像体积 | **11.6 GB → 7.11 GB** |
+| CUDA 轮子 | 构建日志 `nvidia-cublas`/`nvidia-cudnn` 命中 **0**；torch 解析为 `2.12.1+cpu` |
+| 重建 | `up -d --force-recreate app celery-worker celery-beat` |
+| 健康 | `https://127.0.0.1:8443/check_auth` = **200**；容器内 `:8000` = **200**；app **healthy** |
+| 探针 | **11/11 HIT**（4 canonical + 7 本轮新增）→ **镜像 == HEAD** |
 
-### 本轮遗留（给下一轮）
+两处 Dockerfile 修复（`FIX-2026-10-06-QA-031-07/08`）：`TORCH_INDEX` 作 requirements 层主索引
+（`--extra-index-url` 保留镜像）→ 关闭 `UNRESOLVED-036`；apt 镜像 tuna http → `mirrors.ustc.edu.cn`
+**https**（`E: Failed to fetch ... Connection failed [IP: 101.6.15.130 80]` exit 100 的根因，
+Round 030 曾临时改后还原故反复复发）。
 
-1. **解除 ⑧ 阻塞**：把 `requirements.txt` 的 `torch` 从默认 PyPI 源剥离（或对该层加
-   `--index-url ${TORCH_INDEX}` + `--extra-index-url` 以处理 `+cpu` 本地版本号），单开一个
-   **构建轮**处理 `UNRESOLVED-036`——kickoff 已明确建议「勿在修复轮触发依赖地狱」。
-2. 镜像重建后重跑 ⑧ 容器内抽查（含 `reloadAuthGatedPanels` / `stored_answer` 两条新探针）。
-3. ⑨ 独立复检（建议**窄任务 + 小分片**，分片须在**最终 HEAD** 上重新生成并覆盖 registry+tests）。
-4. `UNRESOLVED-039`（pi-lens 基线配置）。
+## ⑨ RE-CHECK / 停跑闸门 —— **达成，loop 结束**
+
+⑨ 独立只读复检（`mimo-v2.6-pro`，fresh，窄任务 + 17.5 KB 单分片）→ **Verdict: OK**：
+
+| 问 | 结论 |
+| --- | --- |
+| Q1 | PASS ×2：整行剥离归 `''`；`正常回答，不应被清洗。` 不受影响 |
+| Q2 | 确认：纯工具报错载荷回退后仍为 `''`（不泄漏）；空 `answer` + 真实正文时分保留正文 |
+| Q3 | 三种场景（新标签页 / 普通刷新 / 登录后 reload）均**恰好 1 次**请求 |
+| Q4 | 无 CUDA 解析风险（PEP 440 本地版本 `2.12.1+cpu` > `2.12.1`，且末尾再显式按 `TORCH_INDEX` 重钉） |
+| Q5 | **new C/H = 0** |
+
+复检列出的两条残余风险均已处理或属既定取舍：
+
+- 「未实际跑 cold build」→ 已由本轮构建实证关闭（`nvidia-*` 命中 0、`torch==2.12.1+cpu`、镜像 7.11 GB）。
+- 「thinking-only 回退可能把 `【思考】/【回答】` 标记带进正文」→ 与改动前行为一致（非回归），
+  已在 `test_sanitized_empty_never_falls_back_to_raw` 的 docstring 里记为既定取舍。
+
+**停跑闸门**：新增 Critical/High = **0**，且无剩余待办批次 → **达成，loop 结束**。
+
+- `data/qa_loop/last_head` → **`7f4e12f`**（= 本轮 code head）
+- `data/qa_loop/pending.flag` → **清空**（已消费）
+
+### 本轮遗留（仍开放，非本 loop 阻塞）
+
+1. `UNRESOLVED-038`（Round 030 终检 L×3）仍 `pending` — 本轮未列入批准批次，未关闭。
+2. `UNRESOLVED-039`（pi-lens 基线配置）— 建议单开一轮；`pyrightconfig.json` 指向 `.venv`
+   可一次性消掉全部 import-resolution 噪声。
+3. `app.js` 死代码（`addFeedbackButtons`/`persistPins`/`addPinButton`/`sortPinnedFirst`，
+   HEAD 各处仅 1 次出现即定义本身、无调用点）— 已实证为既有，未在已批准批次内重构。
 
 ---
 
