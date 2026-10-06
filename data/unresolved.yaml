@@ -579,7 +579,8 @@ unresolved:
 
   - id: UNRESOLVED-036
     title: "Dockerfile torch 双装去重（requirements pin torch → 先装 CUDA 版 + nvidia_*，末尾 CPU wheel 覆盖但 CUDA 依赖残留）→ 镜像 ~12GB 可削数 GB"
-    status: pending
+    status: resolved
+    resolved: 2026-10-06
     severity: low
     discovered: 2026-09-29
     tags: ["构建", "Docker", "体积"]
@@ -592,6 +593,11 @@ unresolved:
       将 torch/torchvision 从 requirements.txt 摘出，仅由 Dockerfile 末尾按 TORCH_INDEX 安装；
       或 requirements 侧用平台/依赖约束避免 CUDA 抽取。改 Dockerfile/requirements 属构建行为变更
       → 需复核 + CHANGELOG；建议在专门构建轮或 B 之后做（当前构建环境刚稳，勿触发依赖地狱）。
+      【已解决 2026-10-06 / FIX-2026-10-06-QA-031-07】采用等效方案：不摘 requirements，而是把
+      TORCH_INDEX 设为 requirements 层的**主索引**（--extra-index-url 保留镜像供其余包），使 torch
+      一次解析为 2.12.1+cpu。实测构建日志 nvidia-cublas / nvidia-cudnn 命中 0，
+      镜像 11.6GB → 7.11GB。
+      配套修复 apt 镜像（tuna http → ustc https，FIX-2026-10-06-QA-031-08）。
 
   - id: UNRESOLVED-038
     title: "Round 030 终检 L×3：app.js DOM href 未走 safeDownloadUrl / docx 写共享 user_styles / structured_data task_id 未校验"
@@ -602,8 +608,8 @@ unresolved:
     context: >
       QA-Loop Round 030 终检（mimo-v2.6-pro 只读）新增 3 条 Low，均在本轮修复范围外；审查方裁定
       进 backlog（下轮并入，不抢当前轮）：
-      ① app.js:1310 / app.js:5985 以 a.href = d.download_url 直接赋值 DOM 属性（非 innerHTML
-         注入面，故非 XSS 风险），仅 scheme 一致性欠缺，未走 safeDownloadUrl；
+      ① app.js:1310 / app.js:5985 以 a.href = d.download_url 直接赋值 DOM 属性（非
+         innerHTML 注入面，故非 XSS 风险），仅 scheme 一致性欠缺，未走 safeDownloadUrl；
       ② app/services/style_engine.py:429 generate_report_file 的 .docx 写共享 data/user_styles；
          zip 仅收自身刚生成文件无泄漏，但注册前无字符集限制的旧用户名经 safe_tag 消毒后可能同名互相覆盖；
       ③ app/services/ingest_pipeline.py:472 _save_structured_data 仍以 f'{task_id}.json' 直接拼

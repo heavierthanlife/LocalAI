@@ -12,7 +12,7 @@ LABEL description="中联招标智能助手 — AI-powered bidding agency platfo
 # ── System dependencies ──
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g; s|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev gcc \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 \
@@ -50,15 +50,24 @@ ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
 # pypi.nvidia.com intermittently stalls; retries resume from the pip cache mount.
 ARG PIP_RETRIES=10
 ARG PIP_TIMEOUT=120
+# UNRESOLVED-036 (fixed 2026-10-06): requirements.txt also pins torch==2.12.1 /
+# torchvision==0.27.1, so installing it from the PyPI mirror FIRST pulled the whole
+# CUDA 13 wheel set (nvidia-cublas 423 MB + nvidia-cudnn-cu13 366 MB, ~12 GB) and
+# then threw it away when the TORCH_INDEX wheel replaced it — the image was ~12 GB
+# and a cold build spent hours on wheels that were never used. Making TORCH_INDEX
+# the primary index for this layer resolves torch to the CPU/CUDA wheel once, while
+# every other package still comes from the mirror via --extra-index-url.
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
-        -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt \
+        --index-url ${TORCH_INDEX} \
+        --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+        -r requirements.txt \
  && pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
         -i https://pypi.tuna.tsinghua.edu.cn/simple gunicorn gevent \
  && pip install --retries ${PIP_RETRIES} --timeout ${PIP_TIMEOUT} \
         --index-url ${TORCH_INDEX} torch==2.12.1 torchvision==0.27.1
-# torch/torchvision installed LAST so requirements.txt's PyPI pin cannot clobber
-# the TORCH_INDEX (CPU/CUDA) wheel chosen by scripts/docker_build.py.
+# torch/torchvision installed LAST as well, so requirements.txt's pin can never
+# clobber the TORCH_INDEX (CPU/CUDA) wheel chosen by scripts/docker_build.py.
 
 # ── Application code ──
 COPY --chown=localai:localai . .

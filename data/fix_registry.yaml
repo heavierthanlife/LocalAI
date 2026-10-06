@@ -2726,3 +2726,44 @@ fixes:
       - type: literal
         file: data/unresolved.yaml
         pattern: "app.js:1310 / app.js:5985"
+
+  - id: FIX-2026-10-06-QA-031-07
+    title: "Dockerfile double-installed torch: ~12 GB of CUDA wheels discarded"
+    severity: medium
+    rationale: >
+      requirements.txt pins torch==2.12.1 / torchvision==0.27.1, and the image
+      installed it from the PyPI mirror FIRST and then re-installed it from
+      TORCH_INDEX. On a CPU host that pulled the whole CUDA 13 wheel set
+      (nvidia-cublas 423 MB + nvidia-cudnn-cu13 366 MB, ~12 GB at 3 MB/s)
+      only to
+      be replaced by the CPU wheel: a cold build spent hours fetching wheels it
+      never used, and the image was ~12 GB. TORCH_INDEX is now the primary index
+      for the requirements layer (--extra-index-url keeps the mirror for every
+      other package), so torch resolves once as 2.12.1+cpu and no nvidia-* wheel
+      is ever downloaded. Image 11.6 GB -> 7.11 GB. Closes UNRESOLVED-036.
+    checks:
+      - type: literal
+        file: Dockerfile
+        pattern: "--extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple"
+      - type: literal_not
+        file: Dockerfile
+        pattern: "-i https://pypi.tuna.tsinghua.edu.cn/simple -r"
+
+  - id: FIX-2026-10-06-QA-031-08
+    title: "apt mirror was tuna over http: large .deb fetches broke the build"
+    severity: medium
+    rationale: >
+      The image set debian.sources to mirrors.tuna.tsinghua.edu.cn over http.
+      apt then failed mid-install with E: Failed to fetch
+      .../libreoffice-core_...deb Connection failed [IP: 101.6.15.130 80] (plus
+      fonts-noto-cjk) and the layer exited 100, so `docker compose build` could
+      never produce an image matching HEAD. Round 030 worked around this by
+      editing the mirror for one build and reverting it — which is why it kept
+      recurring. Now permanent: mirrors.ustc.edu.cn over https.
+    checks:
+      - type: literal
+        file: Dockerfile
+        pattern: "mirrors.ustc.edu.cn|g; s|http://|https://|g"
+      - type: literal_not
+        file: Dockerfile
+        pattern: "mirrors.tuna.tsinghua.edu.cn|g' /etc/apt"
