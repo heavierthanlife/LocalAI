@@ -7202,7 +7202,13 @@
     // is before this auth round trip resolves. On a fresh tab sessionStorage is
     // still empty, so those gates render "登录后查看…" and never fetch. Re-run them
     // once authentication is actually known.
+    // Captured before the gated loaders run at DOMContentLoaded: if the key was
+    // already present they fetched normally, so re-running them here would double
+    // every request on a plain reload.
+    const _authGatedAlreadyLoaded = !!sessionStorage.getItem('username');
+
     function reloadAuthGatedPanels() {
+        if (_authGatedAlreadyLoaded) return;
         if (window.Cases && typeof window.Cases.refresh === 'function') window.Cases.refresh();
         if (window.Templates && typeof window.Templates.refresh === 'function') window.Templates.refresh();
         if (typeof window._refreshNotebook === 'function') window._refreshNotebook();

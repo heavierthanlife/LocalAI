@@ -3373,6 +3373,10 @@ def test_auth_completion_reloads_gated_panels():
     assert 'window.Templates.refresh' in app_src
     assert 'window._refreshNotebook' in app_src
     assert 'loadSidebarProjects();' in app_src
+    # a plain reload already had sessionStorage set, so the loaders fetched at
+    # DOMContentLoaded -> re-running them here must be suppressed
+    assert '_authGatedAlreadyLoaded' in app_src
+    assert 'if (_authGatedAlreadyLoaded) return;' in app_src
     assert 'window._refreshNotebook = loadNotebook' in _read('static/js/knowledge-lab.js')
 
     # the re-trigger must live inside verifyAuth, and the storage check must run
