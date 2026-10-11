@@ -109,8 +109,15 @@ def _reexec_with_venv():
     if os.path.normcase(os.path.abspath(sys.executable)) == os.path.normcase(os.path.abspath(venv_py)):
         return
     os.environ['LOCALAI_HOOK_VENV'] = '1'
+    # NOT os.execv: on Windows it spawns the child and terminates THIS process
+    # with status 0, so the child's exit code never reaches git and the hook
+    # silently stops blocking anything. Measured on this host:
+    #     subprocess.call([py, '-c', 'os.execv(...child exits 7)']) -> 0
+    # That made the whole pre-commit gate decorative from FIX-085 until
+    # FIX-2026-10-06-QA-031-10 — a failed verify_fixes still produced exit 0.
+    # Propagate the child's status explicitly instead.
     try:
-        os.execv(venv_py, [venv_py, os.path.abspath(__file__)] + sys.argv[1:])
+        sys.exit(subprocess.call([venv_py, os.path.abspath(__file__)] + sys.argv[1:]))
     except OSError:
         pass  # fall back to the current interpreter
 

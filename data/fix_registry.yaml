@@ -2914,3 +2914,24 @@ fixes:
       - type: literal
         file: Dockerfile
         pattern: "ARG PIP_RETRIES=20"
+
+  - id: FIX-2026-10-06-QA-031-10
+    title: "pre-commit gate decorative on Windows: os.execv lost exit code"
+    severity: high
+    rationale: >
+      _reexec_with_venv() (added by FIX-085 to stop the hook misreporting fix
+      regressions) re-execs via os.execv. On Windows os.execv spawns the child and
+      terminates the PARENT with status 0, so the child's exit code never reached
+      git: a failing verify_fixes produced exit 0 and every commit was allowed.
+      Measured here: os.name == 'nt' and
+      subprocess.call([py, '-c', 'os.execv(... child exits 7)']) -> 0. The gate had
+      not enforced anything since 2026-10-05 — found when a commit landed while
+      verify_fixes reported 445/1. Fix: delegate with subprocess.call and sys.exit()
+      its status.
+    checks:
+      - type: literal_not
+        file: .githooks/pre-commit
+        pattern: "os.execv(venv_py"
+      - type: literal
+        file: .githooks/pre-commit
+        pattern: "sys.exit(subprocess.call([venv_py"

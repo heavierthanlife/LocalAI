@@ -3272,6 +3272,23 @@ def test_mcp_json_is_explicitly_gitignored():
     assert '.mcp.json' in _read('.gitignore')
 
 
+# ── FIX-2026-10-06-QA-031-10: hook must propagate the re-exec exit code ──
+def test_pre_commit_hook_propagates_reexec_exit_code():
+    """os.execv on Windows exits the parent with status 0, so the child's exit
+    code never reached git and the pre-commit gate silently stopped blocking.
+
+    Measured on this host: subprocess.call(execv(child exits 7)) -> 0.
+    """
+    src = _read('.githooks/pre-commit')
+    body = src[src.index('def _reexec_with_venv'):]
+    end = body.find('\ndef ', 1)
+    body = body[:end] if end != -1 else body
+    assert 'os.execv(venv_py' not in body, \
+        'os.execv loses the exit code on Windows; use subprocess.call + sys.exit'
+    assert 'subprocess.call(' in body and 'sys.exit(' in body, \
+        'the venv re-exec exit code must be propagated explicitly'
+
+
 # ── FIX-2026-10-06-QA-031-01: reasoning_content branch must sanitize too ──
 def test_reasoning_content_branch_sanitizes():
     """The reasoning_content shortcut skipped split_thinking_answer entirely."""
