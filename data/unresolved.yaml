@@ -85,7 +85,8 @@ unresolved:
     severity: high
     discovered: 2026-07-29
     context: >
-      .githooks/pre-commit main() called check_integrity(), check_fix_registry(),
+      .githooks/pre-commit main() called check_integrity(),
+      check_fix_registry(),
       and warn_*() but returned 0 regardless. Fix failures accumulated for
       months unnoticed. Fixed by propagating return values.
     blocked_by: ~
@@ -171,7 +172,8 @@ unresolved:
       would include npm prefix decisions, hermes migration plan, etc.
     blocked_by: ~
     resolution_plan: >
-      This unresolved.yaml serves as the ongoing tracker. IMPROVEMENTS_SKIPPED.md
+      This unresolved.yaml serves as the ongoing tracker.
+      IMPROVEMENTS_SKIPPED.md
       is treated as a historical record.
 
   - id: UNRESOLVED-013
@@ -181,7 +183,8 @@ unresolved:
     discovered: 2026-07-30
     context: >
       app/database.py:1120 declares `law_id INTEGER REFERENCES laws(id)` but no
-      `laws` table exists in the schema. The real table is `law_masters` (line 997).
+      `laws` table exists in the schema. The real table is `law_masters` (line
+      997).
       Existing Docker volumes may have a legacy `laws` table so they work fine,
       but a fresh deployment will crash on CREATE TABLE law_change_events.
     blocked_by: ~
@@ -194,7 +197,8 @@ unresolved:
     discovered: 2026-07-30
     context: >
       CREATE TABLE project_timelines (app/database.py:650-663) has no `name`
-      column, but project_timeline_service.py:48 INSERTs into `(project_id, name, ...)`.
+      column, but project_timeline_service.py:48 INSERTs into `(project_id,
+      name, ...)`.
       Existing timeline rows have no `name` data so they work fine, but creating
       a new timeline will trigger PostgreSQL column-not-found error.
     blocked_by: ~
@@ -207,9 +211,11 @@ unresolved:
     discovered: 2026-07-30
     context: >
       Three documented drifts found:
-      1. "11 Blueprints" → actual 15 (missing audit/wiki/timeline/cases/document_analysis/graph)
+      1. "11 Blueprints" → actual 15 (missing
+      audit/wiki/timeline/cases/document_analysis/graph)
       2. "~4k lines vanilla JS" → actual ~10k lines in app.js
-      3. "Redis by default, falls back to filesystem" → code uses SESSION_TYPE='filesystem' directly
+      3. "Redis by default, falls back to filesystem" → code uses
+      SESSION_TYPE='filesystem' directly
       All three fixed in AGENTS.md 2026-07-30.
     blocked_by: ~
     resolution_plan: >
@@ -403,10 +409,12 @@ unresolved:
       - "广东省实施《招投标法》办法 → 排除出接线，仅存档"
     blocker: "16 部条文抓取录入（逐部核对条文数 + 标注 source_url/fetched_at）"
     progress: >
-      2026-09-16: 11/16 已补全全文（全部来自 www.gov.cn 国务院公报/政策库，source_url/fetched_at 已写入 JSON）：
+      2026-09-16: 11/16 已补全全文（全部来自 www.gov.cn 国务院公报/政策库，source_url/fetched_at
+      已写入 JSON）：
       政采法实施条例79 · 工程施工招标投标办法92 · 评标委员会规定62 · 必须招标规定6 · 87号令88 · 74号令62 ·
       94号令45 · 电子招标投标办法66 · 中小企业46号25 · 公共资源交易平台办法48 · 违法行为记录公告办法21。
-      工具 scripts/fetch_extended_laws.py（gov.cn 页直连 + 行首约束解析 + law-name 校验；搜索 API 对本机 egress 不可达，
+      工具 scripts/fetch_extended_laws.py（gov.cn 页直连 + 行首约束解析 + law-name 校验；搜索 API
+      对本机 egress 不可达，
       URL 需人工从 gov.cn 政策库检索后写入 SOURCES.url）。commit bd1bc49。
       余 5 部说明：38号(营商环境通知)/119号(进口产品办法) 未收录于 gov.cn 政策库；
       「规范招标投标主体行为若干意见」非条文结构（一、二、三 分条）；GB50500 国标按约定走要点摘录；
@@ -426,30 +434,39 @@ unresolved:
     tags: ["清理", "死代码"]
     context: >
       多方向审计确认但为控制风险未在本轮执行：
-      (1) app/services/audit_engine.py 的编排器（run_audit/run_preflight/_generate_reports/
+      (1) app/services/audit_engine.py
+      的编排器（run_audit/run_preflight/_generate_reports/
           _save_file_result/_call_function/_run_ai_review/_run_project_level_function/get_run_results/
           get_project_history/get_running_audit/register+unregister_progress_queue）零调用方，
           audit_report.py / audit_wiki_publisher.py 整文件死（仅被上述死函数 import）；
-          clearance_engine 仅用 _run_style_analysis/_score_style_analysis/_score_rule_extraction。
+          clearance_engine 仅用
+          _run_style_analysis/_score_style_analysis/_score_rule_extraction。
           删除需非连续外科切割（_run_style_analysis 夹在死函数之间），风险较高故延后。
-      (2) static/js/review.js 的 loadDocReviewPanel/initDocReviewToggle（#docReviewPanel 等 DOM 不存在）
+      (2) static/js/review.js 的
+      loadDocReviewPanel/initDocReviewToggle（#docReviewPanel 等 DOM 不存在）
           + app.css 相关样式；/admin/review/document 无前端（应登记 API-only）。
-      (3) 陈旧 DOM id：app.js 的 databaseTabBtn/sidebarEditPromptBtn/fileStationBtn、cases.js 的
-          casesToggleStatus、scripts/run_ui_audit.py TAB_TOUR 的 sidebarTypoResultsBtn、
+      (3) 陈旧 DOM id：app.js 的
+      databaseTabBtn/sidebarEditPromptBtn/fileStationBtn、cases.js 的
+          casesToggleStatus、scripts/run_ui_audit.py TAB_TOUR 的
+          sidebarTypoResultsBtn、
           data/runtime_config_factory.json 的 7 个 typo_* 键（无代码读取）。
-      (4) Dockerfile torch 双装：L50 从 TORCH_INDEX 装 GPU/CPU 轮子，随后 requirements.txt 又 pin
+      (4) Dockerfile torch 双装：L50 从 TORCH_INDEX 装 GPU/CPU 轮子，随后 requirements.txt
+      又 pin
           torch==2.12.1（不含 +cuXXX 时 pip 视为未满足）→ 可能覆盖为 PyPI 轮子（GPU 机器受影响）。
     resolution_plan: >
       分批外科删除 + node --check + pytest + 重建镜像验证；torch 去重可改为 Dockerfile 最后装 torch
       或 requirements 用 torch>=2.12.1 让 +cuXXX 满足。
     progress: >
       2026-09-27（FIX-067）：已完成的低风险子集 — Dockerfile torch 去重（改为 requirements 之后安装）、
-      data/unresolved.yaml 无效 YAML 修复、runtime_config_factory.json 移除 7 个 typo_* 孤儿键、
+      data/unresolved.yaml 无效 YAML 修复、runtime_config_factory.json 移除 7 个 typo_*
+      孤儿键、
       run_ui_audit 移除 #sidebarTypoResultsBtn 陈旧探针。
-      2026-09-29（C3-a/FIX-074）：✅ audit_engine 编排器（run_audit/run_preflight/_generate_reports/get_*/
+      2026-09-29（C3-a/FIX-074）：✅ audit_engine
+      编排器（run_audit/run_preflight/_generate_reports/get_*/
       progress queues）+ audit_report.py + audit_wiki_publisher.py 已外科删除（rg 零调用方；
       保留 _run_style_analysis/_score_*/SCORING_FUNCTIONS）。
-      2026-09-29（C3-b/FIX-075）：✅ review.js docReviewPanel 死块 + app.js/cases.js/knowledge-lab.js
+      2026-09-29（C3-b/FIX-075）：✅ review.js docReviewPanel 死块 +
+      app.js/cases.js/knowledge-lab.js
       陈旧 DOM id/死块已删（node --check 全过）。
       2026-09-29（C3-c/FIX-076）：✅ 残余孤儿扫尾（app.css 孤立 #docReviewPanel 删除；
       app/services 零引用孤儿文件=0；run_ui_audit 无陈旧探针）。027 全部关闭。
@@ -481,14 +498,17 @@ unresolved:
     resolved: 2026-09-24
     tags: ["QA-Loop", "安全", "一致性"]
     context: >
-      QA-Loop Round 028 @code-reviewer（M2）：clearance.py / tasks.py / batch.py 直接调用
+      QA-Loop Round 028 @code-reviewer（M2）：clearance.py / tasks.py / batch.py
+      直接调用
       task_owner_ok()，无 try/except 包裹；若 TaskBus.get() 在 hgetall 时抛异常，这些路由
       将返回 500 而非 403，与 FIX-063 对 compliance._task_forbidden 的 fail-closed 设计不一致。
       属既有问题，非本轮引入。
     blocked_by: ~
     resolution_plan: >
-      2026-09-24 完成（FIX-066）：新增 helpers.load_task_for(task_id, user_id) → (meta, status)，
-      status ∈ {ok, missing, forbidden}，异常归一为 forbidden（fail-closed）；clearance/tasks/batch
+      2026-09-24 完成（FIX-066）：新增 helpers.load_task_for(task_id, user_id) → (meta,
+      status)，
+      status ∈ {ok, missing, forbidden}，异常归一为 forbidden（fail-
+      closed）；clearance/tasks/batch
       调用点复用，compliance._task_forbidden 改为薄封装委托。异常路径统一 403。评审发现并修复
       clearance_stream 误删 TaskBus import（Critical）。
 
@@ -534,7 +554,8 @@ unresolved:
     discovered: 2026-09-29
     tags: ["P1", "限流", "文档诚实性"]
     context: >
-      C1 确认：chat.py / knowledge.py 无 @limiter.limit；文档此前宣称 30/min、10/min（C1 已改如实）。
+      C1 确认：chat.py / knowledge.py 无 @limiter.limit；文档此前宣称 30/min、10/min（C1
+      已改如实）。
     blocked_by: ~
     resolution_plan: >
       为 chat 设 30/min、upload 设 10/min（@limiter.limit + 回归），或维持全局并关闭该项。
@@ -585,12 +606,15 @@ unresolved:
     discovered: 2026-09-29
     tags: ["构建", "Docker", "体积"]
     context: >
-      requirements.txt pin 了 torch==2.12.1/torchvision。构建时第一条 pip install -r requirements.txt
+      requirements.txt pin 了 torch==2.12.1/torchvision。构建时第一条 pip install -r
+      requirements.txt
       经 PyPI 装下 CUDA 版 torch 及整套 nvidia_* wheel（~5GB+），随后 Dockerfile 末尾才用
-      TORCH_INDEX=whl/cpu 重装 torch（覆盖本体，但 CUDA 依赖 wheel 残留）→ local-ai:latest ≈ 12.5GB。
+      TORCH_INDEX=whl/cpu 重装 torch（覆盖本体，但 CUDA 依赖 wheel 残留）→ local-ai:latest ≈
+      12.5GB。
       FIX-067 仅调整了安装顺序，未去除 requirements 的 torch pin，属残留项（同 UNRESOLVED-027 旁）。
     resolution_plan: >
-      将 torch/torchvision 从 requirements.txt 摘出，仅由 Dockerfile 末尾按 TORCH_INDEX 安装；
+      将 torch/torchvision 从 requirements.txt 摘出，仅由 Dockerfile 末尾按 TORCH_INDEX
+      安装；
       或 requirements 侧用平台/依赖约束避免 CUDA 抽取。改 Dockerfile/requirements 属构建行为变更
       → 需复核 + CHANGELOG；建议在专门构建轮或 B 之后做（当前构建环境刚稳，勿触发依赖地狱）。
       【已解决 2026-10-06 / FIX-2026-10-06-QA-031-07】采用等效方案：不摘 requirements，而是把
@@ -610,14 +634,18 @@ unresolved:
       进 backlog（下轮并入，不抢当前轮）：
       ① app.js:1310 / app.js:5985 以 a.href = d.download_url 直接赋值 DOM 属性（非
          innerHTML 注入面，故非 XSS 风险），仅 scheme 一致性欠缺，未走 safeDownloadUrl；
-      ② app/services/style_engine.py:429 generate_report_file 的 .docx 写共享 data/user_styles；
+      ② app/services/style_engine.py:429 generate_report_file 的 .docx 写共享
+      data/user_styles；
          zip 仅收自身刚生成文件无泄漏，但注册前无字符集限制的旧用户名经 safe_tag 消毒后可能同名互相覆盖；
-      ③ app/services/ingest_pipeline.py:472 _save_structured_data 仍以 f'{task_id}.json' 直接拼
+      ③ app/services/ingest_pipeline.py:472 _save_structured_data 仍以
+      f'{task_id}.json' 直接拼
          路径，未做 _KB_TASK_ID_RE 校验（与 Round 030 已修的 kb_review path 同类）。
     blocked_by: ~
     resolution_plan: >
-      ① app.js 两处改用 safeDownloadUrl（或加 scheme 断言）；② style_engine docx 落到按 user_id
-      分目录（data/user_styles/<uid>/）；③ _save_structured_data 复用 _KB_TASK_ID_RE 校验 task_id。
+      ① app.js 两处改用 safeDownloadUrl（或加 scheme 断言）；② style_engine docx 落到按
+      user_id
+      分目录（data/user_styles/<uid>/）；③ _save_structured_data 复用 _KB_TASK_ID_RE 校验
+      task_id。
       三项均低危，下轮（Round 031）随增量修复并入；勿在 B/样本轮前插队。
 
   - id: UNRESOLVED-039

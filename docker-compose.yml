@@ -27,7 +27,8 @@ x-app-env: &app-env
   - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set in .env}
   - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY:?WTF_CSRF_SECRET_KEY must be set in .env}
   - APP_ENV=production
-  # Trusted single-hop reverse proxy (nginx) — real client IP for limiter/audit logs
+  # Trusted single-hop reverse proxy (nginx) — real client IP for limiter/audit
+  # logs
   - TRUST_PROXY=1
   # ADMIN_PIN must be set in .env — production refuses to start without it
   - ADMIN_PIN=${ADMIN_PIN:-}
@@ -61,16 +62,22 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
-      # Generic read-only repo-data mount — the seed source for boot-time seeding of
-      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      # Generic read-only repo-data mount — the seed source for boot-time
+      # seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is
+      # .dockerignore'd.
       - ./data:/app/repo_data:ro
-      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      # Immutable factory preset baseline (restore-to-factory); tracks code →
+      # direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
-      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
-      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they
+      # are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original
+      # paths.
       - company_kb_files:/app/company_kb_files
       - knowledge_lab_files:/app/knowledge_lab_files
-      # EasyOCR models (pre-downloaded on host; avoids re-download at every boot)
+      # EasyOCR models (pre-downloaded on host; avoids re-download at every
+      # boot)
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
       # Certificates (for EdgeDriver HTTPS)
       - ./cert:/app/cert:ro
@@ -145,13 +152,18 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
-      # Generic read-only repo-data mount — the seed source for boot-time seeding of
-      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      # Generic read-only repo-data mount — the seed source for boot-time
+      # seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is
+      # .dockerignore'd.
       - ./data:/app/repo_data:ro
-      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      # Immutable factory preset baseline (restore-to-factory); tracks code →
+      # direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
-      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
-      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they
+      # are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original
+      # paths.
       - company_kb_files:/app/company_kb_files
       - knowledge_lab_files:/app/knowledge_lab_files
       - ${USERPROFILE:-~}/.EasyOCR:/home/localai/.EasyOCR
@@ -182,13 +194,18 @@ services:
       # /app/data is the app_data volume, which shadows the baked data/laws —
       # without this bind mount the compliance engine loads 0 laws (FIX-058).
       - ./data/laws:/app/data/laws:ro
-      # Generic read-only repo-data mount — the seed source for boot-time seeding of
-      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is .dockerignore'd.
+      # Generic read-only repo-data mount — the seed source for boot-time
+      # seeding of
+      # mutable assets (app/bootstrap.py::ensure_seeded). data/ is
+      # .dockerignore'd.
       - ./data:/app/repo_data:ro
-      # Immutable factory preset baseline (restore-to-factory); tracks code → direct mount.
+      # Immutable factory preset baseline (restore-to-factory); tracks code →
+      # direct mount.
       - ./data/runtime_config_factory.json:/app/data/runtime_config_factory.json:ro
-      # Code writes these outside /app/data (BASE_DIR) — without a volume they are
-      # lost on --force-recreate (FIX-061). Named volumes keep the original paths.
+      # Code writes these outside /app/data (BASE_DIR) — without a volume they
+      # are
+      # lost on --force-recreate (FIX-061). Named volumes keep the original
+      # paths.
       - company_kb_files:/app/company_kb_files
       - knowledge_lab_files:/app/knowledge_lab_files
     depends_on:
