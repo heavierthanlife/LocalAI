@@ -99,13 +99,17 @@ def share_conversation():
 
     token = secrets.token_urlsafe(16)
     share_path = os.path.join(TEMP_DIR, f"share_{token}.json")
-    with open(share_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            'thread_id': thread_id,
-            'messages': messages,
-            'created_at': beijing_now(),
-            'expires_at': (datetime.now(BEIJING_TZ) + timedelta(days=7)).isoformat()
-        }, f, ensure_ascii=False)
+    try:
+        with open(share_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'thread_id': thread_id,
+                'messages': messages,
+                'created_at': beijing_now(),
+                'expires_at': (datetime.now(BEIJING_TZ) + timedelta(days=7)).isoformat()
+            }, f, ensure_ascii=False)
+    except OSError as e:
+        logger.error(f"Failed to write shared conversation: {e}")
+        return jsonify({"error": "生成分享链接失败"}), 500
 
     share_url = url_for('.view_shared_conversation', token=token, _external=True)
     return jsonify({"share_url": share_url, "token": token})
@@ -171,7 +175,10 @@ def send_message_stream():
     # Build the query the same way as the non-streaming route
     has_files = any(f.filename for f in request.files.getlist('files'))
     knowledge_files_json = request.form.get('knowledge_files')
-    knowledge_files = json.loads(knowledge_files_json) if knowledge_files_json else []
+    try:
+        knowledge_files = json.loads(knowledge_files_json) if knowledge_files_json else []
+    except (ValueError, TypeError):
+        knowledge_files = []
 
     file_text = ""
     if has_files:
@@ -950,7 +957,10 @@ def check_storage():
     user_id = get_user_id()
     total_bytes = get_user_total_storage_size(user_id)
     from app.services.file_store import MAX_TOTAL_UPLOAD_GB
-    limit_gb = float(MAX_TOTAL_UPLOAD_GB)
+    try:
+        limit_gb = float(MAX_TOTAL_UPLOAD_GB)
+    except (ValueError, TypeError):
+        limit_gb = 50.0
     total_gb = total_bytes / (1024 * 1024 * 1024)
     # Warn at 80% of the unified upload quota (same cap as stream_upload)
     warning = total_bytes > limit_gb * 0.8 * (1024 ** 3)
@@ -974,8 +984,11 @@ def cleanup_anon_temp():
         user_id = get_user_id()
         temp_dir = get_anon_temp_dir(user_id)
         if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            logger.info(f"Cleaned up anonymous temp directory for user {user_id}")
+            try:
+                shutil.rmtree(temp_dir)
+                logger.info(f"Cleaned up anonymous temp directory for user {user_id}")
+            except OSError as e:
+                logger.warning(f"Failed to cleanup anonymous temp directory: {e}")
     return jsonify({"status": "ok"})
 
 # Account routes
