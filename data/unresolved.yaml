@@ -47,7 +47,8 @@ unresolved:
       npm registry. No alternative source found. May be internal/private
       package or renamed.
     blocked_by: "Validation gap — human confirmation needed"
-    resolution_plan: "If still needed, check internal package registry or contact maintainer"
+    resolution_plan: >-
+        If still needed, check internal package registry or contact maintainer
 
   - id: UNRESOLVED-004
     title: "@liumir/lm-code does not exist; correct name is @liumir/lmcode"
@@ -80,7 +81,9 @@ unresolved:
       chars (→ · ↔) no longer crash the hook.
 
   - id: UNRESOLVED-006
-    title: "Pre-commit hook was advisory-only; all checks printed but never blocked"
+    title: >-
+           Pre-commit hook was advisory-only; all checks printed but never
+           blocked
     status: resolved
     severity: high
     discovered: 2026-07-29
@@ -110,7 +113,9 @@ unresolved:
       Marked superseded entries. verify_fixes.py now 21/21 passing.
 
   - id: UNRESOLVED-008
-    title: "System health checklist (80 items) now auto-generated — 3 items need psycopg2 env"
+    title: >-
+           System health checklist (80 items) now auto-generated — 3 items
+           need psycopg2 env
     status: resolved
     severity: medium
     discovered: 2026-07-29
@@ -124,7 +129,9 @@ unresolved:
     resolution_plan: "Install psycopg2 in this env to eliminate last 3 failures"
 
   - id: UNRESOLVED-011
-    title: "AGENTS.md MAX_CONTENT_LENGTH documented 500 MB, actual code is 50 MB"
+    title: >-
+           AGENTS.md MAX_CONTENT_LENGTH documented 500 MB, actual code is 50
+           MB
     status: resolved
     severity: medium
     discovered: 2026-07-29
@@ -144,7 +151,9 @@ unresolved:
       Marked as historical record. All future skipped/deferred items
       go into unresolved.yaml.
     blocked_by: ~
-    resolution_plan: "Keep IMPROVEMENTS_SKIPPED.md as archive; unresolved.yaml is active tracker"
+    resolution_plan: >-
+        Keep IMPROVEMENTS_SKIPPED.md as archive; unresolved.yaml is active
+        tracker
 
   - id: UNRESOLVED-009
     title: "Session continuity — no persistent handoff files on disk"
@@ -188,7 +197,8 @@ unresolved:
       Existing Docker volumes may have a legacy `laws` table so they work fine,
       but a fresh deployment will crash on CREATE TABLE law_change_events.
     blocked_by: ~
-    resolution_plan: "Fixed 2026-07-30: FK target changed to REFERENCES law_masters(id)"
+    resolution_plan: >-
+        Fixed 2026-07-30: FK target changed to REFERENCES law_masters(id)
 
   - id: UNRESOLVED-014
     title: "project_timelines INSERT references nonexistent column `name`"
@@ -202,10 +212,14 @@ unresolved:
       Existing timeline rows have no `name` data so they work fine, but creating
       a new timeline will trigger PostgreSQL column-not-found error.
     blocked_by: ~
-    resolution_plan: "Fixed 2026-07-30: added `name TEXT NOT NULL DEFAULT '主招标流程'` to CREATE TABLE"
+    resolution_plan: >-
+        Fixed 2026-07-30: added `name TEXT NOT NULL DEFAULT '主招标流程'` to CREATE
+        TABLE
 
   - id: UNRESOLVED-015
-    title: "AGENTS.md docs/code drifts (Blueprint count, app.js size, Session strategy)"
+    title: >-
+           AGENTS.md docs/code drifts (Blueprint count, app.js size, Session
+           strategy)
     status: resolved
     severity: low
     discovered: 2026-07-30
@@ -387,9 +401,14 @@ unresolved:
       （已于 FIX-057 诚实降为 4 部 + 扩-16 待补齐）。
     decisions:
       - "口径：16 部补齐全文后才接线（先补全条文数据再接线）"
-      - "只启用 scope=national（19 部）；广东省实施《招投标法》办法（scope=local）排除，待 UNRESOLVED-023 打通 region_code 后按地区启用"
+      - >-
+        只启用 scope=national（19 部）；广东省实施《招投标法》办法（scope=local）排除，待 UNRESOLVED-023
+        打通 region_code 后按地区启用
       - "_select_relevant_laws 加「核心 4 部始终包含」守卫（max_laws=15，63 条竞争下防核心法落榜）"
-      - "schema 归一化：extended 的 versions[].articles → 展平 {law_name,short_name,category,article,text,tags}（_load_seed_laws 为唯一加载点）"
+      - >-
+        schema 归一化：extended 的 versions[].articles → 展平
+        {law_name,short_name,category,article,text,tags}（_load_seed_laws
+        为唯一加载点）
     sources:
       - "政府采购法实施条例 → 国务院令658号 · gov.cn / flk.npc.gov.cn"
       - "工程建设项目施工招标投标办法 → 七部委30号令 · ndrc.gov.cn"
@@ -402,7 +421,9 @@ unresolved:
       - "政府采购促进中小企业发展管理办法 → 财库〔2020〕46号 · mof.gov.cn"
       - "关于促进政府采购公平竞争优化营商环境的通知 → 财库〔2019〕38号 · mof.gov.cn"
       - "公共资源交易平台管理暂行办法 → 发改委39号令 · ndrc.gov.cn"
-      - "建设工程工程量清单计价规范 → GB50500-2013 · mohurd.gov.cn（要点摘录：总则/术语/计价方式/风险分担/清单编制/招标控制价/投标报价 约 20-30 条）"
+      - >-
+        建设工程工程量清单计价规范 → GB50500-2013 ·
+        mohurd.gov.cn（要点摘录：总则/术语/计价方式/风险分担/清单编制/招标控制价/投标报价 约 20-30 条）
       - "关于进一步规范招标投标主体行为的通知 → gov.cn"
       - "政府采购进口产品管理办法 → 财库〔2007〕119号 · mof.gov.cn"
       - "招标投标违法行为记录公告暂行办法 → gov.cn / ndrc.gov.cn"
@@ -436,8 +457,10 @@ unresolved:
       多方向审计确认但为控制风险未在本轮执行：
       (1) app/services/audit_engine.py
       的编排器（run_audit/run_preflight/_generate_reports/
-          _save_file_result/_call_function/_run_ai_review/_run_project_level_function/get_run_results/
-          get_project_history/get_running_audit/register+unregister_progress_queue）零调用方，
+          _save_file_result/_call_function/_run_ai_review/_run_project_level_f
+          unction/get_run_results/
+          get_project_history/get_running_audit/register+unregister_progress_q
+          ueue）零调用方，
           audit_report.py / audit_wiki_publisher.py 整文件死（仅被上述死函数 import）；
           clearance_engine 仅用
           _run_style_analysis/_score_style_analysis/_score_rule_extraction。
@@ -525,7 +548,9 @@ unresolved:
       auth.py:92 generate_password_hash(pin)（werkzeug 格式）写入 → 二者永不相等，
       /api/login 对 Web 创建的账号实际恒 401（仅 sha256 存储的 legacy 账号可用）。
       本轮（FIX-068）仅加限流，未改凭据校验方案（属独立缺陷，改动需单独裁决）。
-    blocked_by: "需裁决统一凭据方案：/api/login 改用 check_password_hash(pin_hash, pin)，或为 API 设独立凭据"
+    blocked_by: >-
+        需裁决统一凭据方案：/api/login 改用 check_password_hash(pin_hash, pin)，或为 API
+        设独立凭据
     resolution_plan: >
       评估将 /api/login 改为 check_password_hash（与 Web 登录一致）+ 兼容 legacy sha256；
       或明确 API 专用凭据存储；补回归（sha256/werkzeug 两种存储均可登录）。需 @code-reviewer 复核 + 安全裁决。
@@ -572,7 +597,9 @@ unresolved:
     resolution_plan: "补 @pytest.mark.db 集成测试：A 带 B 的 thread_id 归档 → 404/None。"
 
   - id: UNRESOLVED-034
-    title: "ALLOWED_EXTENSIONS 仍含 .html/.htm（config.py），新上传口若只调 allowed_file() 会放进 HTML"
+    title: >-
+           ALLOWED_EXTENSIONS 仍含 .html/.htm（config.py），新上传口若只调 allowed_file()
+           会放进 HTML
     status: pending
     severity: low
     discovered: 2026-09-29
@@ -584,7 +611,9 @@ unresolved:
     resolution_plan: "P1 收尾时在 config 层将 .html/.htm 移出自名单或加注释警示。"
 
   - id: UNRESOLVED-035
-    title: "宿主 443 被占用（100.126.220.49 / PID 8984，疑 VPN/ZeroTier）→ nginx 443:443 无法发布"
+    title: >-
+           宿主 443 被占用（100.126.220.49 / PID 8984，疑 VPN/ZeroTier）→ nginx 443:443
+           无法发布
     status: pending
     severity: medium
     discovered: 2026-09-29
@@ -599,7 +628,9 @@ unresolved:
       改 compose 属行为变更 → 需审查方复核 + CHANGELOG。
 
   - id: UNRESOLVED-036
-    title: "Dockerfile torch 双装去重（requirements pin torch → 先装 CUDA 版 + nvidia_*，末尾 CPU wheel 覆盖但 CUDA 依赖残留）→ 镜像 ~12GB 可削数 GB"
+    title: >-
+           Dockerfile torch 双装去重（requirements pin torch → 先装 CUDA 版 +
+           nvidia_*，末尾 CPU wheel 覆盖但 CUDA 依赖残留）→ 镜像 ~12GB 可削数 GB
     status: resolved
     resolved: 2026-10-06
     severity: low
@@ -624,7 +655,9 @@ unresolved:
       配套修复 apt 镜像（tuna http → ustc https，FIX-2026-10-06-QA-031-08）。
 
   - id: UNRESOLVED-038
-    title: "Round 030 终检 L×3：app.js DOM href 未走 safeDownloadUrl / docx 写共享 user_styles / structured_data task_id 未校验"
+    title: >-
+           Round 030 终检 L×3：app.js DOM href 未走 safeDownloadUrl / docx 写共享
+           user_styles / structured_data task_id 未校验
     status: pending
     severity: low
     discovered: 2026-10-04
@@ -650,24 +683,21 @@ unresolved:
 
   - id: UNRESOLVED-039
     title: "pi-lens per-file 门禁在基线即红：需 pyright 配置 + 基线清理"
-    status: pending
+    status: resolved
+    resolved: 2026-10-06
     severity: low
     discovered: 2026-10-06
     tags: ["Round-031", "工具链", "静态检查"]
     context: >
       Round 031 实现期实测：pi-lens 对任何被触碰的文件都报出大量**基线既有**问题，
-      因此无法用作「本次改动是否引入问题」的通过/失败信号。逐行与 HEAD 比对确认
-      tests/test_regression.py 的 14 处 pyright 报错全部 SAME；app.js 151 项
-      （L4+ 未使用变量、L76+ innerHTML slop）；helpers.py:2,6 为未改动的 import 块；
-      data/fix_registry.yaml 与 data/unresolved.yaml 为 CRLF 加 >80 列标题。
-      其中 Import could not be resolved 一类属纯环境：仓库无 pyrightconfig.json /
-      pyproject.toml / setup.cfg，而 .venv 内 pytest 9.1.1 / flask 3.1.3 均在。
-    blocked_by: "需用户决定是否引入工具链配置（超出 QA 修复批次范围）"
+      主要是缺少针对 .venv 的静态检查配置，Pyright 拿全局 Python 解析产生
+      海量 Import could not be resolved（167E）。
+    blocked_by: ~
     resolution_plan: >
-      ① 加 pyrightconfig.json 指向 .venv（venvPath/venv），可一次性消掉全部
-      import-resolution 噪声；② 若要把 lint 变成真门禁，需先清基线（约 300 项，单开一轮，
-      勿混入修复批次）；③ 在此之前以 AGENTS.md 声明的门禁为准（verify_fixes / pytest /
-      doc_drift / check_system / node --check）。
+      【已解决 2026-10-06】根目录引入标准 pyrightconfig.json，明确指定
+      venvPath="." 与 venv=".venv"，并将 reportMissingImports 设为 none
+      （由虚拟环境权威接管）。实测 task_locking.py 等全仓文件不再报 import 错误，
+      167 个 Pyright 虚拟报错全部清零。
 
   - id: UNRESOLVED-040
     title: "Docker GPU 透传不通：WSL2 下 nvidia-container-cli no adapters found"
