@@ -643,7 +643,8 @@ unresolved:
 
   - id: UNRESOLVED-040
     title: "Docker GPU 透传不通：WSL2 下 nvidia-container-cli no adapters found"
-    status: pending
+    status: resolved
+    resolved: 2026-10-06
     severity: medium
     discovered: 2026-10-06
     tags: ["Docker", "GPU", "WSL2", "环境"]
@@ -654,15 +655,14 @@ unresolved:
       ubuntu:24.04` 同样失败（nvidia-container-cli: initialization error:
       WSL environment detected but no adapters were found；mode 'legacy'）。
       故 `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d`
-      会让 app 与 celery-worker 起不来（celery-beat 无 GPU 需求故正常）。
-      已用纯净 ubuntu 镜像复现，与仓库镜像/compose 无关。
-    blocked_by: "宿主层——WSL2 GPU 透传 / 驱动，非仓库可修"
+      曾让 app 与 celery-worker 起不来。已用纯净 ubuntu 镜像复现，与仓库镜像/compose 无关。
+    blocked_by: ~
     resolution_plan: >
-      ① 先 `wsl --update`，再 `wsl --shutdown` 后重启 Docker Desktop（刷新
-      /usr/lib/wsl/lib）；② 若仍 blocked，重装/升级 Windows NVIDIA 驱动（WSL 侧库由驱动
-      提供，版本不一致即报此错）；③ 确认 Windows 图形设置未把 WSL 绑到非 NVIDIA GPU；
-      ④ 修好前**不要**加载 docker-compose.gpu.yml。GPU 镜像本身已验证正确
-      （torch 2.12.1+cu126、cuda 12.6、15 个 nvidia-*cu12 轮子）。
+      【已解决 2026-10-06】用户在 Windows 执行 `wsl --update` 与 `wsl --shutdown`，
+      重启 Docker Desktop 后 WSL 底层驱动映射恢复正常。使用 `docker compose -f
+      docker-compose.yml -f docker-compose.gpu.yml up -d --force-recreate app
+      celery-worker celery-beat` 成功启用 GPU 透传。实测容器内 torch.cuda.is_available()
+      == True，设备识别为 NVIDIA GeForce RTX 2080 Super，EasyOCR 日志确认初始化为 GPU 模式。
 
   - id: UNRESOLVED-041
     title: "pre-commit 未拦下 verify_fixes 失败的提交（根因已定位并修复）"
