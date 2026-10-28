@@ -1,0 +1,5 @@
+URL: https://127.0.0.1:8443/cases
+LABEL: 案例库
+
+--- visible text (first 1500 chars) ---
+{"items":[],"page":1,"pages":1,"per_page":20,"success":true,"total":0}

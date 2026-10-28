@@ -1,0 +1,5 @@
+URL: https://127.0.0.1:8443/admin/users
+LABEL: 用户管理
+
+--- visible text (first 1500 chars) ---
+{"success":true,"users":[{"role":"admin","user_id":"fc81ddf6-9986-496d-966e-5067554b2dff","username":"CEO"},{"role":"admin","user_id":"ce960657-786e-4d14-a869-a3f497b74e71","username":"CEO"},{"role":"admin","user_id":"5586d25a-d12c-4dc0-95df-0bb8afb7fa85","username":"CEO_1"},{"role":"admin","user_id":"20a10f5d-0761-4bc5-978d-8475c6ff399c","username":"COO"},{"role":"admin","user_id":"8e8bc069-a581-4745-9f4a-78f1c70ddf65","username":"COO_1"},{"role":"admin","user_id":"934bb7fe-294c-4da7-bc9e-a5cf041ffc82","username":"admin"}]}

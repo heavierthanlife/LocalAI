@@ -1,0 +1,10 @@
+.venv/
+pylibs/
+fonts/
+.mplcache/
+__pycache__/
+*.pyc
+get-pip.py
+pkg/
+.mplcache/
+build/__pycache__/

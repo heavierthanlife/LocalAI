@@ -1,0 +1,47 @@
+===== 0. 生产库行数基线 =====
+              t              | n  
+-----------------------------+----
+ admin_audit_log             | 15
+ audit_runs                  |  0
+ project_files               |  2
+ project_timeline_milestones | 11
+ project_timelines           |  1
+ project_todos               |  1
+ projects                    |  1
+ workflow_kpi                |  0
+(8 rows)
+
+===== 1. 建测试库并克隆结构 =====
+== 1. 创建测试库 localai_probe_verify ==
+WARNING:  database "postgres" has no actual collation version, but a version was recorded
+DROP DATABASE
+CREATE DATABASE
+== 2. 从生产库导出 14 张表的结构（只读，不导出数据）==
+WARNING:  database "localai" has no actual collation version, but a version was recorded
+   schema dump: 1094 行
+== 3. 载入测试库 ==
+ set_config 
+------------
+ 
+(1 row)
+
+== 4. 结构一致性校验（生产库 vs 测试库，逐列比对）==
+WARNING:  database "localai" has no actual collation version, but a version was recorded
+   OK：测试库 14 张表结构与生产库完全一致（160 列）
+== 完成：localai_probe_verify 就绪（空表）==
+===== 2. 植入合成测试场景 =====
+   已写入合成场景（PROBE-* 项目 / 时间轴 / 里程碑 / 待办 / KPI / 审计运行）
+===== 3. 在测试库上计算 17 项指标（表6-1口径）=====
+   指标计算输出 -> evidence/verify_chain_indicators.txt
+===== 4. 同一套指标 SQL 在**生产库**上的结果（只读对照，证明生产数据为空）=====
+   对照结果 -> evidence/prod_indicators_empty.txt
+===== 5. 清理测试库并复核生产库未被改动 =====
+== 清理测试库 localai_probe_verify ==
+WARNING:  database "postgres" has no actual collation version, but a version was recorded
+DROP DATABASE
+== 复核：实例内剩余数据库清单 ==
+WARNING:  database "postgres" has no actual collation version, but a version was recorded
+   （上面为空表示测试库已删除干净）
+===== 6. 生产库行数复核 =====
+   OK：生产库行数与执行前完全一致（未污染）
+完成。证据：/home/guava5tar_/dsh/playground/review/system_probe/evidence/verify_chain_indicators.txt

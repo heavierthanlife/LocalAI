@@ -1,0 +1,5 @@
+URL: https://127.0.0.1:8443/admin/projects
+LABEL: 项目管理
+
+--- visible text (first 1500 chars) ---
+{"has_projects":true,"projects":[{"archive_filename":null,"archived_at":null,"created_at":"Tue, 14 Jul 2026 06:29:11 GMT","deletion_scheduled_at":null,"description":"Data recovered from database reset","id":2,"name":"KekKekKek233","status":"active","updated_at":"Tue, 14 Jul 2026 06:29:11 GMT"}],"success":true}

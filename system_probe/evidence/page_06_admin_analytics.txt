@@ -1,0 +1,5 @@
+URL: https://127.0.0.1:8443/admin/analytics
+LABEL: 运行分析
+
+--- visible text (first 1500 chars) ---
+{"active_projects":1,"active_users_24h":0,"credit_checks":0,"is_admin_view":true,"messages_per_day":[],"messages_today":0,"rag_stats":{"company_kb":0,"knowledge_lab":0,"project_file":0,"total":0,"user_file":0},"storage_breakdown":{"\u516c\u53f8\u5e93":0.0,"\u77e5\u8bc6\u5e93":0.0,"\u804a\u5929\u6587\u4ef6":0.0,"\u9879\u76ee\u6587\u4ef6":0.0},"storage_mb":"0.0","success":true,"top_users":[{"files":0,"storage_mb":"0.0","username":"CEO"},{"files":0,"storage_mb":"0.0","username":"CEO_1"},{"files":0,"storage_mb":"0.0","username":"COO_1"},{"files":0,"storage_mb":"0.0","username":"admin"},{"files":0,"storage_mb":"0.0","username":"COO"}],"total_files":0,"total_messages":0,"total_sessions":0,"total_users":6}

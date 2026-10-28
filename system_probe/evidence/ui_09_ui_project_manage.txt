@@ -1,0 +1,3 @@
+STEP: document.getElementById('adminTabBtn').click()
+
+{"tabs":["chatTabBtn","adminTabBtn","knowledgeLabTabBtn","recycleBinTabBtn","analyticsTabBtn"],"visible":"folder_open 项目\nadd 新建项目 folder 我的文件\n项目列表\n📁 KekKekKek233\n🧠 全部技能\n🏢 招投标法草案-中联国际修改建议-1.docx 公司\nsettings\n账户设置\n中联招标智能助手 China United International Engineering AI Services 管理员\nbar_chart\ndownload\nsmartphone\ndark_mode\nchat 智能对话\nfolder_open 项目管理\nmenu_book 知识中心\ndelete 回收站\nsettings 系统管理\nfolder_open 项目\n项目管理\nfolder 我的文件\n+ 新建项目\nKekKekKek233 进行中\n\nData recovered from database reset\n\n创建于: 7/14/2026, 2:29:11 PM 最后修改: 7/14/2026, 2:29:11 PM\nfolder_open 打开\ngroups 成员管理\nflag 完成并归档\nblock 中止\n🔗 快捷查询"}
