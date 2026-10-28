@@ -8,3 +8,4 @@ get-pip.py
 pkg/
 .mplcache/
 build/__pycache__/
+*.bundle
