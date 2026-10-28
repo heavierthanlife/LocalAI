@@ -47,6 +47,27 @@ tools/            辅助脚本（docx 提取、图片替换、编辑脚本等）
    ```
    > 注意：主稿是基于作者手工修改版 `build/in_author_v12.docx` 做图件替换得到的，直接 `build_v11.py` 会生成不含手工修改的版本；修改正文请改 `text_part*.py` 后重建，或直接在 docx 中改。
 
+### 需要 Local_AI 源码时（同一仓库的 master 分支）
+
+代码与论文在**同一个 GitHub 仓库**，只是不同分支：
+
+```bash
+# 方式一：完整克隆（一次拿到 main / master / mba-thesis）
+git clone git@github.com:heavierthanlife/LocalAI.git LocalAI
+cd LocalAI
+git switch master                            # 系统源码（论文第5章依据）
+git worktree add ../mba-thesis mba-thesis    # 另开目录放论文
+```
+
+```bash
+# 方式二：已有论文仓库，补取代码分支
+git remote set-branches origin master
+git fetch origin master
+git worktree add ../LocalAI-code master
+```
+
+说明：git 上 `master` 的 HEAD 为 `aefee49`，与本机代码仓库 HEAD 完全一致；本机 160 个“已修改”文件仅为 CRLF/LF 换行差异（`git diff -w` 为 0）。运行系统所需的 `.env`、Docker 镜像、`data/` 等不在 git 中。
+
 ## 四、待办（送审前）
 
 1. 套学校模板：封面研究方向/指导教师/中图分类号、页眉页脚、分节页码、目录样式（目录为自动域，Word 中右键“更新域”）
